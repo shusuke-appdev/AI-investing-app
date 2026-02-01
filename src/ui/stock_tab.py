@@ -13,7 +13,8 @@ from src.ui.components.stock import (
     render_integrated_metrics,
     render_quarterly_financials_graph,
     render_recent_earnings,
-    render_news_and_analysis,
+    render_news_full_width,
+    render_ai_stock_analysis,
     render_technical_analysis
 )
 
@@ -43,6 +44,8 @@ def render_stock_tab():
     
     with col1:
         render_chart(ticker)
+        # チャート下にAI銘柄分析を配置
+        render_ai_stock_analysis(ticker, info)
     
     with col2:
         render_company_overview(ticker, info)
@@ -71,5 +74,5 @@ def render_stock_tab():
     
     st.divider()
     
-    # === 最下段: ニュース・AI分析 ===
-    render_news_and_analysis(ticker, info)
+    # === 最下段: ニュース（横幅いっぱい）===
+    render_news_full_width(ticker)

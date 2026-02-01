@@ -243,6 +243,14 @@ def generate_company_summary_ja(ticker: str, english_summary: str) -> str:
     if not GEMINI_AVAILABLE or not english_summary:
         return english_summary
     
+    # APIキーを設定
+    from src.settings_storage import get_gemini_api_key
+    api_key = get_gemini_api_key()
+    if not api_key:
+        return english_summary
+    
+    genai.configure(api_key=api_key)
+    
     prompt = f"""
 以下の企業概要を、投資家向けに日本語で簡潔に要約してください（3-5文程度）。
 主な事業内容、競争優位性、注目すべきポイントを含めてください。
@@ -258,3 +266,4 @@ def generate_company_summary_ja(ticker: str, english_summary: str) -> str:
         return response.text
     except Exception as e:
         return english_summary
+

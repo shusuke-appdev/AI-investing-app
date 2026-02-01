@@ -31,19 +31,26 @@ def render_company_overview(ticker: str, info: dict):
     """, unsafe_allow_html=True)
     
     # 自動翻訳サマリー
-    summary = info.get("summary", "情報なし")
+    summary = info.get("summary") or "情報なし"
     cache_key = f"summary_ja_{ticker}"
     
+    # キャッシュがあればそれを使用
     if cache_key in st.session_state:
         summary = st.session_state[cache_key]
-    elif st.session_state.get("gemini_configured") and summary != "情報なし":
-        with st.spinner("翻訳中..."):
-            try:
-                summary_ja = generate_company_summary_ja(ticker, summary)
-                st.session_state[cache_key] = summary_ja
-                summary = summary_ja
-            except Exception:
-                pass
+    else:
+        # 英語サマリーがあれば翻訳を試行
+        if summary and summary != "情報なし" and len(summary) > 10:
+            from src.settings_storage import get_gemini_api_key
+            api_key = get_gemini_api_key()
+            if api_key:
+                with st.spinner("日本語に翻訳中..."):
+                    try:
+                        summary_ja = generate_company_summary_ja(ticker, summary)
+                        if summary_ja and len(summary_ja) > 10:
+                            st.session_state[cache_key] = summary_ja
+                            summary = summary_ja
+                    except Exception as e:
+                        st.warning(f"翻訳エラー: {e}")
     
     st.markdown(f"""
     <div style="font-size: 1rem; line-height: 1.6; color: var(--color-text-primary); 
@@ -54,43 +61,51 @@ def render_company_overview(ticker: str, info: dict):
     """, unsafe_allow_html=True)
 
 
-def render_news_and_analysis(ticker: str, info: dict = None):
-    """ニュースとAI分析を描画"""
-    col1, col2 = st.columns([1, 1])
+def render_ai_stock_analysis(ticker: str, info: dict = None):
+    """AI銘柄分析ボタン（フル幅版）"""
     
-    with col1:
-        st.markdown("### 📰 関連ニュース")
-        with st.spinner("ニュースを取得中..."):
-            news = get_stock_news(ticker)
+    if st.button("🤖 AI銘柄分析を実行", type="primary", use_container_width=True, key="ai_analysis_btn"):
+        if not st.session_state.get("gemini_configured"):
+            st.warning("⚠️ Gemini APIキーを設定してください")
+            return
         
-        if news:
-            for item in news[:5]:
+        with st.spinner("テクニカル分析とAI分析を実行中..."):
+            from src.stock_analyst import analyze_stock
+            
+            if info is None:
+                try:
+                    info = get_stock_info(ticker)
+                except:
+                    info = {}
+            
+            news = get_stock_news(ticker)
+            headlines = [n.get("title", "") for n in (news or [])]
+            
+            try:
+                analysis = analyze_stock(ticker, info, news_headlines=headlines)
+                st.markdown(analysis)
+            except Exception as e:
+                st.error(f"分析エラー: {e}")
+
+
+def render_news_full_width(ticker: str):
+    """関連ニュースを横幅いっぱいで描画"""
+    st.markdown("### 📰 関連ニュース")
+    
+    with st.spinner("ニュースを取得中..."):
+        news = get_stock_news(ticker)
+    
+    if news:
+        # 3列でニュースを表示
+        cols = st.columns(3)
+        for i, item in enumerate(news[:6]):
+            with cols[i % 3]:
                 st.markdown(f"**[{item['title']}]({item['link']})**")
                 st.caption(f"{item['publisher']} - {item['published']}")
-        else:
-            st.info("ニュースがありません")
-    
-    with col2:
-        st.markdown("### 🤖 AI銘柄分析")
-        
-        if st.button("📊 AI分析を生成", use_container_width=True, type="primary"):
-            if not st.session_state.get("gemini_configured"):
-                st.warning("⚠️ Gemini APIキーを設定してください")
-                return
-            
-            with st.spinner("分析中..."):
-                from src.stock_analyst import analyze_stock
-                
-                # Use passed info or fetch if None
-                if info is None:
-                    try:
-                        info = get_stock_info(ticker)
-                    except:
-                        info = {}
+    else:
+        st.info("ニュースがありません")
 
-                headlines = [n.get("title", "") for n in (news or [])]
-                try:
-                    analysis = analyze_stock(ticker, info, news_headlines=headlines)
-                    st.markdown(analysis)
-                except Exception as e:
-                    st.error(f"分析中にエラーが発生しました: {e}")
+
+def render_news_and_analysis(ticker: str, info: dict = None):
+    """ニュースをフル幅で描画（互換性維持用）"""
+    render_news_full_width(ticker)

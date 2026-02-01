@@ -202,11 +202,11 @@ def _render_market_item(label: str, value: str, change: float):
     color = "#10b981" if change >= 0 else "#ef4444"
     arrow = "↑" if change >= 0 else "↓"
     st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; padding: 0.2rem 0; 
-                border-bottom: 1px solid #e5e7eb; font-size: 0.85rem;">
-        <span style="color: #374151;">{label}</span>
-        <span style="font-weight: 600;">{value}</span>
-        <span style="color: {color};">{arrow}{abs(change):.2f}%</span>
+    <div style="display: flex; justify-content: space-between; padding: 0.4rem 0; 
+                border-bottom: 1px solid #e5e7eb; font-size: 1rem;">
+        <span style="color: #374151; font-weight: 500;">{label}</span>
+        <span style="font-weight: 700;">{value}</span>
+        <span style="color: {color}; font-weight: 600;">{arrow}{abs(change):.2f}%</span>
     </div>
     """, unsafe_allow_html=True)
 
