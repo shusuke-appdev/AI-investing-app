@@ -87,7 +87,15 @@ def set_setting(key: str, value) -> bool:
 # === 便利関数 ===
 
 def get_gemini_api_key() -> str:
-    """Gemini APIキーを取得"""
+    """Gemini APIキーを取得（Streamlit secrets対応）"""
+    # 1. Streamlit secretsから取得
+    try:
+        import streamlit as st
+        if "GEMINI_API_KEY" in st.secrets:
+            return st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        pass
+    # 2. ローカル設定から取得
     return get_setting("gemini_api_key", "")
 
 
@@ -97,7 +105,15 @@ def set_gemini_api_key(api_key: str) -> bool:
 
 
 def get_gas_url() -> str:
-    """GAS Web App URLを取得"""
+    """GAS Web App URLを取得（Streamlit secrets対応）"""
+    # 1. Streamlit secretsから取得
+    try:
+        import streamlit as st
+        if "GAS_WEBAPP_URL" in st.secrets:
+            return st.secrets["GAS_WEBAPP_URL"]
+    except Exception:
+        pass
+    # 2. ローカル設定から取得
     return get_setting("gas_url", "")
 
 
