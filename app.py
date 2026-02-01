@@ -1,0 +1,70 @@
+"""
+AI投資アプリ - メインアプリケーション
+Streamlitを使用したダッシュボードUI
+サイドバーナビゲーション方式
+"""
+import streamlit as st
+import os
+import sys
+
+# パス設定
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from src.ui.styles import get_custom_css
+from src.ui.sidebar import render_sidebar
+from src.ui.market_tab import render_market_tab
+from src.ui.theme_tab import render_theme_tab
+from src.ui.stock_tab import render_stock_tab
+from src.ui.portfolio_tab import render_portfolio_tab
+from src.ui.alerts_tab import render_alerts_tab
+
+# ページ設定
+st.set_page_config(
+    page_title="AI投資アプリ",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+def init_session_state():
+    """セッション状態の初期化"""
+    defaults = {
+        "gemini_configured": False,
+        "market_data": None,
+        "option_analysis": None,
+        "ai_recap": None,
+        "current_page": "market",
+        "portfolio_submode": "input",
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
+def main():
+    """メイン関数"""
+    init_session_state()
+    
+    # スタイルの適用
+    st.markdown(get_custom_css(), unsafe_allow_html=True)
+    
+    # サイドバー描画
+    render_sidebar()
+    
+    # ページルーティング
+    page = st.session_state.current_page
+    
+    if page == "market":
+        render_market_tab()
+    elif page == "theme":
+        render_theme_tab()
+    elif page == "stock":
+        render_stock_tab()
+    elif page == "portfolio":
+        render_portfolio_tab()
+    elif page == "alerts":
+        render_alerts_tab()
+
+
+if __name__ == "__main__":
+    main()

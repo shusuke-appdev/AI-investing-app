@@ -1,0 +1,47 @@
+{
+  "name": "米国中小型グロース",
+  "holdings": [
+    {
+      "ticker": "AFRM",
+      "shares": 5.0,
+      "avg_cost": 73.34
+    },
+    {
+      "ticker": "NBIS",
+      "shares": 8.0,
+      "avg_cost": 43.72
+    },
+    {
+      "ticker": "OSCR",
+      "shares": 19.0,
+      "avg_cost": 15.82
+    },
+    {
+      "ticker": "PGY",
+      "shares": 13.0,
+      "avg_cost": 27.9
+    },
+    {
+      "ticker": "RBRK",
+      "shares": 4.0,
+      "avg_cost": 75.83
+    },
+    {
+      "ticker": "SOFI",
+      "shares": 11.0,
+      "avg_cost": 26.61
+    },
+    {
+      "ticker": "ZETA",
+      "shares": 8.0,
+      "avg_cost": 20.58
+    },
+    {
+      "ticker": "HOOD",
+      "shares": 3.0,
+      "avg_cost": 46.34
+    }
+  ],
+  "created_at": "2026-01-29T05:18:26.001879",
+  "updated_at": "2026-01-29T05:18:26.001879"
+}

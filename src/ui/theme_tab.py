@@ -1,0 +1,72 @@
+"""
+Thematic Trends Tab Module
+Displays thematic performance rankings.
+"""
+import streamlit as st
+import pandas as pd
+from themes_config import PERIODS
+from src.theme_analyst import get_ranked_themes
+
+def render_theme_tab():
+    """Renders the Thematic Trends tab."""
+    st.markdown("## 🎯 テーマ別トレンド")
+    
+    # 期間選択（タブ形式）
+    period_names = list(PERIODS.keys())
+    tabs = st.tabs(period_names)
+    
+    for i, tab in enumerate(tabs):
+        with tab:
+            period = period_names[i]
+            # ランキング取得
+            with st.spinner(f"{period}のパフォーマンスを計算中..."):
+                ranked_themes = get_ranked_themes(period)
+            
+            if not ranked_themes:
+                st.warning("テーマデータを取得できませんでした")
+                continue
+            
+            # Top 10 & Bottom 10 Split Layout
+            col_top, col_bottom = st.columns(2)
+            
+            # --- Top 10 ---
+            with col_top:
+                st.markdown(f"### 🏆 Top 10 Winners ({period})")
+                top_10 = ranked_themes[:10]
+                for rank, theme_data in enumerate(top_10, 1):
+                    _render_theme_item(rank, theme_data)
+
+            # --- Bottom 10 ---
+            with col_bottom:
+                st.markdown(f"### 📉 Top 10 Losers ({period})")
+                # Bottom 10 (reverse order for display: Worst 1st)
+                bottom_10 = ranked_themes[-10:]
+                # Sort explicitly by performance ascending (worst first) just in case
+                bottom_10.sort(key=lambda x: x["performance"]) 
+                
+                for rank, theme_data in enumerate(bottom_10, 1):
+                    _render_theme_item(rank, theme_data)
+
+
+def _render_theme_item(rank: int, theme_data: dict):
+    """テーマ項目のレンダリングヘルパー"""
+    theme_name = theme_data["theme"]
+    perf = theme_data["performance"]
+    stocks = theme_data["stocks"]
+    
+    # パフォーマンスによる色分け
+    perf_color = "green" if perf >= 0 else "red"
+    perf_icon = "📈" if perf >= 0 else "📉"
+    
+    with st.expander(f"**{rank}. {theme_name}** {perf_icon} :{perf_color}[{perf:+.2f}%]"):
+        # 構成銘柄のパフォーマンス
+        if stocks:
+            st.markdown("**構成銘柄:**")
+            stock_df = pd.DataFrame(stocks)
+            stock_df["performance"] = stock_df["performance"].map(lambda x: f"{x:+.2f}%") # Use map for safe formatting
+            stock_df.columns = ["銘柄", "騰落率"]
+            st.dataframe(stock_df, use_container_width=True, hide_index=True)
+        else:
+            st.caption("銘柄データなし")
+    
+
