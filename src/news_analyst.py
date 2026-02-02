@@ -218,20 +218,21 @@ Focus: Decode the "Implicit" market expectations.
 - **Rates/Credit**: イールド、スプレッド、ファンディング環境の変化。
 *(Dense, assertive narrative paragraph)*
 
-### Ⅱ. 資金循環と投資テーマ (Themes & Flows)
-Context: Sector rotation, Dominant narratives (AI, Reflation, etc.), Institutional positioning.
-データから支配的テーマを特定し、以下のレンズで分析:
-1. **Core Infra**: 支配的なコンピュート基盤・インフラ。
-2. **Capital Cycle**: 誰がCapexを投下？規模・持続性・ROI。
-3. **Supply Chain Constraints**: ボトルネック（部品・プロセス・電力）。
-4. **Barriers & Geopolitics**: 技術主権、輸出規制、法的リスク。
-5. **Diffusion**: Edge、ロボティクス、非テック領域への拡散。
+### Ⅱ. 資金循環と投資テーマの変遷 (Themes & Flows)
+Context: Sector rotation, Dominant narratives, Institutional positioning.
+以下のレンズで資金フローとテーマ動態を分析:
+1. **Theme Lifecycle**: 各テーマの成熟度（黎明期/加速期/過熟期/衰退期）。
+2. **Rotation Dynamics**: セクター間・スタイル間（Growth↔Value, Large↔Small）の資金移動。
+3. **Smart Money vs Retail**: 機関投資家のポジショニング vs 個人のセンチメント乖離。
+4. **Narrative Shifts**: 支配的ナラティブの変化（インフレ→利下げ期待、AI→実需化 等）。
+5. **Crowding Risk**: 過度に集中したポジション（Magnificent 7偏重等）のリスク評価。
 
 | テーマ | ステータス | 資金フロー | 備考 |
 |:---|:---|:---|:---|
-| (Ex: AI Semi) | 加熱感/蓄積期/ピークアウト | 流入/流出/利確売り | --- |
+| (Ex: AI Infra) | 加熱感/蓄積期/ピークアウト | 流入継続/利確売り/ショートカバー | Smart Money動向 |
+| (Ex: Defensives) | 蓄積期 | 静かに流入 | レイトサイクル準備 |
 
-*(Narrative first, then table)*
+*(Narrative paragraph first, then summarize in table)*
 
 ### Ⅲ. センチメント・ポジショニング (Structure & Sentiment)
 Context: Rates/FX/Commodities/Crypto correlations.
