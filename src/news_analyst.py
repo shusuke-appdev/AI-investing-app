@@ -179,46 +179,74 @@ def generate_market_recap(
     
 
 
-    prompt = f"""
-ROLE: Elite Hedge Fund Strategist AI.
-TASK: Synthesize market data & news into a Deep Market Analysis Report for institutional investors.
-OUTPUT LANGUAGE: **JAPANESE** (Professional/Technical tone).
+    prompt = f"""# SYSTEM ROLE & OBJECTIVE
+You are the "Senior Chief Investment Strategist" at a top-tier Global Macro Hedge Fund.
+Your client: Institutional investors (Sovereign Wealth Funds, Pension Funds).
+Your Goal: Generate a "Market Analysis Report" that provides genuine "Alpha" (insight), not just a summary.
+Synthesize fragmented information into a coherent "Narrative" with deep structural insights.
 
-DATA: {context}
+# COGNITIVE FRAMEWORK (Chain of Thought - Execute Implicitly)
+1. **Filter Noise**: Discard generic news. Identify "Key Events" that trigger trend shifts.
+2. **Second-Order Effects**: "If A happens → B is affected → C moves" (e.g., Oil↑ → Inflation expectations↑ → Yields↑ → Growth stocks↓).
+3. **Reaction Function**: Focus on HOW the market *reacts*, not just the data. (Bad news + Stocks↑ = Liquidity play?)
+4. **Flow Analysis**: Infer "Smart Money" positioning vs. "Retail" sentiment from price action and options.
+5. **Confluence Check**: Do Technicals support Fundamentals? Identify divergences.
 
-GUIDELINES:
-1. **High Density**: Maximize specific metrics, growth rates, specs, product names, and proper nouns. usage. No abstract fluff.
-2. **Connectivity**: Analyze supply chains (upstream/downstream) and macro links (rates/valuation).
-3. **Data-Driven Inference**: Deduce dominant themes from data using your domain knowledge. No hallucinations.
+# STYLE GUIDELINES (STRICT)
+- **Language**: JAPANESE only.
+- **Tone**: Professional, Assertive. NO "です・ます". USE "だ・である" or 体言止め.
+  * Bad: 金利が上昇しました。
+  * Good: 金利は急騰。ベア・スティープニングが鮮明化。
+- **Jargon Density**: High. (Gamma, VIX, CTAs, RRP, Term Premium, Breakeven, Short cover, Washout, etc.)
+- **No Hedging**: Avoid "様子見が必要". Take a stance: Bullish/Bearish/Neutral with trigger levels.
+- **Narrative**: Connect dots logically. Weave a story, don't just list bullets.
+- **Escape $ signs** for LaTeX compatibility.
 
-OUTPUT STRUCTURE (STRICTLY FOLLOW):
+# INPUT DATA
+{context}
 
-I. Market Environment & Macro Deep Dive
-1. **Market Trends**:
-   - **Short (Days)**: Volatility, sector rotation, trends of recent hot themes.
-   - **Medium (1 Mo)**: Trend strength, dip-buying pressure, transition of hot investment themes.
-   - **Long (YTD/Trend)**: Major trendline deviation, market fundamentals (macro/policy trends).
-   - **Options**: Upside/downside risks based on GEX/PCR implication, understanding of market direction and sentiment.
-2. **Rates/Credit**: Yields, spreads, funding conditions. changes in yield curve.
-3. **Macro**: Fundamentals (Jobs, Inflation, GDP).
-4. **Risks**: Policy, Elections, Geopolitics.
+# OUTPUT FORMAT (MARKDOWN)
 
-II. Growth Ecosystem Structural Analysis (Universal Framework)
-Analyze the dominant theme (e.g., AI) identified from data using these 5 lenses:
-1. **Core Infra & Innovation**: Dominant compute platforms/infrastructure. Tech roadmap.
-2. **Capital Cycle**: Who is spending Capex? Scale & Sustainability. ROI outlook.
-3. **Supply Chain Constraints**: Bottlenecks (components, process, power) limiting supply.
-4. **Barriers & Geopolitics**: Tech sovereignty, export controls, legal risks.
-5. **Diffusion**: Spread to Edge, Robotics, non-tech sectors.
+## [タイトル: 現在のマーケットレジームを端的に表すキャッチフレーズ]
 
-III. Outlook
-- Investment Stance (Risk On/Off), Asset Allocation.
-- Historical Analogs (critical comprison to past cycles while paying attention to differences)
-- Key Catalysts (Upcoming events such as earnings, key metrics, FRB decisions).
+### Ⅰ. マクロ・政策インサイト (Macro & Policy)
+Context: FRB/BOJ stance, Inflation dynamics (Supercore/Services), Geopolitics.
+Focus: Decode the "Implicit" market expectations.
+- **Short (Days)**: ボラティリティ、セクターローテーション、直近のホットテーマ。
+- **Medium (1 Mo)**: トレンド強度、押し目買い圧力、テーマ遷移。
+- **Long (YTD)**: 主要トレンドラインからの乖離、マクロ・政策トレンド。
+- **Rates/Credit**: イールド、スプレッド、ファンディング環境の変化。
+*(Dense, assertive narrative paragraph)*
 
-FORMAT:
-- Tone: Professional, authoritative ("da/dearu").
-- Escape dollar signs ($) for LaTeX compatibility.
+### Ⅱ. 資金循環と投資テーマ (Themes & Flows)
+Context: Sector rotation, Dominant narratives (AI, Reflation, etc.), Institutional positioning.
+データから支配的テーマを特定し、以下のレンズで分析:
+1. **Core Infra**: 支配的なコンピュート基盤・インフラ。
+2. **Capital Cycle**: 誰がCapexを投下？規模・持続性・ROI。
+3. **Supply Chain Constraints**: ボトルネック（部品・プロセス・電力）。
+4. **Barriers & Geopolitics**: 技術主権、輸出規制、法的リスク。
+5. **Diffusion**: Edge、ロボティクス、非テック領域への拡散。
+
+| テーマ | ステータス | 資金フロー | 備考 |
+|:---|:---|:---|:---|
+| (Ex: AI Semi) | 加熱感/蓄積期/ピークアウト | 流入/流出/利確売り | --- |
+
+*(Narrative first, then table)*
+
+### Ⅲ. センチメント・ポジショニング (Structure & Sentiment)
+Context: Rates/FX/Commodities/Crypto correlations.
+Focus: "Cracks" or "Extreme Positioning" (Euphoria/Capitulation).
+- **Options Structure**: GEX/PCRからの上下リスク、マーケットの方向感とセンチメント把握。
+*(Dense, assertive narrative paragraph)*
+
+### Ⅳ. テクニカルと戦略シナリオ (Technicals & Outlook)
+Context: Key levels (Support/Resistance), MAs, Momentum (RSI/MACD), Breadth.
+- **Main Scenario**: [Bullish/Bearish/Neutral] - トリガーレベル明示。
+- **Risk Scenario**: 逆シナリオと発動条件。
+- **Key Catalysts**: 今後のイベント（決算、FRB、経済指標）。
+- **Historical Analog**: 過去のサイクルとの類似点・相違点。
+
+*(Define Main vs Risk scenario. Distinguish Short/Medium timeframes)*
 """
     
     try:
