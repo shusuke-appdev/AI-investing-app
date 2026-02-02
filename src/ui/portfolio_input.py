@@ -363,28 +363,33 @@ def render_file_import() -> list[PortfolioHolding]:
         )
         
         if drive_url and "docs.google.com/spreadsheets" in drive_url:
-            try:
-                sheet_id = drive_url.split("/d/")[1].split("/")[0]
-                csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-                
-                if st.button("📥 スプレッドシートを読み込み"):
-                    import requests
-                    try:
-                        resp = requests.get(csv_url, timeout=10)
-                        resp.raise_for_status()
-                        holdings = parse_csv_portfolio(resp.text)
-                        if holdings:
-                            st.success(f"✅ {len(holdings)}銘柄を読み込み")
-                            show_holdings_preview(holdings)
-                            st.session_state.drive_holdings = holdings
-                    except Exception as e:
-                        st.error(f"❌ 読み込みエラー: {str(e)}")
-                
-                if "drive_holdings" in st.session_state:
-                    return st.session_state.drive_holdings
+            # URLを安全に解析
+            parts = drive_url.split("/d/")
+            if len(parts) < 2:
+                st.warning("⚠️ URLの形式が正しくありません。/d/ を含むURLを入力してください")
+            else:
+                sheet_parts = parts[1].split("/")
+                if not sheet_parts or not sheet_parts[0]:
+                    st.warning("⚠️ スプレッドシートIDを抽出できませんでした")
+                else:
+                    sheet_id = sheet_parts[0]
+                    csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
                     
-            except Exception:
-                st.warning("⚠️ URLを解析できませんでした")
+                    if st.button("📥 スプレッドシートを読み込み"):
+                        import requests
+                        try:
+                            resp = requests.get(csv_url, timeout=10)
+                            resp.raise_for_status()
+                            holdings = parse_csv_portfolio(resp.text)
+                            if holdings:
+                                st.success(f"✅ {len(holdings)}銘柄を読み込み")
+                                show_holdings_preview(holdings)
+                                st.session_state.drive_holdings = holdings
+                        except Exception as e:
+                            st.error(f"❌ 読み込みエラー: {str(e)}")
+                    
+                    if "drive_holdings" in st.session_state:
+                        return st.session_state.drive_holdings
     
     return []
 

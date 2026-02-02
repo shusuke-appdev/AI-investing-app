@@ -67,7 +67,7 @@ def get_stock_info(ticker: str) -> dict:
             try:
                 hist = stock.history(period="1d")
                 current_price = hist["Close"].iloc[-1] if not hist.empty else 0
-            except:
+            except Exception:
                 current_price = 0
         
 

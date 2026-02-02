@@ -66,8 +66,12 @@ def calculate_gex(ticker: str) -> Optional[dict]:
     # 現在の株価を取得
     try:
         stock = yf.Ticker(ticker)
-        current_price = stock.history(period="1d")["Close"].iloc[-1]
-    except Exception:
+        hist = stock.history(period="1d")
+        if hist.empty:
+            return None
+        current_price = hist["Close"].iloc[-1]
+    except Exception as e:
+        print(f"Error fetching price for {ticker}: {e}")
         return None
     
     # GEX計算用のデータ準備
@@ -80,8 +84,10 @@ def calculate_gex(ticker: str) -> Optional[dict]:
         gamma = row.get("gamma", 0)
         
         if pd.isna(gamma) or gamma == 0:
-            # Gammaが提供されていない場合は推定
-            gamma = 0.01  # 簡易推定値
+            # Gammaが提供されていない場合はBlack-Scholesで推定
+            # 簡易版: ATMに近いほど高く、離れるほど低くなる近似
+            moneyness = abs(strike - current_price) / current_price
+            gamma = max(0.001, 0.05 * np.exp(-5 * moneyness))  # ATMで約0.05、離れると減衰
         
         # Call GEX: positive (ディーラーはロングガンマ)
         gex = gamma * oi * 100 * current_price
@@ -99,7 +105,8 @@ def calculate_gex(ticker: str) -> Optional[dict]:
         gamma = row.get("gamma", 0)
         
         if pd.isna(gamma) or gamma == 0:
-            gamma = 0.01
+            moneyness = abs(strike - current_price) / current_price
+            gamma = max(0.001, 0.05 * np.exp(-5 * moneyness))
         
         # Put GEX: negative (ディーラーはショートガンマ)
         gex = -gamma * oi * 100 * current_price
@@ -171,8 +178,12 @@ def calculate_atm_iv(ticker: str) -> Optional[float]:
     """ATM (At The Money) の平均IVを計算"""
     try:
         stock = yf.Ticker(ticker)
-        current_price = stock.history(period="1d")["Close"].iloc[-1]
-    except:
+        hist = stock.history(period="1d")
+        if hist.empty:
+            return None
+        current_price = hist["Close"].iloc[-1]
+    except Exception as e:
+        print(f"Error fetching price for ATM IV ({ticker}): {e}")
         return None
         
     option_data = get_option_chain(ticker)

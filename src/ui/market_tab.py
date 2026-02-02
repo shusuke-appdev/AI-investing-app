@@ -300,8 +300,8 @@ def _render_ticker_compact(opt: dict):
         
         # Wall情報などは補足として
         if gex:
-            p_wall = gex.get("positive_wall", {}).get("strike")
-            n_wall = gex.get("negative_wall", {}).get("strike")
+            p_wall = (gex.get("positive_wall") or {}).get("strike")
+            n_wall = (gex.get("negative_wall") or {}).get("strike")
             walls = []
             if p_wall: walls.append(f"+Wall ${p_wall:,.0f}")
             if n_wall: walls.append(f"-Wall ${n_wall:,.0f}")
