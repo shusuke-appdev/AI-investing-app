@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 
 
-# 設定ファイルのパス
-SETTINGS_DIR = Path.home() / ".ai_investing_app"
+# 設定ファイルのパス（プロジェクト内のdataディレクトリ）
+SETTINGS_DIR = Path(__file__).parent.parent / "data"
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 
 
