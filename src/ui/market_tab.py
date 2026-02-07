@@ -52,8 +52,9 @@ def _generate_ai_recap():
     with st.spinner("AI分析レポートを生成中... (ニュース取得・分析)"):
         from src.market_data import get_stock_news, get_stock_data
         from src.theme_analyst import get_ranked_themes
+        from src.news_aggregator import get_aggregated_news, merge_with_yfinance_news
         
-        # 1. ニュース取得 (指数 + AIバリューチェーン + Macro + Sectors)
+        # 1. yfinanceからティッカー関連ニュース取得
         tickers_to_fetch = [
             # Macro / Indices
             "^GSPC", "^IXIC", "^RUT", "TLT", "VIX", "DX-Y.NYB",
@@ -67,28 +68,77 @@ def _generate_ai_recap():
             # Broad Sector ETFs
             "XLE", "XLF", "XLV", "XLI", "XLY", "XLP", "XLU", "XLRE"
         ]
-        all_news = []
+        yf_news = []
         seen_links = set()
         
-        # 各銘柄からニュースを取得して統合
         for t in tickers_to_fetch:
-            news_items = get_stock_news(t, max_items=3) # 各銘柄3件
+            news_items = get_stock_news(t, max_items=3)
             for item in news_items:
                 if item['link'] not in seen_links:
-                    item['related_ticker'] = t # どの銘柄のニュースかタグ付け
-                    all_news.append(item)
+                    item['related_ticker'] = t
+                    item['source'] = 'YFinance'
+                    yf_news.append(item)
                     seen_links.add(item['link'])
         
-        # 日付順にソート (新しい順)
-        all_news.sort(key=lambda x: x.get('published', ''), reverse=True)
-        # 最大40件程度まで広げる
-        news_data = all_news[:40]
+        # 2. GNewsから広範なニュースを取得（コモディティ、暗号資産、マクロ含む）
+        gnews_articles = get_aggregated_news(
+            categories=["BUSINESS", "TECHNOLOGY", "WORLD"],
+            keywords=[
+                # マクロ・政策
+                "Federal Reserve", "FOMC", "inflation", "Treasury yields", "interest rates",
+                # コモディティ
+                "crude oil", "gold prices", "commodities", "copper",
+                # 暗号資産
+                "Bitcoin", "cryptocurrency", "Ethereum",
+                # 市場全般
+                "stock market", "S&P 500", "Nasdaq", "Wall Street",
+                # 地政学
+                "tariffs", "trade war", "geopolitics",
+            ],
+            max_per_source=8,
+            max_total=50
+        )
         
-        # 2. 市場コンテキスト (1ヶ月トレンド) の取得
-        # 主要指数の1ヶ月データを取得して騰落率計算
+        # 3. yfinanceとGNewsを統合（重複排除）
+        news_data = merge_with_yfinance_news(gnews_articles, yf_news, max_total=80)
+        
+        # 4. 週次パフォーマンス（1週間リターン）の取得 - アセットクラス横断
+        weekly_performance = {}
+        cross_asset_tickers = {
+            # 株式指数
+            "S&P 500": "^GSPC",
+            "Nasdaq 100": "^NDX",
+            "Russell 2000": "^RUT",
+            "Dow Jones": "^DJI",
+            # 債券
+            "TLT (20Y Bond)": "TLT",
+            "US 10Y Yield": "^TNX",
+            # コモディティ
+            "Gold": "GC=F",
+            "WTI Crude": "CL=F",
+            "Copper": "HG=F",
+            # 暗号資産
+            "Bitcoin": "BTC-USD",
+            "Ethereum": "ETH-USD",
+            # 為替
+            "DXY (Dollar)": "DX-Y.NYB",
+            "USD/JPY": "JPY=X",
+        }
+        try:
+            for name, ticker in cross_asset_tickers.items():
+                df = get_stock_data(ticker, period="5d")
+                if not df.empty and len(df) >= 2:
+                    start_price = df["Close"].iloc[0]
+                    end_price = df["Close"].iloc[-1]
+                    change_1w = (end_price - start_price) / start_price * 100
+                    weekly_performance[name] = f"{change_1w:+.2f}%"
+        except Exception as e:
+            print(f"Weekly performance fetch error: {e}")
+        
+        # 5. 市場コンテキスト (1ヶ月トレンド) の取得
         trend_context = {}
         try:
-            indices = {"S&P 500": "^GSPC", "Nasdaq 100": "^NDX", "Rusell 2000": "^RUT"}
+            indices = {"S&P 500": "^GSPC", "Nasdaq 100": "^NDX", "Russell 2000": "^RUT"}
             for name, ticker in indices.items():
                 df = get_stock_data(ticker, period="1mo")
                 if not df.empty and len(df) > 1:
@@ -96,7 +146,6 @@ def _generate_ai_recap():
                     end_price = df["Close"].iloc[-1]
                     change_1mo = (end_price - start_price) / start_price * 100
                     
-                    # 簡易的なトレンド判定
                     trend = "上昇" if change_1mo > 2 else "下落" if change_1mo < -2 else "横ばい"
                     trend_context[name] = {
                         "change_1mo": f"{change_1mo:+.2f}%",
@@ -133,7 +182,8 @@ def _generate_ai_recap():
         theme_analysis_str = "\n".join(theme_str_parts)
 
         market_data = st.session_state.market_data or {}
-        market_data["trend_1mo"] = trend_context # market_dataに追加して渡す
+        market_data["trend_1mo"] = trend_context
+        market_data["weekly_performance"] = weekly_performance  # 週次パフォーマンス追加
         
         option_analysis = st.session_state.option_analysis or []
         

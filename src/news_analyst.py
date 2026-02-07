@@ -136,11 +136,17 @@ def generate_market_recap(
     # コンテキストの構築
     context_parts = []
     
-    # 市場データ
+    # 市場データ（5日変動）
     context_parts.append("【短期変動 (5日)】")
     for name, data in market_data.items():
-        if name != "trend_1mo":
+        if name not in ("trend_1mo", "weekly_performance"):
             context_parts.append(f"- {name}: {data.get('price', 'N/A')}, 変化: {data.get('change', 0):+.2f}%")
+    
+    # 週次パフォーマンス（アセットクラス横断）
+    if "weekly_performance" in market_data:
+        context_parts.append("\n【週次パフォーマンス (1週間) - アセットクラス横断】")
+        for name, change in market_data["weekly_performance"].items():
+            context_parts.append(f"- {name}: {change}")
             
     # 中期トレンド (1ヶ月)
     if "trend_1mo" in market_data:
@@ -148,17 +154,18 @@ def generate_market_recap(
         for name, data in market_data["trend_1mo"].items():
             context_parts.append(f"- {name}: {data['trend']} ({data['change_1mo']})期間: {data['start_date']}~{data['end_date']}")
 
-    # ニュース
-    context_parts.append("\n【ニュースヘッドライン (AI・テック・市場全体)】")
-    for news in news_data[:35]: # 件数を少し増やす
+    # ニュース（件数拡大、カテゴリ表示）
+    context_parts.append("\n【ニュースヘッドライン (AI・テック・市場・マクロ・コモディティ・暗号資産)】")
+    for news in news_data[:60]:  # 60件に拡大
         related = f"[{news.get('related_ticker', '')}] " if news.get('related_ticker') else ""
+        category = f"({news.get('category', '')})" if news.get('category') else ""
+        source = f"[{news.get('source', '')}]" if news.get('source') else ""
         title = news.get("title", "")
         summary = news.get("summary", "")
-        # Summaryがある場合は追加（あまりに長い場合はカットする等の処理も考えられるが、まずはそのまま）
         if summary:
-            context_parts.append(f"- {related}{title}\n  (Summary: {summary})")
+            context_parts.append(f"- {source}{related}{title} {category}\n  (Summary: {summary[:200]})")
         else:
-            context_parts.append(f"- {related}{title}")
+            context_parts.append(f"- {source}{related}{title} {category}")
     
     # オプション分析
     if option_analysis:
@@ -221,6 +228,21 @@ Synthesize fragmented information into a coherent "Narrative" with deep structur
 4. **Flow Analysis**: Infer "Smart Money" positioning vs. "Retail" sentiment from price action and options.
 5. **Confluence Check**: Do Technicals support Fundamentals? Identify divergences.
 
+# CROSS-ASSET LINKAGE FRAMEWORK (CRITICAL - Apply Throughout)
+Do NOT analyze each asset class in isolation. Identify and explain these linkages:
+1. **Risk-On/Off Signals**: VIX↑ + Gold↑ + JPY↑ = Risk-Off. Track divergences.
+2. **Liquidity Proxy**: BTC and small-caps (IWM) correlation as liquidity barometer.
+3. **Curve Dynamics**: Yield curve shape changes → Equity valuation implications.
+4. **Commodity-Equity Nexus**: Copper/Oil movements → Cyclical sector outlook.
+5. **FX-Equity Correlation**: Dollar strength/weakness → MNC earnings impact.
+6. **Crypto-Equity Linkage**: De-leveraging in crypto → Potential sell-off contagion.
+
+# NARRATIVE CONSTRUCTION FRAMEWORK (MANDATORY)
+- Connect the past 1 week's major events into a coherent STORY.
+- Explain "WHY is this happening NOW" with explicit cause-effect chains.
+- Position current moves within the context of the past 1 month's trajectory.
+- Reference macro events (FOMC, CPI, earnings) as plot points in the narrative.
+
 # STYLE GUIDELINES (STRICT)
 - **Language**: JAPANESE only.
 - **Tone**: Professional, Assertive. NO "です・ます". USE "だ・である" or 体言止め.
@@ -234,49 +256,76 @@ Synthesize fragmented information into a coherent "Narrative" with deep structur
 # INPUT DATA
 {context}
 
-# OUTPUT FORMAT (MARKDOWN)
+# OUTPUT FORMAT (MARKDOWN) - 3 SECTIONS ONLY
 
 ## [タイトル: 現在のマーケットレジームを端的に表すキャッチフレーズ]
 
-### Ⅰ. マクロ・政策インサイト (Macro & Policy)
-Context: FRB/BOJ stance, Inflation dynamics (Supercore/Services), Geopolitics.
-Focus: Decode the "Implicit" market expectations.
-- **Short (Days)**: ボラティリティ、セクターローテーション、直近のホットテーマ。
-- **Medium (1 Mo)**: トレンド強度、押し目買い圧力、テーマ遷移。
-- **Long (YTD)**: 主要トレンドラインからの乖離、マクロ・政策トレンド。
-- **Rates/Credit**: イールド、スプレッド、ファンディング環境の変化。
-*(Dense, assertive narrative paragraph)*
+### Ⅰ. 市場アップデート (本日の日付)
 
-### Ⅱ. 資金循環と投資テーマの変遷 (Themes & Flows)
-Context: Sector rotation, Dominant narratives, Institutional positioning.
-以下のレンズで資金フローとテーマ動態を分析:
-1. **Theme Lifecycle**: 各テーマの成熟度（黎明期/加速期/過熟期/衰退期）。
-2. **Rotation Dynamics**: セクター間・スタイル間（Growth↔Value, Large↔Small）の資金移動。
-3. **Smart Money vs Retail**: 機関投資家のポジショニング vs 個人のセンチメント乖離。
-4. **Narrative Shifts**: 支配的ナラティブの変化（インフレ→利下げ期待、AI→実需化 等）。
-5. **Crowding Risk**: 過度に集中したポジション（Magnificent 7偏重等）のリスク評価。
+**統合ナラティブ形式で以下の要素を織り込む（箇条書きではなくストーリーとして記述）:**
+
+**A. 主要指数・資産クラス動向**
+- 前日の米国市場：S&P500, Nasdaq, Russell 2000, Dow の値動きと背景
+- 注目個別銘柄・セクター：大幅変動の銘柄、セクターローテーション
+- 国債・クレジット：イールドカーブ形状、スプレッド動向、ファンディング環境
+- FX/コモディティ/暗号資産：ドルインデックス、原油、金、BTCの連動性
+
+**B. 時間軸別分析**
+- **Short (Days)**: ボラティリティ、直近のホットテーマ、日次モメンタム
+- **Medium (1 Mo)**: トレンド強度、押し目買い圧力、テーマ遷移
+- **Long (YTD)**: 主要トレンドラインからの乖離、マクロ・政策トレンド累積
+
+**C. マクロ・政策コンテキスト**
+- FRB/BOJスタンス解釈（Implicit market expectations）
+- インフレダイナミクス：Headline vs Supercore vs Services
+- Geopolitics：関税、制裁、地政学リスクの市場インパクト
+
+**D. センチメント・ポジショニング**
+- オプション構造：GEX/PCRからの上下リスク
+- Extreme Positioning判定：Euphoria or Capitulation のサイン
+- Smart Money vs Retail の乖離
+
+**E. テクニカル・ブレッス**
+- Key Levels：主要サポート/レジスタンス
+- Momentum：RSI/MACD状況
+- Market Breadth：Advance/Decline、新高値/新安値比率
+- Historical Analog：過去のサイクルとの類似点（該当する場合のみ）
+
+*(Dense, assertive narrative paragraph - integrate A through E into a cohesive story)*
+
+---
+
+### Ⅱ. 資金循環と投資テーマ (Themes & Flows)
+
+**アセットクラス横断で資金フローとテーマ動態を分析:**
+
+1. **Cross-Asset Flows**: 株式⇔債券⇔コモディティ⇔暗号資産間の資金移動
+2. **Theme Lifecycle**: 各テーマの成熟度（黎明期/加速期/過熟期/衰退期）
+3. **Rotation Dynamics**: セクター間・スタイル間（Growth↔Value, Large↔Small）の資金移動
+4. **Smart Money vs Retail**: 機関投資家のポジショニング vs 個人のセンチメント乖離
+5. **Narrative Shifts**: 支配的ナラティブの変化（「週次〜月次のストーリー」として記述）
+6. **Crowding Risk**: 過度に集中したポジション（Magnificent 7偏重等）のリスク評価
 
 | テーマ | ステータス | 資金フロー | 備考 |
 |:---|:---|:---|:---|
 | (Ex: AI Infra) | 加熱感/蓄積期/ピークアウト | 流入継続/利確売り/ショートカバー | Smart Money動向 |
 | (Ex: Defensives) | 蓄積期 | 静かに流入 | レイトサイクル準備 |
+| (Ex: Commodities) | 蓄積期/調整 | ... | 株式との連動性 |
+| (Ex: Crypto) | ... | ... | 流動性プロキシとして |
 
 *(Narrative paragraph first, then summarize in table)*
 
-### Ⅲ. センチメント・ポジショニング (Structure & Sentiment)
-Context: Rates/FX/Commodities/Crypto correlations.
-Focus: "Cracks" or "Extreme Positioning" (Euphoria/Capitulation).
-- **Options Structure**: GEX/PCRからの上下リスク、マーケットの方向感とセンチメント把握。
-*(Dense, assertive narrative paragraph)*
+---
 
-### Ⅳ. テクニカルと戦略シナリオ (Technicals & Outlook)
-Context: Key levels (Support/Resistance), MAs, Momentum (RSI/MACD), Breadth.
-- **Main Scenario**: [Bullish/Bearish/Neutral] - トリガーレベル明示。
-- **Risk Scenario**: 逆シナリオと発動条件。
-- **Key Catalysts**: 今後のイベント（決算、FRB、経済指標）。
-- **Historical Analog**: 過去のサイクルとの類似点・相違点。
+### Ⅲ. まとめ (Outlook & Key Catalysts)
 
-*(Define Main vs Risk scenario. Distinguish Short/Medium timeframes)*
+- **Main Scenario**: [Bullish/Bearish/Neutral] - トリガーレベル明示（例：S&P500 5,200突破で上目線加速）
+- **Risk Scenario**: 逆シナリオと発動条件（例：VIX 20超で調整リスク顕在化）
+- **Key Catalysts (今後1-2週間)**:
+  - 決算発表スケジュール（注目銘柄）
+  - 経済指標（CPI, 雇用統計, PMI等）
+  - FRB/中銀イベント
+  - 地政学リスク監視ポイント
 {earnings_section}
 """
     
