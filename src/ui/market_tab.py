@@ -229,22 +229,43 @@ def _render_flash_summary(market_data, market_type: str = "US"):
             
             # --- 株式指数 ---
             st.caption("主要指数")
-            for name, data in market_data.items():
-                if name in ("trend_1mo", "weekly_performance"): continue
-                ticker = data.get("ticker", "")
-                if ticker in indices_tickers:
-                    price = data.get("price", 0)
-                    change = data.get("change", 0)
-                    if market_type == "JP":
+            
+            if market_type == "JP":
+                # 日本市場: Stooq データは名前で判定
+                jp_indices = ["日経平均", "TOPIX", "東証グロース250", "JPX日経400"]
+                for name in jp_indices:
+                    if name in market_data:
+                        data = market_data[name]
+                        price = data.get("price", 0)
+                        change = data.get("change", 0)
                         price_fmt = f"¥{price:,.0f}"
-                    else:
+                        _render_market_item(name, price_fmt, change)
+            else:
+                # 米国市場: ティッカーで判定
+                for name, data in market_data.items():
+                    if name in ("trend_1mo", "weekly_performance"): continue
+                    ticker = data.get("ticker", "")
+                    if ticker in indices_tickers:
+                        price = data.get("price", 0)
+                        change = data.get("change", 0)
                         price_fmt = f"{price:,.0f}"
-                    _render_market_item(name, price_fmt, change)
+                        _render_market_item(name, price_fmt, change)
             
             # --- 債券・金利 ---
             st.caption("債券・金利")
             if market_type == "JP":
-                st.caption("※ 日本国債利回りは非表示")
+                # 日本市場: Stooq から日本金利を取得
+                jp_rates = ["日本10年金利", "日本2年金利"]
+                found_rates = False
+                for rate_name in jp_rates:
+                    if rate_name in market_data:
+                        found_rates = True
+                        data = market_data[rate_name]
+                        price = data.get("price", 0)
+                        change = data.get("change", 0)
+                        _render_market_item(rate_name, f"{price:.2f}%", change)
+                if not found_rates:
+                    st.caption("※ データ取得中...")
             else:
                 for name, data in market_data.items():
                     if name in ("trend_1mo", "weekly_performance"): continue

@@ -12,3 +12,4 @@ requests>=2.31.0
 PyPDF2>=3.0.0
 youtube-transcript-api>=0.6.0
 gnews>=0.3.0
+pandas-datareader>=0.10.0

@@ -259,11 +259,60 @@ def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]
 
 from src.market_config import get_market_config
 
+
+def _get_stooq_data(ticker: str, period_days: int = 5) -> tuple[float, float] | None:
+    """
+    Stooq からデータを取得します。
+    
+    Args:
+        ticker: Stooq ティッカー
+        period_days: 取得期間（日数）
+    
+    Returns:
+        (現在価格, 変化率%) または None
+    """
+    try:
+        from pandas_datareader import data as pdr
+        from datetime import datetime, timedelta
+        
+        end = datetime.now()
+        start = end - timedelta(days=period_days + 5)  # 余裕を持って取得
+        
+        df = pdr.DataReader(ticker, "stooq", start, end)
+        if df.empty or len(df) < 2:
+            return None
+        
+        # Stooq は新しい日付が先頭
+        df = df.sort_index()
+        current = df["Close"].iloc[-1]
+        prev = df["Close"].iloc[-2]
+        change = ((current - prev) / prev) * 100
+        
+        return (current, change)
+    except Exception as e:
+        print(f"Stooq fetch error for {ticker}: {e}")
+        return None
+
+
+# 日本市場用 Stooq ティッカーマッピング
+JP_STOOQ_TICKERS = {
+    # 株式指数
+    "日経平均": "^NKX",
+    "TOPIX": "^TPX",
+    "東証グロース250": "^TSM",
+    "JPX日経400": "^JNI",
+    # 金利
+    "日本10年金利": "10YJP.B",
+    "日本2年金利": "2YJP.B",
+}
+
+
 @st.cache_data(ttl=300)  # 5分間キャッシュ
 def get_market_indices(market_type: str = "US") -> dict[str, dict]:
     """
     主要市場指数のデータを取得します。
-    キャッシュにより高速化。
+    日本市場: Stooq をプライマリソースとして使用
+    米国市場: yfinance を使用
     
     Args:
         market_type: "US" または "JP"
@@ -272,16 +321,54 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
         指数名をキーとする価格情報の辞書
     """
     config = get_market_config(market_type)
+    result = {}
     
+    # ========================================
+    # 日本市場: Stooq をプライマリソースとして使用
+    # ========================================
+    if market_type == "JP":
+        # 1. Stooq から主要指数・金利を取得
+        for name, stooq_ticker in JP_STOOQ_TICKERS.items():
+            data = _get_stooq_data(stooq_ticker)
+            if data:
+                price, change = data
+                result[name] = {
+                    "price": price,
+                    "change": change,
+                    "ticker": stooq_ticker
+                }
+        
+        # 2. コモディティ・FX・暗号資産は yfinance から取得（グローバルデータ）
+        global_tickers = {
+            **config["commodities"],
+            **config["crypto"],
+            **config["forex"]
+        }
+        for name, ticker in global_tickers.items():
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period="5d")["Close"]
+                if len(hist) >= 2:
+                    current = hist.iloc[-1]
+                    prev = hist.iloc[-2]
+                    change = ((current - prev) / prev) * 100
+                    result[name] = {"price": current, "change": change, "ticker": ticker}
+            except Exception:
+                pass
+        
+        return result
+    
+    # ========================================
+    # 米国市場: yfinance を使用（従来ロジック）
+    # ========================================
     indices = config["indices"]
-    sectors = config.get("sectors", {}) # セクター追加
+    sectors = config.get("sectors", {})
     treasuries = config["treasuries"]
     commodities = config["commodities"]
     crypto = config["crypto"]
     forex = config["forex"]
     
     all_tickers = {**indices, **sectors, **treasuries, **commodities, **crypto, **forex}
-    result = {}
     
     # 一括取得で高速化
     ticker_list = list(all_tickers.values())
@@ -289,53 +376,35 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
         return {}
         
     try:
-        # threads=True は高速だが、銘柄数が多い場合や混在市場の場合に失敗しやすいことがある
         data = yf.download(ticker_list, period="5d", group_by="ticker", progress=False, threads=True)
     except Exception as e:
         print(f"Batch download failed: {e}")
-        data = pd.DataFrame() # 空のDataFrameで初期化
+        data = pd.DataFrame()
     
-    # 単一銘柄の場合、MultiIndexにならないことがあるため調整
     is_multi_index = isinstance(data.columns, pd.MultiIndex) if not data.empty else False
     
     for name, ticker in all_tickers.items():
         hist = None
         try:
-            # 一括データからの抽出を試みる
             if not data.empty:
                 if is_multi_index and ticker in data.columns.levels[0]:
                     hist = data[ticker]["Close"].dropna()
-                elif not is_multi_index and ticker == ticker_list[0]: # 1銘柄だけの場合
+                elif not is_multi_index and ticker == ticker_list[0]:
                     hist = data["Close"].dropna()
-                elif not is_multi_index and ticker in data.columns: # MultiIndexでないがカラムにある場合
-                     # yfinanceのバージョンによっては level 0 がない場合もある
-                    if "Close" in data.columns:
-                         # これは単一銘柄のケースに近いが、念のため
-                         pass
             
-            # データがない場合は個別取得 (フォールバック)
+            # フォールバック: 個別取得
             if hist is None or len(hist) == 0:
                 stock = yf.Ticker(ticker)
-                # 日本株の場合は遅延があるため 5d で取得して直近を使う
                 hist = stock.history(period="5d")["Close"]
             
             if len(hist) >= 2:
                 current = hist.iloc[-1]
                 prev = hist.iloc[-2]
                 change = ((current - prev) / prev) * 100
-                result[name] = {
-                    "price": current,
-                    "change": change,
-                    "ticker": ticker
-                }
+                result[name] = {"price": current, "change": change, "ticker": ticker}
             elif len(hist) == 1:
-                result[name] = {
-                    "price": hist.iloc[-1],
-                    "change": 0,
-                    "ticker": ticker
-                }
+                result[name] = {"price": hist.iloc[-1], "change": 0, "ticker": ticker}
         except Exception:
-            # 個別取得も失敗した場合はスキップ
             pass
     
     return result
