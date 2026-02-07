@@ -260,9 +260,9 @@ def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]
 from src.market_config import get_market_config
 
 
-def _get_stooq_data(ticker: str, period_days: int = 5) -> tuple[float, float] | None:
+def _get_stooq_data(ticker: str, period_days: int = 10) -> tuple[float, float] | None:
     """
-    Stooq からデータを取得します。
+    Stooq から直接データを取得します（pandas-datareader不使用）。
     
     Args:
         ticker: Stooq ティッカー
@@ -271,19 +271,39 @@ def _get_stooq_data(ticker: str, period_days: int = 5) -> tuple[float, float] | 
     Returns:
         (現在価格, 変化率%) または None
     """
+    import requests
+    from datetime import datetime, timedelta
+    from io import StringIO
+    
     try:
-        from pandas_datareader import data as pdr
-        from datetime import datetime, timedelta
-        
+        # Stooq CSV API を直接呼び出し
+        # 例: https://stooq.com/q/d/l/?s=^nkx&d1=20240101&d2=20240110
         end = datetime.now()
-        start = end - timedelta(days=period_days + 5)  # 余裕を持って取得
+        start = end - timedelta(days=period_days)
         
-        df = pdr.DataReader(ticker, "stooq", start, end)
-        if df.empty or len(df) < 2:
+        d1 = start.strftime("%Y%m%d")
+        d2 = end.strftime("%Y%m%d")
+        
+        # ティッカーをそのまま使用（URL エンコードは requests が処理）
+        url = f"https://stooq.com/q/d/l/?s={ticker}&i=d&d1={d1}&d2={d2}"
+        
+        response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            print(f"Stooq HTTP error for {ticker}: {response.status_code}")
             return None
         
-        # Stooq は新しい日付が先頭
-        df = df.sort_index()
+        # CSV をパース
+        df = pd.read_csv(StringIO(response.text))
+        
+        if df.empty or len(df) < 2 or "Close" not in df.columns:
+            print(f"Stooq no data for {ticker}")
+            return None
+        
+        # 日付順にソート（古い順）
+        if "Date" in df.columns:
+            df["Date"] = pd.to_datetime(df["Date"])
+            df = df.sort_values("Date")
+        
         current = df["Close"].iloc[-1]
         prev = df["Close"].iloc[-2]
         change = ((current - prev) / prev) * 100
@@ -295,15 +315,12 @@ def _get_stooq_data(ticker: str, period_days: int = 5) -> tuple[float, float] | 
 
 
 # 日本市場用 Stooq ティッカーマッピング
+# 注: 日本国債金利は Stooq で取得不可のため、株式指数のみ
 JP_STOOQ_TICKERS = {
-    # 株式指数
     "日経平均": "^NKX",
     "TOPIX": "^TPX",
-    "東証グロース250": "^TSM",
-    "JPX日経400": "^JNI",
-    # 金利
-    "日本10年金利": "10YJP.B",
-    "日本2年金利": "2YJP.B",
+    # "東証グロース250": "^TSM",  # 取得不安定のため一旦無効化
+    # "JPX日経400": "^JNI",       # 取得不安定のため一旦無効化
 }
 
 

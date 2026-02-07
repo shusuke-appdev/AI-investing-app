@@ -232,7 +232,7 @@ def _render_flash_summary(market_data, market_type: str = "US"):
             
             if market_type == "JP":
                 # 日本市場: Stooq データは名前で判定
-                jp_indices = ["日経平均", "TOPIX", "東証グロース250", "JPX日経400"]
+                jp_indices = ["日経平均", "TOPIX"]
                 for name in jp_indices:
                     if name in market_data:
                         data = market_data[name]
@@ -254,18 +254,8 @@ def _render_flash_summary(market_data, market_type: str = "US"):
             # --- 債券・金利 ---
             st.caption("債券・金利")
             if market_type == "JP":
-                # 日本市場: Stooq から日本金利を取得
-                jp_rates = ["日本10年金利", "日本2年金利"]
-                found_rates = False
-                for rate_name in jp_rates:
-                    if rate_name in market_data:
-                        found_rates = True
-                        data = market_data[rate_name]
-                        price = data.get("price", 0)
-                        change = data.get("change", 0)
-                        _render_market_item(rate_name, f"{price:.2f}%", change)
-                if not found_rates:
-                    st.caption("※ データ取得中...")
+                # 日本市場: 金利データは取得不可
+                st.caption("※ 日本国債利回りは非対応")
             else:
                 for name, data in market_data.items():
                     if name in ("trend_1mo", "weekly_performance"): continue
