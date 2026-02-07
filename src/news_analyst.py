@@ -175,7 +175,36 @@ def generate_market_recap(
     if theme_analysis:
         context_parts.append(f"\n{theme_analysis}")
     
+    # ユーザー参照知識
+    try:
+        from src.knowledge_storage import get_knowledge_for_ai_context
+        knowledge_context = get_knowledge_for_ai_context(max_items=10)
+        if knowledge_context:
+            context_parts.append(f"\n{knowledge_context}")
+    except Exception as e:
+        print(f"Knowledge context error: {e}")
+    
     context = "\n".join(context_parts)
+    
+    # 決算データの取得と追加
+    earnings_section = ""
+    try:
+        from src.earnings_data import get_earnings_context_for_recap
+        earnings_context = get_earnings_context_for_recap()
+        if earnings_context:
+            context += f"\n\n{earnings_context}"
+            earnings_section = """
+### Ⅴ. 主要決算サマリー (Earnings Highlights)
+Context: 直近発表された主要企業の決算結果。
+- EPS Beat/Miss、サプライズ率を分析
+- ガイダンスの強弱と市場反応
+- セクター別の決算トレンド
+- 決算を受けた株価反応と今後の見通し
+
+*(決算データがない場合、このセクションは省略)*
+"""
+    except Exception as e:
+        print(f"Earnings context error: {e}")
     
 
 
@@ -248,6 +277,7 @@ Context: Key levels (Support/Resistance), MAs, Momentum (RSI/MACD), Breadth.
 - **Historical Analog**: 過去のサイクルとの類似点・相違点。
 
 *(Define Main vs Risk scenario. Distinguish Short/Medium timeframes)*
+{earnings_section}
 """
     
     try:

@@ -9,7 +9,7 @@ from typing import Optional
 from dataclasses import dataclass, asdict
 
 
-HISTORY_DIR = Path("data/portfolio_history")
+HISTORY_DIR = Path(__file__).parent.parent / "data" / "portfolio_history"
 
 
 @dataclass

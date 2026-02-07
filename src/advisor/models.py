@@ -44,6 +44,32 @@ class TechnicalScore:
     # 逆張り買いゾーン
     contrarian_buy_zone: tuple[float, float] = field(default_factory=lambda: (0.0, 0.0))  # (下限, 上限)
     contrarian_signal: str = ""  # "買い検討ゾーン" / "様子見" / "過熱警戒"
+    
+    # === 拡張指標 ===
+    
+    # OBV (On Balance Volume)
+    obv_trend: str = ""  # 上昇/下降/横ばい
+    obv_divergence: str = ""  # bullish/bearish/none
+    
+    # ADX (Average Directional Index)
+    adx: float = 0.0  # 0-100, >25でトレンド強い
+    adx_signal: str = ""  # 強トレンド/弱トレンド/レンジ
+    
+    # Stochastic RSI
+    stoch_rsi: float = 50.0  # 0-100
+    stoch_rsi_signal: str = ""  # 買われすぎ/売られすぎ/中立
+    
+    # フィボナッチ・リトレースメント
+    fib_levels: dict = field(default_factory=dict)  # {0.236: price, 0.382: price, ...}
+    fib_nearest_level: str = ""  # 最寄りのフィボナッチレベル
+    
+    # 複数タイムフレーム分析
+    mtf_alignment: str = ""  # aligned_bullish/aligned_bearish/mixed
+    mtf_details: dict = field(default_factory=dict)  # {daily: signal, weekly: signal, monthly: signal}
+    
+    # モメンタムダイバージェンス
+    divergence_rsi: str = ""  # bullish/bearish/none
+    divergence_macd: str = ""  # bullish/bearish/none
 
 
 @dataclass

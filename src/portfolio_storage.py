@@ -12,7 +12,7 @@ from datetime import datetime
 from .gas_client import get_gas_client
 
 
-PORTFOLIO_DIR = Path("data/portfolios")
+PORTFOLIO_DIR = Path(__file__).parent.parent / "data" / "portfolios"
 StorageType = Literal["local", "gas"]
 
 # デフォルトストレージタイプ

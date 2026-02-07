@@ -139,6 +139,228 @@ def calculate_contrarian_zone(close_prices: pd.Series, bb: dict, atr: float) -> 
     return (float(zone_lower), float(zone_upper))
 
 
+# === 拡張テクニカル指標 ===
+
+def calculate_obv(close: pd.Series, volume: pd.Series) -> dict:
+    """
+    OBV (On Balance Volume) を計算
+    
+    Returns:
+        {"obv": pd.Series, "trend": str, "divergence": str}
+    """
+    obv = pd.Series(index=close.index, dtype=float)
+    obv.iloc[0] = 0
+    
+    for i in range(1, len(close)):
+        if close.iloc[i] > close.iloc[i-1]:
+            obv.iloc[i] = obv.iloc[i-1] + volume.iloc[i]
+        elif close.iloc[i] < close.iloc[i-1]:
+            obv.iloc[i] = obv.iloc[i-1] - volume.iloc[i]
+        else:
+            obv.iloc[i] = obv.iloc[i-1]
+    
+    # OBVのトレンド判定（20日MA比較）
+    obv_ma = obv.rolling(20).mean()
+    if obv.iloc[-1] > obv_ma.iloc[-1] * 1.02:
+        trend = "上昇"
+    elif obv.iloc[-1] < obv_ma.iloc[-1] * 0.98:
+        trend = "下降"
+    else:
+        trend = "横ばい"
+    
+    # ダイバージェンス検出（価格とOBVの方向性比較）
+    price_change = close.iloc[-1] - close.iloc[-20] if len(close) >= 20 else 0
+    obv_change = obv.iloc[-1] - obv.iloc[-20] if len(obv) >= 20 else 0
+    
+    if price_change < 0 and obv_change > 0:
+        divergence = "bullish"
+    elif price_change > 0 and obv_change < 0:
+        divergence = "bearish"
+    else:
+        divergence = "none"
+    
+    return {"obv": obv, "trend": trend, "divergence": divergence}
+
+
+def calculate_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> dict:
+    """
+    ADX (Average Directional Index) を計算
+    
+    Returns:
+        {"adx": float, "plus_di": float, "minus_di": float, "signal": str}
+    """
+    # True Range
+    tr = pd.concat([
+        high - low,
+        abs(high - close.shift(1)),
+        abs(low - close.shift(1))
+    ], axis=1).max(axis=1)
+    
+    # +DM, -DM
+    plus_dm = high.diff()
+    minus_dm = -low.diff()
+    
+    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+    minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+    
+    # Smoothed values
+    atr = tr.ewm(span=period, adjust=False).mean()
+    plus_di = 100 * (plus_dm.ewm(span=period, adjust=False).mean() / atr)
+    minus_di = 100 * (minus_dm.ewm(span=period, adjust=False).mean() / atr)
+    
+    # DX and ADX
+    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)
+    adx = dx.ewm(span=period, adjust=False).mean()
+    
+    adx_val = float(adx.iloc[-1]) if pd.notna(adx.iloc[-1]) else 0.0
+    
+    # シグナル判定
+    if adx_val >= 25:
+        signal = "強トレンド"
+    elif adx_val >= 15:
+        signal = "弱トレンド"
+    else:
+        signal = "レンジ"
+    
+    return {
+        "adx": adx_val,
+        "plus_di": float(plus_di.iloc[-1]) if pd.notna(plus_di.iloc[-1]) else 0.0,
+        "minus_di": float(minus_di.iloc[-1]) if pd.notna(minus_di.iloc[-1]) else 0.0,
+        "signal": signal
+    }
+
+
+def calculate_stochastic_rsi(close: pd.Series, rsi_period: int = 14, stoch_period: int = 14) -> dict:
+    """
+    Stochastic RSI を計算
+    
+    Returns:
+        {"stoch_rsi": float, "signal": str}
+    """
+    # RSIを計算
+    delta = close.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=rsi_period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_period).mean()
+    rs = gain / (loss + 1e-10)
+    rsi = 100 - (100 / (1 + rs))
+    
+    # RSIのStochasticを計算
+    rsi_min = rsi.rolling(window=stoch_period).min()
+    rsi_max = rsi.rolling(window=stoch_period).max()
+    stoch_rsi = 100 * (rsi - rsi_min) / (rsi_max - rsi_min + 1e-10)
+    
+    stoch_val = float(stoch_rsi.iloc[-1]) if pd.notna(stoch_rsi.iloc[-1]) else 50.0
+    
+    # シグナル判定
+    if stoch_val >= 80:
+        signal = "買われすぎ"
+    elif stoch_val <= 20:
+        signal = "売られすぎ"
+    else:
+        signal = "中立"
+    
+    return {"stoch_rsi": stoch_val, "signal": signal}
+
+
+def calculate_fibonacci_levels(high: pd.Series, low: pd.Series) -> dict:
+    """
+    フィボナッチ・リトレースメントレベルを計算
+    
+    Returns:
+        {"levels": dict, "nearest": str}
+    """
+    # 直近の高値・安値を使用
+    swing_high = float(high.max())
+    swing_low = float(low.min())
+    diff = swing_high - swing_low
+    
+    fib_ratios = [0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
+    levels = {ratio: swing_low + diff * (1 - ratio) for ratio in fib_ratios}
+    
+    # 現在価格に最も近いレベルを特定
+    current_price = float(high.iloc[-1])
+    nearest_ratio = min(fib_ratios, key=lambda r: abs(levels[r] - current_price))
+    nearest = f"{nearest_ratio*100:.1f}%"
+    
+    return {"levels": levels, "nearest": nearest}
+
+
+def detect_divergence(close: pd.Series, indicator: pd.Series, lookback: int = 20) -> str:
+    """
+    価格と指標の間のダイバージェンスを検出
+    
+    Returns:
+        "bullish" | "bearish" | "none"
+    """
+    if len(close) < lookback or len(indicator) < lookback:
+        return "none"
+    
+    # 直近の期間での価格と指標の変化
+    price_start = close.iloc[-lookback]
+    price_end = close.iloc[-1]
+    ind_start = indicator.iloc[-lookback]
+    ind_end = indicator.iloc[-1]
+    
+    price_rising = price_end > price_start
+    ind_rising = ind_end > ind_start
+    
+    if not price_rising and ind_rising:
+        return "bullish"  # 価格下落、指標上昇 → 反転の可能性
+    elif price_rising and not ind_rising:
+        return "bearish"  # 価格上昇、指標下落 → 反転の可能性
+    
+    return "none"
+
+
+def analyze_multi_timeframe(ticker: str) -> dict:
+    """
+    複数タイムフレームでの分析を実行
+    
+    Returns:
+        {"alignment": str, "details": dict}
+    """
+    timeframes = {
+        "daily": "1mo",
+        "weekly": "3mo",
+        "monthly": "1y"
+    }
+    
+    signals = {}
+    
+    for tf_name, period in timeframes.items():
+        try:
+            df = get_stock_data(ticker, period)
+            if df.empty or len(df) < 20:
+                signals[tf_name] = "データ不足"
+                continue
+            
+            close = df["Close"]
+            ma20 = close.rolling(20).mean().iloc[-1]
+            current = close.iloc[-1]
+            
+            if current > ma20 * 1.02:
+                signals[tf_name] = "強気"
+            elif current < ma20 * 0.98:
+                signals[tf_name] = "弱気"
+            else:
+                signals[tf_name] = "中立"
+        except Exception:
+            signals[tf_name] = "エラー"
+    
+    # アラインメント判定
+    bullish_count = sum(1 for s in signals.values() if s == "強気")
+    bearish_count = sum(1 for s in signals.values() if s == "弱気")
+    
+    if bullish_count >= 2:
+        alignment = "aligned_bullish"
+    elif bearish_count >= 2:
+        alignment = "aligned_bearish"
+    else:
+        alignment = "mixed"
+    
+    return {"alignment": alignment, "details": signals}
+
+
 def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScore]:
     """
     銘柄の包括的テクニカル分析を実行します。
@@ -157,9 +379,10 @@ def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScor
     close = df["Close"]
     high = df["High"]
     low = df["Low"]
+    volume = df["Volume"] if "Volume" in df.columns else pd.Series([0] * len(df))
     current_price = float(close.iloc[-1])
     
-    # === 各指標の計算 ===
+    # === 既存指標の計算 ===
     
     # RSI
     rsi = calculate_rsi(close)
@@ -197,49 +420,123 @@ def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScor
     # 逆張りゾーン
     contrarian_zone = calculate_contrarian_zone(close, bb, atr_data["atr"])
     
+    # === 拡張指標の計算 ===
+    
+    # OBV
+    obv_data = calculate_obv(close, volume)
+    obv_trend = obv_data["trend"]
+    obv_divergence = obv_data["divergence"]
+    
+    # ADX
+    adx_data = calculate_adx(high, low, close)
+    adx = adx_data["adx"]
+    adx_signal = adx_data["signal"]
+    
+    # Stochastic RSI
+    stoch_data = calculate_stochastic_rsi(close)
+    stoch_rsi = stoch_data["stoch_rsi"]
+    stoch_rsi_signal = stoch_data["signal"]
+    
+    # フィボナッチ
+    fib_data = calculate_fibonacci_levels(high, low)
+    fib_levels = fib_data["levels"]
+    fib_nearest = fib_data["nearest"]
+    
+    # MTF分析
+    mtf_data = analyze_multi_timeframe(ticker)
+    mtf_alignment = mtf_data["alignment"]
+    mtf_details = mtf_data["details"]
+    
+    # ダイバージェンス検出（RSI）
+    delta = close.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-10)
+    rsi_series = 100 - (100 / (1 + rs))
+    divergence_rsi = detect_divergence(close, rsi_series)
+    
+    # ダイバージェンス検出（MACD）
+    exp12 = close.ewm(span=12, adjust=False).mean()
+    exp26 = close.ewm(span=26, adjust=False).mean()
+    macd_line = exp12 - exp26
+    divergence_macd = detect_divergence(close, macd_line)
+    
     # === 総合スコア計算 (-100 to 100) ===
     score = 0
     
     # RSIスコア（売られすぎ=買いシグナル）
     if rsi < 30:
-        score += 25
+        score += 20
     elif rsi < 40:
-        score += 10
+        score += 8
     elif rsi > 70:
-        score -= 25
+        score -= 20
     elif rsi > 60:
-        score -= 10
+        score -= 8
     
     # MA乖離スコア（下方乖離=買いシグナル）
     if ma_dev < -15:
-        score += 20
+        score += 15
     elif ma_dev < -5:
-        score += 10
+        score += 8
     elif ma_dev > 15:
-        score -= 20
+        score -= 15
     elif ma_dev > 5:
-        score -= 10
+        score -= 8
     
     # MACDスコア
     if macd_signal == "強気":
-        score += 15
+        score += 12
     elif macd_signal == "弱気":
-        score -= 15
+        score -= 12
     
     # ボリンジャースコア（下限=買いシグナル）
     if bb["position"] == "下限突破":
-        score += 20
+        score += 15
     elif bb["position"] == "下半分":
-        score += 5
+        score += 4
     elif bb["position"] == "上限突破":
-        score -= 20
+        score -= 15
     elif bb["position"] == "上半分":
-        score -= 5
+        score -= 4
     
     # トレンドスコア
     if ma_trend == "上昇トレンド":
-        score += 10
+        score += 8
     elif ma_trend == "下降トレンド":
+        score -= 8
+    
+    # === 拡張指標によるスコア調整 ===
+    
+    # ADXスコア（トレンド方向と強度）
+    if adx >= 25:
+        if macd_signal == "強気":
+            score += 10  # 強いトレンド + 強気
+        elif macd_signal == "弱気":
+            score -= 10  # 強いトレンド + 弱気
+    
+    # Stochastic RSI スコア
+    if stoch_rsi <= 20:
+        score += 8  # 売られすぎ
+    elif stoch_rsi >= 80:
+        score -= 8  # 買われすぎ
+    
+    # OBVダイバージェンススコア
+    if obv_divergence == "bullish":
+        score += 10  # 強気ダイバージェンス
+    elif obv_divergence == "bearish":
+        score -= 10  # 弱気ダイバージェンス
+    
+    # RSIダイバージェンススコア
+    if divergence_rsi == "bullish":
+        score += 8
+    elif divergence_rsi == "bearish":
+        score -= 8
+    
+    # MTF整合性スコア
+    if mtf_alignment == "aligned_bullish":
+        score += 10
+    elif mtf_alignment == "aligned_bearish":
         score -= 10
     
     score = max(-100, min(100, score))
@@ -280,7 +577,20 @@ def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScor
         overall_score=score,
         overall_signal=overall,
         contrarian_buy_zone=contrarian_zone,
-        contrarian_signal=contrarian_signal
+        contrarian_signal=contrarian_signal,
+        # 拡張指標
+        obv_trend=obv_trend,
+        obv_divergence=obv_divergence,
+        adx=adx,
+        adx_signal=adx_signal,
+        stoch_rsi=stoch_rsi,
+        stoch_rsi_signal=stoch_rsi_signal,
+        fib_levels=fib_levels,
+        fib_nearest_level=fib_nearest,
+        mtf_alignment=mtf_alignment,
+        mtf_details=mtf_details,
+        divergence_rsi=divergence_rsi,
+        divergence_macd=divergence_macd
     )
 
 
@@ -309,6 +619,7 @@ def get_technical_summary_for_ai(ticker: str) -> str:
     if not tech:
         return "テクニカルデータ取得失敗"
     
+    # 基本指標
     summary = f"""【{ticker} テクニカル分析】
 - RSI: {tech.rsi:.1f} ({tech.rsi_signal})
 - 50日MA乖離: {tech.ma_deviation:+.1f}% ({tech.ma_signal})
@@ -318,6 +629,16 @@ def get_technical_summary_for_ai(ticker: str) -> str:
 - サポート: ${tech.support_price:.2f} / レジスタンス: ${tech.resistance_price:.2f}
 - 逆張り買いゾーン: ${tech.contrarian_buy_zone[0]:.2f} - ${tech.contrarian_buy_zone[1]:.2f}
 - 総合スコア: {tech.overall_score} ({tech.overall_signal})
-- 逆張りシグナル: {tech.contrarian_signal}"""
+- 逆張りシグナル: {tech.contrarian_signal}
+
+【拡張指標】
+- OBV: {tech.obv_trend} (ダイバージェンス: {tech.obv_divergence})
+- ADX: {tech.adx:.1f} ({tech.adx_signal})
+- Stochastic RSI: {tech.stoch_rsi:.1f} ({tech.stoch_rsi_signal})
+- MTF整合性: {tech.mtf_alignment}
+- RSIダイバージェンス: {tech.divergence_rsi}
+- MACDダイバージェンス: {tech.divergence_macd}
+- フィボナッチ最寄り: {tech.fib_nearest_level}"""
     
     return summary
+

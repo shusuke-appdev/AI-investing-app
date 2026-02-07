@@ -77,6 +77,11 @@ def render_sidebar():
         
         st.divider()
         
+        # === 参照知識管理 ===
+        _render_knowledge_management()
+        
+        st.divider()
+        
         # === AIチャット（全モード共通）===
         _render_ai_chat()
         
@@ -281,3 +286,201 @@ def _refresh_data():
             st.success("✅ AIレポート生成完了")
     
     st.rerun()
+
+
+def _render_knowledge_management():
+    """参照知識管理セクション"""
+    with st.expander("📚 参照知識", expanded=False):
+        # 知識追加モード切替
+        if "knowledge_mode" not in st.session_state:
+            st.session_state.knowledge_mode = "list"  # "list" | "add" | "edit"
+        
+        # モード別表示
+        if st.session_state.knowledge_mode == "list":
+            _render_knowledge_list()
+        elif st.session_state.knowledge_mode == "add":
+            _render_knowledge_add()
+        elif st.session_state.knowledge_mode == "edit":
+            _render_knowledge_edit()
+
+
+def _render_knowledge_list():
+    """知識一覧表示"""
+    from src.knowledge_storage import load_all_knowledge, delete_knowledge
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("**保存済み知識**")
+    with col2:
+        if st.button("➕ 追加", key="add_knowledge_btn", use_container_width=True):
+            st.session_state.knowledge_mode = "add"
+            st.rerun()
+    
+    items = load_all_knowledge()
+    
+    if not items:
+        st.caption("まだ知識が追加されていません")
+        return
+    
+    for item in items[:10]:  # 最大10件表示
+        source_icon = {
+            "text": "📝",
+            "file": "📄",
+            "youtube": "🎥",
+            "url": "🌐"
+        }.get(item.source_type, "📌")
+        
+        with st.container(border=True):
+            st.markdown(f"**{source_icon} {item.title[:30]}**")
+            st.caption(item.summary[:100] + "..." if len(item.summary) > 100 else item.summary)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✏️", key=f"edit_{item.id}", help="編集"):
+                    st.session_state.knowledge_mode = "edit"
+                    st.session_state.edit_knowledge_id = item.id
+                    st.rerun()
+            with col2:
+                if st.button("🗑️", key=f"del_{item.id}", help="削除"):
+                    delete_knowledge(item.id)
+                    st.toast("削除しました")
+                    st.rerun()
+
+
+def _render_knowledge_add():
+    """知識追加フォーム"""
+    from src.knowledge_storage import KnowledgeItem, save_knowledge
+    from src.knowledge_extractor import (
+        extract_from_text, extract_from_file, extract_from_youtube,
+        extract_from_url, summarize_content, generate_title
+    )
+    
+    st.markdown("**📥 知識を追加**")
+    
+    # 入力タイプ選択
+    input_type = st.radio(
+        "入力方式",
+        ["text", "file", "youtube", "url"],
+        format_func=lambda x: {
+            "text": "📝 テキスト",
+            "file": "📄 ファイル",
+            "youtube": "🎥 YouTube",
+            "url": "🌐 URL"
+        }[x],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    
+    content = ""
+    metadata = {}
+    
+    if input_type == "text":
+        content = st.text_area(
+            "テキストを入力",
+            height=150,
+            placeholder="投資に関する情報をペーストしてください..."
+        )
+    
+    elif input_type == "file":
+        uploaded = st.file_uploader(
+            "ファイルをアップロード",
+            type=["txt", "pdf", "md", "csv", "json"],
+            help="txt, pdf, md, csv, json形式に対応"
+        )
+        if uploaded:
+            content = extract_from_file(uploaded.read(), uploaded.name)
+            metadata["file_name"] = uploaded.name
+    
+    elif input_type == "youtube":
+        url = st.text_input(
+            "YouTube URL",
+            placeholder="https://www.youtube.com/watch?v=..."
+        )
+        if url:
+            with st.spinner("トランスクリプト取得中..."):
+                content = extract_from_youtube(url)
+            metadata["video_url"] = url
+    
+    elif input_type == "url":
+        url = st.text_input(
+            "ページURL",
+            placeholder="https://..."
+        )
+        if url:
+            with st.spinner("ページ取得中..."):
+                content = extract_from_url(url)
+            metadata["page_url"] = url
+    
+    # プレビュー
+    if content and not content.startswith("["):
+        st.caption(f"プレビュー: {content[:200]}...")
+    elif content and content.startswith("["):
+        st.warning(content)
+        content = ""
+    
+    # ボタン
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("💾 保存", type="primary", disabled=not content):
+            with st.spinner("要約生成中..."):
+                summary = summarize_content(content, input_type)
+                title = generate_title(content, input_type)
+            
+            item = KnowledgeItem.create(
+                title=title,
+                source_type=input_type,
+                original_content=content,
+                summary=summary,
+                metadata=metadata
+            )
+            save_knowledge(item)
+            st.toast("✅ 保存しました")
+            st.session_state.knowledge_mode = "list"
+            st.rerun()
+    
+    with col2:
+        if st.button("❌ キャンセル"):
+            st.session_state.knowledge_mode = "list"
+            st.rerun()
+
+
+def _render_knowledge_edit():
+    """知識編集フォーム"""
+    from src.knowledge_storage import get_knowledge_by_id, update_knowledge
+    
+    item_id = st.session_state.get("edit_knowledge_id")
+    if not item_id:
+        st.session_state.knowledge_mode = "list"
+        st.rerun()
+        return
+    
+    item = get_knowledge_by_id(item_id)
+    if not item:
+        st.warning("知識が見つかりません")
+        st.session_state.knowledge_mode = "list"
+        return
+    
+    st.markdown("**✏️ 知識を編集**")
+    
+    new_title = st.text_input("タイトル", value=item.title)
+    new_summary = st.text_area("要約", value=item.summary, height=150)
+    
+    st.caption(f"ソース: {item.source_type}")
+    st.caption(f"作成日: {item.created_at[:10]}")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("💾 更新", type="primary"):
+            update_knowledge(item_id, {
+                "title": new_title,
+                "summary": new_summary
+            })
+            st.toast("✅ 更新しました")
+            st.session_state.knowledge_mode = "list"
+            st.rerun()
+    
+    with col2:
+        if st.button("❌ キャンセル"):
+            st.session_state.knowledge_mode = "list"
+            st.rerun()
+
