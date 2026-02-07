@@ -267,13 +267,21 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
     }
 
 
-def get_major_indices_options() -> list[dict]:
+def get_major_indices_options(market_type: str = "US") -> list[dict]:
     """
     主要指数ETF (SPY, QQQ, IWM) のオプション分析を取得します。
+    日本市場ではオプションデータが取得できないため空リストを返します。
+    
+    Args:
+        market_type: "US" または "JP"
     
     Returns:
-        各指数のオプション分析結果のリスト
+        各指数のオプション分析結果のリスト（日本市場では空）
     """
+    # 日本市場ではオプションデータ取得不可
+    if market_type == "JP":
+        return []
+    
     indices = ["SPY", "QQQ", "IWM"]
     results = []
     

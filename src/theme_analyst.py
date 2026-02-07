@@ -11,20 +11,26 @@ import os
 
 # 親ディレクトリのインポート用
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from themes_config import THEMES, PERIODS
+from themes_config import THEMES, PERIODS, get_themes
 
 
 
-def fetch_and_calculate_all_performances(days: int) -> dict[str, float]:
+def fetch_and_calculate_all_performances(days: int, market_type: str = "US") -> dict[str, float]:
     """
     全テーマの構成銘柄を一括取得して騰落率を計算します。
+    
+    Args:
+        days: 期間（日数）
+        market_type: "US" または "JP"
     
     Returns:
         {ticker: performance} の辞書
     """
+    themes = get_themes(market_type)
+    
     # 1. 全銘柄リストの作成
     all_tickers = set()
-    for tickers in THEMES.values():
+    for tickers in themes.values():
         all_tickers.update(tickers)
     
     all_tickers = list(all_tickers)
@@ -108,12 +114,13 @@ def fetch_and_calculate_all_performances(days: int) -> dict[str, float]:
 import streamlit as st
 
 @st.cache_data(ttl=43200)  # 12時間キャッシュ
-def get_ranked_themes(period_name: str) -> list[dict]:
+def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:
     """
     指定期間での全テーマをパフォーマンス順（降順）で取得します。
     
     Args:
         period_name: 期間名 ("1日", "5日", etc.)
+        market_type: "US" または "JP"
     
     Returns:
         全テーマのリスト（パフォーマンス順）
@@ -122,11 +129,12 @@ def get_ranked_themes(period_name: str) -> list[dict]:
         raise ValueError(f"Unknown period: {period_name}")
     
     days = PERIODS[period_name]
-    ticker_performances = fetch_and_calculate_all_performances(days)
+    ticker_performances = fetch_and_calculate_all_performances(days, market_type)
     
+    themes = get_themes(market_type)
     theme_performances = []
     
-    for theme_name, tickers in THEMES.items():
+    for theme_name, tickers in themes.items():
         stock_perfs = []
         for t in tickers:
             if t in ticker_performances:

@@ -20,15 +20,25 @@ from src.ui.components.stock import (
 
 def render_stock_tab():
     """Renders the Stock Analysis tab."""
-    st.markdown("## 🔍 個別銘柄分析")
+    # グローバル市場タイプを取得
+    market_type = st.session_state.get("market_type", "US")
+    
+    from src.market_config import get_market_config
+    config = get_market_config(market_type)
+    
+    default_ticker = config["default_ticker"]
+    sample_tickers = ", ".join(config["sample_tickers"][:3])
+    market_label = "🇯🇵 日本市場" if market_type == "JP" else "🇺🇸 米国市場"
+    
+    st.markdown(f"## 🔍 個別銘柄分析 ({market_label})")
     
     # 銘柄入力
     col_input, _ = st.columns([1, 2])
     with col_input:
         ticker = st.text_input(
             "銘柄コードを入力",
-            value="AAPL",
-            placeholder="例: AAPL, NVDA, TSLA"
+            value=default_ticker,
+            placeholder=f"例: {sample_tickers}"
         ).upper()
     
     if not ticker:

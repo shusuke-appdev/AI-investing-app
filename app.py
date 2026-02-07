@@ -35,6 +35,7 @@ def init_session_state():
         "ai_recap": None,
         "current_page": "market",
         "portfolio_submode": "input",
+        "market_type": "US",  # グローバル市場設定
     }
     for key, value in defaults.items():
         if key not in st.session_state:

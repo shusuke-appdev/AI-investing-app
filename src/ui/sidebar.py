@@ -41,6 +41,30 @@ def render_sidebar():
         # 保存済み設定を読み込み
         _load_saved_settings()
         
+        # === グローバル市場選択（全機能に影響） ===
+        st.markdown("### 🌐 市場")
+        if "market_type" not in st.session_state:
+            st.session_state.market_type = "US"
+        
+        market_options = ["🇺🇸 米国株", "🇯🇵 日本株"]
+        current_idx = 0 if st.session_state.market_type == "US" else 1
+        
+        market_selection = st.segmented_control(
+            "市場選択",
+            options=market_options,
+            default=market_options[current_idx],
+            label_visibility="collapsed"
+        )
+        
+        new_market = "US" if "米国" in (market_selection or "") else "JP"
+        if new_market != st.session_state.market_type:
+            st.session_state.market_type = new_market
+            # キャッシュをクリアして再取得
+            st.cache_data.clear()
+            st.rerun()
+        
+        st.divider()
+        
         # === ナビゲーション ===
         st.markdown("### 🧭 ナビゲーション")
         

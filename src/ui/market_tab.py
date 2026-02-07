@@ -10,20 +10,25 @@ from src.option_analyst import get_major_indices_options
 
 def render_market_tab():
     """Renders the Market News tab."""
+    # グローバル市場タイプを取得
+    market_type = st.session_state.get("market_type", "US")
+    market_label = "🇯🇵 日本市場" if market_type == "JP" else "🇺🇸 米国市場"
+    
     # ヘッダーとAIレポートボタンを横並びに配置
     header_col, btn_col = st.columns([4, 1])
     with header_col:
-        st.markdown("## 📰 ニュース")
+        st.markdown(f"## 📰 ニュース ({market_label})")
     with btn_col:
         if st.button("✨ AI分析", type="secondary", use_container_width=True):
-            _generate_ai_recap()
+            _generate_ai_recap(market_type)
     
     with st.spinner("市場データを取得中..."):
         if st.session_state.market_data is None:
-            st.session_state.market_data = get_market_indices()
+            from src.market_data import get_market_indices
+            st.session_state.market_data = get_market_indices(market_type)
         market_data = st.session_state.market_data
     
-    _render_flash_summary(market_data)
+    _render_flash_summary(market_data, market_type)
     
     # AIレポートがある場合のみ表示
     if st.session_state.get("ai_recap"):
@@ -40,10 +45,10 @@ def render_market_tab():
                 st.rerun()
     
     st.divider()
-    _render_option_analysis()
+    _render_option_analysis(market_type)
 
 
-def _generate_ai_recap():
+def _generate_ai_recap(market_type: str = "US"):
     """AIレポート生成"""
     if not st.session_state.get("gemini_configured"):
         st.toast("⚠️ Gemini APIキーを設定してください", icon="⚠️")
@@ -53,6 +58,9 @@ def _generate_ai_recap():
         from src.market_data import get_stock_news, get_stock_data
         from src.theme_analyst import get_ranked_themes
         from src.news_aggregator import get_aggregated_news, merge_with_yfinance_news
+        from src.market_config import get_market_config
+        
+        config = get_market_config(market_type)
         
         # 1. yfinanceからティッカー関連ニュース取得
         tickers_to_fetch = [
@@ -197,54 +205,94 @@ def _generate_ai_recap():
         st.rerun()
 
 
-def _render_flash_summary(market_data):
+def _render_flash_summary(market_data, market_type: str = "US"):
     """Flash Summaryを資産クラス別にボックス化して表示"""
+    from src.market_config import get_market_config
+    config = get_market_config(market_type)
+    
     st.markdown("### 📌 Flash Summary")
     
     col1, col2, col3 = st.columns(3)
     
+    # 各カテゴリのティッカーセットを作成
+    indices_tickers = set(config["indices"].values())
+    treasuries_tickers = set(config["treasuries"].values())
+    sectors_tickers = set(config.get("sectors", {}).values())
+    commodities_tickers = set(config["commodities"].values())
+    crypto_tickers = set(config["crypto"].values())
+    forex_tickers = set(config["forex"].values())
+    
+    # 左カラム: 株式指数 & 債券・金利
     with col1:
         with st.container(border=True):
-            st.markdown("**📊 株式指数**")
-            # TOPIXはETF(1306.T)で代用しているため、円表示になるが変化率は近似できる
-            indices = [
-                ("S&P 500", "S&P500"), ("Nasdaq", "Nasdaq"), ("Dow 30", "Dow30"),
-                ("Nikkei 225", "日経225"), ("TOPIX", "TOPIX"), # 1306.T
-                ("EURO STOXX 50", "Euro50"), ("Shanghai Composite", "上海総合")
-            ]
-            for name, label in indices:
-                if name in market_data:
-                    d = market_data[name]
-                    price_fmt = f"{d.get('price', 0):,.0f}"
-                    if name == "TOPIX": price_fmt = f"¥{d.get('price', 0):,.0f}"
-                    _render_market_item(label, price_fmt, d.get("change", 0))
-    
+            st.markdown("**📊 株式指数・金利**")
+            
+            # --- 株式指数 ---
+            st.caption("主要指数")
+            for name, data in market_data.items():
+                if name in ("trend_1mo", "weekly_performance"): continue
+                ticker = data.get("ticker", "")
+                if ticker in indices_tickers:
+                    price = data.get("price", 0)
+                    change = data.get("change", 0)
+                    if market_type == "JP":
+                        price_fmt = f"¥{price:,.0f}"
+                    else:
+                        price_fmt = f"{price:,.0f}"
+                    _render_market_item(name, price_fmt, change)
+            
+            # --- 債券・金利 ---
+            st.caption("債券・金利")
+            if market_type == "JP":
+                st.caption("※ 日本国債利回りは非表示")
+            else:
+                for name, data in market_data.items():
+                    if name in ("trend_1mo", "weekly_performance"): continue
+                    ticker = data.get("ticker", "")
+                    if ticker in treasuries_tickers:
+                        price = data.get("price", 0)
+                        change = data.get("change", 0)
+                        _render_market_item(name, f"{price:.2f}%", change)
+
+    # 中央カラム: セクター別指数 (米国のみ)
     with col2:
         with st.container(border=True):
-            st.markdown("**💵 債券・金利**")
-            # 日本10年はYF取得不可のため削除、US 2Y復活
-            rates = [("US 2Y", "米2年"), ("US 10Y", "米10年"), ("US 30Y", "米30年")]
-            for name, label in rates:
-                if name in market_data:
-                    d = market_data[name]
-                    _render_market_item(label, f"{d.get('price', 0):.2f}%", d.get("change", 0))
+            st.markdown("**🏭 セクター別指数**")
+            if not sectors_tickers:
+                st.info("データなし")
+            else:
+                found_sectors = False
+                for name, data in market_data.items():
+                    if name in ("trend_1mo", "weekly_performance"): continue
+                    ticker = data.get("ticker", "")
+                    if ticker in sectors_tickers:
+                        found_sectors = True
+                        price = data.get("price", 0)
+                        change = data.get("change", 0)
+                        _render_market_item(name, f"${price:.2f}", change)
+                if not found_sectors:
+                    st.caption("データ取得中または利用不可")
     
+    # 右カラム: 商品・FX・暗号資産
     with col3:
         with st.container(border=True):
             st.markdown("**🌍 商品・FX・暗号資産**")
-            assets = [
-                ("USD/JPY", "USD/JPY", lambda p: f"¥{p:.2f}"),
-                ("EUR/JPY", "EUR/JPY", lambda p: f"¥{p:.2f}"),
-                ("Gold", "Gold", lambda p: f"${p:,.0f}"),
-                ("WTI Oil", "WTI原油", lambda p: f"${p:.2f}"),
-                # Brent削除
-                ("Bitcoin", "BTC", lambda p: f"${p/1000:.1f}K"),
-                ("Ethereum", "ETH", lambda p: f"${p/1000:.1f}K"),
-            ]
-            for name, label, fmt in assets:
-                if name in market_data:
-                    d = market_data[name]
-                    _render_market_item(label, fmt(d.get("price", 0)), d.get("change", 0))
+            target_tickers = commodities_tickers | crypto_tickers | forex_tickers
+            for name, data in market_data.items():
+                if name in ("trend_1mo", "weekly_performance"): continue
+                ticker = data.get("ticker", "")
+                if ticker in target_tickers:
+                    price = data.get("price", 0)
+                    change = data.get("change", 0)
+                    if "JPY" in name:
+                        price_fmt = f"¥{price:.2f}"
+                    elif "BTC" in ticker or "ETH" in ticker:
+                        price_fmt = f"${price/1000:.1f}K"
+                    elif "GC" in ticker or "Gold" in name:
+                        price_fmt = f"${price:,.0f}"
+                    else:
+                        price_fmt = f"${price:.2f}"
+                    _render_market_item(name, price_fmt, change)
 
 
 def _render_market_item(label: str, value: str, change: float):
@@ -261,14 +309,19 @@ def _render_market_item(label: str, value: str, change: float):
     """, unsafe_allow_html=True)
 
 
-def _render_option_analysis():
+def _render_option_analysis(market_type: str = "US"):
     """オプション分析（コンパクト版）"""
     st.markdown("### 📊 オプション分析 (詳細)")
+    
+    # 日本市場ではオプションデータ取得不可
+    if market_type == "JP":
+        st.warning("🇯🇵 日本市場のオプションデータは現在取得できません（yfinance APIの制約）")
+        return
     
     with st.spinner("オプションデータを取得中..."):
         if st.session_state.option_analysis is None:
             from src.option_analyst import get_major_indices_options
-            st.session_state.option_analysis = get_major_indices_options()
+            st.session_state.option_analysis = get_major_indices_options(market_type)
         option_analysis = st.session_state.option_analysis
     
     if not option_analysis:

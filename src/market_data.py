@@ -2,6 +2,7 @@
 市場データ取得モジュール
 株価、オプションチェーン、ニュース、企業情報を取得します。
 """
+import streamlit as st
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
@@ -256,79 +257,66 @@ def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]
         return None
 
 
-import streamlit as st
+from src.market_config import get_market_config
 
 @st.cache_data(ttl=300)  # 5分間キャッシュ
-def get_market_indices() -> dict[str, dict]:
+def get_market_indices(market_type: str = "US") -> dict[str, dict]:
     """
     主要市場指数のデータを取得します。
     キャッシュにより高速化。
     
+    Args:
+        market_type: "US" または "JP"
+    
     Returns:
         指数名をキーとする価格情報の辞書
     """
-    indices = {
-        "S&P 500": "^GSPC",
-        "Nasdaq": "^IXIC",
-        "Dow 30": "^DJI",
-        "Nikkei 225": "^N225",
-        "TOPIX": "1306.T", # ETF (TOPIX連動) を代用 (^TOPXは取得不安定なため) または ^TPX
-                           # 1306.T (Nomura TOPIX ETF) is reliable.
-        "EURO STOXX 50": "^STOXX50E",
-        "Shanghai Composite": "000001.SS", 
-    }
+    config = get_market_config(market_type)
     
-    treasuries = {
-        "US 10Y": "^TNX",
-        "US 30Y": "^TYX",
-        # 日本10年金利: YFでの直接取得は非常に困難。
-        # 代替として、日本の長期金利に連動するETF等もない。
-        # ここではユーザー要望に応えるため、別のアプローチが必要だが、
-        # YFAPIの仕様上、"JGB"等のシンボルは存在しない。
-        # 暫定的に "US 2Y" を復活させ、日本金利は一旦削除するか、
-        # もし可能なら "10Y_JP" のようなプレースホルダーではなく、
-        # クライアント側で非表示にするしかない。
-        # ただしユーザーは「ない」と言っているので、「取得できないため表示されていない」のが現状。
-        # ここでは、確実に取れる "US 2Y" に戻しつつ、日本金利はコメントアウトする。
-        # (TradingViewなどと違いYFは債券データが弱い)
-        "US 2Y": "^IRX", 
-    }
+    indices = config["indices"]
+    sectors = config.get("sectors", {}) # セクター追加
+    treasuries = config["treasuries"]
+    commodities = config["commodities"]
+    crypto = config["crypto"]
+    forex = config["forex"]
     
-    commodities = {
-        "WTI Oil": "CL=F",
-        # Brent Removed
-        "Gold": "GC=F",
-        "Copper": "HG=F",
-    }
-    
-    crypto = {
-        "Bitcoin": "BTC-USD",
-        "Ethereum": "ETH-USD",
-    }
-    
-    forex = {
-        "USD/JPY": "JPY=X",
-        "EUR/JPY": "EURJPY=X",
-        "EUR/USD": "EURUSD=X",
-    }
-    
-    all_tickers = {**indices, **treasuries, **commodities, **crypto, **forex}
+    all_tickers = {**indices, **sectors, **treasuries, **commodities, **crypto, **forex}
     result = {}
     
     # 一括取得で高速化
     ticker_list = list(all_tickers.values())
+    if not ticker_list:
+        return {}
+        
     try:
+        # threads=True は高速だが、銘柄数が多い場合や混在市場の場合に失敗しやすいことがある
         data = yf.download(ticker_list, period="5d", group_by="ticker", progress=False, threads=True)
-    except Exception:
-        data = None
+    except Exception as e:
+        print(f"Batch download failed: {e}")
+        data = pd.DataFrame() # 空のDataFrameで初期化
+    
+    # 単一銘柄の場合、MultiIndexにならないことがあるため調整
+    is_multi_index = isinstance(data.columns, pd.MultiIndex) if not data.empty else False
     
     for name, ticker in all_tickers.items():
+        hist = None
         try:
-            # 日本国債30年など取得不可のものはスキップされる
-            if data is not None and ticker in data.columns.get_level_values(0):
-                hist = data[ticker]["Close"].dropna()
-            else:
+            # 一括データからの抽出を試みる
+            if not data.empty:
+                if is_multi_index and ticker in data.columns.levels[0]:
+                    hist = data[ticker]["Close"].dropna()
+                elif not is_multi_index and ticker == ticker_list[0]: # 1銘柄だけの場合
+                    hist = data["Close"].dropna()
+                elif not is_multi_index and ticker in data.columns: # MultiIndexでないがカラムにある場合
+                     # yfinanceのバージョンによっては level 0 がない場合もある
+                    if "Close" in data.columns:
+                         # これは単一銘柄のケースに近いが、念のため
+                         pass
+            
+            # データがない場合は個別取得 (フォールバック)
+            if hist is None or len(hist) == 0:
                 stock = yf.Ticker(ticker)
+                # 日本株の場合は遅延があるため 5d で取得して直近を使う
                 hist = stock.history(period="5d")["Close"]
             
             if len(hist) >= 2:
@@ -347,7 +335,8 @@ def get_market_indices() -> dict[str, dict]:
                     "ticker": ticker
                 }
         except Exception:
-            pass # エラー時はスキップ
+            # 個別取得も失敗した場合はスキップ
+            pass
     
     return result
 
