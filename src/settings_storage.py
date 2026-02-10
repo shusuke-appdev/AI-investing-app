@@ -130,3 +130,21 @@ def get_storage_type() -> str:
 def set_storage_type_setting(storage_type: str) -> bool:
     """ストレージタイプを保存"""
     return set_setting("storage_type", storage_type)
+
+
+def get_finnhub_api_key() -> str:
+    """Finnhub APIキーを取得（Streamlit secrets対応）"""
+    # 1. Streamlit secretsから取得
+    try:
+        import streamlit as st
+        if "FINNHUB_API_KEY" in st.secrets:
+            return st.secrets["FINNHUB_API_KEY"]
+    except Exception:
+        pass
+    # 2. ローカル設定から取得
+    return get_setting("finnhub_api_key", "")
+
+
+def set_finnhub_api_key(api_key: str) -> bool:
+    """Finnhub APIキーを保存"""
+    return set_setting("finnhub_api_key", api_key)

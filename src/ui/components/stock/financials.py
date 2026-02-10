@@ -3,116 +3,151 @@ import plotly.graph_objects as go
 import pandas as pd
 
 def render_quarterly_financials_graph(ticker: str):
-    """四半期財務グラフを描画（詳細データテーブルは削除済み）"""
+    """四半期財務グラフを描画（Finnhub版）"""
     try:
-        import yfinance as yf
-        stock = yf.Ticker(ticker)
-        q_fin = stock.quarterly_financials
+        from src.finnhub_client import get_financials_reported, is_configured
         
-        if q_fin is not None and not q_fin.empty:
-            q_fin = q_fin.sort_index(axis=1)
-            recent_q_fin = q_fin.iloc[:, -6:]
-            dates = []
-            
-            for d in recent_q_fin.columns:
-                try:
-                    ts = pd.Timestamp(d)
-                    quarter = (ts.month - 1) // 3 + 1
-                    year = str(ts.year)[2:]
-                    dates.append(f"Q{quarter} '{year}")
-                except:
-                    dates.append(str(d)[:10])
-            
-            def get_row_data(df, keys):
-                for k in keys:
-                    if k in df.index:
-                        return df.loc[k].values
-                return [0] * len(df.columns)
+        if not is_configured():
+            st.warning("Finnhub APIキーが設定されていません")
+            return
 
-            revenue_row = get_row_data(recent_q_fin, ["Total Revenue", "Revenue"])
-            net_income_row = get_row_data(recent_q_fin, ["Net Income", "Net Income Common Stockholders"])
-            
-            revenue_m = revenue_row / 1e6
-            net_income_m = net_income_row / 1e6
-            
-            net_margin = []
-            for r, n in zip(revenue_row, net_income_row):
-                if r != 0:
-                    net_margin.append((n / r) * 100)
-                else:
-                    net_margin.append(0)
-            
-            fig = go.Figure()
-            
-            # 1. 売上高 (棒グラフ・青)
-            fig.add_trace(go.Bar(
-                x=dates, y=revenue_m, name="売上高",
-                marker_color="#4285F4", offsetgroup=1, yaxis="y1"
-            ))
-            
-            # 2. 純利益 (棒グラフ・水色)
-            fig.add_trace(go.Bar(
-                x=dates, y=net_income_m, name="純利益",
-                marker_color="#64B5F6", offsetgroup=2, yaxis="y1"
-            ))
-            
-            # 3. 純利益率 (折れ線グラフ・オレンジ)
-            fig.add_trace(go.Scatter(
-                x=dates, y=net_margin, name="当期純利益率 %",
-                mode="lines+markers",
-                line=dict(color="#FB8C00", width=3),
-                marker=dict(size=8, color="#FFFFFF", line=dict(width=2, color="#FB8C00")),
-                yaxis="y2"
-            ))
-            
-            fig.update_layout(
-                title=dict(text="損益計算書 (四半期)", font=dict(size=16)),
-                yaxis=dict(title="金額 (百万ドル)", side="left", showgrid=True, gridcolor="#F1F3F4"),
-                yaxis2=dict(
-                    title="利益率 (%)", side="right", overlaying="y", showgrid=False,
-                    range=[min(net_margin)*1.2 if min(net_margin)<0 else 0, max(net_margin)*1.2]
-                ),
-                legend=dict(orientation="h", x=0.5, y=1.1, xanchor="center"),
-                barmode='group', height=400, margin=dict(l=50, r=50, t=50, b=50),
-                template="plotly_white",xaxis=dict(tickmode='array', tickvals=dates)
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-        else:
-            st.warning("四半期財務データを取得できませんでした。")
+        # Finnhubから四半期報告書を取得
+        # data = [{"report": {"ic": [...], "bs": [...]}, "year": 2024, "quarter": 1, ...}]
+        reports = get_financials_reported(ticker, freq="quarterly")
+        
+        if not reports:
+            st.info("四半期財務データが見つかりませんでした (Finnhub)")
+            return
+
+        # データを抽出・整理
+        financials_data = []
+        
+        for item in reports:
+            try:
+                year = item.get("year")
+                quarter = item.get("quarter")
+                report = item.get("report", {})
+                
+                # Income Statement (ic) から Revenue, NetIncome を探す
+                ic = report.get("ic", [])
+                
+                revenue = 0
+                net_income = 0
+                
+                # コンセプト辞書から検索 ("concept" key)
+                # 一般的なタグ名: "Revenues", "SalesRevenueNet", "NetIncomeLoss"
+                for entry in ic:
+                    concept = entry.get("concept", "")
+                    value = entry.get("value", 0)
+                    
+                    if concept in ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet", "SalesRevenueGoodsNet"]:
+                        if revenue == 0: revenue = value # 最初に見つかったものを採用（簡易）
+                    
+                    if concept in ["NetIncomeLoss", "ProfitLoss"]:
+                        if net_income == 0: net_income = value
+                
+                # 日付ラベル作成
+                filed_date = item.get("filedDate", "")
+                date_label = f"Q{quarter} '{str(year)[2:]}"
+                
+                # データがある場合のみ追加
+                if revenue != 0:
+                    financials_data.append({
+                        "date_label": date_label,
+                        "filed_date": filed_date, # ソート用
+                        "revenue": revenue,
+                        "net_income": net_income
+                    })
+                    
+            except Exception:
+                continue
+
+        if not financials_data:
+            st.warning("財務データの解析に失敗しました")
+            return
+
+        # 日付順でソート（古い順）
+        financials_data.sort(key=lambda x: x["filed_date"])
+        
+        # 直近6四半期程度に絞る
+        financials_data = financials_data[-6:]
+        
+        dates = [d["date_label"] for d in financials_data]
+        revenue_m = [d["revenue"] / 1e6 for d in financials_data]
+        net_income_m = [d["net_income"] / 1e6 for d in financials_data]
+        
+        net_margin = []
+        for r, n in zip(revenue_m, net_income_m):
+            if r != 0:
+                net_margin.append((n / r) * 100)
+            else:
+                net_margin.append(0)
+        
+        fig = go.Figure()
+        
+        # 1. 売上高 (棒グラフ・青)
+        fig.add_trace(go.Bar(
+            x=dates, y=revenue_m, name="売上高",
+            marker_color="#4285F4", offsetgroup=1, yaxis="y1"
+        ))
+        
+        # 2. 純利益 (棒グラフ・水色)
+        fig.add_trace(go.Bar(
+            x=dates, y=net_income_m, name="純利益",
+            marker_color="#64B5F6", offsetgroup=2, yaxis="y1"
+        ))
+        
+        # 3. 純利益率 (折れ線グラフ・オレンジ)
+        fig.add_trace(go.Scatter(
+            x=dates, y=net_margin, name="当期純利益率 %",
+            mode="lines+markers",
+            line=dict(color="#FB8C00", width=3),
+            marker=dict(size=8, color="#FFFFFF", line=dict(width=2, color="#FB8C00")),
+            yaxis="y2"
+        ))
+        
+        fig.update_layout(
+            title=dict(text="損益計算書 (四半期 / Finnhub)", font=dict(size=16)),
+            yaxis=dict(title="金額 (百万ドル)", side="left", showgrid=True, gridcolor="#F1F3F4"),
+            yaxis2=dict(
+                title="利益率 (%)", side="right", overlaying="y", showgrid=False,
+                range=[min(net_margin)*1.2 if min(net_margin)<0 else 0, max(net_margin)*1.2]
+            ),
+            legend=dict(orientation="h", x=0.5, y=1.1, xanchor="center"),
+            barmode='group', height=400, margin=dict(l=50, r=50, t=50, b=50),
+            template="plotly_white",xaxis=dict(tickmode='array', tickvals=dates)
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
             
     except Exception as e:
-        st.info("詳細データの計算中に一部データが不足していました")
+        st.info(f"詳細データの表示中にエラーが発生しました: {e}")
 
 
 def render_recent_earnings(ticker: str):
-    """直近決算サプライズを描画"""
+    """直近決算サプライズを描画（Finnhub版）"""
     try:
-        import yfinance as yf
-        stock = yf.Ticker(ticker)
-        earnings_hist = stock.earnings_history
+        from src.finnhub_client import get_earnings_surprises, is_configured
         
-        if earnings_hist is not None and not earnings_hist.empty:
-            df = earnings_hist.copy()
-            try:
-                df['sort_date'] = pd.to_datetime(df['quarter'])
-                df = df.sort_values('sort_date', ascending=False)
-            except: pass
-            
-            df = df.head(5)
+        # Finnhub未設定時はyfinanceフォールバック（またはメッセージ）
+        if not is_configured():
+            st.warning("Finnhub APIキーが設定されていません")
+            return
+
+        surprises = get_earnings_surprises(ticker, limit=5)
+        
+        if surprises:
             display_data = []
             
-            for index, row in df.iterrows():
-                date_val = row.get("quarter", index)
-                date_str = str(date_val)[:10] 
-                est = row.get("epsEstimate")
-                act = row.get("epsActual")
+            for item in surprises:
+                period = item.get("period", "") # YYYY-MM-DD
+                est = item.get("estimate")
+                act = item.get("actual")
+                surp_pct = item.get("surprisePercent")
                 
-                surprise = "N/A"
-                if est is not None and act is not None and est != 0:
-                    surp_val = (act - est) / abs(est) * 100
-                    surprise = f"{surp_val:+.1f}%"
+                surprise_str = "N/A"
+                if surp_pct is not None:
+                    surprise_str = f"{surp_pct:+.1f}%"
                 
                 beat_miss = "➖"
                 if act is not None and est is not None:
@@ -120,16 +155,17 @@ def render_recent_earnings(ticker: str):
                     elif act < est: beat_miss = "❌ Miss"
                 
                 display_data.append({
-                    "決算日": date_str,
+                    "決算日": period,
                     "EPS予想": f"${est:.2f}" if est is not None else "-",
                     "EPS実績": f"${act:.2f}" if act is not None else "-",
-                    "サプライズ": surprise,
+                    "サプライズ": surprise_str,
                     "結果": beat_miss
                 })
             
             st.dataframe(pd.DataFrame(display_data), use_container_width=True, hide_index=True)
-        else:
-            st.info("決算サプライズデータがありません")
             
-    except Exception:
-        st.info("決算データの取得に失敗しました")
+        else:
+            st.info("決算サプライズデータがありません (Finnhub)")
+            
+    except Exception as e:
+        st.info(f"決算データの取得に失敗しました: {e}")

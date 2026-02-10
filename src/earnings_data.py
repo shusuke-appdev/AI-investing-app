@@ -4,7 +4,7 @@
 """
 from datetime import datetime, timedelta
 from typing import Optional
-import yfinance as yf
+from src.finnhub_client import get_earnings_calendar, is_configured
 
 
 # 主要決算対象銘柄（時価総額上位・市場インパクト大）
@@ -31,6 +31,7 @@ MAJOR_EARNINGS_TICKERS = [
 def get_recent_earnings(lookback_days: int = 3) -> list[dict]:
     """
     直近の主要決算を取得します。
+    Finnhub Calendar APIを使用。
     
     Args:
         lookback_days: 何日前まで遡るか
@@ -38,68 +39,60 @@ def get_recent_earnings(lookback_days: int = 3) -> list[dict]:
     Returns:
         決算データのリスト
     """
+    if not is_configured():
+        # Finnhub未設定時は空リスト（yfinanceフォールバックは実装複雑なため省略）
+        return []
+
     results = []
-    today = datetime.now().date()
-    start_date = today - timedelta(days=lookback_days)
+    today = datetime.now()
+    start_date = (today - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    end_date = today.strftime("%Y-%m-%d")
     
-    for ticker in MAJOR_EARNINGS_TICKERS:
+    # 全銘柄のカレンダーを取得
+    calendar_data = get_earnings_calendar(from_date=start_date, to_date=end_date)
+    
+    # 対象銘柄のみフィルタリング
+    # Finnhub Calendar returns: date, epsActual, epsEstimate, hour, quarter, revenueActual, revenueEstimate, symbol, year
+    
+    target_tickers = set(MAJOR_EARNINGS_TICKERS)
+    
+    for item in calendar_data:
+        ticker = item.get("symbol")
+        if ticker not in target_tickers:
+            continue
+            
         try:
-            stock = yf.Ticker(ticker)
+            earnings_date = item.get("date") # YYYY-MM-DD
+            eps_act = item.get("epsActual")
+            eps_est = item.get("epsEstimate")
             
-            # 決算日程を取得
-            calendar = getattr(stock, 'calendar', None)
-            if calendar is None:
-                continue
+            # Beat/Miss判定
+            beat_miss = "N/A"
+            surprise_pct = 0
             
-            # earnings_datesから直近の決算を確認
-            earnings_dates = getattr(stock, 'earnings_dates', None)
-            if earnings_dates is not None and not earnings_dates.empty:
-                for date_idx in earnings_dates.index:
-                    earnings_date = date_idx.date() if hasattr(date_idx, 'date') else date_idx
-                    
-                    # 直近の決算かチェック
-                    if start_date <= earnings_date <= today:
-                        row = earnings_dates.loc[date_idx]
-                        
-                        # EPS情報を抽出
-                        eps_estimate = row.get('EPS Estimate', None)
-                        eps_actual = row.get('Reported EPS', None)
-                        
-                        # 決算がまだ発表されていない（eps_actualがNaN）場合はスキップ
-                        if eps_actual is None or (hasattr(eps_actual, '__float__') and str(eps_actual) == 'nan'):
-                            continue
-                        
-                        # Beat/Miss判定
-                        if eps_estimate and eps_actual:
-                            try:
-                                eps_est = float(eps_estimate)
-                                eps_act = float(eps_actual)
-                                beat_miss = "Beat" if eps_act > eps_est else "Miss" if eps_act < eps_est else "Inline"
-                                surprise_pct = ((eps_act - eps_est) / abs(eps_est) * 100) if eps_est != 0 else 0
-                            except (ValueError, TypeError):
-                                beat_miss = "N/A"
-                                surprise_pct = 0
-                        else:
-                            beat_miss = "N/A"
-                            surprise_pct = 0
-                        
-                        # Pre/After market判定（簡易）
-                        timing = "after" if earnings_date < today else "pre"
-                        
-                        results.append({
-                            "ticker": ticker,
-                            "company_name": stock.info.get("shortName", ticker),
-                            "date": str(earnings_date),
-                            "timing": timing,
-                            "eps_estimate": eps_estimate,
-                            "eps_actual": eps_actual,
-                            "beat_miss": beat_miss,
-                            "surprise_pct": surprise_pct
-                        })
-                        break  # 最新の決算のみ取得
-                        
-        except Exception as e:
-            # 個別銘柄のエラーはスキップ
+            if eps_act is not None and eps_est is not None:
+                if eps_act > eps_est:
+                    beat_miss = "Beat"
+                elif eps_act < eps_est:
+                    beat_miss = "Miss"
+                else:
+                    beat_miss = "Inline"
+                
+                if eps_est != 0:
+                    surprise_pct = ((eps_act - eps_est) / abs(eps_est)) * 100
+            
+            results.append({
+                "ticker": ticker,
+                "company_name": ticker, # Finnhub Calendar doesn't provide name
+                "date": earnings_date,
+                "timing": item.get("hour", ""), # bmo, amc, etc
+                "eps_estimate": eps_est,
+                "eps_actual": eps_act,
+                "beat_miss": beat_miss,
+                "surprise_pct": surprise_pct
+            })
+            
+        except Exception:
             continue
     
     # 日付順にソート（新しい順）
@@ -168,7 +161,11 @@ def format_earnings_for_prompt(earnings: list[dict]) -> str:
         
         # EPS情報
         try:
-            eps_str = f"EPS: ${float(eps_actual):.2f} (予想: ${float(eps_estimate):.2f}, {surprise:+.1f}%)"
+            # None check before formatting
+            act_val = float(eps_actual) if eps_actual is not None else 0.0
+            est_val = float(eps_estimate) if eps_estimate is not None else 0.0
+            
+            eps_str = f"EPS: ${act_val:.2f} (予想: ${est_val:.2f}, {surprise:+.1f}%)"
         except (ValueError, TypeError):
             eps_str = f"EPS: {eps_actual}"
         
@@ -186,9 +183,15 @@ def get_earnings_context_for_recap() -> Optional[str]:
         決算コンテキスト文字列 または None
     """
     # 決算シーズンでなくても、直近の決算があれば表示
-    earnings = get_recent_earnings(lookback_days=3)
-    
-    if not earnings:
+    # Finnhubの場合はAPIコール制限もあるため、呼び出し頻度に注意が必要だが
+    # finnhub_client側でcache制御していない（get_earnings_calendarは都度呼ぶ）。
+    # ただし今回はレポート生成時のみ呼ばれるので許容範囲。
+    try:
+        earnings = get_recent_earnings(lookback_days=3)
+        
+        if not earnings:
+            return None
+        
+        return format_earnings_for_prompt(earnings)
+    except Exception:
         return None
-    
-    return format_earnings_for_prompt(earnings)

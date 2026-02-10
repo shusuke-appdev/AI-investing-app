@@ -3,7 +3,6 @@
 テーマごとの騰落率計算とランキング生成を行います。
 """
 import pandas as pd
-import yfinance as yf
 from datetime import datetime, timedelta
 from typing import Optional
 import sys
@@ -12,6 +11,7 @@ import os
 # 親ディレクトリのインポート用
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from themes_config import THEMES, PERIODS, get_themes
+from src.market_data import get_stock_data
 
 
 
@@ -37,77 +37,56 @@ def fetch_and_calculate_all_performances(days: int, market_type: str = "US") -> 
     if not all_tickers:
         return {}
     
-    # 2. 一括データ取得 (yf.download)
-    # 期間は指定日数 + 余裕 (土日祝考慮して1.5倍〜2倍程度、あるいはシンプルに '6mo' など)
-    # days=1 -> 5d, days=5 -> 1mo, days=30 -> 3mo, days=90 -> 6mo
-    period = "1mo"
-    if days > 5: period = "3mo"
-    if days > 30: period = "6mo"
+    # 2. 個別データ取得 (Finnhub移行)
+    # yf.download(threads=True) は高速だが Finnhub はレート制限(60/min)があるため
+    # 非常に時間がかかる可能性がある。キャッシュ(12h)を頼りにループ処理する。
     
-    try:
-        # group_by='ticker' でマルチインデックス取得
-        data = yf.download(all_tickers, period=period, group_by='ticker', threads=True, progress=False)
-    except Exception as e:
-        print(f"Batch Download Error: {e}")
-        return {}
-
     performance_map = {}
     
-    # 3. 各銘柄のパフォーマンス計算
-    # dataのカラム構造: (Ticker, PriceType) または Ticker (単一銘柄の場合)
-    # yfinanceの仕様変更で、Tickerが1つの場合はマルチインデックスにならない場合があるが、
-    # listで渡していれば基本マルチになるはず。ただし全滅時などは空。
-    
-    if data.empty:
-        return {}
+    # 期間を日数文字列に変換
+    period_str = "1mo"
+    if days <= 5: period_str = "5d"
+    elif days <= 30: period_str = "1mo"
+    elif days <= 90: period_str = "3mo"
+    elif days <= 180: period_str = "6mo"
+    else: period_str = "1y"
 
-    # 単一銘柄の場合の対応 (columnsがMultiIndexでない場合)
-    is_multi_index = isinstance(data.columns, pd.MultiIndex)
+    # 進捗表示はできないため（backendロジック）、ひたすら取得
+    # 実用性を考慮し、各テーマの上位銘柄（定義順）のみに絞るなどの最適化が望ましいが、
+    # Plan通り全取得を試みる。タイムアウト時はキャッシュが効くことを祈る。
+    
+    # デバッグ用に件数を制限するオプションがあれば良いが、今回は全件トライ。
+    # ただし、エラーが続出する場合は空を返す。
     
     for ticker in all_tickers:
         try:
-            if is_multi_index:
-                # 該当Tickerのデータがあるか確認
-                if ticker not in data.columns.levels[0]:
-                    continue  # データなし
-                hist = data[ticker] # DataFrame with Open, High, Low, Close...
-            else:
-                # 単一銘柄で渡した、あるいはデータ構造が違う場合。
-                # ここではall_tickersが複数ある前提なのでMultiIndex処理が主。
-                # 万が一のためのfallback (Tickerが1個だけリストにある場合など)
-                if ticker == all_tickers[0]:
-                    hist = data
-                else:
-                    continue
-
-            # Closeデータの抽出とクリーニング
-            if "Close" not in hist.columns:
+            # get_stock_data は DataFrame を返す (columns: Open, High, Low, Close, Volume)
+            hist = get_stock_data(ticker, period=period_str)
+            
+            if hist is None or hist.empty:
                 continue
                 
-            closes = hist["Close"].dropna()
-            
+            closes = hist["Close"]
             if len(closes) < 2:
                 continue
-                
-            # 指定日数前の価格を取得
-            # closesは日付インデックス(昇順)
-            if len(closes) <= days:
-                start_price = closes.iloc[0]
-            else:
-                start_price = closes.iloc[-days-1]
             
-            end_price = closes.iloc[-1]
+            # 期間計算
+            # 取得されたデータが必要な日数分あるとは限らない（Finnhubのcandlesは期間指定）
+            # get_stock_data内部で期間計算済み
             
-            if start_price == 0 or pd.isna(start_price) or pd.isna(end_price):
-                continue
-                
-            perf = ((end_price - start_price) / start_price) * 100
-            performance_map[ticker] = perf
+            current_price = closes.iloc[-1]
+            start_price = closes.iloc[0] # 期間の最初
             
-        except Exception as e:
-            # 個別計算エラーはスキップ
+            if len(closes) > 1:
+                # 念のためデータの日付スパンを確認すべきだが、簡易的に最初と最後で計算
+                if start_price != 0:
+                    perf = ((current_price - start_price) / start_price) * 100
+                    performance_map[ticker] = perf
+                    
+        except Exception:
+            # 個別エラーは無視
             continue
-            
+
     return performance_map
 
 

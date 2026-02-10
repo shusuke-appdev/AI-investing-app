@@ -55,62 +55,85 @@ def _generate_ai_recap(market_type: str = "US"):
         return
     
     with st.spinner("AI分析レポートを生成中... (ニュース取得・分析)"):
-        from src.market_data import get_stock_news, get_stock_data
+        from src.finnhub_client import get_company_news
+        from src.market_data import get_stock_data
         from src.theme_analyst import get_ranked_themes
-        from src.news_aggregator import get_aggregated_news, merge_with_yfinance_news
+        from src.news_aggregator import get_aggregated_news, merge_with_finnhub_news
         from src.market_config import get_market_config
         
         config = get_market_config(market_type)
         
-        # 1. yfinanceからティッカー関連ニュース取得
-        tickers_to_fetch = [
-            # Macro / Indices
-            "^GSPC", "^IXIC", "^RUT", "TLT", "VIX", "DX-Y.NYB",
+        # 1. Finnhubからティッカー関連ニュース取得
+        # インデックスはETFに置換してニュースを取得（より多くのニュースが出る傾向があるため）
+        tickers_map = {
+            "^GSPC": "SPY", "^IXIC": "QQQ", "^RUT": "IWM", "^N225": "EWJ",
+        }
+        
+        target_tickers = [
+            # Macro / Indices (mapped to ETFs)
+            "SPY", "QQQ", "IWM", "TLT", "VIX", "UUP", # DX-Y -> UUP
             # Mega Tech
             "NVDA", "MSFT", "GOOGL", "META", "AMZN", "AAPL", "TSLA",
-            # Semiconductor (Design/Fab/Equip)
+            # Semiconductor
             "TSM", "AVGO", "AMD", "ARM", "QCOM", "INTC", "MU", 
             "ASML", "LRCX", "AMAT", "KLAC",
-            # AI Ecosystem (Server/Data/Software)
+            # AI Ecosystem
             "SMCI", "PLTR", "ORCL", "CRM", "NOW", "DELL", "VRT",
             # Broad Sector ETFs
             "XLE", "XLF", "XLV", "XLI", "XLY", "XLP", "XLU", "XLRE"
         ]
-        yf_news = []
+        
+        # 日本市場の場合はシンボルを調整
+        if market_type == "JP":
+            target_tickers = [
+                # 主要指数
+                "1306.T", "1321.T", # TOPIX, Nikkei ETF
+                # Export / Tech
+                "7203.T", "6758.T", "8035.T", "6861.T", "6501.T",
+                # Finance
+                "8306.T", "8316.T",
+                # Chips
+                "6146.T", "7735.T", "6920.T"
+            ]
+
+        finnhub_news = []
         seen_links = set()
         
-        for t in tickers_to_fetch:
-            news_items = get_stock_news(t, max_items=3)
-            for item in news_items:
-                if item['link'] not in seen_links:
-                    item['related_ticker'] = t
-                    item['source'] = 'YFinance'
-                    yf_news.append(item)
-                    seen_links.add(item['link'])
+        # バッチ取得がないためループ（finnhub_clientがレート制限管理）
+        # 時間短縮のため、主要なもの上位10個程度に絞るか、ループを回す
+        # ここでは重要度が高い順に最大15銘柄程度に絞って取得
+        limit_tickers = target_tickers[:15]
         
-        # 2. GNewsから広範なニュースを取得（コモディティ、暗号資産、マクロ含む）
+        for ticker in limit_tickers:
+            news_items = get_company_news(ticker)
+            for item in news_items[:2]: # 各銘柄最新2件
+                link = item.get("url")
+                if link not in seen_links:
+                    finnhub_news.append(item)
+                    seen_links.add(link)
+        
+        # 2. GNewsからマクロ・セクターニュース取得 (維持)
+        keywords = config.get("news_keywords")
         gnews_articles = get_aggregated_news(
-            categories=["BUSINESS", "TECHNOLOGY", "WORLD"],
-            keywords=[
-                # マクロ・政策
-                "Federal Reserve", "FOMC", "inflation", "Treasury yields", "interest rates",
-                # コモディティ
-                "crude oil", "gold prices", "commodities", "copper",
-                # 暗号資産
-                "Bitcoin", "cryptocurrency", "Ethereum",
-                # 市場全般
-                "stock market", "S&P 500", "Nasdaq", "Wall Street",
-                # 地政学
-                "tariffs", "trade war", "geopolitics",
-            ],
-            max_per_source=8,
-            max_total=50
+            categories=["BUSINESS", "TECHNOLOGY"],
+            keywords=keywords,
+            max_per_source=5,
+            market_type=market_type
         )
         
-        # 3. yfinanceとGNewsを統合（重複排除）
-        news_data = merge_with_yfinance_news(gnews_articles, yf_news, max_total=80)
+        # 3. 統合
+        all_news = merge_with_finnhub_news(gnews_articles, finnhub_news, max_total=60)
         
-        # 4. 週次パフォーマンス（1週間リターン）の取得 - アセットクラス横断
+        # 4. Prompt用に整形
+        news_text = ""
+        for i, article in enumerate(all_news):
+            title = article.get("title", "No Title")
+            summary = article.get("summary", "")
+            source = article.get("source", "Unknown")
+            pub = article.get("published", "")
+            news_text += f"{i+1}. [{source}] {pub} - {title}\n{summary[:100]}...\n\n"
+            
+        # 5. 生成
         weekly_performance = {}
         cross_asset_tickers = {
             # 株式指数

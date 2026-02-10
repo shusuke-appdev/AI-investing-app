@@ -7,7 +7,7 @@ import numpy as np
 from scipy.stats import norm
 from typing import Optional
 from .market_data import get_option_chain
-import yfinance as yf
+from .finnhub_client import get_quote, is_configured
 
 
 def calculate_pcr(ticker: str) -> Optional[dict]:
@@ -63,16 +63,11 @@ def calculate_gex(ticker: str) -> Optional[dict]:
     
     calls, puts = option_data
     
-    # 現在の株価を取得
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="1d")
-        if hist.empty:
-            return None
-        current_price = hist["Close"].iloc[-1]
-    except Exception as e:
-        print(f"Error fetching price for {ticker}: {e}")
+    # 現在の株価を取得 (Finnhub)
+    quote = get_quote(ticker)
+    if not quote or quote.get("c", 0) == 0:
         return None
+    current_price = quote["c"]
     
     # GEX計算用のデータ準備
     gex_data = []
@@ -176,16 +171,12 @@ def calculate_max_pain(ticker: str) -> Optional[float]:
 
 def calculate_atm_iv(ticker: str) -> Optional[float]:
     """ATM (At The Money) の平均IVを計算"""
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="1d")
-        if hist.empty:
-            return None
-        current_price = hist["Close"].iloc[-1]
-    except Exception as e:
-        print(f"Error fetching price for ATM IV ({ticker}): {e}")
+    # 現在の株価を取得 (Finnhub)
+    quote = get_quote(ticker)
+    if not quote or quote.get("c", 0) == 0:
         return None
-        
+    current_price = quote["c"]
+    
     option_data = get_option_chain(ticker)
     if option_data is None: return None
     calls, puts = option_data

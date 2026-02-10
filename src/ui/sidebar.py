@@ -230,23 +230,38 @@ def _render_settings():
         # === API設定 ===
         st.markdown("**🔑 API設定**")
         
-        saved_api_key = get_gemini_api_key()
-        api_key = st.text_input(
+        # Gemini API Key
+        saved_gemini_key = get_gemini_api_key()
+        gemini_key = st.text_input(
             "Gemini API Key",
             type="password",
-            value=saved_api_key if saved_api_key else "",
+            value=saved_gemini_key if saved_gemini_key else "",
             help="AIレポート生成に必要です"
         )
         
-        if api_key and api_key != saved_api_key:
-            if configure_gemini(api_key):
+        if gemini_key and gemini_key != saved_gemini_key:
+            if configure_gemini(gemini_key):
                 st.session_state.gemini_configured = True
-                set_gemini_api_key(api_key)
-                st.success("✅ API設定完了（保存済み）")
+                set_gemini_api_key(gemini_key)
+                st.success("✅ Gemini設定保存")
             else:
-                st.error("❌ API設定失敗")
-        elif saved_api_key:
-            st.caption("✅ 設定済み")
+                st.error("❌ Gemini設定失敗")
+        
+        # Finnhub API Key
+        from src.settings_storage import get_finnhub_api_key, set_finnhub_api_key
+        saved_finnhub_key = get_finnhub_api_key()
+        finnhub_key = st.text_input(
+            "Finnhub API Key",
+            type="password",
+            value=saved_finnhub_key if saved_finnhub_key else "",
+            help="株価・ニュース取得に必要です（無料枠あり）"
+        )
+        
+        if finnhub_key and finnhub_key != saved_finnhub_key:
+            # 簡単な検証（実際にAPIを呼ぶのがベストだが、ここでは保存のみ）
+            set_finnhub_api_key(finnhub_key)
+            st.session_state.finnhub_api_key = finnhub_key
+            st.success("✅ Finnhub設定保存")
         
         st.markdown("---")
         

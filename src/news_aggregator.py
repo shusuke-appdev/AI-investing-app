@@ -234,17 +234,17 @@ def get_aggregated_news(
     return all_news[:max_total]
 
 
-def merge_with_yfinance_news(
+def merge_with_finnhub_news(
     gnews_articles: list[dict],
-    yfinance_articles: list[dict],
+    finnhub_articles: list[dict],
     max_total: int = 80
 ) -> list[dict]:
     """
-    GNewsとyfinanceのニュースを統合（重複排除付き）
+    GNewsとFinnhubのニュースを統合（重複排除付き）
     
     Args:
         gnews_articles: get_aggregated_news()の結果
-        yfinance_articles: yfinance経由のニュース
+        finnhub_articles: Finnhub経由のニュース
         max_total: 合計最大件数
     
     Returns:
@@ -253,15 +253,19 @@ def merge_with_yfinance_news(
     seen_ids = set()
     merged = []
     
-    # yfinanceを優先（ティッカー紐付けがあるため）
-    for article in yfinance_articles:
+    # Finnhubを優先（個別銘柄・公式ニュースのため）
+    for article in finnhub_articles:
+        # 重複チェック用ID生成
         news_id = _generate_news_id(
             article.get("title", ""),
             article.get("link", "")
         )
         if news_id not in seen_ids:
             article["news_id"] = news_id
-            article["source"] = article.get("source", "YFinance")
+            # Sourceが空ならFinnhubとする（通常は提供元が入る）
+            if not article.get("source"):
+                article["source"] = "Finnhub"
+            
             merged.append(article)
             seen_ids.add(news_id)
     
@@ -275,7 +279,7 @@ def merge_with_yfinance_news(
             merged.append(article)
             seen_ids.add(news_id)
     
-    # 日付順ソート
+    # 日付順ソート (YYYY-MM-DD HH:MM 文字列比較)
     merged.sort(key=lambda x: x.get("published", ""), reverse=True)
     
     return merged[:max_total]
