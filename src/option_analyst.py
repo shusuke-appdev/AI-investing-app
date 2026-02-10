@@ -207,7 +207,7 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
         ticker: 銘柄コード
     
     Returns:
-        センチメント分析結果
+        センチメント分析結果（current_price, sentiment, pcr, gex, iv, max_pain, analysis を含む辞書）
     """
     pcr = calculate_pcr(ticker)
     gex = calculate_gex(ticker)
@@ -216,6 +216,15 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
     
     if pcr is None and gex is None:
         return None
+    
+    # 現在価格: GEXから取得、なければ直接取得
+    current_price = 0.0
+    if gex and gex.get("current_price"):
+        current_price = gex["current_price"]
+    else:
+        quote = get_quote(ticker)
+        if quote and quote.get("c", 0) != 0:
+            current_price = quote["c"]
     
     sentiment = "中立"
     analysis = []
@@ -249,6 +258,7 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
     
     return {
         "ticker": ticker,
+        "current_price": current_price,
         "sentiment": sentiment,
         "pcr": pcr,
         "gex": gex,

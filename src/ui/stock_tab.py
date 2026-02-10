@@ -15,7 +15,8 @@ from src.ui.components.stock import (
     render_recent_earnings,
     render_news_full_width,
     render_ai_stock_analysis,
-    render_technical_analysis
+    render_technical_analysis,
+    render_option_analysis
 )
 
 def render_stock_tab():
@@ -64,6 +65,11 @@ def render_stock_tab():
     
     # === テクニカル分析セクション ===
     render_technical_analysis(ticker)
+    
+    st.divider()
+
+    # === オプション分析セクション ===
+    render_option_analysis(ticker)
     
     st.divider()
     
