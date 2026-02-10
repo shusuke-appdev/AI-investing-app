@@ -70,6 +70,54 @@ class TechnicalScore:
     # モメンタムダイバージェンス
     divergence_rsi: str = ""  # bullish/bearish/none
     divergence_macd: str = ""  # bullish/bearish/none
+    
+    # === Phase 1 拡張 ===
+    
+    # MACD高度化
+    macd_hist_slope: str = ""  # rising/falling/bottoming/topping
+    macd_zero_filter: str = ""  # above_zero/below_zero
+    
+    # 動的RSI (レジーム別閾値)
+    rsi_regime: str = ""  # bullish_regime/bearish_regime
+    rsi_dynamic_signal: str = ""  # 動的閾値での判定結果
+    
+    # BBスクイズ
+    bb_squeeze: bool = False  # スクイズ状態か否か
+    bb_squeeze_signal: str = ""  # squeeze/expansion/normal
+    
+    # 一目均衡表
+    ichimoku_regime: str = ""  # above_cloud/below_cloud/in_cloud
+    ichimoku_sannyaku: bool = False  # 三役好転
+    ichimoku_signal: str = ""  # 強気/弱気/中立
+    
+    # === Phase 2 拡張 ===
+    
+    # Anchored VWAP
+    avwap_ytd: float = 0.0  # 年初来AVWAP
+    avwap_deviation: float = 0.0  # AVWAP乖離率(%)
+    
+    # GEX環境
+    # GEX環境
+    gex_regime: str = ""  # positive_gamma/negative_gamma/unknown
+    gex_positive_wall: float = 0.0  # 上値抵抗(Gamma Wall)
+    gex_negative_wall: float = 0.0  # 下値支持(Gamma Wall)
+    
+    # オプション需給
+    pcr_ratio: float = 0.0  # Put/Call Ratio (Open Interest)
+    pcr_signal: str = ""  # 強気/弱気/中立
+    atm_iv: float = 0.0  # ATM Implied Volatility
+    max_pain: float = 0.0  # Max Pain Price
+    
+    # === Phase 3 拡張 ===
+    
+    # 極値検出
+    recent_peaks: list = field(default_factory=list)  # [(index, price), ...]
+    recent_valleys: list = field(default_factory=list)  # [(index, price), ...]
+    peak_valley_signal: str = ""  # higher_highs/lower_lows/range/unknown
+    
+    # ローソク足パターン
+    candlestick_patterns: list = field(default_factory=list)  # [{"name": str, "signal": int}, ...]
+    candlestick_summary: str = ""  # bullish/bearish/neutral
 
 
 @dataclass
