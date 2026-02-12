@@ -28,6 +28,7 @@ class MarketSettings(TypedDict):
     commodities: dict[str, str]
     crypto: dict[str, str]
     forex: dict[str, str]
+    ai_analysis_targets: list[str]
 
 
 # 米国市場設定
@@ -77,6 +78,19 @@ US_CONFIG: MarketSettings = {
         "EUR/USD": "EURUSD=X",
         "GBP/USD": "GBPUSD=X",
     },
+    "ai_analysis_targets": [
+        # Macro / Indices (mapped to ETFs)
+        "SPY", "QQQ", "IWM", "TLT", "VIX", "UUP", # DX-Y -> UUP
+        # Mega Tech
+        "NVDA", "MSFT", "GOOGL", "META", "AMZN", "AAPL", "TSLA",
+        # Semiconductor
+        "TSM", "AVGO", "AMD", "ARM", "QCOM", "INTC", "MU", 
+        "ASML", "LRCX", "AMAT", "KLAC",
+        # AI Ecosystem
+        "SMCI", "PLTR", "ORCL", "CRM", "NOW", "DELL", "VRT",
+        # Broad Sector ETFs
+        "XLE", "XLF", "XLV", "XLI", "XLY", "XLP", "XLU", "XLRE"
+    ],
 }
 
 # 日本市場設定
@@ -115,6 +129,16 @@ JP_CONFIG: MarketSettings = {
         "EUR/JPY": "EURJPY=X",
         "GBP/JPY": "GBPJPY=X",
     },
+    "ai_analysis_targets": [
+        # 主要指数
+        "1306.T", "1321.T", # TOPIX, Nikkei ETF
+        # Export / Tech
+        "7203.T", "6758.T", "8035.T", "6861.T", "6501.T",
+        # Finance
+        "8306.T", "8316.T",
+        # Chips
+        "6146.T", "7735.T", "6920.T"
+    ],
 }
 
 # 設定マップ
