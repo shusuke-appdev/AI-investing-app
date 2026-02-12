@@ -217,14 +217,32 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
     if pcr is None and gex is None:
         return None
     
-    # 現在価格: GEXから取得、なければ直接取得
+    # 現在価格: GEXから取得、なければFinnhub、それでもなければyfinance
     current_price = 0.0
     if gex and gex.get("current_price"):
         current_price = gex["current_price"]
     else:
+        # 1. Try Finnhub
         quote = get_quote(ticker)
         if quote and quote.get("c", 0) != 0:
             current_price = quote["c"]
+        else:
+            # 2. Try yfinance fallback
+            # get_market_indicesやget_stock_infoのロジックを流用したいが、
+            # ここではシンプルにyfinanceを叩くか、market_dataの関数を使う
+            try:
+                # 循環参照防止のためローカルインポート検討、またはget_quote内で処理すべきだが
+                # ここでは直接yfを使用（market_dataはインポート済みだがget_stock_infoは価格を返さない）
+                import yfinance as yf
+                t = yf.Ticker(ticker)
+                hist = t.history(period="1d")
+                if not hist.empty:
+                    current_price = float(hist["Close"].iloc[-1])
+            except Exception as e:
+                print(f"[OPTION_WARN] Price fetch failed for {ticker}: {e}")
+    
+    if current_price == 0:
+        return None
     
     sentiment = "中立"
     analysis = []

@@ -240,7 +240,16 @@ def _render_ai_chat():
 
 def _render_settings():
     """設定セクション（API設定 + ストレージ設定統合）"""
-    with st.expander("⚙️ 設定", expanded=False):
+    with st.expander("⚙️ 設定", expanded=True): # 展開しておく
+        # === デバッグ情報（一時的） ===
+        from src.settings_storage import SETTINGS_FILE, load_settings
+        st.caption(f"Settings Path: `{SETTINGS_FILE}`")
+        current_settings = load_settings()
+        if not current_settings:
+            st.error("⚠️ 設定ファイルを読み込めませんでした（空、またはエラー）")
+        else:
+            st.success(f"✅ 設定読み込み成功: {list(current_settings.keys())}")
+        
         # === API設定 ===
         st.markdown("**🔑 API設定**")
         

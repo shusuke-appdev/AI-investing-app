@@ -20,16 +20,44 @@ def _ensure_dir():
 def load_settings() -> dict:
     """
     保存された設定を読み込みます。
-    
-    Returns:
-        設定辞書
     """
     try:
+        # デバッグログ用
+        log_path = Path("debug_settings.log")
+        
         if SETTINGS_FILE.exists():
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                with open(log_path, "a", encoding="utf-8") as log:
+                    from datetime import datetime
+                    log.write(f"{datetime.now()} [SUCCESS] Loaded {len(data)} keys from {SETTINGS_FILE}\n")
+                return data
+        
+        # Fallback: Try CWD based path
+        cwd_file = Path("data/settings.json").resolve()
+        if cwd_file.exists() and cwd_file != SETTINGS_FILE:
+            with open(cwd_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                with open(log_path, "a", encoding="utf-8") as log:
+                    from datetime import datetime
+                    log.write(f"{datetime.now()} [SUCCESS] Loaded {len(data)} keys from CWD fallback: {cwd_file}\n")
+                return data
+        
+        # If neither exists
+        with open(log_path, "a", encoding="utf-8") as log:
+            from datetime import datetime
+            log.write(f"{datetime.now()} [WARNING] File not found: {SETTINGS_FILE} nor {cwd_file}\n")
+
     except Exception as e:
         print(f"設定読み込みエラー: {e}")
+        # ログ出力（エラー）
+        try:
+            with open("debug_settings.log", "a", encoding="utf-8") as log:
+                from datetime import datetime
+                log.write(f"{datetime.now()} [ERROR] Load failed: {e}\n")
+        except:
+            pass
+            
     return {}
 
 
