@@ -32,6 +32,7 @@ def render_quarterly_financials_graph(ticker: str):
                 ic = report.get("ic", [])
                 
                 revenue = 0
+                operating_income = 0
                 net_income = 0
                 
                 # コンセプト辞書から検索 ("concept" key)
@@ -41,8 +42,11 @@ def render_quarterly_financials_graph(ticker: str):
                     value = entry.get("value", 0)
                     
                     if concept in ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet", "SalesRevenueGoodsNet"]:
-                        if revenue == 0: revenue = value # 最初に見つかったものを採用（簡易）
+                        if revenue == 0: revenue = value
                     
+                    if concept in ["OperatingIncomeLoss", "OperatingIncome"]:
+                        if operating_income == 0: operating_income = value
+
                     if concept in ["NetIncomeLoss", "ProfitLoss"]:
                         if net_income == 0: net_income = value
                 
@@ -56,6 +60,7 @@ def render_quarterly_financials_graph(ticker: str):
                         "date_label": date_label,
                         "filed_date": filed_date, # ソート用
                         "revenue": revenue,
+                        "operating_income": operating_income,
                         "net_income": net_income
                     })
                     
@@ -74,6 +79,7 @@ def render_quarterly_financials_graph(ticker: str):
         
         dates = [d["date_label"] for d in financials_data]
         revenue_m = [d["revenue"] / 1e6 for d in financials_data]
+        operating_income_m = [d["operating_income"] / 1e6 for d in financials_data]
         net_income_m = [d["net_income"] / 1e6 for d in financials_data]
         
         net_margin = []
@@ -88,16 +94,22 @@ def render_quarterly_financials_graph(ticker: str):
         # 1. 売上高 (棒グラフ・青)
         fig.add_trace(go.Bar(
             x=dates, y=revenue_m, name="売上高",
-            marker_color="#4285F4", offsetgroup=1, yaxis="y1"
+            marker_color="#4285F4", offsetgroup=1
+        ))
+
+        # 2. 営業利益 (棒グラフ・緑)
+        fig.add_trace(go.Bar(
+            x=dates, y=operating_income_m, name="営業利益",
+            marker_color="#34A853", offsetgroup=2
         ))
         
-        # 2. 純利益 (棒グラフ・水色)
+        # 3. 純利益 (棒グラフ・水色)
         fig.add_trace(go.Bar(
             x=dates, y=net_income_m, name="純利益",
-            marker_color="#64B5F6", offsetgroup=2, yaxis="y1"
+            marker_color="#64B5F6", offsetgroup=3
         ))
         
-        # 3. 純利益率 (折れ線グラフ・オレンジ)
+        # 4. 純利益率 (折れ線グラフ・オレンジ)
         fig.add_trace(go.Scatter(
             x=dates, y=net_margin, name="当期純利益率 %",
             mode="lines+markers",

@@ -143,6 +143,8 @@ def get_candles(
 
     if not data or data.get("s") != "ok":
         print(f"[FINNHUB_WARN] No candle data for {symbol} (status: {data.get('s') if data else 'None'})")
+        # DEBUG
+        print(f"[DEBUG_RAW] data={data}")
         return pd.DataFrame()
 
     df = pd.DataFrame({

@@ -15,31 +15,11 @@ from src.finnhub_client import (
     get_basic_financials, get_company_news, is_configured
 )
 from src.market_config import get_market_config
+from src.network import get_session
 
 
 @st.cache_data(ttl=300) # 5分キャッシュ
-# --- Helper for yfinance session ---
-def _get_yf_session():
-    """
-    yfinance用のセッションを作成・返却します。
-    クラウド環境でのブロック回避のためUser-Agentを設定します。
-    requests_cacheが利用可能な場合はキャッシュを使用します。
-    """
-    ua_headers = {
-        'User-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
 
-    try:
-        import requests_cache
-        session = requests_cache.CachedSession('yfinance_cache', expire_after=3600)
-        session.headers.update(ua_headers)
-        return session
-    except ImportError:
-        # requests_cacheがない場合は通常のrequestsセッションを使用
-        print("[DATA_WARN] requests_cache module not found. Using standard session.")
-        session = requests.Session()
-        session.headers.update(ua_headers)
-        return session
 
 
 def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
@@ -59,13 +39,57 @@ def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
         print(f"[DATA_WARN] Finnhub API key not configured. Falling back to yfinance for {ticker}.")
         # --- Fallback to yfinance if Finnhub not ready ---
         try:
-            session = _get_yf_session()
-            return yf.Ticker(ticker, session=session).history(period=period)
+            # Note: Do not pass custom session to yf.Ticker as it conflicts with internal curl_cffi usage
+            # needed for anti-bot bypass.
+            return yf.Ticker(ticker).history(period=period)
         except Exception as e:
             print(f"[DATA_ERROR] yfinance fallback failed for {ticker}: {e}")
             return pd.DataFrame()
 
-    # ... (omit middle part) ...
+    # Finnhubからこれらを取得
+    # periodをresolutionに変換
+    resolution = "D"
+    if period in ["1d", "5d"]: resolution = "60" # 60分足 (1d/5dは細かい方がいいが、Freeは日足主体推奨)
+    # Finnhub Free Tierの制限: Intradayは米株のみ？ 
+    # 安全策として日足("D")を標準にするか。
+    # App is designing for "1mo" default. "D" is fine.
+    
+    # Calculate from/to datetimes
+    now = datetime.now()
+    start = now - timedelta(days=30) # Default 1mo
+    
+    if period == "1d": start = now - timedelta(days=1); resolution="5"
+    elif period == "5d": start = now - timedelta(days=5); resolution="60"
+    elif period == "3mo": start = now - timedelta(days=90)
+    elif period == "6mo": start = now - timedelta(days=180)
+    elif period == "1y": start = now - timedelta(days=365)
+    elif period == "ytd": start = datetime(now.year, 1, 1)
+    elif period == "max": start = now - timedelta(days=365*5) # 5 years
+
+    try:
+        # get_candles returns a DataFrame or empty DataFrame on failure
+        df = get_candles(ticker, resolution, start, now)
+        
+        if df is None or df.empty:
+            print(f"[DATA_WARN] Finnhub returned no candles for {ticker}. Falling back to yfinance.")
+            # Fallback to yfinance
+            try:
+                # Note: Do not pass custom session to yf.Ticker
+                return yf.Ticker(ticker).history(period=period)
+            except Exception as e:
+                print(f"[DATA_ERROR] yfinance fallback failed for {ticker}: {e}")
+                return pd.DataFrame()
+            
+        return df
+    except Exception as e:
+        print(f"[DATA_ERROR] Finnhub candle fetch error for {ticker}: {e}")
+        # Fallback to yfinance
+        try:
+            return yf.Ticker(ticker).history(period=period)
+        except Exception as ey:
+             print(f"[DATA_ERROR] yfinance fallback failed for {ticker}: {ey}")
+             return pd.DataFrame()
+
 
 def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]:
     """
@@ -73,8 +97,8 @@ def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]
     Finnhub Free Tierで提供なし → yfinance維持 (Hybrid構成)
     """
     try:
-        session = _get_yf_session()
-        stock = yf.Ticker(ticker, session=session)
+        # Note: Do not pass custom session to yf.Ticker
+        stock = yf.Ticker(ticker)
         # yfinanceのoptionsプロパティはHTTPリクエストを伴うためエラーが出る可能性がある
         try:
             expirations = stock.options
@@ -188,82 +212,85 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
             
         return result
 
-    # --- 米国市場 (Finnhub移行) ---
-    targets = {
+    # --- 米国市場 (Finnhub移行 + YF併用) ---
+    
+    # 1. Finnhub Targets (Indices, Sectors, Commodities, Crypto)
+    finnhub_targets = {
         **config["indices"],
-        **config["treasuries"], 
+        **config["sectors"],
         **config["commodities"], 
         **config["crypto"], 
+    }
+    
+    # 2. yfinance Targets (Treasuries, Forex)
+    # Treasuries are ^TNX (Indices) which Finnhub Free Tier doesn't support.
+    # Forex (JPY=X) is blocked on Finnhub Free Tier (OANDA).
+    yf_targets = {
+        **config["treasuries"],
         **config["forex"]
     }
     
+    # Finnhub APIキー未設定なら全てyfinanceへ
     if not is_configured():
-        # Fallback to current logic (yfinance batch)
-        pass
+        print(f"[DATA_WARN] Finnhub API key not configured. Using yfinance for all.")
+        yf_targets.update(finnhub_targets)
+        finnhub_targets = {}
 
-    # 1. Finnhubで主要指数などを取得
-    for name, ticker in targets.items():
+    # --- Fetch from Finnhub ---
+    for name, ticker in finnhub_targets.items():
         try:
             q = get_quote(ticker)
             if isinstance(q, dict) and q.get("c") not in (0, None):
                 result[name] = {"price": q.get("c"), "change": q.get("dp", 0), "ticker": ticker}
             else:
-                # Finnhubで取れない場合 (例: ^TNX等)
-                print(f"[DATA_INFO] Finnhub returned no data for {name} ({ticker}). Trying fallback.")
-                try:
-                    session = _get_yf_session()
-                    t = yf.Ticker(ticker, session=session)
-                    hist = t.history(period="2d")
-                    if len(hist) >= 1:
-                        c = hist["Close"].iloc[-1]
-                        prev = hist["Close"].iloc[-2] if len(hist) > 1 else c
-                        chg = ((c - prev) / prev * 100) if prev else 0
-                        result[name] = {"price": c, "change": chg, "ticker": ticker}
-                    else:
-                        print(f"[DATA_ERROR] Fallback yfinance returned empty history for {name} ({ticker})")
-                except Exception as e:
-                    print(f"[DATA_ERROR] Fallback yfinance failed for {name} ({ticker}): {e}")
+                print(f"[DATA_WARN] Finnhub returned no data for {name} ({ticker}). Adding to YF fallback.")
+                yf_targets[name] = ticker
         except Exception as e:
-            print(f"[DATA_ERROR] Unexpected error fetching {name} ({ticker}): {e}")
+            print(f"[DATA_ERROR] Finnhub error for {name} ({ticker}): {e}")
+            yf_targets[name] = ticker
 
-    # 2. セクター指数は yfinance で一括取得 (Finnhub不可のため)
-    sectors = config.get("sectors", {})
-    if sectors:
+    # --- Fetch from yfinance (Treasuries, Forex, Fallbacks) ---
+    if yf_targets:
         try:
-            sector_tickers = list(sectors.values())
-            # 直近5日分取得すれば前日比は計算可能 (土日挟む場合も考慮)
-            sec_data = yf.download(sector_tickers, period="5d", group_by='ticker', threads=True, progress=False)
-            
-            for name, ticker in sectors.items():
-                try:
-                    if len(sector_tickers) > 1:
-                        if ticker not in sec_data.columns.levels[0]:
-                            print(f"[DATA_WARN] Sector ticker {ticker} not found in batch data")
-                            continue
-                        df = sec_data[ticker]
-                    else:
-                        df = sec_data
-                    
-                    # Closeがなければスキップ
-                    if "Close" not in df.columns:
-                        print(f"[DATA_ERROR] No 'Close' column for sector {name} ({ticker})")
-                        continue
+            # Batch download is efficient for multiple tickers
+            tickers_list = list(yf_targets.values())
+            if tickers_list:
+                # Note: yf.download might print progress, quiet=True suppresses it in newer versions
+                # period="2d" to calculate change if needed, but "1d" often enough for current price?
+                # We need "previous close" to calc change if YF doesn't give it efficiently.
+                # 'prepost=True' might be good for extended hours but let's stick to standard.
+                batch_data = yf.download(tickers_list, period="5d", progress=False)
+                
+                # Check format of batch_data. If single ticker, it's different?
+                # yfinance usually returns MultiIndex columns if multiple tickers.
+                
+                for name, ticker in yf_targets.items():
+                    try:
+                        # Handle MultiIndex
+                        if len(tickers_list) > 1:
+                            hist = batch_data.xs(ticker, level=1, axis=1) if isinstance(batch_data.columns, pd.MultiIndex) else batch_data
+                        else:
+                            hist = batch_data
                         
-                    closes = df["Close"].dropna()
-                    if len(closes) < 2:
-                        print(f"[DATA_WARN] Insufficient history length ({len(closes)}) for sector {name} ({ticker})")
-                        continue
-                        
-                    c = closes.iloc[-1]
-                    prev = closes.iloc[-2]
-                    chg = ((c - prev) / prev) * 100
-                    
-                    result[name] = {"price": c, "change": chg, "ticker": ticker}
-                except Exception as e:
-                    print(f"[DATA_ERROR] Sector data error {name}: {e}")
-                    continue
+                        # Data extraction
+                        if not hist.empty and len(hist) >= 1:
+                            current = hist["Close"].iloc[-1]
+                            # Try to get previous close for change calc
+                            prev = hist["Close"].iloc[-2] if len(hist) >= 2 else current
+                            
+                            # For Treasuries (Indices), data might be sparse? usually OK.
+                            # For Forex, 5d is enough.
+                            
+                            change = ((current - prev) / prev) * 100 if prev != 0 else 0
+                            
+                            result[name] = {"price": float(current), "change": float(change), "ticker": ticker}
+                        else:
+                            result[name] = {"price": 0.0, "change": 0.0, "ticker": ticker}
+                            print(f"[DATA_WARN] yfinance returned no data for {name} ({ticker})")
+                    except Exception as e_inner:
+                        print(f"[DATA_WARN] Error parsing YF data for {name} ({ticker}): {e_inner}")
         except Exception as e:
-            print(f"[DATA_FATAL] Sector batch fetch error: {e}")
+            print(f"[DATA_ERROR] yfinance batch fetch error: {e}")
 
     return result
 
@@ -288,5 +315,74 @@ def get_stock_news(ticker: str, max_items: int = 10) -> list[dict]:
             "summary": item.get("summary", "")
         })
     return results
+
+
+@st.cache_data(ttl=86400) # 1日キャッシュ
+def get_stock_info(ticker: str) -> dict:
+    """
+    企業概要を取得します (Finnhub優先 -> yfinance Fallback)。
+    
+    Args:
+        ticker: 銘柄コード
+        
+    Returns:
+        dict: {name, ticker, sector, industry, summary, website, logo, city, state, country, employees, exchange}
+    """
+    info = {
+        "name": ticker,
+        "ticker": ticker,
+        "sector": "N/A",
+        "industry": "N/A",
+        "summary": "情報なし",
+        "website": "",
+        "logo": "",
+        "city": "",
+        "state": "",
+        "country": "",
+        "employees": 0,
+        "exchange": ""
+    }
+    
+    # 1. Finnhub
+    if is_configured():
+        try:
+            profile = get_company_profile(ticker)
+            if profile:
+                info.update({
+                    "name": profile.get("name", ticker),
+                    "ticker": profile.get("ticker", ticker),
+                    "sector": profile.get("finnhubIndustry", "N/A"), # Finnhub returns Industry as 'finnhubIndustry'
+                    "industry": profile.get("finnhubIndustry", "N/A"),
+                    "website": profile.get("weburl", ""),
+                    "logo": profile.get("logo", ""),
+                    "exchange": profile.get("exchange", ""),
+                    "country": profile.get("country", ""),
+                })
+                # Finnhub doesn't always have a long summary.
+        except Exception as e:
+            print(f"[DATA_WARN] Finnhub profile fetch failed for {ticker}: {e}")
+
+    # 2. yfinance Fallback (補完的に使用)
+    # SummaryやSectorがFinnhubで取れない場合、またはFinnhub失敗時
+    if info["summary"] == "情報なし" or info["sector"] == "N/A":
+        try:
+            # Note: Do not use custom session for yf.Ticker
+            yf_ticker = yf.Ticker(ticker)
+            yf_info = yf_ticker.info
+            
+            if yf_info:
+                if info["name"] == ticker: info["name"] = yf_info.get("longName", yf_info.get("shortName", ticker))
+                if info["sector"] == "N/A": info["sector"] = yf_info.get("sector", "N/A")
+                if info["industry"] == "N/A": info["industry"] = yf_info.get("industry", "N/A")
+                if info["summary"] == "情報なし": info["summary"] = yf_info.get("longBusinessSummary", "")
+                if not info["website"]: info["website"] = yf_info.get("website", "")
+                if not info["city"]: info["city"] = yf_info.get("city", "")
+                if not info["state"]: info["state"] = yf_info.get("state", "")
+                if not info["country"]: info["country"] = yf_info.get("country", "")
+                if info["employees"] == 0: info["employees"] = yf_info.get("fullTimeEmployees", 0)
+        except Exception as e:
+            print(f"[DATA_WARN] yfinance profile fallback failed for {ticker}: {e}")
+
+    return info
 
 

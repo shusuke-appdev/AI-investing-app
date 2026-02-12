@@ -41,10 +41,10 @@ US_CONFIG: MarketSettings = {
     "default_ticker": "AAPL",
     "options_available": True,
     "indices": {
-        "S&P 500": "^GSPC",
-        "Nasdaq": "^IXIC",
-        "Dow 30": "^DJI",
-        "Russell 2000": "^RUT",
+        "S&P 500 (ETF)": "SPY",
+        "Nasdaq 100 (ETF)": "QQQ",
+        "Dow 30 (ETF)": "DIA",
+        "Russell 2000 (ETF)": "IWM",
     },
     "sectors": {
         "情報技術": "XLK",
@@ -60,18 +60,17 @@ US_CONFIG: MarketSettings = {
         "素材": "XLB",
     },
     "treasuries": {
-        "US 10Y": "^TNX",
-        "US 30Y": "^TYX",
-        "US 2Y": "^IRX",
+        "US 10Y Yield": "^TNX",
+        "US 30Y Yield": "^TYX",
     },
     "commodities": {
-        "WTI Oil": "CL=F",
-        "Gold": "GC=F",
-        "Copper": "HG=F",
+        "WTI Oil (ETF)": "USO",
+        "Gold (ETF)": "GLD",
+        "Copper (ETF)": "CPER",
     },
     "crypto": {
-        "Bitcoin": "BTC-USD",
-        "Ethereum": "ETH-USD",
+        "Bitcoin": "BINANCE:BTCUSDT",
+        "Ethereum": "BINANCE:ETHUSDT",
     },
     "forex": {
         "USD/JPY": "JPY=X",

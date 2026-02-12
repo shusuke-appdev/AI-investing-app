@@ -42,30 +42,53 @@ def init_session_state():
             st.session_state[key] = value
 
 
+def render_error_screen(e):
+    """起動エラー時のフォールバック画面を表示"""
+    st.error("アプリケーションの起動中にエラーが発生しました。")
+    st.code(str(e), language="python")
+    st.markdown("""
+    ### 対処方法
+    1. ページをリロードしてみてください。
+    2. 時間を置いて再度アクセスしてください。
+    3. 管理者にご連絡ください。
+    """)
+
 def main():
     """メイン関数"""
-    init_session_state()
-    
-    # スタイルの適用
-    st.markdown(get_custom_css(), unsafe_allow_html=True)
-    
-    # サイドバー描画
-    render_sidebar()
-    
-    # ページルーティング
-    page = st.session_state.current_page
-    
-    if page == "market":
-        render_market_tab()
-    elif page == "theme":
-        render_theme_tab()
-    elif page == "stock":
-        render_stock_tab()
-    elif page == "portfolio":
-        render_portfolio_tab()
-    elif page == "alerts":
-        render_alerts_tab()
+    try:
+        init_session_state()
+        
+        # スタイルの適用
+        st.markdown(get_custom_css(), unsafe_allow_html=True)
+        
+        # サイドバー描画
+        render_sidebar()
+        
+        # ページルーティング
+        page = st.session_state.current_page
+        
+        if page == "market":
+            render_market_tab()
+        elif page == "theme":
+            render_theme_tab()
+        elif page == "stock":
+            render_stock_tab()
+        elif page == "portfolio":
+            render_portfolio_tab()
+        elif page == "alerts":
+            render_alerts_tab()
 
+    except Exception as e:
+        render_error_screen(e)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # main外（インポート時など）のエラーを補足
+        # streamlitが初期化されていない可能性もあるためprintも併用
+        print(f"Critical Startup Error: {e}")
+        try:
+            st.error(f"Critical Startup Error: {e}")
+        except:
+            pass
