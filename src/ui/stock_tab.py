@@ -4,27 +4,33 @@ Coordinator for individual stock analysis components.
 Refactored to improve maintainability and separate concerns.
 """
 import streamlit as st
-from src.market_data import get_stock_info
+# Imports moved inside functions to avoid circular import issues
+import streamlit as st
 
-# Import separated components
-from src.ui.components.stock import (
-    render_chart,
-    render_company_overview,
-    render_integrated_metrics,
-    render_quarterly_financials_graph,
-    render_recent_earnings,
-    render_news_full_width,
-    render_ai_stock_analysis,
-    render_technical_analysis,
-    render_option_analysis
-)
+# Components are imported inside render_stock_tab to avoid top-level circular dependencies
+# from src.ui.components.stock import ...
 
 def render_stock_tab():
     """Renders the Stock Analysis tab."""
     # グローバル市場タイプを取得
     market_type = st.session_state.get("market_type", "US")
     
+    # Lazy imports to prevent circular dependencies
+    from src.market_data import get_stock_info
     from src.market_config import get_market_config
+    
+    # Import separated components locally
+    from src.ui.components.stock import (
+        render_chart,
+        render_company_overview,
+        render_integrated_metrics,
+        render_quarterly_financials_graph,
+        render_recent_earnings,
+        render_news_full_width,
+        render_ai_stock_analysis,
+        render_technical_analysis,
+        render_option_analysis
+    )
     config = get_market_config(market_type)
     
     default_ticker = config["default_ticker"]

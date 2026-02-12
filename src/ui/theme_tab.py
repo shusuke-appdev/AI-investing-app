@@ -2,13 +2,15 @@
 Thematic Trends Tab Module
 Displays thematic performance rankings.
 """
+# Imports moved inside functions to avoid circular import issues
 import streamlit as st
 import pandas as pd
 from themes_config import PERIODS
-from src.theme_analyst import get_ranked_themes
 
 def render_theme_tab():
     """Renders the Thematic Trends tab."""
+    # Lazy import
+    from src.theme_analyst import get_ranked_themes
     # グローバル市場タイプを取得
     market_type = st.session_state.get("market_type", "US")
     market_label = "🇯🇵 日本市場" if market_type == "JP" else "🇺🇸 米国市場"

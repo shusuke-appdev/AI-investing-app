@@ -9,25 +9,8 @@ Portfolio Advisor Tab Module
 """
 import streamlit as st
 
-from src.portfolio_advisor import PortfolioHolding, generate_portfolio_advice
-
-# 分割したモジュールからインポート
-from src.ui.portfolio_input import (
-    render_portfolio_manager,
-    render_save_portfolio,
-    render_saved_portfolios,
-    render_manual_input,
-    render_text_paste,
-    render_file_import,
-)
-from src.ui.portfolio_analysis import (
-    run_analysis,
-    render_analysis_results,
-)
-from src.ui.portfolio_views import (
-    render_history_view,
-    render_comparison_view,
-)
+# Imports moved inside functions to avoid circular import issues
+import streamlit as st
 
 
 def render_portfolio_tab():
@@ -47,6 +30,17 @@ def render_portfolio_tab():
 
 def _render_input_section():
     """入力・管理セクション"""
+    # Lazy imports
+    from src.ui.portfolio_input import (
+        render_portfolio_manager,
+        render_save_portfolio,
+        render_saved_portfolios,
+        render_manual_input,
+        render_text_paste,
+        render_file_import,
+    )
+    from src.ui.portfolio_analysis import run_analysis
+    
     if "portfolio_input_mode" not in st.session_state:
         st.session_state.portfolio_input_mode = "manage"
     
@@ -102,6 +96,13 @@ def _render_input_section():
 
 def _render_analysis_section():
     """分析・可視化セクション"""
+    # Lazy imports
+    from src.ui.portfolio_analysis import render_analysis_results
+    from src.ui.portfolio_views import (
+        render_history_view,
+        render_comparison_view,
+    )
+    
     analysis = st.session_state.get("portfolio_analysis")
     
     if not analysis:
@@ -126,6 +127,9 @@ def _render_analysis_section():
 
 def _render_advice_section():
     """AIアドバイスセクション"""
+    # Lazy imports
+    from src.portfolio_advisor import generate_portfolio_advice
+    
     st.markdown("### 🤖 AIアドバイス")
     
     analysis = st.session_state.get("portfolio_analysis")
