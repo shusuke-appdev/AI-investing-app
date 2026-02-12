@@ -328,6 +328,21 @@ def get_stock_info(ticker: str) -> dict:
     Returns:
         dict: {name, ticker, sector, industry, summary, website, logo, city, state, country, employees, exchange}
     """
+    info = {
+        "name": ticker,
+        "ticker": ticker,
+        "sector": "N/A",
+        "industry": "N/A",
+        "summary": "情報なし",
+        "website": "",
+        "logo": "",
+        "city": "",
+        "state": "",
+        "country": "",
+        "employees": 0,
+        "exchange": ""
+    }
+
     info.update({
         "revenueGrowth": None, "earningsGrowth": None, "fcfMarginGrowth": None,
         "grossMargins": None, "operatingMargins": None, "currentRatio": None,
