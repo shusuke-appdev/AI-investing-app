@@ -56,7 +56,6 @@ def render_error_screen(e):
 def main():
     """メイン関数"""
     try:
-    try:
         init_session_state()
         
         # --- 設定の即時読み込み（UI描画前）---
