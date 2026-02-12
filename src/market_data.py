@@ -30,91 +30,15 @@ def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
     """
     # Finnhub未設定なら空を返す（またはyfinanceフォールバックも検討可能だが今回は移行）
     if not is_configured():
-        print("Finnhub API key not configured")
+        print(f"[DATA_WARN] Finnhub API key not configured. Falling back to yfinance for {ticker}.")
         # --- Fallback to yfinance if Finnhub not ready ---
         try:
             return yf.Ticker(ticker).history(period=period)
-        except:
+        except Exception as e:
+            print(f"[DATA_ERROR] yfinance fallback failed for {ticker}: {e}")
             return pd.DataFrame()
 
-    # 期間を日数に変換
-    days_map = {
-        "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, 
-        "6mo": 180, "1y": 365, "ytd": 365, "max": 1825 # 5y limit for now
-    }
-    days = days_map.get(period, 30)
-    
-    # 解像度設定
-    resolution = "D"
-    if period == "1d": resolution = "5" # 5分足
-    elif period == "5d": resolution = "60" # 1時間足
-    
-    return get_candles(ticker, resolution=resolution, period_days=days)
-
-
-def get_multiple_stocks_data(tickers: list[str], period: str = "1mo") -> dict[str, pd.DataFrame]:
-    """
-    複数銘柄の株価データを一括取得します。
-    Finnhubはバッチ取得がないためループ処理（finnhub_client側でレート制限ハンドル）。
-    """
-    result = {}
-    for ticker in tickers:
-        result[ticker] = get_stock_data(ticker, period)
-    return result
-
-
-@st.cache_data(ttl=43200) # 12時間キャッシュ
-def get_stock_info(ticker: str) -> dict:
-    """
-    銘柄の企業情報を取得します。
-    Finnhub (Profile + Basic Financials) を使用。
-    """
-    if not is_configured():
-        try:
-            return yf.Ticker(ticker).info
-        except:
-            return {"name": ticker, "summary": "Info unavailable", "current_price": 0}
-
-    profile = get_company_profile(ticker) or {}
-    financials = get_basic_financials(ticker) or {}
-    
-    metric = financials.get("metric", {})
-    quote = get_quote(ticker) or {}
-    
-    current_price = quote.get("c", 0)
-    
-    # 辞書を統合してアプリの期待する形式に変換
-    info = {
-        "name": profile.get("name", ticker),
-        "sector": profile.get("finnhubIndustry", "N/A"),
-        "industry": profile.get("finnhubIndustry", "N/A"), # FinnhubはIndustryのみ
-        "country": profile.get("country", "N/A"),
-        "website": profile.get("weburl", ""),
-        "summary": "Finnhub profile data", # Finnhub Profile2にはSummaryがない場合が多い
-        "market_cap": profile.get("marketCapitalization", 0) * 1000000, # million単位のため
-        
-        "current_price": current_price,
-        "fifty_two_week_high": metric.get("52WeekHigh"),
-        "fifty_two_week_low": metric.get("52WeekLow"),
-        
-        "pe_ratio": metric.get("peBasicExclExtraTTM"),
-        "dividend_yield": metric.get("dividendYieldIndicatedAnnual") if metric.get("dividendYieldIndicatedAnnual") else 0,
-        "beta": metric.get("beta"),
-        
-        # 成長率関連
-        "revenueGrowth": metric.get("revenueGrowthTTMYoy"),
-        "earningsGrowth": metric.get("epsGrowthTTMYoy"),
-        
-        # その他指標
-        "profitMargins": metric.get("netProfitMarginTTM"),
-        "returnOnEquity": metric.get("roeTTM"),
-        
-        # 追加
-        "logo": profile.get("logo", "")
-    }
-    
-    return info
-
+    # ... (omit middle part) ...
 
 def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]:
     """
@@ -123,8 +47,15 @@ def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]
     """
     try:
         stock = yf.Ticker(ticker)
-        expirations = stock.options
+        # yfinanceのoptionsプロパティはHTTPリクエストを伴うためエラーが出る可能性がある
+        try:
+            expirations = stock.options
+        except Exception as e:
+             print(f"[DATA_ERROR] Failed to fetch option expirations for {ticker}: {e}")
+             return None
+             
         if not expirations:
+            print(f"[DATA_WARN] No option expirations found for {ticker}")
             return None
         
         all_calls = []
@@ -139,10 +70,12 @@ def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]
                 puts["expiration"] = exp
                 all_calls.append(calls)
                 all_puts.append(puts)
-            except Exception:
+            except Exception as e:
+                print(f"[DATA_WARN] Failed to fetch option chain for {ticker} exp {exp}: {e}")
                 continue
                 
         if not all_calls:
+            print(f"[DATA_WARN] No option chains successfully fetched for {ticker}")
             return None
             
         calls_df = pd.concat(all_calls, ignore_index=True)
@@ -150,7 +83,7 @@ def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]
         
         return calls_df, puts_df
     except Exception as e:
-        print(f"Option fetch error for {ticker}: {e}")
+        print(f"[DATA_ERROR] Unexpected option fetch error for {ticker}: {e}")
         return None
 
 
@@ -242,21 +175,27 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
 
     # 1. Finnhubで主要指数などを取得
     for name, ticker in targets.items():
-        q = get_quote(ticker)
-        if isinstance(q, dict) and q.get("c") not in (0, None):
-            result[name] = {"price": q.get("c"), "change": q.get("dp", 0), "ticker": ticker}
-        else:
-            # Finnhubで取れない場合 (例: ^TNX等)
-            try:
-                t = yf.Ticker(ticker)
-                hist = t.history(period="2d")
-                if len(hist) >= 1:
-                    c = hist["Close"].iloc[-1]
-                    prev = hist["Close"].iloc[-2] if len(hist) > 1 else c
-                    chg = ((c - prev) / prev * 100) if prev else 0
-                    result[name] = {"price": c, "change": chg, "ticker": ticker}
-            except:
-                pass
+        try:
+            q = get_quote(ticker)
+            if isinstance(q, dict) and q.get("c") not in (0, None):
+                result[name] = {"price": q.get("c"), "change": q.get("dp", 0), "ticker": ticker}
+            else:
+                # Finnhubで取れない場合 (例: ^TNX等)
+                print(f"[DATA_INFO] Finnhub returned no data for {name} ({ticker}). Trying fallback.")
+                try:
+                    t = yf.Ticker(ticker)
+                    hist = t.history(period="2d")
+                    if len(hist) >= 1:
+                        c = hist["Close"].iloc[-1]
+                        prev = hist["Close"].iloc[-2] if len(hist) > 1 else c
+                        chg = ((c - prev) / prev * 100) if prev else 0
+                        result[name] = {"price": c, "change": chg, "ticker": ticker}
+                    else:
+                        print(f"[DATA_ERROR] Fallback yfinance returned empty history for {name} ({ticker})")
+                except Exception as e:
+                    print(f"[DATA_ERROR] Fallback yfinance failed for {name} ({ticker}): {e}")
+        except Exception as e:
+            print(f"[DATA_ERROR] Unexpected error fetching {name} ({ticker}): {e}")
 
     # 2. セクター指数は yfinance で一括取得 (Finnhub不可のため)
     sectors = config.get("sectors", {})
@@ -270,6 +209,7 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
                 try:
                     if len(sector_tickers) > 1:
                         if ticker not in sec_data.columns.levels[0]:
+                            print(f"[DATA_WARN] Sector ticker {ticker} not found in batch data")
                             continue
                         df = sec_data[ticker]
                     else:
@@ -277,10 +217,12 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
                     
                     # Closeがなければスキップ
                     if "Close" not in df.columns:
+                        print(f"[DATA_ERROR] No 'Close' column for sector {name} ({ticker})")
                         continue
                         
                     closes = df["Close"].dropna()
                     if len(closes) < 2:
+                        print(f"[DATA_WARN] Insufficient history length ({len(closes)}) for sector {name} ({ticker})")
                         continue
                         
                     c = closes.iloc[-1]
@@ -289,10 +231,10 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
                     
                     result[name] = {"price": c, "change": chg, "ticker": ticker}
                 except Exception as e:
-                    print(f"Sector data error {name}: {e}")
+                    print(f"[DATA_ERROR] Sector data error {name}: {e}")
                     continue
         except Exception as e:
-            print(f"Sector batch fetch error: {e}")
+            print(f"[DATA_FATAL] Sector batch fetch error: {e}")
 
     return result
 

@@ -229,15 +229,31 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
     sentiment = "中立"
     analysis = []
     
+    # OIベースのPCRは信頼性が低いため（yfinance制限）、Volumeベースを採用する
+    # しかし、元々の関数は両方返している。ここで「使用するPCR」を決定する。
+    
+    # GEXはOI必須のため、OIが極端に少ない場合は信頼できないとしてNoneにする
+    # 簡易判定: PCR情報の total_put_oi + total_call_oi が少なすぎる場合
+    if pcr and (pcr["total_call_oi"] + pcr["total_put_oi"] < 1000):
+        gex = None # 強制無効化
+        
+    sentiment = "中立"
+    analysis = []
+    
     if pcr:
-        if pcr["oi_pcr"] > 1.2:
+        # Volume PCRを主指標とする
+        vol_pcr = pcr["volume_pcr"]
+        if vol_pcr > 1.2:
             sentiment = "弱気"
-            analysis.append(f"PCR ({pcr['oi_pcr']:.2f}) が高く、ヘッジ需要増加 (弱気/警戒)")
-        elif pcr["oi_pcr"] < 0.7:
+            analysis.append(f"PCR(Vol) ({vol_pcr:.2f}) が高く、プット取引活発 (弱気示唆)")
+        elif vol_pcr < 0.7:
             sentiment = "強気"
-            analysis.append(f"PCR ({pcr['oi_pcr']:.2f}) が低く、コール買い優勢 (強気)")
+            analysis.append(f"PCR(Vol) ({vol_pcr:.2f}) が低く、コール取引活発 (強気示唆)")
         else:
-            analysis.append(f"PCR ({pcr['oi_pcr']:.2f}) は中立水準")
+            analysis.append(f"PCR(Vol) ({vol_pcr:.2f}) は中立水準")
+            
+        if gex is None:
+             analysis.append("※ OIデータ不足のためGEX分析は省略")
     
     if gex:
         if gex["nearby_net_gex"] > 0:

@@ -399,14 +399,15 @@ def _render_ticker_compact(opt: dict):
         st.markdown(f"**{icon} {ticker}** ${current_price:,.2f}" if current_price else f"**{icon} {ticker}**")
         
         # 主要指標グリッド
-        pcr_val = pcr.get("oi_pcr", 0) if pcr else 0
+        pcr_val = pcr.get("volume_pcr", 0) if pcr else 0
         net_gex = gex.get("nearby_net_gex", 0) if gex else 0
         
         # 1行目: PCR / GEX
         c1, c2 = st.columns(2)
         with c1:
-            pcr_col = "#ef4444" if pcr_val > 1.2 else "#10b981" if pcr_val < 0.7 else "#6b7280"
-            st.markdown(f"<small>PCR</small><br><strong style='color:{pcr_col}'>{pcr_val:.2f}</strong>", unsafe_allow_html=True)
+            pcr_vol = pcr.get("volume_pcr", 0) if pcr else 0
+            pcr_col = "#ef4444" if pcr_vol > 1.2 else "#10b981" if pcr_vol < 0.7 else "#6b7280"
+            st.markdown(f"<small>PCR (Vol)</small><br><strong style='color:{pcr_col}'>{pcr_vol:.2f}</strong>", unsafe_allow_html=True)
         with c2:
             gex_col = "#10b981" if net_gex > 0 else "#ef4444"
             st.markdown(f"<small>Net GEX</small><br><strong style='color:{gex_col}'>{net_gex/1e6:+.0f}M</strong>", unsafe_allow_html=True)
@@ -421,7 +422,9 @@ def _render_ticker_compact(opt: dict):
         st.divider()
         
         # ナラティブ分析生成
-        narrative = f"現在の**PCRは{pcr_val:.2f}**で、これは{sentiment}を示唆しています。"
+        # ナラティブ分析生成
+        pcr_vol = pcr.get("volume_pcr", 0) if pcr else 0
+        narrative = f"現在の**PCR(Vol)は{pcr_vol:.2f}**で、これは{sentiment}を示唆しています。"
         if net_gex > 0:
             narrative += " **正のNet GEX**により急激な値動きは抑制される傾向にあります。"
         else:

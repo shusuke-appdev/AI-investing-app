@@ -134,7 +134,8 @@ def generate_market_recap(
         return "Gemini APIが利用できません。APIキーを設定してください。"
     
     # コンテキストの構築
-    context_parts = []
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    context_parts = [f"【レポート生成日: {today_str}】"]
     
     # 市場データ（5日変動）
     context_parts.append("【短期変動 (5日)】")
@@ -255,7 +256,7 @@ Do NOT analyze each asset class in isolation. Identify and explain these linkage
 
 ## [タイトル: 現在のマーケットレジームを端的に表すキャッチフレーズ (例: Risk-On / Disinflationary Growth / Stagflation Fear)]
 
-### Ⅰ. 市場アップデート (本日の日付)
+### Ⅰ. 市場アップデート ({today_str})
 
 **統合ナラティブ形式で以下の要素を織り込む（箇条書きではなくストーリーとして記述）:**
 

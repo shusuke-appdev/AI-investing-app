@@ -63,15 +63,18 @@ def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
         except finnhub.FinnhubAPIException as e:
             if e.status_code == 429:
                 wait = 2 ** attempt  # 1s, 2s, 4s
-                print(f"Finnhub rate limit hit. Retrying in {wait}s... (attempt {attempt+1}/{max_retries})")
+                print(f"[FINNHUB_WARN] Rate limit hit. Retrying in {wait}s... (attempt {attempt+1}/{max_retries})")
                 time.sleep(wait)
             else:
+                print(f"[FINNHUB_ERROR] API Exception: {e}")
                 raise
         except finnhub.FinnhubRequestException as e:
+            print(f"[FINNHUB_WARN] Request Exception: {e}. Retrying...")
             if attempt < max_retries - 1:
                 time.sleep(1)
             else:
                 raise
+    print(f"[FINNHUB_ERROR] Max retries exceeded.")
     raise Exception("Finnhub API: max retries exceeded")
 
 
@@ -91,9 +94,12 @@ def get_quote(symbol: str) -> Optional[dict]:
     if not client:
         return None
     try:
-        return _rate_limited_call(client.quote, symbol)
+        data = _rate_limited_call(client.quote, symbol)
+        if not data or data.get("c") == 0:
+             print(f"[FINNHUB_WARN] Quote for {symbol} is empty or zero: {data}")
+        return data
     except Exception as e:
-        print(f"Finnhub quote error ({symbol}): {e}")
+        print(f"[FINNHUB_ERROR] Quote error ({symbol}): {e}")
         return None
 
 
@@ -132,10 +138,11 @@ def get_candles(
     try:
         data = _rate_limited_call(client.stock_candles, symbol, resolution, from_ts, to_ts)
     except Exception as e:
-        print(f"Finnhub candles error ({symbol}): {e}")
+        print(f"[FINNHUB_ERROR] Candles error ({symbol}): {e}")
         return pd.DataFrame()
 
     if not data or data.get("s") != "ok":
+        print(f"[FINNHUB_WARN] No candle data for {symbol} (status: {data.get('s') if data else 'None'})")
         return pd.DataFrame()
 
     df = pd.DataFrame({
