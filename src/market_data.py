@@ -6,7 +6,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import requests
-import requests_cache
+# import requests_cache # Moved to local import in _get_yf_session for robustness
 from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Optional
@@ -23,10 +23,23 @@ def _get_yf_session():
     """
     yfinance用のセッションを作成・返却します。
     クラウド環境でのブロック回避のためUser-Agentを設定します。
+    requests_cacheが利用可能な場合はキャッシュを使用します。
     """
-    session = requests_cache.CachedSession('yfinance_cache', expire_after=3600)
-    session.headers['User-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    return session
+    ua_headers = {
+        'User-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+
+    try:
+        import requests_cache
+        session = requests_cache.CachedSession('yfinance_cache', expire_after=3600)
+        session.headers.update(ua_headers)
+        return session
+    except ImportError:
+        # requests_cacheがない場合は通常のrequestsセッションを使用
+        print("[DATA_WARN] requests_cache module not found. Using standard session.")
+        session = requests.Session()
+        session.headers.update(ua_headers)
+        return session
 
 
 def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
