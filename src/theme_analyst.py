@@ -2,6 +2,7 @@
 テーマ別分析モジュール
 テーマごとの騰落率計算とランキング生成を行います。
 """
+import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
@@ -37,55 +38,86 @@ def fetch_and_calculate_all_performances(days: int, market_type: str = "US") -> 
     if not all_tickers:
         return {}
     
-    # 2. 個別データ取得 (Finnhub移行)
-    # yf.download(threads=True) は高速だが Finnhub はレート制限(60/min)があるため
-    # 非常に時間がかかる可能性がある。キャッシュ(12h)を頼りにループ処理する。
+    # 2. 一括取得 (yfinance batch)
+    # 期間に応じた適切なデータを取得し、日付ベースで計算する
+    
+    # 期間設定を長めに確保して、確実に過去データが含まれるようにする
+    fetch_period = "1mo"
+    interval = "1d"
+    
+    if days <= 5: 
+        fetch_period = "1mo" # 5日でも1ヶ月分取っておけば確実
+        interval = "1d" 
+    elif days <= 30: 
+        fetch_period = "3mo"
+    elif days <= 90: 
+        fetch_period = "6mo"
+    elif days <= 180: 
+        fetch_period = "1y"
+    else: 
+        fetch_period = "2y" # 1年以上なら2年分
     
     performance_map = {}
     
-    # 期間を日数文字列に変換
-    period_str = "1mo"
-    if days <= 5: period_str = "5d"
-    elif days <= 30: period_str = "1mo"
-    elif days <= 90: period_str = "3mo"
-    elif days <= 180: period_str = "6mo"
-    else: period_str = "1y"
+    try:
+        # yfinanceで一括ダウンロード
+        df = yf.download(all_tickers, period=fetch_period, interval=interval, group_by='ticker', auto_adjust=True, threads=True, progress=False)
+        
+        if df.empty:
+            return {}
+            
+        # 1銘柄だけの場合のハンドリング
+        if len(all_tickers) == 1:
+            pass # 通常はMultiIndexではないが、アクセス方法を統一する必要がある
 
-    # 進捗表示はできないため（backendロジック）、ひたすら取得
-    # 実用性を考慮し、各テーマの上位銘柄（定義順）のみに絞るなどの最適化が望ましいが、
-    # Plan通り全取得を試みる。タイムアウト時はキャッシュが効くことを祈る。
-    
-    # デバッグ用に件数を制限するオプションがあれば良いが、今回は全件トライ。
-    # ただし、エラーが続出する場合は空を返す。
-    
-    for ticker in all_tickers:
-        try:
-            # get_stock_data は DataFrame を返す (columns: Open, High, Low, Close, Volume)
-            hist = get_stock_data(ticker, period=period_str)
-            
-            if hist is None or hist.empty:
-                continue
+        for ticker in all_tickers:
+            try:
+                # データ抽出
+                if len(all_tickers) > 1:
+                    if ticker not in df.columns.levels[0]:
+                        continue
+                    stock_df = df[ticker]
+                else:
+                    stock_df = df
                 
-            closes = hist["Close"]
-            if len(closes) < 2:
-                continue
-            
-            # 期間計算
-            # 取得されたデータが必要な日数分あるとは限らない（Finnhubのcandlesは期間指定）
-            # get_stock_data内部で期間計算済み
-            
-            current_price = closes.iloc[-1]
-            start_price = closes.iloc[0] # 期間の最初
-            
-            if len(closes) > 1:
-                # 念のためデータの日付スパンを確認すべきだが、簡易的に最初と最後で計算
+                if "Close" not in stock_df.columns:
+                    continue
+                    
+                closes = stock_df["Close"].dropna()
+                if len(closes) < 2:
+                    continue
+                
+                # 最新日付と価格
+                current_date = closes.index[-1]
+                current_price = closes.iloc[-1]
+                
+                # 目標とする開始日 (営業日ベースで厳密に計算)
+                target_date = current_date - timedelta(days=days)
+                
+                # target_date 以前で最も近い日付を探す (asof)
+                # get_indexer は method='nearest' が使えるが、未来方向に行くと期間が短くなるので
+                # target_date "以下" の最大日付を探したい。
+                # 簡易的に、indexから target_date 以下のものをフィルタして最後を取得
+                
+                past_data = closes[closes.index <= target_date]
+                if past_data.empty:
+                    # データ不足（上場から日が浅いなど）の場合は、ある最古データを使うか、計算しないか。
+                    # ここでは最古データを使う（期間が短くなるがエラーにはしない）
+                    start_price = closes.iloc[0]
+                else:
+                    start_price = past_data.iloc[-1]
+                
                 if start_price != 0:
                     perf = ((current_price - start_price) / start_price) * 100
                     performance_map[ticker] = perf
                     
-        except Exception:
-            # 個別エラーは無視
-            continue
+            except Exception as e:
+                # print(f"Error for {ticker}: {e}")
+                continue
+                
+    except Exception as e:
+        print(f"Batch download error: {e}")
+        return {}
 
     return performance_map
 

@@ -229,7 +229,7 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
 
     # --- 米国市場 (Finnhub移行) ---
     targets = {
-        **config["indices"], 
+        **config["indices"],
         **config["treasuries"], 
         **config["commodities"], 
         **config["crypto"], 
@@ -238,22 +238,15 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
     
     if not is_configured():
         # Fallback to current logic (yfinance batch)
-        # コード省略せずに残すべきだが、長くなるので省略
-        # 実装上は、ここに元のyfinanceロジックを貼り付けるか、
-        # あるいは「設定なし」なら空を返すか。
-        # ユーザー体験のため元のコードを残すのがベストだが、
-        # 今回は「移行」なのでFinnhubロジックのみ書く。
         pass
 
+    # 1. Finnhubで主要指数などを取得
     for name, ticker in targets.items():
-        # シンボル変換: ^GSPC -> ^GSPC (Finnhub OK?) -> Finnhub is usually "SPY" for ETF or separate index symbols
-        # Finnhub indices: ^GSPC supported? -> Yes, usually.
         q = get_quote(ticker)
-        if q and q["c"] != 0:
-            result[name] = {"price": q["c"], "change": q["dp"], "ticker": ticker}
+        if isinstance(q, dict) and q.get("c") not in (0, None):
+            result[name] = {"price": q.get("c"), "change": q.get("dp", 0), "ticker": ticker}
         else:
             # Finnhubで取れない場合 (例: ^TNX等)
-            # yfinanceでリトライ（ハイブリッド）
             try:
                 t = yf.Ticker(ticker)
                 hist = t.history(period="2d")
@@ -264,7 +257,43 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
                     result[name] = {"price": c, "change": chg, "ticker": ticker}
             except:
                 pass
-                
+
+    # 2. セクター指数は yfinance で一括取得 (Finnhub不可のため)
+    sectors = config.get("sectors", {})
+    if sectors:
+        try:
+            sector_tickers = list(sectors.values())
+            # 直近5日分取得すれば前日比は計算可能 (土日挟む場合も考慮)
+            sec_data = yf.download(sector_tickers, period="5d", group_by='ticker', threads=True, progress=False)
+            
+            for name, ticker in sectors.items():
+                try:
+                    if len(sector_tickers) > 1:
+                        if ticker not in sec_data.columns.levels[0]:
+                            continue
+                        df = sec_data[ticker]
+                    else:
+                        df = sec_data
+                    
+                    # Closeがなければスキップ
+                    if "Close" not in df.columns:
+                        continue
+                        
+                    closes = df["Close"].dropna()
+                    if len(closes) < 2:
+                        continue
+                        
+                    c = closes.iloc[-1]
+                    prev = closes.iloc[-2]
+                    chg = ((c - prev) / prev) * 100
+                    
+                    result[name] = {"price": c, "change": chg, "ticker": ticker}
+                except Exception as e:
+                    print(f"Sector data error {name}: {e}")
+                    continue
+        except Exception as e:
+            print(f"Sector batch fetch error: {e}")
+
     return result
 
 

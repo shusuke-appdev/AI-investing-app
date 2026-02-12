@@ -146,6 +146,7 @@ def get_candles(
         "Volume": data["v"],
     }, index=pd.to_datetime(data["t"], unit="s"))
     df.index.name = "Date"
+    df.sort_index(inplace=True)
     return df
 
 
