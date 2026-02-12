@@ -15,3 +15,4 @@ youtube-transcript-api>=0.6.0
 gnews>=0.3.0
 pandas-datareader>=0.10.0
 pandas-ta>=0.4.0
+requests-cache>=1.0.0

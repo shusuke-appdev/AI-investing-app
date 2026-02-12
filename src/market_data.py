@@ -5,6 +5,8 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import requests
+import requests_cache
 from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Optional
@@ -16,6 +18,17 @@ from src.market_config import get_market_config
 
 
 @st.cache_data(ttl=300) # 5分キャッシュ
+# --- Helper for yfinance session ---
+def _get_yf_session():
+    """
+    yfinance用のセッションを作成・返却します。
+    クラウド環境でのブロック回避のためUser-Agentを設定します。
+    """
+    session = requests_cache.CachedSession('yfinance_cache', expire_after=3600)
+    session.headers['User-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    return session
+
+
 def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
     """
     指定銘柄の株価データを取得します。
@@ -33,7 +46,8 @@ def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
         print(f"[DATA_WARN] Finnhub API key not configured. Falling back to yfinance for {ticker}.")
         # --- Fallback to yfinance if Finnhub not ready ---
         try:
-            return yf.Ticker(ticker).history(period=period)
+            session = _get_yf_session()
+            return yf.Ticker(ticker, session=session).history(period=period)
         except Exception as e:
             print(f"[DATA_ERROR] yfinance fallback failed for {ticker}: {e}")
             return pd.DataFrame()
@@ -46,7 +60,8 @@ def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]
     Finnhub Free Tierで提供なし → yfinance維持 (Hybrid構成)
     """
     try:
-        stock = yf.Ticker(ticker)
+        session = _get_yf_session()
+        stock = yf.Ticker(ticker, session=session)
         # yfinanceのoptionsプロパティはHTTPリクエストを伴うためエラーが出る可能性がある
         try:
             expirations = stock.options
@@ -183,7 +198,8 @@ def get_market_indices(market_type: str = "US") -> dict[str, dict]:
                 # Finnhubで取れない場合 (例: ^TNX等)
                 print(f"[DATA_INFO] Finnhub returned no data for {name} ({ticker}). Trying fallback.")
                 try:
-                    t = yf.Ticker(ticker)
+                    session = _get_yf_session()
+                    t = yf.Ticker(ticker, session=session)
                     hist = t.history(period="2d")
                     if len(hist) >= 1:
                         c = hist["Close"].iloc[-1]
