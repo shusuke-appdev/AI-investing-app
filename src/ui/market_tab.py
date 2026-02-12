@@ -3,9 +3,8 @@ Market News Tab Module (formerly Market Intelligence)
 Displays flash summary, option analysis, and AI market recap.
 """
 import streamlit as st
-from src.market_data import get_market_indices, get_stock_info
-from src.news_analyst import generate_market_recap
-from src.option_analyst import get_major_indices_options
+# Imports moved to inside functions to avoid circular dependencies/import errors
+import streamlit as st
 
 
 def render_market_tab():
@@ -57,6 +56,11 @@ def _generate_ai_recap(market_type: str = "US"):
     with st.spinner("AI分析レポートを生成中... (ニュース取得・分析)"):
         from src.finnhub_client import get_company_news
         from src.market_data import get_stock_data
+        from src.theme_analyst import get_ranked_themes
+        from src.news_aggregator import get_aggregated_news, merge_with_finnhub_news
+        from src.finnhub_client import get_company_news
+        from src.market_data import get_stock_data
+        from src.news_analyst import generate_market_recap
         from src.theme_analyst import get_ranked_themes
         from src.news_aggregator import get_aggregated_news, merge_with_finnhub_news
         from src.market_config import get_market_config
@@ -382,6 +386,7 @@ def _render_option_analysis(market_type: str = "US"):
 
 def _render_ticker_compact(opt: dict):
     """個別銘柄のコンパクト表示（ナラティブ形式）"""
+    from src.market_data import get_stock_info
     ticker = opt.get("ticker", "N/A")
     sentiment = opt.get("sentiment", "中立")
     pcr = opt.get("pcr", {})
