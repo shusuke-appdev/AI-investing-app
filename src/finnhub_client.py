@@ -8,7 +8,7 @@ import streamlit as st
 from datetime import datetime, timedelta
 from typing import Optional
 import finnhub
-
+from src.settings_storage import get_finnhub_api_key
 
 # --- クライアント初期化 ---
 
@@ -19,6 +19,11 @@ def _get_client() -> Optional[finnhub.Client]:
         # 環境変数からフォールバック
         import os
         api_key = os.environ.get("FINNHUB_API_KEY", "")
+    
+    # さらにストレージからフォールバック
+    if not api_key:
+        api_key = get_finnhub_api_key()
+        
     if not api_key:
         return None
     return finnhub.Client(api_key=api_key)

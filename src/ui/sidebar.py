@@ -10,7 +10,8 @@ from src.option_analyst import get_major_indices_options
 from src.settings_storage import (
     get_gemini_api_key, set_gemini_api_key,
     get_gas_url, set_gas_url,
-    get_storage_type, set_storage_type_setting
+    get_storage_type, set_storage_type_setting,
+    get_finnhub_api_key,  # Added
 )
 from src.gas_client import configure_gas
 from src.portfolio_storage import set_storage_type
@@ -169,6 +170,11 @@ def _load_saved_settings():
     saved_storage = get_storage_type()
     if saved_storage:
         set_storage_type(saved_storage)
+        
+    # Finnhub API Key
+    saved_finnhub_key = get_finnhub_api_key()
+    if saved_finnhub_key and not st.session_state.get("finnhub_api_key"):
+        st.session_state.finnhub_api_key = saved_finnhub_key
 
 
 def _render_ai_chat():

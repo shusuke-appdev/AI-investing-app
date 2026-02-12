@@ -77,6 +77,11 @@ def get_custom_css() -> str:
     /* ========================================
        Base Styles
        ======================================== */
+    h1 { font-size: 1.75rem !important; font-weight: 700 !important; margin-bottom: 1rem !important; }
+    h2 { font-size: 1.5rem !important; font-weight: 600 !important; margin-top: 1.5rem !important; margin-bottom: 0.75rem !important; }
+    h3 { font-size: 1.25rem !important; font-weight: 600 !important; margin-top: 1.25rem !important; margin-bottom: 0.5rem !important; }
+    h4 { font-size: 1.1rem !important; font-weight: 600 !important; margin-top: 1rem !important; margin-bottom: 0.5rem !important; }
+
     .main-header {
         font-size: 1.75rem;
         font-weight: 600;

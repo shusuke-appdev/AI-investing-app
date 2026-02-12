@@ -254,9 +254,9 @@ Do NOT analyze each asset class in isolation. Identify and explain these linkage
 
 # OUTPUT FORMAT (MARKDOWN) - 3 SECTIONS ONLY
 
-## [タイトル: 現在のマーケットレジームを端的に表すキャッチフレーズ (例: Risk-On / Disinflationary Growth / Stagflation Fear)]
+### [タイトル: 現在のマーケットレジームを端的に表すキャッチフレーズ (例: Risk-On / Disinflationary Growth / Stagflation Fear)]
 
-### Ⅰ. 市場アップデート ({today_str})
+#### Ⅰ. 市場アップデート ({today_str})
 
 **統合ナラティブ形式で以下の要素を織り込む（箇条書きではなくストーリーとして記述）:**
 
@@ -289,7 +289,7 @@ Do NOT analyze each asset class in isolation. Identify and explain these linkage
 
 ---
 
-### Ⅱ. 資金循環と投資テーマ (Themes & Flows)
+#### Ⅱ. 資金循環と投資テーマ (Themes & Flows)
 
 **アセットクラス横断で資金フローとテーマ動態を分析:**
 
@@ -311,7 +311,7 @@ Do NOT analyze each asset class in isolation. Identify and explain these linkage
 
 ---
 
-### Ⅲ. まとめ (Outlook & Key Catalysts)
+#### Ⅲ. まとめ (Outlook & Key Catalysts)
 
 - **Main Scenario**: [Bullish/Bearish/Neutral] - トリガーレベル明示（例：S&P500 5,200突破で上目線加速）
 - **Risk Scenario**: 逆シナリオと発動条件（例：VIX 20超で調整リスク顕在化）
