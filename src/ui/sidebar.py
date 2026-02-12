@@ -153,28 +153,36 @@ def _render_portfolio_submenu():
 
 
 def _load_saved_settings():
-    """保存済み設定を読み込み"""
+    """保存済み設定を読み込み、セッション状態と同期させる"""
     # Gemini API Key
     saved_api_key = get_gemini_api_key()
-    if saved_api_key and not st.session_state.get("gemini_configured"):
-        if configure_gemini(saved_api_key):
-            st.session_state.gemini_configured = True
-    
+    if saved_api_key:
+        # セッションに未設定、または保存値と異なる場合に更新
+        if st.session_state.get("gemini_api_key") != saved_api_key:
+            if configure_gemini(saved_api_key):
+                st.session_state.gemini_configured = True
+                st.session_state.gemini_api_key = saved_api_key # キー自体も保持
+
     # GAS URL
     saved_gas_url = get_gas_url()
-    if saved_gas_url and not st.session_state.get("gas_url"):
-        st.session_state.gas_url = saved_gas_url
-        configure_gas(saved_gas_url)
+    if saved_gas_url:
+        if st.session_state.get("gas_url") != saved_gas_url:
+            st.session_state.gas_url = saved_gas_url
+            configure_gas(saved_gas_url) # クライアント設定も更新
     
     # Storage Type
     saved_storage = get_storage_type()
     if saved_storage:
-        set_storage_type(saved_storage)
+        current_storage = st.session_state.get("storage_type")
+        if current_storage != saved_storage:
+            st.session_state.storage_type = saved_storage
+            set_storage_type(saved_storage)
         
     # Finnhub API Key
     saved_finnhub_key = get_finnhub_api_key()
-    if saved_finnhub_key and not st.session_state.get("finnhub_api_key"):
-        st.session_state.finnhub_api_key = saved_finnhub_key
+    if saved_finnhub_key:
+        if st.session_state.get("finnhub_api_key") != saved_finnhub_key:
+            st.session_state.finnhub_api_key = saved_finnhub_key
 
 
 def _render_ai_chat():
@@ -313,13 +321,20 @@ def _render_settings():
 def _refresh_data():
     """データを更新する"""
     with st.spinner("データ更新中..."):
+        # セッション状態のリセット
         st.session_state.market_data = None
         st.session_state.option_analysis = None
         st.session_state.ai_recap = None
+        
+        # キャッシュの完全クリア
         st.cache_data.clear()
         
-        st.session_state.market_data = get_market_indices()
-        st.session_state.option_analysis = get_major_indices_options()
+        # データの再取得
+        try:
+            st.session_state.market_data = get_market_indices(st.session_state.get("market_type", "US"))
+            st.session_state.option_analysis = get_major_indices_options(st.session_state.get("market_type", "US"))
+        except Exception as e:
+            st.error(f"データ取得エラー: {e}")
         
         if st.session_state.get("gemini_configured"):
             news_data = [{"title": "市場データ更新完了"}]
