@@ -67,8 +67,58 @@ def render_quarterly_financials_graph(ticker: str):
             except Exception:
                 continue
 
+        # --- Fallback: yfinance ---
         if not financials_data:
-            st.warning("財務データの解析に失敗しました")
+            try:
+                import yfinance as yf
+                yf_ticker = yf.Ticker(ticker)
+                qf = yf_ticker.quarterly_financials
+                
+                # yfinance returns DataFrame with dates as columns
+                # Indexes: "Total Revenue", "Operating Income", "Net Income" etc.
+                if not qf.empty:
+                    # 一般的なインデックス名を探す (yfinanceは変動することがある)
+                    # Use .loc with flexible lookup or iterator
+                    
+                    # カラム（日付）でループ（新しい順に来るので逆にするか、あとでソート）
+                    for date_obj in qf.columns:
+                        try:
+                            # 億ドル単位で扱いやすいように生の値を取得
+                            # yfinanceのインデックスは日本語化されている場合と英語の場合があるが、
+                            # ライブラリ内部的には英語キーが残っていることが多い。
+                            # ここでは安全のため .get() ではなく loc検索、なければ0
+                            
+                            def get_val(df, keys):
+                                for k in keys:
+                                    if k in df.index: return df.loc[k, date_obj]
+                                return 0
+
+                            rev_keys = ["Total Revenue", "Operating Revenue", "Revenue"]
+                            op_keys = ["Operating Income", "Operating Profit"]
+                            net_keys = ["Net Income", "Net Income Common Stockholders"]
+                            
+                            revenue = get_val(qf, rev_keys)
+                            operating_income = get_val(qf, op_keys)
+                            net_income = get_val(qf, net_keys)
+                            
+                            if revenue != 0:
+                                # yfinanceの四半期はTimestampオブジェクトなので、strftimeで整形
+                                # Q%q はPythonのstrftimeにはないため、手動で計算するか近似
+                                # ここでは簡易的に年と月で表示
+                                financials_data.append({
+                                    "date_label": date_obj.strftime("'%y-%m"), # 簡易表示
+                                    "filed_date": date_obj.strftime("%Y-%m-%d"),
+                                    "revenue": float(revenue),
+                                    "operating_income": float(operating_income),
+                                    "net_income": float(net_income)
+                                })
+                        except Exception as ey:
+                            continue
+            except Exception as e_yf:
+                print(f"YFormation Fallback Failed: {e_yf}")
+
+        if not financials_data:
+            st.warning("財務データの解析に失敗しました (Finnhub & yfinance)")
             return
 
         # 日付順でソート（古い順）
