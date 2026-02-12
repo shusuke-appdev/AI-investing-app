@@ -68,17 +68,29 @@ def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
         except finnhub.FinnhubAPIException as e:
             if e.status_code == 429:
                 wait = 2 ** attempt  # 1s, 2s, 4s
-                print(f"[FINNHUB_WARN] Rate limit hit. Retrying in {wait}s... (attempt {attempt+1}/{max_retries})")
+                msg = f"Finnhub Rate Limit (429). Retrying in {wait}s..."
+                print(f"[FINNHUB_WARN] {msg}")
+                # st.toast(f"⚠️ {msg}", icon="⏳") # Retry中はうるさいのでスキップ、最後に出す
                 time.sleep(wait)
+            elif e.status_code == 401 or e.status_code == 403:
+                msg = f"Finnhub API Key Invalid or Permission Denied ({e.status_code})"
+                print(f"[FINNHUB_ERROR] {msg}")
+                st.toast(f"🚫 {msg}. Check Settings.", icon="key")
+                raise # リトライしても無駄なのでraise
             else:
-                print(f"[FINNHUB_ERROR] API Exception: {e}")
+                msg = f"Finnhub API Error: {e}"
+                print(f"[FINNHUB_ERROR] {msg}")
+                st.toast(f"❌ {msg}", icon="⚠️")
                 raise
         except finnhub.FinnhubRequestException as e:
             print(f"[FINNHUB_WARN] Request Exception: {e}. Retrying...")
             if attempt < max_retries - 1:
                 time.sleep(1)
             else:
+                st.toast(f"🌐 Network Error: {e}", icon="🔌")
                 raise
+    
+    st.toast("❌ Finnhub API: Max retries exceeded (Rate Limit)", icon="🛑")
     print(f"[FINNHUB_ERROR] Max retries exceeded.")
     raise Exception("Finnhub API: max retries exceeded")
 

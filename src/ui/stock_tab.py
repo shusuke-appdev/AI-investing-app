@@ -59,6 +59,10 @@ def render_stock_tab():
     # === 上段: チャート + 企業概要 ===
     col1, col2 = st.columns([2, 1])
     
+    # チェック: データが空（APIキー未設定 or 取得失敗）の場合
+    if info.get("summary") == "情報なし" and info.get("sector") == "N/A":
+        st.warning("⚠️ 企業情報を取得できませんでした。サイドバーの「設定」でFinnhub APIキーが正しく設定されているか確認してください。", icon="⚠️")
+    
     with col1:
         render_chart(ticker)
         # チャート下にAI銘柄分析を配置
