@@ -44,19 +44,18 @@ def load_settings() -> dict:
                 return data
         
         # If neither exists
-        with open(log_path, "a", encoding="utf-8") as log:
-            from datetime import datetime
-            log.write(f"{datetime.now()} [WARNING] File not found: {SETTINGS_FILE} nor {cwd_file}\n")
+        # Cloud環境などではファイルが存在しないのが正常なので、エラーログは出さずに空を返す
+        return {}
 
     except Exception as e:
-        print(f"設定読み込みエラー: {e}")
-        # ログ出力（エラー）
+        # 権限エラーなど、予期せぬエラーのみログ出力
+        print(f"設定読み込みエラー (詳細): {e}")
         try:
-            with open("debug_settings.log", "a", encoding="utf-8") as log:
+             with open("debug_settings.log", "a", encoding="utf-8") as log:
                 from datetime import datetime
                 log.write(f"{datetime.now()} [ERROR] Load failed: {e}\n")
         except:
-            pass
+             pass
             
     return {}
 

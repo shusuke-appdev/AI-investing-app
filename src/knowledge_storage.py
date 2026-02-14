@@ -70,6 +70,9 @@ def _get_storage_path() -> Path:
     return DATA_DIR / "knowledge_items.json"
 
 
+from src.settings_storage import get_storage_type
+from src.gas_client import get_gas_client
+
 def save_knowledge(item: KnowledgeItem) -> None:
     """
     参照知識を保存します。
@@ -77,6 +80,14 @@ def save_knowledge(item: KnowledgeItem) -> None:
     Args:
         item: 保存するKnowledgeItem
     """
+    # GASストレージの場合
+    if get_storage_type() == "gas":
+        client = get_gas_client()
+        if client:
+            client.save_knowledge_item(item.to_dict())
+            return
+
+    # ローカルストレージの場合
     items = load_all_knowledge()
     
     # 既存アイテムの更新または新規追加
@@ -100,6 +111,28 @@ def load_all_knowledge() -> list[KnowledgeItem]:
     Returns:
         KnowledgeItemのリスト（作成日時順）
     """
+    # GASストレージの場合
+    if get_storage_type() == "gas":
+        client = get_gas_client()
+        if client:
+            try:
+                data_list = client.get_all_knowledge()
+                # 辞書からオブジェクトへ変換
+                items = []
+                for d in data_list:
+                    try:
+                        items.append(KnowledgeItem.from_dict(d))
+                    except Exception as e:
+                        print(f"Skipping invalid item: {e}")
+                
+                # ソート (新しい順)
+                items.sort(key=lambda x: x.created_at, reverse=True)
+                return items
+            except Exception as e:
+                print(f"GAS load error: {e}")
+                return []
+
+    # ローカルストレージの場合
     storage_path = _get_storage_path()
     
     if not storage_path.exists():
@@ -120,12 +153,6 @@ def load_all_knowledge() -> list[KnowledgeItem]:
 def get_knowledge_by_id(item_id: str) -> Optional[KnowledgeItem]:
     """
     IDで参照知識を取得します。
-    
-    Args:
-        item_id: 取得するアイテムのID
-    
-    Returns:
-        KnowledgeItem または None
     """
     items = load_all_knowledge()
     return next((x for x in items if x.id == item_id), None)
@@ -141,6 +168,14 @@ def delete_knowledge(item_id: str) -> bool:
     Returns:
         削除成功時True
     """
+    # GASストレージの場合
+    if get_storage_type() == "gas":
+        client = get_gas_client()
+        if client:
+            return client.delete_knowledge_item(item_id)
+        return False
+
+    # ローカルストレージの場合
     items = load_all_knowledge()
     original_len = len(items)
     items = [x for x in items if x.id != item_id]

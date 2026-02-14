@@ -256,6 +256,52 @@ class GasClient:
         })
         return result.get("success", False)
 
+    # ============================================================
+    # 参照知識管理 (Knowledge Base)
+    # ============================================================
+
+    def save_knowledge_item(self, item: dict) -> bool:
+        """
+        参照知識を保存
+        
+        Args:
+            item: KnowledgeItemの辞書表現
+        
+        Returns:
+            保存成功時True
+        """
+        result = self._post({
+            "action": "save_knowledge",
+            "item": item
+        })
+        return result.get("success", False)
+
+    def get_all_knowledge(self) -> list[dict]:
+        """
+        全参照知識を取得
+        
+        Returns:
+            参照知識リスト
+        """
+        result = self._get({"action": "get_knowledge"})
+        return result.get("items", [])
+
+    def delete_knowledge_item(self, item_id: str) -> bool:
+        """
+        参照知識を削除
+        
+        Args:
+            item_id: 削除するアイテムID
+        
+        Returns:
+            削除成功時True
+        """
+        result = self._post({
+            "action": "delete_knowledge",
+            "id": item_id
+        })
+        return result.get("success", False)
+
 
 # シングルトンインスタンス（設定後に使用）
 _gas_client: Optional[GasClient] = None

@@ -246,50 +246,64 @@ def _render_ai_chat():
 def _render_settings():
     """設定セクション（API設定 + ストレージ設定統合）"""
     with st.expander("⚙️ 設定", expanded=True): # 展開しておく
-        # === デバッグ情報（一時的） ===
-        from src.settings_storage import SETTINGS_FILE, load_settings
-        st.caption(f"Settings Path: `{SETTINGS_FILE}`")
-        current_settings = load_settings()
-        if not current_settings:
-            st.error("⚠️ 設定ファイルを読み込めませんでした（空、またはエラー）")
-        else:
-            st.success(f"✅ 設定読み込み成功: {list(current_settings.keys())}")
         
         # === API設定 ===
         st.markdown("**🔑 API設定**")
         
-        # Gemini API Key
-        saved_gemini_key = get_gemini_api_key()
-        gemini_key = st.text_input(
-            "Gemini API Key",
-            type="password",
-            value=saved_gemini_key if saved_gemini_key else "",
-            help="AIレポート生成に必要です"
-        )
+        # 1. Gemini API Key
+        gemini_in_secrets = False
+        try:
+            if "GEMINI_API_KEY" in st.secrets:
+                gemini_in_secrets = True
+        except:
+            pass
+
+        if gemini_in_secrets:
+            st.text_input("Gemini API Key", value="", placeholder="✅ Secretsで設定済み (システム管理)", disabled=True)
+            st.caption("※ Streamlit Secretsによって安全に管理されています")
+        else:
+            saved_gemini_key = get_gemini_api_key()
+            gemini_key = st.text_input(
+                "Gemini API Key",
+                type="password",
+                value=saved_gemini_key if saved_gemini_key else "",
+                help="AIレポート生成に必要です"
+            )
+            
+            if gemini_key and gemini_key != saved_gemini_key:
+                if configure_gemini(gemini_key):
+                    st.session_state.gemini_configured = True
+                    set_gemini_api_key(gemini_key)
+                    st.success("✅ Gemini設定保存")
+                else:
+                    st.error("❌ Gemini設定失敗")
         
-        if gemini_key and gemini_key != saved_gemini_key:
-            if configure_gemini(gemini_key):
-                st.session_state.gemini_configured = True
-                set_gemini_api_key(gemini_key)
-                st.success("✅ Gemini設定保存")
-            else:
-                st.error("❌ Gemini設定失敗")
-        
-        # Finnhub API Key
+        # 2. Finnhub API Key
         from src.settings_storage import get_finnhub_api_key, set_finnhub_api_key
-        saved_finnhub_key = get_finnhub_api_key()
-        finnhub_key = st.text_input(
-            "Finnhub API Key",
-            type="password",
-            value=saved_finnhub_key if saved_finnhub_key else "",
-            help="株価・ニュース取得に必要です（無料枠あり）"
-        )
         
-        if finnhub_key and finnhub_key != saved_finnhub_key:
-            # 簡単な検証（実際にAPIを呼ぶのがベストだが、ここでは保存のみ）
-            set_finnhub_api_key(finnhub_key)
-            st.session_state.finnhub_api_key = finnhub_key
-            st.success("✅ Finnhub設定保存")
+        finnhub_in_secrets = False
+        try:
+            if "FINNHUB_API_KEY" in st.secrets:
+                finnhub_in_secrets = True
+        except:
+            pass
+
+        if finnhub_in_secrets:
+            st.text_input("Finnhub API Key", value="", placeholder="✅ Secretsで設定済み (システム管理)", disabled=True)
+            st.caption("※ Streamlit Secretsによって安全に管理されています")
+        else:
+            saved_finnhub_key = get_finnhub_api_key()
+            finnhub_key = st.text_input(
+                "Finnhub API Key",
+                type="password",
+                value=saved_finnhub_key if saved_finnhub_key else "",
+                help="株価・ニュース取得に必要です（無料枠あり）"
+            )
+            
+            if finnhub_key and finnhub_key != saved_finnhub_key:
+                set_finnhub_api_key(finnhub_key)
+                st.session_state.finnhub_api_key = finnhub_key
+                st.success("✅ Finnhub設定保存")
         
         st.markdown("---")
         
