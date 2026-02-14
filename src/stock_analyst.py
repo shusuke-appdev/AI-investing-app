@@ -6,6 +6,8 @@ from typing import Optional
 import google.generativeai as genai
 from src.advisor.technical import analyze_technical, get_technical_summary_for_ai
 
+from src.constants import GEMINI_MODEL_NAME
+
 # 分析用モデル
 _model = None
 
@@ -14,7 +16,7 @@ def _get_model():
     """モデルインスタンスを取得"""
     global _model
     if _model is None:
-        _model = genai.GenerativeModel("gemini-3-flash-preview")
+        _model = genai.GenerativeModel(GEMINI_MODEL_NAME)
     return _model
 
 
@@ -56,60 +58,22 @@ def analyze_stock(
     knowledge_context = get_knowledge_for_ai_context(max_items=5)
     
     # プロンプト構築
-    prompt = f"""あなたはエクイティリサーチアナリスト兼テクニカルアナリストです。
-以下の銘柄について、ファンダメンタルズとテクニカル両面から客観的かつ批判的な分析を行ってください。
-
-【銘柄情報】
-- ティッカー: {ticker}
-- 企業名: {company_name}
-- セクター: {sector}
-- 業種: {industry}
-- 時価総額: ${market_cap/1e9:.2f}B
-- 現在株価: ${price:.2f}
-- PER (直近): {pe_ratio}
-- PER (予想): {forward_pe}
-- アナリスト目標株価: ${target_price}
-
-{technical_summary}
-
-【関連ニュース】
-{chr(10).join(news_headlines[:5]) if news_headlines else "ニュースなし"}
-
-【ユーザー参照知識 (あなたの分析に取り入れるべきユーザーのメモ)】
-{knowledge_context if knowledge_context else "特になし"}
-
-【分析指示】
-
-## 1. 投資判断
-買い / 中立 / 売り のいずれかを明示し、その根拠を1行で
-※ユーザー参照知識に関連情報があれば、それを考慮して判断すること
-
-## 2. テクニカル分析
-- 現在のトレンド評価
-- エントリーポイント（具体的な価格水準）
-- 逆張り買いゾーンの評価
-- 損切りライン（サポート割れなど）
-
-## 3. ファンダメンタルズ
-- バリュエーション評価（割高/割安）
-- 成長性・収益性の評価
-
-## 4. Bull Case（強気シナリオ）
-- 上昇要因を2-3点
-
-## 5. Bear Case（弱気シナリオ）
-- 下落リスクを2-3点（Devil's Advocate視点）
-
-## 6. 推奨アクション
-- 具体的な売買タイミング
-- 買い増し/利確の価格水準
-
-【出力ルール】
-- 日本語で回答
-- だ・である調
-- 具体的な数字（価格、比率）を使う
-- 投資アドバイスではなく情報提供であることを最後に注記
-"""
+    from src.prompts.analysis_prompts import STOCK_ANALYSIS_PROMPT_TEMPLATE
+    
+    prompt = STOCK_ANALYSIS_PROMPT_TEMPLATE.format(
+        ticker=ticker,
+        company_name=company_name,
+        sector=sector,
+        industry=industry,
+        market_cap=market_cap,
+        price=price,
+        pe_ratio=pe_ratio,
+        forward_pe=forward_pe,
+        target_price=target_price,
+        technical_summary=technical_summary,
+        news_headlines=chr(10).join(news_headlines[:5]) if news_headlines else "ニュースなし",
+        knowledge_context=knowledge_context if knowledge_context else "特になし"
+    )
     
     try:
         response = model.generate_content(prompt)
@@ -129,15 +93,15 @@ def get_quick_summary(ticker: str, stock_info: dict) -> str:
     market_cap = stock_info.get("marketCap", 0)
     pe_ratio = stock_info.get("trailingPE", "N/A")
     
-    prompt = f"""以下の銘柄について、1-2文で簡潔に説明してください。
-
-ティッカー: {ticker}
-企業名: {company_name}
-セクター: {sector}
-時価総額: ${market_cap/1e9:.2f}B
-PER: {pe_ratio}
-
-日本語で、だ・である調で回答。"""
+    from src.prompts.analysis_prompts import QUICK_SUMMARY_PROMPT_TEMPLATE
+    
+    prompt = QUICK_SUMMARY_PROMPT_TEMPLATE.format(
+        ticker=ticker,
+        company_name=company_name,
+        sector=sector,
+        market_cap=market_cap,
+        pe_ratio=pe_ratio
+    )
     
     try:
         response = model.generate_content(prompt)

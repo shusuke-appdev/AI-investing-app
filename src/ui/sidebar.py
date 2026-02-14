@@ -311,17 +311,29 @@ def _render_settings():
         st.markdown("**💾 ストレージ設定**")
         
         saved_storage = get_storage_type()
+        
+        storage_options = ["local", "gas", "supabase"]
+        try:
+            default_index = storage_options.index(saved_storage)
+        except ValueError:
+            default_index = 0
+            
         storage = st.radio(
             "保存先",
-            ["local", "gas"],
-            format_func=lambda x: "ローカル" if x == "local" else "Google Apps Script",
-            index=0 if saved_storage == "local" else 1,
+            storage_options,
+            format_func=lambda x: {
+                "local": "ローカル",
+                "gas": "Google Apps Script",
+                "supabase": "Supabase (Sync)"
+            }.get(x, x),
+            index=default_index,
             horizontal=True
         )
         
         if storage != saved_storage:
             set_storage_type(storage)
             set_storage_type_setting(storage)
+            st.rerun()
         
         if storage == "gas":
             saved_gas_url = get_gas_url()
@@ -338,6 +350,13 @@ def _render_settings():
                 st.success("✅ GAS設定完了（保存済み）")
             elif saved_gas_url:
                 st.caption("✅ 設定済み")
+        
+        if storage == "supabase":
+            from src.portfolio_storage import _get_supabase_client
+            if not _get_supabase_client():
+                st.warning("⚠️ secrets.toml に SUPABASE_URL と SUPABASE_KEY を設定してください")
+            else:
+                st.success("✅ Supabase接続OK")
         
         st.markdown("---")
         

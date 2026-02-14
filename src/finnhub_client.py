@@ -4,26 +4,53 @@ Finnhub APIクライアントモジュール
 """
 import time
 import pandas as pd
-import streamlit as st
+# import streamlit as st  # Removed UI dependency
 from datetime import datetime, timedelta
 from typing import Optional
 import finnhub
 from src.settings_storage import get_finnhub_api_key
 
+# --- Custom Exceptions ---
+class FinnhubError(Exception):
+    """Base exception for Finnhub client errors."""
+    pass
+
+class FinnhubConfigError(FinnhubError):
+    """Raised when API key is missing or invalid."""
+    pass
+
+class FinnhubRateLimitError(FinnhubError):
+    """Raised when rate limit is exceeded."""
+    pass
+
+class FinnhubNetworkError(FinnhubError):
+    """Raised when network issues occur."""
+    pass
+
 # --- クライアント初期化 ---
 
+def _get_api_key() -> str:
+    """APIキーを取得（Streamlit依存を最小限に）"""
+    # 1. Session State (if available)
+    try:
+        import streamlit as st
+        if hasattr(st, "session_state"):
+            key = st.session_state.get("finnhub_api_key")
+            if key: return key
+    except ImportError:
+        pass
+
+    # 2. Environment Variable
+    import os
+    key = os.environ.get("FINNHUB_API_KEY")
+    if key: return key
+
+    # 3. Settings Storage
+    return get_finnhub_api_key()
+
 def _get_client() -> Optional[finnhub.Client]:
-    """Finnhubクライアントを取得（APIキー設定済みの場合）"""
-    api_key = st.session_state.get("finnhub_api_key", "")
-    if not api_key:
-        # 環境変数からフォールバック
-        import os
-        api_key = os.environ.get("FINNHUB_API_KEY", "")
-    
-    # さらにストレージからフォールバック
-    if not api_key:
-        api_key = get_finnhub_api_key()
-        
+    """Finnhubクライアントを取得"""
+    api_key = _get_api_key()
     if not api_key:
         return None
     return finnhub.Client(api_key=api_key)
@@ -31,33 +58,22 @@ def _get_client() -> Optional[finnhub.Client]:
 
 def is_configured() -> bool:
     """Finnhub APIが設定済みか確認"""
-    return _get_client() is not None
+    return _get_api_key() != ""
 
 
 # --- レート制限 & リトライ ---
 
 _last_call_time = 0.0
-_MIN_INTERVAL = 1.1  # 秒（60 calls/min = ~1s間隔、余裕持たせる）
-
+_MIN_INTERVAL = 1.1  # 秒
 
 def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
     """
-    レート制限付きAPI呼び出し。429エラー時に指数バックオフでリトライ。
-
-    Args:
-        func: 呼び出すFinnhub APIメソッド
-        max_retries: 最大リトライ回数
-
-    Returns:
-        APIレスポンス
-
-    Raises:
-        Exception: リトライ上限超過時
+    レート制限付きAPI呼び出し。
+    UI依存(st.toast)を排除し、例外を送出する。
     """
     global _last_call_time
 
     for attempt in range(max_retries):
-        # レート制限: 最低間隔を確保
         elapsed = time.time() - _last_call_time
         if elapsed < _MIN_INTERVAL:
             time.sleep(_MIN_INTERVAL - elapsed)
@@ -67,32 +83,24 @@ def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
             return func(*args, **kwargs)
         except finnhub.FinnhubAPIException as e:
             if e.status_code == 429:
-                wait = 2 ** attempt  # 1s, 2s, 4s
-                msg = f"Finnhub Rate Limit (429). Retrying in {wait}s..."
-                print(f"[FINNHUB_WARN] {msg}")
-                # st.toast(f"⚠️ {msg}", icon="⏳") # Retry中はうるさいのでスキップ、最後に出す
+                wait = 2 ** attempt
+                print(f"[FINNHUB_WARN] Rate Limit (429). Retrying in {wait}s...")
                 time.sleep(wait)
             elif e.status_code == 401 or e.status_code == 403:
-                msg = f"Finnhub API Key Invalid or Permission Denied ({e.status_code})"
-                print(f"[FINNHUB_ERROR] {msg}")
-                st.toast(f"🚫 {msg}. Check Settings.", icon="key")
-                raise # リトライしても無駄なのでraise
+                print(f"[FINNHUB_ERROR] Permission Denied ({e.status_code})")
+                raise FinnhubConfigError(f"Invalid API Key or Permission Denied: {e}")
             else:
-                msg = f"Finnhub API Error: {e}"
-                print(f"[FINNHUB_ERROR] {msg}")
-                st.toast(f"❌ {msg}", icon="⚠️")
-                raise
+                print(f"[FINNHUB_ERROR] API Error: {e}")
+                raise FinnhubError(f"API Error: {e}")
         except finnhub.FinnhubRequestException as e:
-            print(f"[FINNHUB_WARN] Request Exception: {e}. Retrying...")
+            print(f"[FINNHUB_WARN] Network Exception: {e}")
             if attempt < max_retries - 1:
                 time.sleep(1)
             else:
-                st.toast(f"🌐 Network Error: {e}", icon="🔌")
-                raise
+                raise FinnhubNetworkError(f"Network Error: {e}")
     
-    st.toast("❌ Finnhub API: Max retries exceeded (Rate Limit)", icon="🛑")
     print(f"[FINNHUB_ERROR] Max retries exceeded.")
-    raise Exception("Finnhub API: max retries exceeded")
+    raise FinnhubRateLimitError("Max retries exceeded")
 
 
 # --- 株価データ ---
