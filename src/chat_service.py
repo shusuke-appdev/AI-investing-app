@@ -1,32 +1,28 @@
 """
 チャットサービスモジュール
 Gemini APIを使用した対話型チャット機能を提供します。
+セッション状態は st.session_state で管理（マルチユーザー安全）。
 """
 from typing import Optional
+import streamlit as st
 import google.generativeai as genai
 from src.constants import GEMINI_MODEL_NAME
-
-# チャット用モデル
-_chat_model = None
-_chat_session = None
 
 
 def get_chat_session(context: str = ""):
     """
     チャットセッションを取得または作成します。
-    
+
     Args:
         context: チャットのコンテキスト（AIレポートなど）
-    
+
     Returns:
         Geminiチャットセッション
     """
-    global _chat_model, _chat_session
-    
-    if _chat_model is None:
-        _chat_model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-    
-    if _chat_session is None:
+    if "_chat_model" not in st.session_state:
+        st.session_state["_chat_model"] = genai.GenerativeModel(GEMINI_MODEL_NAME)
+
+    if "_chat_session" not in st.session_state:
         system_prompt = f"""あなたは金融市場のニュースと分析に精通したAIアナリストです。
 以下のコンテキスト情報を参考に、ユーザーの質問に日本語で簡潔に回答してください。
 
@@ -38,28 +34,27 @@ def get_chat_session(context: str = ""):
 - 不確実な情報は「推測です」と明記
 - 投資アドバイスは控え、情報提供に徹する
 """
-        _chat_session = _chat_model.start_chat(history=[
+        st.session_state["_chat_session"] = st.session_state["_chat_model"].start_chat(history=[
             {"role": "user", "parts": [system_prompt]},
             {"role": "model", "parts": ["了解しました。金融市場に関するご質問にお答えします。"]}
         ])
-    
-    return _chat_session
+
+    return st.session_state["_chat_session"]
 
 
 def reset_chat_session():
     """チャットセッションをリセットします。"""
-    global _chat_session
-    _chat_session = None
+    st.session_state.pop("_chat_session", None)
 
 
 def send_message(message: str, context: str = "") -> str:
     """
     チャットメッセージを送信し、応答を取得します。
-    
+
     Args:
         message: ユーザーメッセージ
         context: チャットコンテキスト
-    
+
     Returns:
         AIの応答テキスト
     """

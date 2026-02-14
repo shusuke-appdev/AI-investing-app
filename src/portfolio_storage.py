@@ -20,19 +20,17 @@ from .supabase_client import get_supabase_client
 PORTFOLIO_DIR = Path(__file__).parent.parent / "data" / "portfolios"
 StorageType = Literal["local", "gas", "supabase"]
 
-# デフォルトストレージタイプ
-_storage_type: StorageType = "local"
-
 
 def set_storage_type(storage_type: StorageType):
-    """ストレージタイプを設定"""
-    global _storage_type
-    _storage_type = storage_type
+    """ストレージタイプを設定（session_stateで管理）"""
+    import streamlit as st
+    st.session_state["_storage_type"] = storage_type
 
 
 def get_storage_type() -> StorageType:
     """現在のストレージタイプを取得"""
-    return _storage_type
+    import streamlit as st
+    return st.session_state.get("_storage_type", "local")
 
 
 @dataclass

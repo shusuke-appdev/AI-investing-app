@@ -3,21 +3,18 @@
 テクニカル分析を統合した詳細な銘柄分析を提供します。
 """
 from typing import Optional
+import streamlit as st
 import google.generativeai as genai
 from src.advisor.technical import analyze_technical, get_technical_summary_for_ai
 
 from src.constants import GEMINI_MODEL_NAME
 
-# 分析用モデル
-_model = None
-
 
 def _get_model():
-    """モデルインスタンスを取得"""
-    global _model
-    if _model is None:
-        _model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-    return _model
+    """モデルインスタンスを取得（session_stateで管理）"""
+    if "_stock_analyst_model" not in st.session_state:
+        st.session_state["_stock_analyst_model"] = genai.GenerativeModel(GEMINI_MODEL_NAME)
+    return st.session_state["_stock_analyst_model"]
 
 
 def analyze_stock(
