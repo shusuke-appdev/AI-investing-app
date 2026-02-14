@@ -72,6 +72,7 @@ def _get_storage_path() -> Path:
 
 from src.settings_storage import get_storage_type
 from src.gas_client import get_gas_client
+from src.supabase_client import get_supabase_client
 
 def save_knowledge(item: KnowledgeItem) -> None:
     """
@@ -80,12 +81,27 @@ def save_knowledge(item: KnowledgeItem) -> None:
     Args:
         item: 保存するKnowledgeItem
     """
-    # GASストレージの場合
+    # GAS
     if get_storage_type() == "gas":
         client = get_gas_client()
         if client:
             client.save_knowledge_item(item.to_dict())
             return
+
+    # Supabase
+    if get_storage_type() == "supabase":
+        client = get_supabase_client()
+        if client:
+            try:
+                # Upsert
+                # Supabase upsert requires dict.
+                data = item.to_dict()
+                # Ensure metadata is json compatible
+                client.table("knowledge_items").upsert(data).execute()
+                return
+            except Exception as e:
+                print(f"Supabase save error: {e}")
+                return
 
     # ローカルストレージの場合
     items = load_all_knowledge()
@@ -132,6 +148,22 @@ def load_all_knowledge() -> list[KnowledgeItem]:
                 print(f"GAS load error: {e}")
                 return []
 
+    # Supabase
+    if get_storage_type() == "supabase":
+        client = get_supabase_client()
+        if client:
+            try:
+                res = client.table("knowledge_items").select("*").execute()
+                items = []
+                for d in res.data:
+                    items.append(KnowledgeItem.from_dict(d))
+                # Sort
+                items.sort(key=lambda x: x.created_at, reverse=True)
+                return items
+            except Exception as e:
+                print(f"Supabase load error: {e}")
+                return []
+
     # ローカルストレージの場合
     storage_path = _get_storage_path()
     
@@ -173,6 +205,17 @@ def delete_knowledge(item_id: str) -> bool:
         client = get_gas_client()
         if client:
             return client.delete_knowledge_item(item_id)
+        return False
+
+    # Supabase
+    if get_storage_type() == "supabase":
+        client = get_supabase_client()
+        if client:
+            try:
+                client.table("knowledge_items").delete().eq("id", item_id).execute()
+                return True
+            except Exception as e:
+                print(f"Supabase delete error: {e}")
         return False
 
     # ローカルストレージの場合

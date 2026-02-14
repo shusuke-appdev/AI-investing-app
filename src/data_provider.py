@@ -18,7 +18,7 @@ from src.finnhub_client import (
 from src.market_config import get_market_config
 from src.constants import MARKET_US
 from src.models import StockInfo, NewsItem, MarketIndex
-from src.portfolio_storage import _get_supabase_client
+
 
 # We will move hybrid logic from market_data.py to here.
 
@@ -26,66 +26,17 @@ class DataProvider:
     """
     Centralized data provider for the application.
     Handles switching between Finnhub and yfinance, and caching strategies.
-    Now supports SBI API Sync (via Supabase) for Real-time JP data.
     """
     
-    @staticmethod
-    def _get_jp_price_from_supabase(ticker: str) -> Optional[float]:
-        """Try to get real-time price from Supabase Sync (for JP stocks)"""
-        try:
-            client = _get_supabase_client()
-            if not client:
-                return None
-            
-            # Query market_data_sync
-            response = client.table("market_data_sync").select("price, timestamp").eq("ticker", ticker).execute()
-            if not response.data:
-                return None
-            
-            data = response.data[0]
-            price = data.get("price")
-            ts_str = data.get("timestamp")
-            
-            if price is None or not ts_str:
-                return None
-                
-            # Check freshness (e.g., within 10 mins)
-            # timestamp from Supabase is ISO 8601 with timezone
-            try:
-                # Python 3.11+ handles ISO Z, but safer to use replace
-                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                now = datetime.now(ts.tzinfo)
-                if (now - ts).total_seconds() < 600: # 10 mins
-                    return float(price)
-            except Exception:
-                pass # Date parsing error or timezone mismatch, ignore freshness check? No, rely on fallback.
-            
-            # If date parse fails or old data, return None to fallback
-            return None
-
-        except Exception as e:
-            # print(f"[DataProvider] Supabase fetch error: {e}")
-            return None
-
     @staticmethod
     def get_current_price(ticker: str) -> float:
         """
         Get current price for a ticker.
         Priority:
-        1. Supabase Sync (JP Stocks Only, Real-time)
-        2. Finnhub Quote (US Stocks)
-        3. yfinance fast_info / history (Fallback)
+        1. Finnhub Quote (US Stocks)
+        2. yfinance fast_info / history (Fallback)
         """
-        # 1. SBI Sync (JP Stocks)
-        # Heuristic: ends with .T or is 4-digit number (Stooq style is "7203.JP", yf is "7203.T", user inputs "7203")
-        is_likely_jp = ticker.endswith(".T") or ticker.endswith(".JP") or (ticker.isdigit() and len(ticker) == 4)
-        
-        if is_likely_jp:
-            price = DataProvider._get_jp_price_from_supabase(ticker)
-            if price:
-                return price
-
-        # 2. Finnhub
+        # 1. Finnhub
         if is_finnhub_configured():
             try:
                 q = get_quote(ticker)
@@ -192,7 +143,7 @@ class DataProvider:
     @staticmethod
     def get_market_indices(market_type: str = MARKET_US) -> Dict[str, MarketIndex]:
         """
-        主要市場指数のデータを取得。
+        Get major market indices data.
         US: Finnhub quote
         JP: Stooq
         Global: Finnhub quote
@@ -273,15 +224,15 @@ class DataProvider:
     @staticmethod
     def get_stock_news(ticker: str, max_items: int = 10) -> List[NewsItem]:
         """
-        銘柄ニュース取得。
-        Finnhub Company News を使用。
+        Get stock news.
+        Uses Finnhub Company News.
         """
         if not is_configured():
             return []
 
         try:
             news = get_company_news(ticker)
-            # フォーマット変換
+            # Format conversion
             results: List[NewsItem] = []
             for item in news[:max_items]:
                 results.append({
@@ -298,7 +249,7 @@ class DataProvider:
     @staticmethod
     def get_stock_info(ticker: str) -> StockInfo:
         """
-        企業概要を取得します (Finnhub優先 -> yfinance Fallback)。
+        Get company profile (Finnhub priority -> yfinance Fallback).
         """
         info: StockInfo = {
             "name": ticker,

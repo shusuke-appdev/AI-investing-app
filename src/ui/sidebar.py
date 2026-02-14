@@ -324,7 +324,7 @@ def _render_settings():
             format_func=lambda x: {
                 "local": "ローカル",
                 "gas": "Google Apps Script",
-                "supabase": "Supabase (Sync)"
+                "supabase": "Supabase"
             }.get(x, x),
             index=default_index,
             horizontal=True
@@ -352,8 +352,8 @@ def _render_settings():
                 st.caption("✅ 設定済み")
         
         if storage == "supabase":
-            from src.portfolio_storage import _get_supabase_client
-            if not _get_supabase_client():
+            from src.supabase_client import get_supabase_client
+            if not get_supabase_client():
                 st.warning("⚠️ secrets.toml に SUPABASE_URL と SUPABASE_KEY を設定してください")
             else:
                 st.success("✅ Supabase接続OK")

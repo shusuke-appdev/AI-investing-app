@@ -5,6 +5,7 @@ API設定やGAS URLなどをローカルに永続化します。
 import json
 import os
 from pathlib import Path
+from .supabase_client import get_supabase_client
 
 
 # 設定ファイルのパス（プロジェクト内のdataディレクトリ）
@@ -20,60 +21,62 @@ def _ensure_dir():
 def load_settings() -> dict:
     """
     保存された設定を読み込みます。
+    Localをベースに、Supabaseが有効ならマージします。
     """
+    data = {}
+    
+    # 1. Local Load
     try:
         # デバッグログ用
         log_path = Path("debug_settings.log")
         
-        if SETTINGS_FILE.exists():
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                with open(log_path, "a", encoding="utf-8") as log:
-                    from datetime import datetime
-                    log.write(f"{datetime.now()} [SUCCESS] Loaded {len(data)} keys from {SETTINGS_FILE}\n")
-                return data
+        target_file = SETTINGS_FILE
+        if not target_file.exists():
+            cwd_file = Path("data/settings.json").resolve()
+            if cwd_file.exists():
+                target_file = cwd_file
         
-        # Fallback: Try CWD based path
-        cwd_file = Path("data/settings.json").resolve()
-        if cwd_file.exists() and cwd_file != SETTINGS_FILE:
-            with open(cwd_file, "r", encoding="utf-8") as f:
+        if target_file.exists():
+            with open(target_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                with open(log_path, "a", encoding="utf-8") as log:
-                    from datetime import datetime
-                    log.write(f"{datetime.now()} [SUCCESS] Loaded {len(data)} keys from CWD fallback: {cwd_file}\n")
-                return data
-        
-        # If neither exists
-        # Cloud環境などではファイルが存在しないのが正常なので、エラーログは出さずに空を返す
-        return {}
-
+                
     except Exception as e:
-        # 権限エラーなど、予期せぬエラーのみログ出力
         print(f"設定読み込みエラー (詳細): {e}")
-        try:
-             with open("debug_settings.log", "a", encoding="utf-8") as log:
-                from datetime import datetime
-                log.write(f"{datetime.now()} [ERROR] Load failed: {e}\n")
-        except:
-             pass
-            
-    return {}
+
+    # 2. Supabase Merge (if enabled locally)
+    # We check local config to see if we should fetch remote
+    if data.get("storage_type") == "supabase":
+        client = get_supabase_client()
+        if client:
+            try:
+                res = client.table("user_settings").select("*").execute()
+                for row in res.data:
+                    # Remote overrides local (except keys we want to keep local? e.g. API keys if strict?)
+                    # For now, remote overrides.
+                    data[row["key"]] = row["value"]
+            except Exception as e:
+                print(f"Supabase settings load error: {e}")
+
+    return data
 
 
 def save_settings(settings: dict) -> bool:
     """
     設定を保存します。
-    
-    Args:
-        settings: 保存する設定辞書
-        
-    Returns:
-        成功時True
     """
     try:
+        # 1. Local Save
         _ensure_dir()
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2, ensure_ascii=False)
+        
+        # 2. Supabase Save (if enabled)
+        if settings.get("storage_type") == "supabase":
+            client = get_supabase_client()
+            if client:
+                upsert_data = [{"key": k, "value": str(v), "updated_at": "now()"} for k, v in settings.items()]
+                client.table("user_settings").upsert(upsert_data).execute()
+
         return True
     except Exception as e:
         print(f"設定保存エラー: {e}")
