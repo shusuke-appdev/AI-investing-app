@@ -113,6 +113,10 @@ def generate_portfolio_advice(
                 news_lines.append(f"- [{n.get('ticker', '')}] {n.get('title', '')}")
             news_text = "\n".join(news_lines)
     
+    # ユーザー参照知識を取得
+    from src.knowledge_storage import get_knowledge_for_ai_context
+    knowledge_context = get_knowledge_for_ai_context(max_items=10)
+
     prompt = f"""あなたは経験豊富なポートフォリオマネージャー兼テクニカルアナリストです。
 以下の情報に基づいて、**テクニカル分析を重視した具体的な売買アドバイス**を提供してください。
 
@@ -137,11 +141,15 @@ def generate_portfolio_advice(
 
 {news_text}
 
+【ユーザー参照知識 (あなたの戦略指示書)】
+{knowledge_context if knowledge_context else "特になし"}
+
 【出力形式 - 以下の構成で詳細に分析】
 
 ## 1. ポートフォリオ総合評価 (0-100点)
 - 分散度、リスク/リターン効率、テクニカル状態の総合評価
 - 現在の市場環境との適合度
+- ※ユーザー参照知識に戦略指示があれば整合性を評価
 
 ## 2. 市場テクニカル環境
 - SPY/QQQ/IWMのトレンド判断

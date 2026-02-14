@@ -16,7 +16,7 @@ from src.ui.market_tab import render_market_tab
 from src.ui.theme_tab import render_theme_tab
 from src.ui.stock_tab import render_stock_tab
 from src.ui.portfolio_tab import render_portfolio_tab
-from src.ui.alerts_tab import render_alerts_tab
+from src.ui.knowledge_tab import render_knowledge_tab
 
 # ページ設定
 st.set_page_config(
@@ -30,6 +30,7 @@ def init_session_state():
     """セッション状態の初期化"""
     defaults = {
         "gemini_configured": False,
+        # ... (unchanged)
         "market_data": None,
         "option_analysis": None,
         "ai_recap": None,
@@ -43,6 +44,7 @@ def init_session_state():
 
 
 def render_error_screen(e):
+    # ... (unchanged)
     """起動エラー時のフォールバック画面を表示"""
     st.error("アプリケーションの起動中にエラーが発生しました。")
     st.code(str(e), language="python")
@@ -59,7 +61,7 @@ def main():
         init_session_state()
         
         # --- 設定の即時読み込み（UI描画前）---
-        # これによりデータ取得時（キャッシュ含む）にConfigが有効になる
+        # ... (unchanged)
         from src.settings_storage import load_settings, get_gemini_api_key, get_gas_url, get_storage_type, get_finnhub_api_key
         # settings_storageの関数を使ってセッションに同期
         # 1. Gemini
@@ -101,6 +103,8 @@ def main():
             render_stock_tab()
         elif page == "portfolio":
             render_portfolio_tab()
+        elif page == "knowledge":
+            render_knowledge_tab()
         elif page == "alerts":
             render_alerts_tab()
 

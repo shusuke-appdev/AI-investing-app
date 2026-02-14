@@ -51,6 +51,10 @@ def analyze_stock(
     # テクニカル分析を取得
     technical_summary = get_technical_summary_for_ai(ticker)
     
+    # ユーザー参照知識を取得
+    from src.knowledge_storage import get_knowledge_for_ai_context
+    knowledge_context = get_knowledge_for_ai_context(max_items=5)
+    
     # プロンプト構築
     prompt = f"""あなたはエクイティリサーチアナリスト兼テクニカルアナリストです。
 以下の銘柄について、ファンダメンタルズとテクニカル両面から客観的かつ批判的な分析を行ってください。
@@ -71,10 +75,14 @@ def analyze_stock(
 【関連ニュース】
 {chr(10).join(news_headlines[:5]) if news_headlines else "ニュースなし"}
 
+【ユーザー参照知識 (あなたの分析に取り入れるべきユーザーのメモ)】
+{knowledge_context if knowledge_context else "特になし"}
+
 【分析指示】
 
 ## 1. 投資判断
 買い / 中立 / 売り のいずれかを明示し、その根拠を1行で
+※ユーザー参照知識に関連情報があれば、それを考慮して判断すること
 
 ## 2. テクニカル分析
 - 現在のトレンド評価
