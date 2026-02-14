@@ -23,6 +23,9 @@ from src.finnhub_client import (
 from src.market_config import get_market_config
 from src.constants import MARKET_US, CACHE_TTL_SHORT, CACHE_TTL_MEDIUM, CACHE_TTL_LONG, CACHE_TTL_DAILY
 from src.models import StockInfo, NewsItem, MarketIndex
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 
 # --- 日本市場用 Stooq データ取得 ---
@@ -54,7 +57,7 @@ def _get_stooq_data(ticker: str) -> Optional[Tuple[float, float]]:
         change = ((close - open_price) / open_price * 100) if open_price != 0 else 0.0
         return close, round(change, 2)
     except Exception as e:
-        print(f"[STOOQ_WARN] Failed to fetch {ticker}: {e}")
+        logger.info(f"[STOOQ_WARN] Failed to fetch {ticker}: {e}")
         return None
 
 class DataProvider:
@@ -136,7 +139,7 @@ class DataProvider:
                 if result is not None:
                     return result
             except Exception as e:
-                print(f"[DataProvider] Finnhub option chain error for {ticker}: {e}")
+                logger.error(f"[DataProvider] Finnhub option chain error for {ticker}: {e}")
 
         # 2. yfinance Fallback (Greeksなし)
         try:
@@ -169,7 +172,7 @@ class DataProvider:
                 
             return pd.concat(all_calls, ignore_index=True), pd.concat(all_puts, ignore_index=True)
         except Exception as e:
-            print(f"[DataProvider] Option fetch error for {ticker}: {e}")
+            logger.error(f"[DataProvider] Option fetch error for {ticker}: {e}")
             return None
 
     @staticmethod
@@ -359,7 +362,7 @@ class DataProvider:
                     info["current_price"] = quote.get("c")
 
             except Exception as e:
-                print(f"[DATA_WARN] Finnhub fetch failed for {ticker}: {e}")
+                logger.warning(f"Finnhub fetch failed for {ticker}: {e}")
 
         # 2. yfinance Fallback (補完・代替)
         try:
@@ -406,7 +409,7 @@ class DataProvider:
                     if info["pe_ratio"] is None: info["pe_ratio"] = yf_info.get("trailingPE")
                     
         except Exception as e:
-            print(f"[DATA_WARN] yfinance profile fallback failed for {ticker}: {e}")
+            logger.warning(f"yfinance profile fallback failed for {ticker}: {e}")
 
         return info
 

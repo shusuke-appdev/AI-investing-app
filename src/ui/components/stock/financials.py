@@ -1,6 +1,9 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 def render_quarterly_financials_graph(ticker: str):
     """四半期財務グラフを描画（Finnhub版）"""
@@ -115,7 +118,7 @@ def render_quarterly_financials_graph(ticker: str):
                         except Exception as ey:
                             continue
             except Exception as e_yf:
-                print(f"YFormation Fallback Failed: {e_yf}")
+                logger.info(f"YFormation Fallback Failed: {e_yf}")
 
         if not financials_data:
             st.warning("財務データの解析に失敗しました (Finnhub & yfinance)")

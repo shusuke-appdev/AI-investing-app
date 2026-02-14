@@ -5,6 +5,9 @@
 from datetime import datetime, timedelta
 from typing import Optional
 import hashlib
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def _generate_news_id(title: str, link: str) -> str:
@@ -92,10 +95,10 @@ def get_gnews_articles(
         return results
         
     except ImportError:
-        print("gnews library not installed. Run: pip install gnews")
+        logger.info("gnews library not installed. Run: pip install gnews")
         return []
     except Exception as e:
-        print(f"GNews fetch error: {e}")
+        logger.error(f"GNews fetch error: {e}")
         return []
 
 

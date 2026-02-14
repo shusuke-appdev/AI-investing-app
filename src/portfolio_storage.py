@@ -16,6 +16,9 @@ except ImportError:
     pass
 
 from .supabase_client import get_supabase_client
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 PORTFOLIO_DIR = Path(__file__).parent.parent / "data" / "portfolios"
 StorageType = Literal["local", "gas", "supabase"]
@@ -85,7 +88,7 @@ def _save_local(name: str, holdings: list[dict]) -> bool:
             json.dump(portfolio, f, indent=2, ensure_ascii=False)
         return True
     except Exception as e:
-        print(f"Local save error: {e}")
+        logger.error(f"Local save error: {e}")
         return False
 
 
@@ -99,7 +102,7 @@ def _load_local(name: str) -> Optional[dict]:
         with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        print(f"Local load error: {e}")
+        logger.error(f"Local load error: {e}")
         return None
 
 
@@ -125,7 +128,7 @@ def _delete_local(name: str) -> bool:
             filepath.unlink()
             return True
         except Exception as e:
-            print(f"Local delete error: {e}")
+            logger.error(f"Local delete error: {e}")
             return False
     return False
 
@@ -136,7 +139,7 @@ def _save_gas(name: str, holdings: list[dict]) -> bool:
     """GAS経由で保存"""
     client = get_gas_client()
     if not client:
-        print("GAS client not configured")
+        logger.info("GAS client not configured")
         return False
     return client.save_portfolio(name, holdings)
 
@@ -192,7 +195,7 @@ def _save_supabase(name: str, holdings: list[dict]) -> bool:
         client.table("portfolios").upsert(payload, on_conflict="name").execute()
         return True
     except Exception as e:
-        print(f"Supabase save error: {e}")
+        logger.error(f"Supabase save error: {e}")
         return False
 
 
@@ -218,7 +221,7 @@ def _load_supabase(name: str) -> Optional[dict]:
             "updated_at": row["updated_at"]
         }
     except Exception as e:
-        print(f"Supabase load error: {e}")
+        logger.error(f"Supabase load error: {e}")
         return None
 
 
@@ -234,7 +237,7 @@ def _list_supabase() -> list[str]:
         names = set(r["name"] for r in response.data)
         return sorted(list(names))
     except Exception as e:
-        print(f"Supabase list error: {e}")
+        logger.error(f"Supabase list error: {e}")
         return []
 
 
@@ -248,7 +251,7 @@ def _delete_supabase(name: str) -> bool:
         client.table("portfolios").delete().eq("name", name).execute()
         return True
     except Exception as e:
-        print(f"Supabase delete error: {e}")
+        logger.error(f"Supabase delete error: {e}")
         return False
 
 

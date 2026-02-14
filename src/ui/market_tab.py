@@ -3,6 +3,9 @@ Market News Tab Module (formerly Market Intelligence)
 Displays flash summary, option analysis, and AI market recap.
 """
 import streamlit as st
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def render_market_tab():
@@ -63,7 +66,7 @@ def _generate_ai_recap(market_type: str = "US"):
                 st.error("レポートの生成に失敗しました。")
         except Exception as e:
             st.error(f"エラーが発生しました: {e}")
-            print(f"AI Recap Error: {e}")
+            logger.error(f"AI Recap Error: {e}")
 
 
 def _render_flash_summary(market_data, market_type: str = "US"):

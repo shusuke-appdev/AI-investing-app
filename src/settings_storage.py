@@ -7,6 +7,9 @@ import os
 from pathlib import Path
 from typing import Optional, Any
 from .supabase_client import get_supabase_client
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 
 # 設定ファイルのパス（プロジェクト内のdataディレクトリ）
@@ -51,7 +54,7 @@ def load_settings(force_reload: bool = False) -> dict:
                 data = json.load(f)
 
     except Exception as e:
-        print(f"設定読み込みエラー: {e}")
+        logger.info(f"設定読み込みエラー: {e}")
 
     # 2. Supabase Merge (if enabled locally)
     if data.get("storage_type") == "supabase":
@@ -62,7 +65,7 @@ def load_settings(force_reload: bool = False) -> dict:
                 for row in res.data:
                     data[row["key"]] = row["value"]
             except Exception as e:
-                print(f"Supabase settings load error: {e}")
+                logger.error(f"Supabase settings load error: {e}")
 
     _settings_cache = data
     return _settings_cache.copy()
@@ -89,7 +92,7 @@ def save_settings(settings: dict) -> bool:
         _settings_cache = settings.copy()
         return True
     except Exception as e:
-        print(f"設定保存エラー: {e}")
+        logger.info(f"設定保存エラー: {e}")
         _settings_cache = None
         return False
 

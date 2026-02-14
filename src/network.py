@@ -6,6 +6,9 @@ import requests
 import streamlit as st
 import time
 from tenacity import retry,  stop_after_attempt, wait_exponential
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 # Constants
 DEFAULT_TIMEOUT = 10  # seconds
@@ -24,10 +27,10 @@ def get_session(cache_name: str = "app_cache", expire_after: int = CACHE_EXPIRE_
         import requests_cache
         session = requests_cache.CachedSession(cache_name, expire_after=expire_after)
     except ImportError:
-        print("[NETWORK_WARN] requests_cache not found. Using standard session without caching.")
+        logger.info("[NETWORK_WARN] requests_cache not found. Using standard session without caching.")
         session = requests.Session()
     except Exception as e:
-        print(f"[NETWORK_ERROR] Failed to initialize cache: {e}. Using standard session.")
+        logger.error(f"Failed to initialize cache: {e}. Using standard session.")
         session = requests.Session()
         
     session.headers.update({'User-Agent': USER_AGENT})
@@ -50,5 +53,5 @@ def safe_request(url: str, params: dict = None, timeout: int = DEFAULT_TIMEOUT) 
         response.raise_for_status()
         return response
     except requests.exceptions.RequestException as e:
-        print(f"[NETWORK_ERROR] Request failed for {url}: {e}")
+        logger.error(f"Request failed for {url}: {e}")
         raise e

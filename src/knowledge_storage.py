@@ -73,6 +73,9 @@ def _get_storage_path() -> Path:
 from src.settings_storage import get_storage_type
 from src.gas_client import get_gas_client
 from src.supabase_client import get_supabase_client
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 def save_knowledge(item: KnowledgeItem) -> None:
     """
@@ -100,7 +103,7 @@ def save_knowledge(item: KnowledgeItem) -> None:
                 client.table("knowledge_items").upsert(data).execute()
                 return
             except Exception as e:
-                print(f"Supabase save error: {e}")
+                logger.error(f"Supabase save error: {e}")
                 return
 
     # ローカルストレージの場合
@@ -139,13 +142,13 @@ def load_all_knowledge() -> list[KnowledgeItem]:
                     try:
                         items.append(KnowledgeItem.from_dict(d))
                     except Exception as e:
-                        print(f"Skipping invalid item: {e}")
+                        logger.info(f"Skipping invalid item: {e}")
                 
                 # ソート (新しい順)
                 items.sort(key=lambda x: x.created_at, reverse=True)
                 return items
             except Exception as e:
-                print(f"GAS load error: {e}")
+                logger.error(f"GAS load error: {e}")
                 return []
 
     # Supabase
@@ -161,7 +164,7 @@ def load_all_knowledge() -> list[KnowledgeItem]:
                 items.sort(key=lambda x: x.created_at, reverse=True)
                 return items
             except Exception as e:
-                print(f"Supabase load error: {e}")
+                logger.error(f"Supabase load error: {e}")
                 return []
 
     # ローカルストレージの場合
@@ -178,7 +181,7 @@ def load_all_knowledge() -> list[KnowledgeItem]:
         items.sort(key=lambda x: x.created_at, reverse=True)
         return items
     except (json.JSONDecodeError, KeyError) as e:
-        print(f"Knowledge storage read error: {e}")
+        logger.error(f"Knowledge storage read error: {e}")
         return []
 
 
@@ -215,7 +218,7 @@ def delete_knowledge(item_id: str) -> bool:
                 client.table("knowledge_items").delete().eq("id", item_id).execute()
                 return True
             except Exception as e:
-                print(f"Supabase delete error: {e}")
+                logger.error(f"Supabase delete error: {e}")
         return False
 
     # ローカルストレージの場合

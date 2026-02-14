@@ -7,6 +7,9 @@ from pathlib import Path
 from datetime import datetime, date
 from typing import Optional
 from dataclasses import dataclass, asdict
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 
 HISTORY_DIR = Path(__file__).parent.parent / "data" / "portfolio_history"
@@ -86,7 +89,7 @@ def save_snapshot(portfolio_name: str, total_value: float, holdings: list[dict])
             json.dump(history, f, ensure_ascii=False, indent=2)
         return True
     except Exception as e:
-        print(f"Error saving history: {e}")
+        logger.error(f"Error saving history: {e}")
         return False
 
 
@@ -114,7 +117,7 @@ def load_history(portfolio_name: str, days: Optional[int] = None) -> list[dict]:
             return history[-days:]
         return history
     except Exception as e:
-        print(f"Error loading history: {e}")
+        logger.error(f"Error loading history: {e}")
         return []
 
 

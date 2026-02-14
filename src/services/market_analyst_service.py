@@ -14,6 +14,9 @@ from src.theme_analyst import get_ranked_themes
 from src.news_aggregator import get_aggregated_news, merge_with_finnhub_news
 from src.news_analyst import generate_market_recap
 from src.option_analyst import get_major_indices_options
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
     """
@@ -97,7 +100,7 @@ def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
                 change_1w = (end_price - start_price) / start_price * 100
                 weekly_performance[name] = f"{change_1w:+.2f}%"
     except Exception as e:
-        print(f"Weekly performance fetch error: {e}")
+        logger.error(f"Weekly performance fetch error: {e}")
     
     # 5. Market Context (Monthly Trend)
     trend_context = {}
@@ -118,7 +121,7 @@ def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
                     "end_date": df.index[-1].strftime("%Y-%m-%d")
                 }
     except Exception as e:
-        print(f"Trend fetch error: {e}")
+        logger.error(f"Trend fetch error: {e}")
 
     # 6. Theme Analysis
     theme_str_parts = ["【テーマ別トレンド分析 (資金循環)】"]
@@ -140,7 +143,7 @@ def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
             if bot5_m: theme_str_parts.append(f"- 中期(1ヶ月) Bottom5: {', '.join(bot5_m)}")
             
     except Exception as e:
-        print(f"Theme data fetch error: {e}")
+        logger.error(f"Theme data fetch error: {e}")
         theme_str_parts.append("- テーマデータの取得に失敗しました")
         
     theme_analysis_str = "\n".join(theme_str_parts)

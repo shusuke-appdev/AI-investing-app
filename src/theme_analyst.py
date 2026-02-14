@@ -108,17 +108,19 @@ def fetch_and_calculate_all_performances(days: int, market_type: str = "US") -> 
                     performance_map[ticker] = perf
                     
             except Exception as e:
-                # print(f"Error for {ticker}: {e}")
                 continue
                 
     except Exception as e:
-        print(f"Batch download error: {e}")
+        logger.error(f"Batch download error: {e}")
         return {}
 
     return performance_map
 
 
 import streamlit as st
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 @st.cache_data(ttl=43200)  # 12時間キャッシュ
 def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:

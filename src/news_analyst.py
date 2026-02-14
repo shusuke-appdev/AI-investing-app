@@ -6,6 +6,9 @@ import os
 from datetime import datetime
 from typing import Optional
 from dotenv import load_dotenv
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 load_dotenv()
 
@@ -190,7 +193,7 @@ def generate_market_recap(
         if knowledge_context:
             context_parts.append(f"\n{knowledge_context}")
     except Exception as e:
-        print(f"Knowledge context error: {e}")
+        logger.error(f"Knowledge context error: {e}")
     
     context = "\n".join(context_parts)
     
@@ -212,7 +215,7 @@ Context: 直近発表された主要企業の決算結果。
 *(決算データがない場合、このセクションは省略)*
 """
     except Exception as e:
-        print(f"Earnings context error: {e}")
+        logger.error(f"Earnings context error: {e}")
     
 
 

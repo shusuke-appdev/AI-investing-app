@@ -11,6 +11,9 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 import finnhub
 from src.settings_storage import get_finnhub_api_key
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 # --- Custom Exceptions ---
 class FinnhubError(Exception):
@@ -88,22 +91,22 @@ def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
         except finnhub.FinnhubAPIException as e:
             if e.status_code == 429:
                 wait = 2 ** attempt
-                print(f"[FINNHUB_WARN] Rate Limit (429). Retrying in {wait}s...")
+                logger.warning(f"Rate Limit (429). Retrying in {wait}s...")
                 time.sleep(wait)
             elif e.status_code == 401 or e.status_code == 403:
-                print(f"[FINNHUB_ERROR] Permission Denied ({e.status_code})")
+                logger.error(f"Permission Denied ({e.status_code})")
                 raise FinnhubConfigError(f"Invalid API Key or Permission Denied: {e}")
             else:
-                print(f"[FINNHUB_ERROR] API Error: {e}")
+                logger.error(f"API Error: {e}")
                 raise FinnhubError(f"API Error: {e}")
         except finnhub.FinnhubRequestException as e:
-            print(f"[FINNHUB_WARN] Network Exception: {e}")
+            logger.warning(f"Network Exception: {e}")
             if attempt < max_retries - 1:
                 time.sleep(1)
             else:
                 raise FinnhubNetworkError(f"Network Error: {e}")
     
-    print(f"[FINNHUB_ERROR] Max retries exceeded.")
+    logger.error(f"Max retries exceeded.")
     raise FinnhubRateLimitError("Max retries exceeded")
 
 
@@ -125,10 +128,10 @@ def get_quote(symbol: str) -> Optional[dict]:
     try:
         data = _rate_limited_call(client.quote, symbol)
         if not data or data.get("c") == 0:
-             print(f"[FINNHUB_WARN] Quote for {symbol} is empty or zero: {data}")
+             logger.warning(f"Quote for {symbol} is empty or zero: {data}")
         return data
     except Exception as e:
-        print(f"[FINNHUB_ERROR] Quote error ({symbol}): {e}")
+        logger.error(f"Quote error ({symbol}): {e}")
         return None
 
 
@@ -167,13 +170,13 @@ def get_candles(
     try:
         data = _rate_limited_call(client.stock_candles, symbol, resolution, from_ts, to_ts)
     except Exception as e:
-        print(f"[FINNHUB_ERROR] Candles error ({symbol}): {e}")
+        logger.error(f"Candles error ({symbol}): {e}")
         return pd.DataFrame()
 
     if not data or data.get("s") != "ok":
-        print(f"[FINNHUB_WARN] No candle data for {symbol} (status: {data.get('s') if data else 'None'})")
+        logger.warning(f"No candle data for {symbol} (status: {data.get('s') if data else 'None'})")
         # DEBUG
-        print(f"[DEBUG_RAW] data={data}")
+        logger.debug(f"data={data}")
         return pd.DataFrame()
 
     df = pd.DataFrame({
@@ -215,7 +218,7 @@ def get_option_chain(
     try:
         raw = _rate_limited_call(client.option_chain, symbol=symbol)
     except Exception as e:
-        print(f"[FINNHUB_ERROR] Option chain error ({symbol}): {e}")
+        logger.error(f"Option chain error ({symbol}): {e}")
         return None
 
     # Finnhubクライアントは文字列(JSON)を返す場合がある
@@ -223,11 +226,11 @@ def get_option_chain(
         try:
             raw = json.loads(raw)
         except json.JSONDecodeError as e:
-            print(f"[FINNHUB_ERROR] Option chain JSON parse error ({symbol}): {e}")
+            logger.error(f"Option chain JSON parse error ({symbol}): {e}")
             return None
 
     if not raw or not isinstance(raw, dict) or "data" not in raw:
-        print(f"[FINNHUB_WARN] No option data for {symbol}")
+        logger.warning(f"No option data for {symbol}")
         return None
 
     all_calls: list[dict] = []
@@ -246,7 +249,7 @@ def get_option_chain(
             all_puts.append(_normalize_option_contract(contract, expiration_date))
 
     if not all_calls and not all_puts:
-        print(f"[FINNHUB_WARN] Option data empty for {symbol}")
+        logger.warning(f"Option data empty for {symbol}")
         return None
 
     calls_df = pd.DataFrame(all_calls) if all_calls else pd.DataFrame()
@@ -309,7 +312,7 @@ def get_company_profile(symbol: str) -> Optional[dict]:
         result = _rate_limited_call(client.company_profile2, symbol=symbol)
         return result if result else None
     except Exception as e:
-        print(f"Finnhub profile error ({symbol}): {e}")
+        logger.error(f"Finnhub profile error ({symbol}): {e}")
         return None
 
 
@@ -329,7 +332,7 @@ def get_basic_financials(symbol: str) -> Optional[dict]:
     try:
         return _rate_limited_call(client.company_basic_financials, symbol, 'all')
     except Exception as e:
-        print(f"Finnhub financials error ({symbol}): {e}")
+        logger.error(f"Finnhub financials error ({symbol}): {e}")
         return None
 
 
@@ -363,7 +366,7 @@ def get_company_news(
     try:
         return _rate_limited_call(client.company_news, symbol, _from=from_date, to=to_date) or []
     except Exception as e:
-        print(f"Finnhub news error ({symbol}): {e}")
+        logger.error(f"Finnhub news error ({symbol}): {e}")
         return []
 
 
@@ -383,7 +386,7 @@ def get_market_news(category: str = "general") -> list[dict]:
     try:
         return _rate_limited_call(client.general_news, category, min_id=0) or []
     except Exception as e:
-        print(f"Finnhub market news error: {e}")
+        logger.error(f"Finnhub market news error: {e}")
         return []
 
 
@@ -406,7 +409,7 @@ def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
     try:
         return _rate_limited_call(client.company_earnings, symbol, limit=limit) or []
     except Exception as e:
-        print(f"Finnhub earnings error ({symbol}): {e}")
+        logger.error(f"Finnhub earnings error ({symbol}): {e}")
         return []
 
 
@@ -438,7 +441,7 @@ def get_earnings_calendar(
         result = _rate_limited_call(client.earnings_calendar, _from=from_date, to=to_date, symbol="")
         return result.get("earningsCalendar", []) if result else []
     except Exception as e:
-        print(f"Finnhub earnings calendar error: {e}")
+        logger.error(f"Finnhub earnings calendar error: {e}")
         return []
 
 
@@ -463,5 +466,5 @@ def get_financials_reported(symbol: str, freq: str = "quarterly") -> list[dict]:
         result = _rate_limited_call(client.financials_reported, symbol=symbol, freq=freq)
         return result.get("data", []) if result else []
     except Exception as e:
-        print(f"Finnhub financials reported error ({symbol}): {e}")
+        logger.error(f"Finnhub financials reported error ({symbol}): {e}")
         return []
