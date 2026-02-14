@@ -1,27 +1,61 @@
 """
 Data Provider Module
-Abstrating data fetching logic (Finnhub + yfinance fallback).
+アプリケーション全体の唯一のデータアクセスポイント。
+Finnhub + yfinance のハイブリッドフェッチとキャッシュを管理。
 """
 from datetime import datetime, timedelta
 from typing import Optional, Tuple, Dict, List
-import importlib
 
-# Use late import for yfinance to avoid circular deps if any, 
-# though direct import is usually fine.
 import yfinance as yf
 import pandas as pd
+import streamlit as st
+import requests
 
 from src.finnhub_client import (
-    get_candles, get_quote, get_company_profile, 
-    get_basic_financials, get_company_news, is_configured,
-    get_option_chain as finnhub_get_option_chain,
+    get_candles, get_quote as _finnhub_get_quote, get_company_profile,
+    get_basic_financials, get_company_news as _finnhub_get_company_news,
+    is_configured,
+    get_option_chain as _finnhub_get_option_chain,
+    get_earnings_calendar as _finnhub_get_earnings_calendar,
+    get_earnings_surprises as _finnhub_get_earnings_surprises,
+    get_financials_reported as _finnhub_get_financials_reported,
 )
 from src.market_config import get_market_config
-from src.constants import MARKET_US
+from src.constants import MARKET_US, CACHE_TTL_SHORT, CACHE_TTL_MEDIUM, CACHE_TTL_LONG, CACHE_TTL_DAILY
 from src.models import StockInfo, NewsItem, MarketIndex
 
 
-# We will move hybrid logic from market_data.py to here.
+# --- 日本市場用 Stooq データ取得 ---
+
+JP_STOOQ_TICKERS: Dict[str, str] = {
+    "日経225": "^NKX",
+    "TOPIX": "^TPX",
+    "10年国債": "10YJP.B",
+}
+
+
+def _get_stooq_data(ticker: str) -> Optional[Tuple[float, float]]:
+    """
+    Stooqから日本市場データを取得する。
+
+    Args:
+        ticker: Stooqティッカー
+
+    Returns:
+        (current_price, change_percent) のタプル、または None
+    """
+    try:
+        url = f"https://stooq.com/q/l/?s={ticker}&f=sd2t2ohlcv&h&e=csv"
+        df = pd.read_csv(url)
+        if df.empty or "Close" not in df.columns:
+            return None
+        close = float(df["Close"].iloc[0])
+        open_price = float(df["Open"].iloc[0])
+        change = ((close - open_price) / open_price * 100) if open_price != 0 else 0.0
+        return close, round(change, 2)
+    except Exception as e:
+        print(f"[STOOQ_WARN] Failed to fetch {ticker}: {e}")
+        return None
 
 class DataProvider:
     """
@@ -30,77 +64,64 @@ class DataProvider:
     """
     
     @staticmethod
+    @st.cache_data(ttl=CACHE_TTL_SHORT)
     def get_current_price(ticker: str) -> float:
         """
         Get current price for a ticker.
-        Priority:
-        1. Finnhub Quote (US Stocks)
-        2. yfinance fast_info / history (Fallback)
+        Priority: Finnhub Quote -> yfinance fallback.
         """
-        # 1. Finnhub
-        if is_finnhub_configured():
+        if is_configured():
             try:
-                q = get_quote(ticker)
+                q = _finnhub_get_quote(ticker)
                 if q and q.get("c"):
                     return float(q["c"])
-            except Exception as e:
-                # print(f"[DataProvider] Finnhub error for {ticker}: {e}")
+            except Exception:
                 pass
-        
-        # 3. yfinance Fallback
+
         try:
-            # Note: Do not use custom session for yf to avoid anti-bot issues
             ticker_obj = yf.Ticker(ticker)
-            # Try fast info first
             if hasattr(ticker_obj, "fast_info") and "last_price" in ticker_obj.fast_info:
-                 price = ticker_obj.fast_info["last_price"]
-                 if price: return float(price)
-            
-            # Fallback to history
+                price = ticker_obj.fast_info["last_price"]
+                if price:
+                    return float(price)
             hist = ticker_obj.history(period="1d")
             if not hist.empty:
                 return float(hist["Close"].iloc[-1])
-        except Exception as e:
-            print(f"[DataProvider] yfinance error for {ticker}: {e}")
-            
+        except Exception:
+            pass
+
         return 0.0
-            
+
     @staticmethod
+    @st.cache_data(ttl=CACHE_TTL_MEDIUM)
     def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
         """
         Get OHLCV data.
-        Logic ported from market_data.py
+        Priority: yfinance (most periods) -> Finnhub candles (fallback).
         """
-        # 1. Finnhub
-        if is_finnhub_configured():
-            try:
-                # Map period to resolution/start_date
-                 from datetime import timedelta
-                 resolution = "D"
-                 if period in ["1d", "5d"]: resolution = "60"
-                 
-                 now = datetime.now()
-                 start = now - timedelta(days=30)
-                 if period == "1d": start = now - timedelta(days=1); resolution="5"
-                 elif period == "5d": start = now - timedelta(days=5); resolution="60"
-                 elif period == "3mo": start = now - timedelta(days=90)
-                 elif period == "6mo": start = now - timedelta(days=180)
-                 elif period == "1y": start = now - timedelta(days=365)
-                 elif period == "ytd": start = datetime(now.year, 1, 1)
-                 elif period == "max": start = now - timedelta(days=365*5)
-
-                 df = get_candles(ticker, resolution, start, now)
-                 if df is not None and not df.empty:
-                     return df
-            except Exception as e:
-                print(f"[DataProvider] Finnhub candle error for {ticker}: {e}")
-
-        # 2. yfinance Fallback
+        # 1. yfinance (primary)
         try:
-            return yf.Ticker(ticker).history(period=period)
-        except Exception as e:
-             print(f"[DataProvider] yfinance history error for {ticker}: {e}")
-             return pd.DataFrame()
+            df = yf.Ticker(ticker).history(period=period)
+            if not df.empty:
+                return df
+        except Exception:
+            pass
+
+        # 2. Finnhub candles (fallback)
+        if is_configured():
+            try:
+                period_map = {"1d": 7, "5d": 7, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "max": 1825}
+                days = period_map.get(period, 30)
+                now = datetime.now()
+                _from = int((now - timedelta(days=days)).timestamp())
+                _to = int(now.timestamp())
+                df = get_candles(ticker, "D", _from, _to)
+                if df is not None and not df.empty:
+                    return df
+            except Exception:
+                pass
+
+        return pd.DataFrame()
 
     @staticmethod
     def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]:
@@ -111,7 +132,7 @@ class DataProvider:
         # 1. Finnhub (推奨: Greeks含む)
         if is_configured():
             try:
-                result = finnhub_get_option_chain(ticker)
+                result = _finnhub_get_option_chain(ticker)
                 if result is not None:
                     return result
             except Exception as e:
@@ -152,20 +173,17 @@ class DataProvider:
             return None
 
     @staticmethod
+    @st.cache_data(ttl=CACHE_TTL_MEDIUM)
     def get_market_indices(market_type: str = MARKET_US) -> Dict[str, MarketIndex]:
         """
         Get major market indices data.
-        US: Finnhub quote
-        JP: Stooq
-        Global: Finnhub quote
+        US: Finnhub quote, JP: Stooq, Global: Finnhub quote.
         """
         config = get_market_config(market_type)
         result: Dict[str, MarketIndex] = {}
-        
-        # --- 日本市場 (Stooq優先) ---
+
+        # --- 日本市場 (Stooq) ---
         if market_type == "JP":
-            from src.market_data import _get_stooq_data, JP_STOOQ_TICKERS
-            
             for name, ticker in JP_STOOQ_TICKERS.items():
                 data = _get_stooq_data(ticker)
                 if data:
@@ -188,14 +206,14 @@ class DataProvider:
             **config["forex"]
         }
         
-        if not is_finnhub_configured():
+        if not is_configured():
             yf_targets.update(finnhub_targets)
             finnhub_targets = {}
 
         # --- Fetch from Finnhub ---
         for name, ticker in finnhub_targets.items():
             try:
-                q = get_quote(ticker)
+                q = _finnhub_get_quote(ticker)
                 if isinstance(q, dict) and q.get("c") not in (0, None):
                     result[name] = {"price": q.get("c"), "change": q.get("dp", 0), "ticker": ticker}
                 else:
@@ -242,8 +260,7 @@ class DataProvider:
             return []
 
         try:
-            news = get_company_news(ticker)
-            # Format conversion
+            news = _finnhub_get_company_news(ticker)
             results: List[NewsItem] = []
             for item in news[:max_items]:
                 results.append({
@@ -258,6 +275,17 @@ class DataProvider:
             return []
 
     @staticmethod
+    def get_company_news_raw(ticker: str) -> list[dict]:
+        """Finnhub Company Newsの生データを返す（market_analyst_service用）"""
+        if not is_configured():
+            return []
+        try:
+            return _finnhub_get_company_news(ticker) or []
+        except Exception:
+            return []
+
+    @staticmethod
+    @st.cache_data(ttl=CACHE_TTL_DAILY)
     def get_stock_info(ticker: str) -> StockInfo:
         """
         Get company profile (Finnhub priority -> yfinance Fallback).
@@ -326,7 +354,7 @@ class DataProvider:
                     })
                 
                 # C. Quote for Current Price
-                quote = get_quote(ticker)
+                quote = _finnhub_get_quote(ticker)
                 if quote:
                     info["current_price"] = quote.get("c")
 
@@ -381,3 +409,48 @@ class DataProvider:
             print(f"[DATA_WARN] yfinance profile fallback failed for {ticker}: {e}")
 
         return info
+
+    # --- 追加メソッド（finnhub_client直接呼び出しを排除するためのラッパー） ---
+
+    @staticmethod
+    def get_quote(ticker: str) -> Optional[dict]:
+        """Finnhub Quote APIのラッパー。"""
+        if not is_configured():
+            return None
+        try:
+            return _finnhub_get_quote(ticker)
+        except Exception:
+            return None
+
+    @staticmethod
+    def get_earnings_calendar(
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+    ) -> list[dict]:
+        """決算カレンダーを取得（Finnhub経由）。"""
+        if not is_configured():
+            return []
+        try:
+            return _finnhub_get_earnings_calendar(from_date, to_date)
+        except Exception:
+            return []
+
+    @staticmethod
+    def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
+        """EPSサプライズデータを取得（Finnhub経由）。"""
+        if not is_configured():
+            return []
+        try:
+            return _finnhub_get_earnings_surprises(symbol, limit)
+        except Exception:
+            return []
+
+    @staticmethod
+    def get_financials_reported(symbol: str, freq: str = "quarterly") -> list[dict]:
+        """報告済み財務諸表を取得（Finnhub経由）。"""
+        if not is_configured():
+            return []
+        try:
+            return _finnhub_get_financials_reported(symbol, freq)
+        except Exception:
+            return []

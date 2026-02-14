@@ -5,15 +5,15 @@ import pandas as pd
 def render_quarterly_financials_graph(ticker: str):
     """四半期財務グラフを描画（Finnhub版）"""
     try:
-        from src.finnhub_client import get_financials_reported, is_configured
-        
+        from src.data_provider import DataProvider
+        from src.finnhub_client import is_configured
+
         if not is_configured():
             st.warning("Finnhub APIキーが設定されていません")
             return
 
-        # Finnhubから四半期報告書を取得
-        # data = [{"report": {"ic": [...], "bs": [...]}, "year": 2024, "quarter": 1, ...}]
-        reports = get_financials_reported(ticker, freq="quarterly")
+        # DataProvider経由で四半期報告書を取得
+        reports = DataProvider.get_financials_reported(ticker, freq="quarterly")
         
         if not reports:
             st.info("四半期財務データが見つかりませんでした (Finnhub)")
@@ -189,14 +189,15 @@ def render_quarterly_financials_graph(ticker: str):
 def render_recent_earnings(ticker: str):
     """直近決算サプライズを描画（Finnhub版）"""
     try:
-        from src.finnhub_client import get_earnings_surprises, is_configured
-        
+        from src.data_provider import DataProvider
+        from src.finnhub_client import is_configured
+
         # Finnhub未設定時はyfinanceフォールバック（またはメッセージ）
         if not is_configured():
             st.warning("Finnhub APIキーが設定されていません")
             return
 
-        surprises = get_earnings_surprises(ticker, limit=5)
+        surprises = DataProvider.get_earnings_surprises(ticker, limit=5)
         
         if surprises:
             display_data = []

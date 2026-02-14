@@ -8,7 +8,7 @@ import pandas as pd
 from typing import Optional
 
 from src.market_config import get_market_config
-from src.finnhub_client import get_company_news
+from src.data_provider import DataProvider
 from src.market_data import get_stock_data
 from src.theme_analyst import get_ranked_themes
 from src.news_aggregator import get_aggregated_news, merge_with_finnhub_news
@@ -40,7 +40,7 @@ def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
     seen_links = set()
     
     for ticker in limit_tickers:
-        news_items = get_company_news(ticker)
+        news_items = DataProvider.get_company_news_raw(ticker)
         for item in news_items[:2]: # Latest 2 items per ticker
             link = item.get("url")
             if link not in seen_links:

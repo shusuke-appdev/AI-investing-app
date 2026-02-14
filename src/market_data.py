@@ -1,50 +1,36 @@
 """
 市場データ取得モジュール
-(Facade for src.data_provider.DataProvider)
+DataProvider への後方互換リエクスポート。
+
+Note: キャッシュは DataProvider 側で管理。
+      このモジュールは既存13箇所の import を壊さないための薄いラッパー。
 """
-import streamlit as st
 import pandas as pd
 from typing import Optional, Dict, List
 from src.data_provider import DataProvider
 from src.constants import MARKET_US
 
-@st.cache_data(ttl=300) # 5分キャッシュ
+
 def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
-    """
-    指定銘柄の株価データを取得します。
-    Delegates to DataProvider.
-    """
+    """株価データを取得（DataProvider委譲）。"""
     return DataProvider.get_historical_data(ticker, period)
 
+
 def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]:
-    """
-    オプションチェーンデータを取得します。
-    Delegates to DataProvider.
-    """
+    """オプションチェーンデータを取得（DataProvider委譲）。"""
     return DataProvider.get_option_chain(ticker)
 
-@st.cache_data(ttl=300)
+
 def get_market_indices(market_type: str = MARKET_US) -> Dict[str, dict]:
-    """
-    主要市場指数のデータを取得。
-    Delegates to DataProvider.
-    """
+    """主要市場指数のデータを取得（DataProvider委譲）。"""
     return DataProvider.get_market_indices(market_type)
 
+
 def get_stock_news(ticker: str, max_items: int = 10) -> List[dict]:
-    """
-    銘柄ニュース取得。
-    Delegates to DataProvider.
-    """
+    """銘柄ニュース取得（DataProvider委譲）。"""
     return DataProvider.get_stock_news(ticker, max_items)
 
-@st.cache_data(ttl=86400) # 1日キャッシュ
+
 def get_stock_info(ticker: str) -> dict:
-    """
-    企業概要を取得します。
-    Delegates to DataProvider.
-    """
+    """企業概要を取得（DataProvider委譲）。"""
     return DataProvider.get_stock_info(ticker)
-
-
-

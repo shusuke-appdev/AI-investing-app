@@ -4,7 +4,8 @@
 """
 from datetime import datetime, timedelta
 from typing import Optional
-from src.finnhub_client import get_earnings_calendar, is_configured
+from src.data_provider import DataProvider
+from src.finnhub_client import is_configured
 
 
 # 主要決算対象銘柄（時価総額上位・市場インパクト大）
@@ -48,8 +49,8 @@ def get_recent_earnings(lookback_days: int = 3) -> list[dict]:
     start_date = (today - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     end_date = today.strftime("%Y-%m-%d")
     
-    # 全銘柄のカレンダーを取得
-    calendar_data = get_earnings_calendar(from_date=start_date, to_date=end_date)
+    # DataProvider経由で取得
+    calendar_data = DataProvider.get_earnings_calendar(from_date=start_date, to_date=end_date)
     
     # 対象銘柄のみフィルタリング
     # Finnhub Calendar returns: date, epsActual, epsEstimate, hour, quarter, revenueActual, revenueEstimate, symbol, year

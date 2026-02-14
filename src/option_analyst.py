@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from typing import Optional, Tuple
 from .market_data import get_option_chain
-from .finnhub_client import get_quote, is_configured
+from .data_provider import DataProvider
 
 
 # ============================================================
@@ -27,22 +27,10 @@ def _fetch_option_data(ticker: str) -> Optional[Tuple[pd.DataFrame, pd.DataFrame
 
     calls, puts = option_data
 
-    # 現在価格取得
-    current_price = 0.0
-    quote = get_quote(ticker)
-    if quote and quote.get("c", 0) != 0:
-        current_price = quote["c"]
-    else:
-        try:
-            import yfinance as yf
-            t = yf.Ticker(ticker)
-            hist = t.history(period="1d")
-            if not hist.empty:
-                current_price = float(hist["Close"].iloc[-1])
-        except Exception as e:
-            print(f"[OPTION_WARN] Price fetch failed for {ticker}: {e}")
+    # 現在価格取得（DataProvider経由: Finnhub→yfinanceフォールバック内蔵）
+    current_price = DataProvider.get_current_price(ticker)
 
-    if current_price == 0.0:
+    if not current_price:
         return None
 
     return calls, puts, current_price
