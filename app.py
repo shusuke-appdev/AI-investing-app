@@ -17,6 +17,7 @@ from src.ui.theme_tab import render_theme_tab
 from src.ui.stock_tab import render_stock_tab
 from src.ui.portfolio_tab import render_portfolio_tab
 from src.ui.knowledge_tab import render_knowledge_tab
+from src.ui.alerts_tab import render_alerts_tab
 
 # ページ設定
 st.set_page_config(

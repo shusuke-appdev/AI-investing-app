@@ -57,14 +57,25 @@ class MarketIndex(TypedDict):
     change: float
     ticker: str
 
-class OptionData(TypedDict):
+class OptionData(TypedDict, total=False):
     """Option chain summary data."""
+    contractName: str
     strike: float
     lastPrice: float
     bid: float
     ask: float
+    change: float
+    changePercent: float
     volume: int
     openInterest: int
     impliedVolatility: float
-    inTheMoney: bool
+    inTheMoney: str
     expiration: str
+    # Greeks (Finnhub APIから直接取得)
+    delta: Optional[float]
+    gamma: Optional[float]
+    theta: Optional[float]
+    vega: Optional[float]
+    rho: Optional[float]
+    intrinsicValue: Optional[float]
+    timeValue: Optional[float]

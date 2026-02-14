@@ -3,8 +3,6 @@ Market News Tab Module (formerly Market Intelligence)
 Displays flash summary, option analysis, and AI market recap.
 """
 import streamlit as st
-# Imports moved to inside functions to avoid circular dependencies/import errors
-import streamlit as st
 
 
 def render_market_tab():

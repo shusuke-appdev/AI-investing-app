@@ -2,11 +2,13 @@
 Finnhub APIクライアントモジュール
 レート制限ハンドリング・リトライ・キャッシュ内蔵。
 """
+import json
 import time
+import threading
 import pandas as pd
 # import streamlit as st  # Removed UI dependency
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Tuple
 import finnhub
 from src.settings_storage import get_finnhub_api_key
 
@@ -65,6 +67,7 @@ def is_configured() -> bool:
 
 _last_call_time = 0.0
 _MIN_INTERVAL = 1.1  # 秒
+_rate_lock = threading.Lock()
 
 def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
     """
@@ -74,12 +77,13 @@ def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
     global _last_call_time
 
     for attempt in range(max_retries):
-        elapsed = time.time() - _last_call_time
-        if elapsed < _MIN_INTERVAL:
-            time.sleep(_MIN_INTERVAL - elapsed)
+        with _rate_lock:
+            elapsed = time.time() - _last_call_time
+            if elapsed < _MIN_INTERVAL:
+                time.sleep(_MIN_INTERVAL - elapsed)
+            _last_call_time = time.time()
 
         try:
-            _last_call_time = time.time()
             return func(*args, **kwargs)
         except finnhub.FinnhubAPIException as e:
             if e.status_code == 429:
@@ -182,6 +186,107 @@ def get_candles(
     df.index.name = "Date"
     df.sort_index(inplace=True)
     return df
+
+
+# --- オプションデータ ---
+
+def get_option_chain(
+    symbol: str,
+    max_expirations: int = 4
+) -> Optional[Tuple[pd.DataFrame, pd.DataFrame]]:
+    """
+    Finnhubからオプションチェーンデータを取得。
+
+    Args:
+        symbol: ティッカーシンボル (e.g. "SPY")
+        max_expirations: 取得する満期日の最大数
+
+    Returns:
+        (calls_df, puts_df) のタプル。各DataFrameには以下のカラムを含む:
+        strike, lastPrice, bid, ask, volume, openInterest,
+        impliedVolatility, delta, gamma, theta, vega, rho,
+        expiration, contractName
+        取得失敗時はNoneを返す。
+    """
+    client = _get_client()
+    if not client:
+        return None
+
+    try:
+        raw = _rate_limited_call(client.option_chain, symbol=symbol)
+    except Exception as e:
+        print(f"[FINNHUB_ERROR] Option chain error ({symbol}): {e}")
+        return None
+
+    # Finnhubクライアントは文字列(JSON)を返す場合がある
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError as e:
+            print(f"[FINNHUB_ERROR] Option chain JSON parse error ({symbol}): {e}")
+            return None
+
+    if not raw or not isinstance(raw, dict) or "data" not in raw:
+        print(f"[FINNHUB_WARN] No option data for {symbol}")
+        return None
+
+    all_calls: list[dict] = []
+    all_puts: list[dict] = []
+
+    expirations = raw["data"][:max_expirations]
+
+    for exp_data in expirations:
+        expiration_date = exp_data.get("expirationDate", "")
+        options = exp_data.get("options", {})
+
+        for contract in options.get("CALL", []):
+            all_calls.append(_normalize_option_contract(contract, expiration_date))
+
+        for contract in options.get("PUT", []):
+            all_puts.append(_normalize_option_contract(contract, expiration_date))
+
+    if not all_calls and not all_puts:
+        print(f"[FINNHUB_WARN] Option data empty for {symbol}")
+        return None
+
+    calls_df = pd.DataFrame(all_calls) if all_calls else pd.DataFrame()
+    puts_df = pd.DataFrame(all_puts) if all_puts else pd.DataFrame()
+
+    return calls_df, puts_df
+
+
+def _normalize_option_contract(contract: dict, expiration_date: str) -> dict:
+    """
+    Finnhubのオプション契約データを統一フォーマットに変換する。
+
+    Args:
+        contract: Finnhub APIからの個別契約データ
+        expiration_date: 満期日文字列 (YYYY-MM-DD)
+
+    Returns:
+        正規化された辞書
+    """
+    return {
+        "contractName": contract.get("contractName", ""),
+        "strike": contract.get("strike", 0),
+        "lastPrice": contract.get("lastPrice", 0),
+        "bid": contract.get("bid", 0),
+        "ask": contract.get("ask", 0),
+        "change": contract.get("change", 0),
+        "changePercent": contract.get("changePercent", 0),
+        "volume": contract.get("volume", 0),
+        "openInterest": contract.get("openInterest", 0),
+        "impliedVolatility": contract.get("impliedVolatility", 0),
+        "delta": contract.get("delta", 0),
+        "gamma": contract.get("gamma", 0),
+        "theta": contract.get("theta", 0),
+        "vega": contract.get("vega", 0),
+        "rho": contract.get("rho", 0),
+        "inTheMoney": contract.get("inTheMoney", ""),
+        "intrinsicValue": contract.get("intrinsicValue", 0),
+        "timeValue": contract.get("timeValue", 0),
+        "expiration": expiration_date,
+    }
 
 
 # --- 企業情報 ---

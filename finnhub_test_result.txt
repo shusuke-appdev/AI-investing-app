@@ -1,0 +1,10 @@
+Test run at 2026-02-15 06:04:04.867774
+Using API Key: d682...oht0
+--- Checking Finnhub Options for SPY ---
+Successfully called client.option_chain
+Data Type: <class 'str'>
+Data is string. Attempting to parse JSON...
+Options Count: 34
+First Expiration: 2026-02-17
+First Call Contract Keys: ['contractName', 'contractSize', 'contractPeriod', 'currency', 'type', 'inTheMoney', 'lastTradeDateTime', 'expirationDate', 'strike', 'lastPrice', 'bid', 'ask', 'change', 'changePercent', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'gamma', 'theta', 'vega', 'rho', 'theoretical', 'intrinsicValue', 'timeValue', 'updatedAt', 'daysBeforeExpiration']
+First Call Contract Sample: {"contractName": "SPY260217C00500000", "contractSize": "REGULAR", "contractPeriod": "WEEKLY", "currency": "USD", "type": "CALL", "inTheMoney": "TRUE", "lastTradeDateTime": "2026-02-10 10:01:14", "expirationDate": "2026-02-17", "strike": 500, "lastPrice": 196, "bid": 180.46, "ask": 183.18, "change": 0, "changePercent": 0, "volume": 0, "openInterest": 0, "impliedVolatility": 0, "delta": 0, "gamma": 0, "theta": 0, "vega": 0, "rho": 0, "theoretical": 0, "intrinsicValue": -485.75, "timeValue": 0, "updatedAt": "2026-02-13 19:04:15", "daysBeforeExpiration": 3}

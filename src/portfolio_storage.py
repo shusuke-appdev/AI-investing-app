@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Optional, Literal
 from dataclasses import dataclass, asdict
 from datetime import datetime
-import streamlit as st
 
 try:
     # Optional: gas_client check
@@ -54,17 +53,85 @@ def ensure_portfolio_dir():
 # ローカルストレージ関数
 # ============================================================
 
+def _get_portfolio_path(name: str) -> Path:
+    """ポートフォリオファイルのパスを取得"""
+    safe_name = name.replace("/", "_").replace("\\", "_")
+    return PORTFOLIO_DIR / f"{safe_name}.json"
+
+
 def _save_local(name: str, holdings: list[dict]) -> bool:
     """ローカルJSONに保存"""
     ensure_portfolio_dir()
     now = datetime.now().isoformat()
-    
+    filepath = _get_portfolio_path(name)
+
+    # 既存ファイルがあれば created_at を保持
+    created_at = now
+    if filepath.exists():
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+                created_at = existing.get("created_at", now)
+        except Exception:
+            pass
+
     portfolio = {
         "name": name,
         "holdings": holdings,
-        "created_at": now,
+        "created_at": created_at,
         "updated_at": now,
     }
+
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(portfolio, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"Local save error: {e}")
+        return False
+
+
+def _load_local(name: str) -> Optional[dict]:
+    """ローカルJSONから読み込み"""
+    filepath = _get_portfolio_path(name)
+    if not filepath.exists():
+        return None
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Local load error: {e}")
+        return None
+
+
+def _list_local() -> list[str]:
+    """ローカルの全ポートフォリオ名を取得"""
+    ensure_portfolio_dir()
+    names = []
+    for f in PORTFOLIO_DIR.glob("*.json"):
+        try:
+            with open(f, "r", encoding="utf-8") as fp:
+                data = json.load(fp)
+                names.append(data.get("name", f.stem))
+        except Exception:
+            names.append(f.stem)
+    return sorted(names)
+
+
+def _delete_local(name: str) -> bool:
+    """ローカルJSONを削除"""
+    filepath = _get_portfolio_path(name)
+    if filepath.exists():
+        try:
+            filepath.unlink()
+            return True
+        except Exception as e:
+            print(f"Local delete error: {e}")
+            return False
+    return False
+
+
 # ============================================================
 
 def _save_gas(name: str, holdings: list[dict]) -> bool:

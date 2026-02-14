@@ -4,6 +4,7 @@ Gemini APIを使用した対話型チャット機能を提供します。
 """
 from typing import Optional
 import google.generativeai as genai
+from src.constants import GEMINI_MODEL_NAME
 
 # チャット用モデル
 _chat_model = None
@@ -23,7 +24,7 @@ def get_chat_session(context: str = ""):
     global _chat_model, _chat_session
     
     if _chat_model is None:
-        _chat_model = genai.GenerativeModel("gemini-3-flash-preview")
+        _chat_model = genai.GenerativeModel(GEMINI_MODEL_NAME)
     
     if _chat_session is None:
         system_prompt = f"""あなたは金融市場のニュースと分析に精通したAIアナリストです。

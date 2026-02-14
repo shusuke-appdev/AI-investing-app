@@ -6,11 +6,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
-import sys
-import os
 
-# 親ディレクトリのインポート用
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from themes_config import THEMES, PERIODS, get_themes
 from src.market_data import get_stock_data
 

@@ -5,6 +5,7 @@ API設定やGAS URLなどをローカルに永続化します。
 import json
 import os
 from pathlib import Path
+from typing import Optional, Any
 from .supabase_client import get_supabase_client
 
 
@@ -12,64 +13,72 @@ from .supabase_client import get_supabase_client
 SETTINGS_DIR = Path(__file__).parent.parent / "data"
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 
+# メモリキャッシュ（ファイルI/O削減用）
+_settings_cache: Optional[dict] = None
+
 
 def _ensure_dir():
     """設定ディレクトリを作成"""
     SETTINGS_DIR.mkdir(exist_ok=True)
 
 
-def load_settings() -> dict:
+def load_settings(force_reload: bool = False) -> dict:
     """
     保存された設定を読み込みます。
     Localをベースに、Supabaseが有効ならマージします。
+    キャッシュがある場合はファイルI/Oをスキップします。
+
+    Args:
+        force_reload: Trueの場合キャッシュを無視して再読み込み
     """
+    global _settings_cache
+
+    if _settings_cache is not None and not force_reload:
+        return _settings_cache.copy()
+
     data = {}
-    
+
     # 1. Local Load
     try:
-        # デバッグログ用
-        log_path = Path("debug_settings.log")
-        
         target_file = SETTINGS_FILE
         if not target_file.exists():
             cwd_file = Path("data/settings.json").resolve()
             if cwd_file.exists():
                 target_file = cwd_file
-        
+
         if target_file.exists():
             with open(target_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                
+
     except Exception as e:
-        print(f"設定読み込みエラー (詳細): {e}")
+        print(f"設定読み込みエラー: {e}")
 
     # 2. Supabase Merge (if enabled locally)
-    # We check local config to see if we should fetch remote
     if data.get("storage_type") == "supabase":
         client = get_supabase_client()
         if client:
             try:
                 res = client.table("user_settings").select("*").execute()
                 for row in res.data:
-                    # Remote overrides local (except keys we want to keep local? e.g. API keys if strict?)
-                    # For now, remote overrides.
                     data[row["key"]] = row["value"]
             except Exception as e:
                 print(f"Supabase settings load error: {e}")
 
-    return data
+    _settings_cache = data
+    return _settings_cache.copy()
 
 
 def save_settings(settings: dict) -> bool:
     """
-    設定を保存します。
+    設定を保存します。保存後はキャッシュを無効化します。
     """
+    global _settings_cache
     try:
         # 1. Local Save
         _ensure_dir()
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2, ensure_ascii=False)
-        
+
         # 2. Supabase Save (if enabled)
         if settings.get("storage_type") == "supabase":
             client = get_supabase_client()
@@ -77,9 +86,11 @@ def save_settings(settings: dict) -> bool:
                 upsert_data = [{"key": k, "value": str(v), "updated_at": "now()"} for k, v in settings.items()]
                 client.table("user_settings").upsert(upsert_data).execute()
 
+        _settings_cache = settings.copy()
         return True
     except Exception as e:
         print(f"設定保存エラー: {e}")
+        _settings_cache = None
         return False
 
 

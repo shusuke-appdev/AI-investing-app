@@ -13,7 +13,8 @@ import pandas as pd
 
 from src.finnhub_client import (
     get_candles, get_quote, get_company_profile, 
-    get_basic_financials, get_company_news, is_configured
+    get_basic_financials, get_company_news, is_configured,
+    get_option_chain as finnhub_get_option_chain,
 )
 from src.market_config import get_market_config
 from src.constants import MARKET_US
@@ -105,8 +106,18 @@ class DataProvider:
     def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]:
         """
         Get option chain data.
-        Currently yfinance only.
+        Priority: Finnhub (Greeks included) -> yfinance fallback.
         """
+        # 1. Finnhub (推奨: Greeks含む)
+        if is_configured():
+            try:
+                result = finnhub_get_option_chain(ticker)
+                if result is not None:
+                    return result
+            except Exception as e:
+                print(f"[DataProvider] Finnhub option chain error for {ticker}: {e}")
+
+        # 2. yfinance Fallback (Greeksなし)
         try:
             stock = yf.Ticker(ticker)
             try:
@@ -119,8 +130,8 @@ class DataProvider:
             
             all_calls = []
             all_puts = []
-            # Fetch first 2 expirations to save time/limits
-            for exp in expirations[:2]:
+            # Finnhubと同一の満期日数（4）を取得して一貫性を確保
+            for exp in expirations[:4]:
                 try:
                     opt = stock.option_chain(exp)
                     calls = opt.calls.copy()
