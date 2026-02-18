@@ -16,13 +16,21 @@ def render_market_tab():
     market_type = st.session_state.get("market_type", "US")
     market_label = "🇯🇵 日本市場" if market_type == "JP" else "🇺🇸 米国市場"
 
-    # ヘッダーとAIレポートボタンを横並びに配置
-    header_col, btn_col = st.columns([4, 1])
+    # ヘッダーとボタンを横並びに配置
+    header_col, btn_col = st.columns([3, 2])
     with header_col:
         st.markdown(f"## 📰 ニュース ({market_label})")
     with btn_col:
-        if st.button("✨ AI分析", type="secondary", use_container_width=True):
-            _generate_ai_recap(market_type)
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("🔄 更新", use_container_width=True):
+                st.session_state.market_data = None
+                st.session_state.option_analysis = None
+                st.cache_data.clear()  # Clear global cache to ensure fresh data
+                st.rerun()
+        with c2:
+            if st.button("✨ AI分析", type="secondary", use_container_width=True):
+                _generate_ai_recap(market_type)
 
     with st.spinner("市場データを取得中..."):
         if st.session_state.market_data is None:
