@@ -4,7 +4,7 @@ GEX (Gamma Exposure)、PCR (Put/Call Ratio)、Gamma Wallの計算を行います
 Finnhub APIから取得したGreeksを活用し、より正確な分析を提供します。
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
 import numpy as np
@@ -37,8 +37,13 @@ def _fetch_option_data(
     # Note: timestamp is not directly returned by get_current_price, so we use current time
     # Strictly speaking we should get time from quote, but for now system time is enough for "freshness" check
     # to show user when THIS analysis was run.
+    # Cloud environment often uses UTC, so we convert to JST explicitly.
     current_price = DataProvider.get_current_price(ticker)
-    now_str = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    
+    JST = timezone(timedelta(hours=9), "JST")
+    now_utc = datetime.now(timezone.utc)
+    now_jst = now_utc.astimezone(JST)
+    now_str = now_jst.strftime("%Y/%m/%d %H:%M:%S") + " (JST)"
 
     if not current_price:
         return None
