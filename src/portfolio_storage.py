@@ -2,12 +2,12 @@
 ポートフォリオ保存・読み込みモジュール
 ローカルJSON または GAS（Google Apps Script）、Supabase経由でポートフォリオを管理します。
 """
+
 import json
-import os
-from pathlib import Path
-from typing import Optional, Literal
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Literal, Optional
 
 try:
     # Optional: gas_client check
@@ -15,8 +15,9 @@ try:
 except ImportError:
     pass
 
-from .supabase_client import get_supabase_client
 from src.log_config import get_logger
+
+from .supabase_client import get_supabase_client
 
 logger = get_logger(__name__)
 
@@ -27,18 +28,21 @@ StorageType = Literal["local", "gas", "supabase"]
 def set_storage_type(storage_type: StorageType):
     """ストレージタイプを設定（session_stateで管理）"""
     import streamlit as st
+
     st.session_state["_storage_type"] = storage_type
 
 
 def get_storage_type() -> StorageType:
     """現在のストレージタイプを取得"""
     import streamlit as st
+
     return st.session_state.get("_storage_type", "local")
 
 
 @dataclass
 class SavedPortfolio:
     """保存済みポートフォリオ"""
+
     name: str
     holdings: list[dict]  # [{"ticker": "AAPL", "shares": 10, "avg_cost": 150.0}, ...]
     created_at: str
@@ -53,6 +57,7 @@ def ensure_portfolio_dir():
 # ============================================================
 # ローカルストレージ関数
 # ============================================================
+
 
 def _get_portfolio_path(name: str) -> Path:
     """ポートフォリオファイルのパスを取得"""
@@ -135,6 +140,7 @@ def _delete_local(name: str) -> bool:
 
 # ============================================================
 
+
 def _save_gas(name: str, holdings: list[dict]) -> bool:
     """GAS経由で保存"""
     client = get_gas_client()
@@ -181,15 +187,15 @@ def _save_supabase(name: str, holdings: list[dict]) -> bool:
     try:
         # Check if exists by name to get ID (or just upsert on name if unique constraint exists)
         # Schema defined name as unique.
-        
+
         # Prepare payload
         current_time = datetime.now().isoformat()
         payload = {
             "name": name,
-            "holdings": holdings, # JSONB conversion handled by client/library usually
-            "updated_at": current_time
+            "holdings": holdings,  # JSONB conversion handled by client/library usually
+            "updated_at": current_time,
         }
-        
+
         # Try upsert
         # Note: on_conflict="name" is needed if we rely on name uniqueness
         client.table("portfolios").upsert(payload, on_conflict="name").execute()
@@ -210,15 +216,15 @@ def _load_supabase(name: str) -> Optional[dict]:
         rows = response.data
         if not rows:
             return None
-            
+
         # Should be single row due to unique name
         row = rows[0]
-        
+
         return {
             "name": row["name"],
-            "holdings": row["holdings"], # Already list of dicts
+            "holdings": row["holdings"],  # Already list of dicts
             "created_at": row["created_at"],
-            "updated_at": row["updated_at"]
+            "updated_at": row["updated_at"],
         }
     except Exception as e:
         logger.error(f"Supabase load error: {e}")
@@ -230,7 +236,7 @@ def _list_supabase() -> list[str]:
     client = get_supabase_client()
     if not client:
         return []
-    
+
     try:
         # Distinct names
         response = client.table("portfolios").select("name").execute()
@@ -246,7 +252,7 @@ def _delete_supabase(name: str) -> bool:
     client = get_supabase_client()
     if not client:
         return False
-    
+
     try:
         client.table("portfolios").delete().eq("name", name).execute()
         return True
@@ -259,11 +265,14 @@ def _delete_supabase(name: str) -> bool:
 # 統合インターフェース
 # ============================================================
 
-def save_portfolio(name: str, holdings: list[dict], storage: Optional[StorageType] = None) -> bool:
+
+def save_portfolio(
+    name: str, holdings: list[dict], storage: Optional[StorageType] = None
+) -> bool:
     """
     ポートフォリオを保存します。
     """
-    st_type = storage or _storage_type
+    st_type = storage or get_storage_type()
     if st_type == "gas":
         return _save_gas(name, holdings)
     elif st_type == "supabase":
@@ -275,7 +284,7 @@ def load_portfolio(name: str, storage: Optional[StorageType] = None) -> Optional
     """
     ポートフォリオを読み込みます。
     """
-    st_type = storage or _storage_type
+    st_type = storage or get_storage_type()
     if st_type == "gas":
         return _load_gas(name)
     elif st_type == "supabase":
@@ -287,7 +296,7 @@ def list_portfolios(storage: Optional[StorageType] = None) -> list[str]:
     """
     保存済みポートフォリオ一覧を取得します。
     """
-    st_type = storage or _storage_type
+    st_type = storage or get_storage_type()
     if st_type == "gas":
         return _list_gas()
     elif st_type == "supabase":
@@ -299,7 +308,7 @@ def delete_portfolio(name: str, storage: Optional[StorageType] = None) -> bool:
     """
     ポートフォリオを削除します。
     """
-    st_type = storage or _storage_type
+    st_type = storage or get_storage_type()
     if st_type == "gas":
         return _delete_gas(name)
     elif st_type == "supabase":

@@ -5,10 +5,13 @@ DataProvider への後方互換リエクスポート。
 Note: キャッシュは DataProvider 側で管理。
       このモジュールは既存13箇所の import を壊さないための薄いラッパー。
 """
+
+from typing import Dict, List, Optional
+
 import pandas as pd
-from typing import Optional, Dict, List
-from src.data_provider import DataProvider
+
 from src.constants import MARKET_US
+from src.data_provider import DataProvider
 
 
 def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:

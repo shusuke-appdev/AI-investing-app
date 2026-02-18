@@ -1,7 +1,5 @@
-
-import sys
-import os
 import yfinance as yf
+
 
 def test_nvda_oi():
     ticker = "NVDA"
@@ -16,9 +14,10 @@ def test_nvda_oi():
         print(f"Exp: {exps[0]}")
         c = t.option_chain(exps[0]).calls
         print(f"NVDA OI Sum: {c['openInterest'].sum()}")
-        
+
     except Exception as e:
         print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     test_nvda_oi()

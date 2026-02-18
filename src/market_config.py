@@ -2,18 +2,21 @@
 市場設定モジュール
 米国/日本市場の設定を中央管理します。
 """
+
 from enum import Enum
 from typing import TypedDict
 
 
 class MarketType(str, Enum):
     """市場タイプ"""
+
     US = "US"
     JP = "JP"
 
 
 class MarketSettings(TypedDict):
     """市場設定の型定義"""
+
     name: str
     currency: str
     currency_symbol: str
@@ -80,16 +83,49 @@ US_CONFIG: MarketSettings = {
     },
     "ai_analysis_targets": [
         # Macro / Indices (mapped to ETFs)
-        "SPY", "QQQ", "IWM", "TLT", "VIX", "UUP", # DX-Y -> UUP
+        "SPY",
+        "QQQ",
+        "IWM",
+        "TLT",
+        "VIX",
+        "UUP",  # DX-Y -> UUP
         # Mega Tech
-        "NVDA", "MSFT", "GOOGL", "META", "AMZN", "AAPL", "TSLA",
+        "NVDA",
+        "MSFT",
+        "GOOGL",
+        "META",
+        "AMZN",
+        "AAPL",
+        "TSLA",
         # Semiconductor
-        "TSM", "AVGO", "AMD", "ARM", "QCOM", "INTC", "MU", 
-        "ASML", "LRCX", "AMAT", "KLAC",
+        "TSM",
+        "AVGO",
+        "AMD",
+        "ARM",
+        "QCOM",
+        "INTC",
+        "MU",
+        "ASML",
+        "LRCX",
+        "AMAT",
+        "KLAC",
         # AI Ecosystem
-        "SMCI", "PLTR", "ORCL", "CRM", "NOW", "DELL", "VRT",
+        "SMCI",
+        "PLTR",
+        "ORCL",
+        "CRM",
+        "NOW",
+        "DELL",
+        "VRT",
         # Broad Sector ETFs
-        "XLE", "XLF", "XLV", "XLI", "XLY", "XLP", "XLU", "XLRE"
+        "XLE",
+        "XLF",
+        "XLV",
+        "XLI",
+        "XLY",
+        "XLP",
+        "XLU",
+        "XLRE",
     ],
 }
 
@@ -106,7 +142,6 @@ JP_CONFIG: MarketSettings = {
     "indices": {
         "日経平均": "^N225",
         "TOPIX": "1306.T",  # TOPIX連動ETF（^TPXは不安定）
-        "東証グロース250": "2516.T",  # ETF
         "東証グロース250": "2516.T",  # ETF
         "JPX400": "1364.T",  # ETF
     },
@@ -131,13 +166,21 @@ JP_CONFIG: MarketSettings = {
     },
     "ai_analysis_targets": [
         # 主要指数
-        "1306.T", "1321.T", # TOPIX, Nikkei ETF
+        "1306.T",
+        "1321.T",  # TOPIX, Nikkei ETF
         # Export / Tech
-        "7203.T", "6758.T", "8035.T", "6861.T", "6501.T",
+        "7203.T",
+        "6758.T",
+        "8035.T",
+        "6861.T",
+        "6501.T",
         # Finance
-        "8306.T", "8316.T",
+        "8306.T",
+        "8316.T",
         # Chips
-        "6146.T", "7735.T", "6920.T"
+        "6146.T",
+        "7735.T",
+        "6920.T",
     ],
 }
 
@@ -151,10 +194,10 @@ MARKET_CONFIGS: dict[str, MarketSettings] = {
 def get_market_config(market_type: str = "US") -> MarketSettings:
     """
     指定された市場タイプの設定を取得します。
-    
+
     Args:
         market_type: "US" または "JP"
-    
+
     Returns:
         市場設定の辞書
     """
@@ -164,18 +207,18 @@ def get_market_config(market_type: str = "US") -> MarketSettings:
 def format_price(price: float, market_type: str = "US", decimals: int = 2) -> str:
     """
     市場に応じた通貨フォーマットで価格を表示します。
-    
+
     Args:
         price: 価格
         market_type: "US" または "JP"
         decimals: 小数点以下桁数
-    
+
     Returns:
         フォーマット済み価格文字列
     """
     config = get_market_config(market_type)
     symbol = config["currency_symbol"]
-    
+
     if market_type == "JP":
         # 日本円は通常整数表示
         return f"{symbol}{price:,.0f}"
@@ -185,31 +228,50 @@ def format_price(price: float, market_type: str = "US", decimals: int = 2) -> st
 def get_news_keywords(market_type: str = "US") -> list[str]:
     """
     市場に応じたニュース検索キーワードを取得します。
-    
+
     Args:
         market_type: "US" または "JP"
-    
+
     Returns:
         キーワードリスト
     """
     if market_type == "JP":
         return [
             # マクロ・政策
-            "日銀", "金融政策", "円安", "円高", "物価",
+            "日銀",
+            "金融政策",
+            "円安",
+            "円高",
+            "物価",
             # 市場
-            "日経平均", "TOPIX", "東証",
+            "日経平均",
+            "TOPIX",
+            "東証",
             # コモディティ・為替
-            "原油価格", "金価格", "ドル円",
+            "原油価格",
+            "金価格",
+            "ドル円",
             # 企業・セクター
-            "決算", "半導体", "自動車", "銀行株",
+            "決算",
+            "半導体",
+            "自動車",
+            "銀行株",
         ]
     return [
         # マクロ・政策
-        "Federal Reserve", "FOMC", "inflation", "Treasury yields",
+        "Federal Reserve",
+        "FOMC",
+        "inflation",
+        "Treasury yields",
         # コモディティ
-        "crude oil", "gold prices", "commodities",
+        "crude oil",
+        "gold prices",
+        "commodities",
         # 暗号資産
-        "Bitcoin", "cryptocurrency",
+        "Bitcoin",
+        "cryptocurrency",
         # 市場全般
-        "stock market", "S&P 500", "Nasdaq",
+        "stock market",
+        "S&P 500",
+        "Nasdaq",
     ]

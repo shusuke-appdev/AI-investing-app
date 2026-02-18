@@ -3,29 +3,32 @@ AI投資アプリ - メインアプリケーション
 Streamlitを使用したダッシュボードUI
 サイドバーナビゲーション方式
 """
-import streamlit as st
+
 import os
 import sys
+
+import streamlit as st
 
 # パス設定
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.ui.styles import get_custom_css
-from src.ui.sidebar import render_sidebar
-from src.ui.market_tab import render_market_tab
-from src.ui.theme_tab import render_theme_tab
-from src.ui.stock_tab import render_stock_tab
-from src.ui.portfolio_tab import render_portfolio_tab
-from src.ui.knowledge_tab import render_knowledge_tab
 from src.ui.alerts_tab import render_alerts_tab
+from src.ui.knowledge_tab import render_knowledge_tab
+from src.ui.market_tab import render_market_tab
+from src.ui.portfolio_tab import render_portfolio_tab
+from src.ui.sidebar import render_sidebar
+from src.ui.stock_tab import render_stock_tab
+from src.ui.styles import get_custom_css
+from src.ui.theme_tab import render_theme_tab
 
 # ページ設定
 st.set_page_config(
     page_title="AI投資アプリ",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
+
 
 def init_session_state():
     """セッション状態の初期化"""
@@ -56,46 +59,53 @@ def render_error_screen(e):
     3. 管理者にご連絡ください。
     """)
 
+
 def main():
     """メイン関数"""
     try:
         init_session_state()
-        
+
         # --- 設定の即時読み込み（UI描画前）---
         # ... (unchanged)
-        from src.settings_storage import load_settings, get_gemini_api_key, get_gas_url, get_storage_type, get_finnhub_api_key
+        from src.settings_storage import (
+            get_finnhub_api_key,
+            get_gas_url,
+            get_gemini_api_key,
+            get_storage_type,
+        )
+
         # settings_storageの関数を使ってセッションに同期
         # 1. Gemini
         saved_gen_key = get_gemini_api_key()
         if saved_gen_key and st.session_state.get("gemini_api_key") != saved_gen_key:
-             st.session_state.gemini_api_key = saved_gen_key
-             st.session_state.gemini_configured = True
-        
+            st.session_state.gemini_api_key = saved_gen_key
+            st.session_state.gemini_configured = True
+
         # 2. Finnhub
         saved_finn_key = get_finnhub_api_key()
         if saved_finn_key and st.session_state.get("finnhub_api_key") != saved_finn_key:
             st.session_state.finnhub_api_key = saved_finn_key
-        
+
         # 3. GAS / Storage
         saved_gas = get_gas_url()
         if saved_gas and st.session_state.get("gas_url") != saved_gas:
-             st.session_state.gas_url = saved_gas
-             
+            st.session_state.gas_url = saved_gas
+
         saved_storage = get_storage_type()
         if st.session_state.get("storage_type") != saved_storage:
-             st.session_state.storage_type = saved_storage
-        
+            st.session_state.storage_type = saved_storage
+
         # -----------------------------------
-        
+
         # スタイルの適用
         st.markdown(get_custom_css(), unsafe_allow_html=True)
-        
+
         # サイドバー描画
         render_sidebar()
-        
+
         # ページルーティング
         page = st.session_state.current_page
-        
+
         if page == "market":
             render_market_tab()
         elif page == "theme":
@@ -112,6 +122,7 @@ def main():
     except Exception as e:
         render_error_screen(e)
 
+
 if __name__ == "__main__":
     try:
         main()
@@ -121,5 +132,5 @@ if __name__ == "__main__":
         print(f"Critical Startup Error: {e}")
         try:
             st.error(f"Critical Startup Error: {e}")
-        except:
+        except Exception:
             pass

@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 import time
 
 sys.path.insert(0, os.path.join(os.getcwd(), "src"))
@@ -7,8 +7,9 @@ sys.path.insert(0, os.path.join(os.getcwd(), "src"))
 # Load .env
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
-except:
+except Exception:
     pass
 
 from finnhub_client import get_quote
@@ -24,8 +25,9 @@ SECTORS = {
     "Energy": "XLE",
     "Utilities": "XLU",
     "Real Estate": "XLRE",
-    "Materials": "XLB"
+    "Materials": "XLB",
 }
+
 
 def main():
     print("=== Checking Sector ETFs on Finnhub ===")
@@ -41,9 +43,10 @@ def main():
                 print(f"[FAIL] {q}")
         except Exception as e:
             print(f"[ERROR] {e}")
-        time.sleep(0.2) # Avoid rate limit
-        
+        time.sleep(0.2)  # Avoid rate limit
+
     print(f"\nResult: {success_count}/{len(SECTORS)} sectors available on Finnhub.")
+
 
 if __name__ == "__main__":
     main()

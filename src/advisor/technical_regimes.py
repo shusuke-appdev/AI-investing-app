@@ -3,14 +3,11 @@
 
 一目均衡表, BBスクイズ, 動的RSI, Anchored VWAP の計算関数を提供します。
 """
+
 import pandas as pd
-import numpy as np
-from typing import Optional
 
 
-def calculate_ichimoku(
-    close: pd.Series, high: pd.Series, low: pd.Series
-) -> dict:
+def calculate_ichimoku(close: pd.Series, high: pd.Series, low: pd.Series) -> dict:
     """
     一目均衡表を計算する。雲レジーム判定と三役好転の定量化。
 
@@ -19,8 +16,15 @@ def calculate_ichimoku(
          "tenkan": float, "kijun": float, "cloud_top": float, "cloud_bottom": float}
     """
     if len(close) < 52:
-        return {"regime": "データ不足", "sannyaku": False, "signal": "中立",
-                "tenkan": 0.0, "kijun": 0.0, "cloud_top": 0.0, "cloud_bottom": 0.0}
+        return {
+            "regime": "データ不足",
+            "sannyaku": False,
+            "signal": "中立",
+            "tenkan": 0.0,
+            "kijun": 0.0,
+            "cloud_top": 0.0,
+            "cloud_bottom": 0.0,
+        }
 
     tenkan = (high.rolling(9).max() + low.rolling(9).min()) / 2
     kijun = (high.rolling(26).max() + low.rolling(26).min()) / 2
@@ -53,16 +57,24 @@ def calculate_ichimoku(
         signal = "中立"
 
     return {
-        "regime": regime, "sannyaku": sannyaku, "signal": signal,
-        "tenkan": tenkan_val, "kijun": kijun_val,
-        "cloud_top": cloud_top, "cloud_bottom": cloud_bottom,
+        "regime": regime,
+        "sannyaku": sannyaku,
+        "signal": signal,
+        "tenkan": tenkan_val,
+        "kijun": kijun_val,
+        "cloud_top": cloud_top,
+        "cloud_bottom": cloud_bottom,
     }
 
 
 def calculate_bb_squeeze(
-    close: pd.Series, high: pd.Series, low: pd.Series,
-    bb_period: int = 20, bb_std: float = 2.0,
-    atr_period: int = 20, kc_mult: float = 1.5,
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
+    bb_period: int = 20,
+    bb_std: float = 2.0,
+    atr_period: int = 20,
+    kc_mult: float = 1.5,
 ) -> dict:
     """
     BBスクイズ検出（ケルトナーチャネル比較方式）。
@@ -79,23 +91,29 @@ def calculate_bb_squeeze(
     bb_lower = bb_ma - bb_std * bb_std_val
 
     prev_close = close.shift(1)
-    tr = pd.concat([
-        high - low, (high - prev_close).abs(), (low - prev_close).abs(),
-    ], axis=1).max(axis=1)
+    tr = pd.concat(
+        [
+            high - low,
+            (high - prev_close).abs(),
+            (low - prev_close).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
     atr = tr.rolling(atr_period).mean()
     kc_ma = close.rolling(atr_period).mean()
     kc_upper = kc_ma + kc_mult * atr
     kc_lower = kc_ma - kc_mult * atr
 
     squeeze = bool(
-        bb_upper.iloc[-1] < kc_upper.iloc[-1]
-        and bb_lower.iloc[-1] > kc_lower.iloc[-1]
+        bb_upper.iloc[-1] < kc_upper.iloc[-1] and bb_lower.iloc[-1] > kc_lower.iloc[-1]
     )
 
     bandwidth = (bb_upper - bb_lower) / bb_ma * 100
     bw_series = bandwidth.dropna().tail(120)
     if len(bw_series) > 0:
-        percentile = float((bw_series < bandwidth.iloc[-1]).sum() / len(bw_series) * 100)
+        percentile = float(
+            (bw_series < bandwidth.iloc[-1]).sum() / len(bw_series) * 100
+        )
     else:
         percentile = 50.0
 
@@ -146,14 +164,20 @@ def calculate_dynamic_rsi(close: pd.Series, period: int = 14) -> dict:
         signal = "中立"
 
     return {
-        "rsi": rsi_val, "regime": regime, "signal": signal,
-        "oversold_threshold": oversold, "overbought_threshold": overbought,
+        "rsi": rsi_val,
+        "regime": regime,
+        "signal": signal,
+        "oversold_threshold": oversold,
+        "overbought_threshold": overbought,
     }
 
 
 def calculate_anchored_vwap(
-    close: pd.Series, high: pd.Series, low: pd.Series,
-    volume: pd.Series, anchor_type: str = "ytd",
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
+    volume: pd.Series,
+    anchor_type: str = "ytd",
 ) -> dict:
     """
     アンカーVWAP（Anchored VWAP）を計算する。
@@ -190,4 +214,8 @@ def calculate_anchored_vwap(
     if avwap_val > 0:
         deviation_pct = (current_price - avwap_val) / avwap_val * 100
 
-    return {"avwap": avwap_val, "deviation_pct": deviation_pct, "anchor_type": anchor_type}
+    return {
+        "avwap": avwap_val,
+        "deviation_pct": deviation_pct,
+        "anchor_type": anchor_type,
+    }

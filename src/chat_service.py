@@ -3,9 +3,10 @@
 Gemini APIを使用した対話型チャット機能を提供します。
 セッション状態は st.session_state で管理（マルチユーザー安全）。
 """
-from typing import Optional
-import streamlit as st
+
 import google.generativeai as genai
+import streamlit as st
+
 from src.constants import GEMINI_MODEL_NAME
 
 
@@ -34,10 +35,15 @@ def get_chat_session(context: str = ""):
 - 不確実な情報は「推測です」と明記
 - 投資アドバイスは控え、情報提供に徹する
 """
-        st.session_state["_chat_session"] = st.session_state["_chat_model"].start_chat(history=[
-            {"role": "user", "parts": [system_prompt]},
-            {"role": "model", "parts": ["了解しました。金融市場に関するご質問にお答えします。"]}
-        ])
+        st.session_state["_chat_session"] = st.session_state["_chat_model"].start_chat(
+            history=[
+                {"role": "user", "parts": [system_prompt]},
+                {
+                    "role": "model",
+                    "parts": ["了解しました。金融市場に関するご質問にお答えします。"],
+                },
+            ]
+        )
 
     return st.session_state["_chat_session"]
 

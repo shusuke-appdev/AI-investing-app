@@ -1,25 +1,35 @@
 from typing import Optional
+
 import google.generativeai as genai
-from .analysis import get_macro_context, get_sector_performance, get_theme_exposure_analysis, get_holdings_news
-from .technical import analyze_market_technicals, analyze_technical, get_technical_summary_for_ai
+
+from .analysis import (
+    get_holdings_news,
+    get_macro_context,
+    get_sector_performance,
+    get_theme_exposure_analysis,
+)
+from .technical import (
+    analyze_market_technicals,
+)
+
 
 def generate_portfolio_advice(
     analysis: dict,
     market_sentiment: str = "中立",
     option_summary: Optional[str] = None,
     include_macro: bool = True,
-    include_news: bool = True
+    include_news: bool = True,
 ) -> str:
     """
     AIによる包括的なポートフォリオアドバイスを生成します。
     テクニカル分析に基づく具体的な売買判断（数量・タイミング）を含む。
     """
     model = genai.GenerativeModel("gemini-3-flash-preview")
-    
+
     # ポートフォリオサマリー構築（テクニカル詳細を拡充）
     holdings_text = []
-    technical_summaries = []
-    
+    # technical_summaries = [] (Unused)
+
     for h in analysis["holdings"]:
         tech = h.get("technical")
         if tech:
@@ -36,45 +46,45 @@ def generate_portfolio_advice(
             tech_str = "テクニカル: N/A"
             zone_str = ""
             support_str = ""
-        
-        pnl = f"損益: {h['pnl_pct']:+.1f}%" if h.get('pnl_pct') is not None else ""
-        
+
+        pnl = f"損益: {h['pnl_pct']:+.1f}%" if h.get("pnl_pct") is not None else ""
+
         holdings_text.append(
             f"- {h['ticker']} ({h['name']}): ${h['current_price']:.2f} x {h['shares']:.1f}株 = ${h['value']:,.0f} "
             f"({h['weight']:.1f}%) | セクター: {h.get('sector', '不明')} | {pnl}\n"
             f"  {tech_str}\n"
             f"  {zone_str} | {support_str}"
         )
-    
+
     # マクロ分析
     macro_text = ""
     market_tech_text = ""
     sector_text = ""
     theme_text = ""
     news_text = ""
-    
+
     if include_macro:
         # マクロ環境
         macro = get_macro_context()
         macro_lines = ["【マクロ環境】"]
-        
+
         # 指数
         for name, data in macro.get("indices", {}).items():
             macro_lines.append(f"- {name}: {data.get('change', 0):+.2f}%")
-        
+
         # 金利
         rate_parts = []
         for name, data in macro.get("rates", {}).items():
             rate_parts.append(f"{name}: {data.get('price', 0):.2f}%")
         if rate_parts:
             macro_lines.append(f"- 金利: {', '.join(rate_parts)}")
-        
+
         # 商品
         for name, data in macro.get("commodities", {}).items():
             macro_lines.append(f"- {name}: {data.get('change', 0):+.2f}%")
-        
+
         macro_text = "\n".join(macro_lines)
-        
+
         # 市場テクニカル
         market_tech = analyze_market_technicals()
         if market_tech:
@@ -84,11 +94,13 @@ def generate_portfolio_advice(
                     f"- {ticker}: {data['signal']} (RSI: {data['rsi']:.1f}, MACD: {data['macd']}, トレンド: {data.get('trend', 'N/A')})"
                 )
             market_tech_text = "\n".join(tech_lines)
-        
+
         # セクターパフォーマンス
         sectors = get_sector_performance()
         if sectors:
-            sorted_sectors = sorted(sectors.items(), key=lambda x: x[1].get("change_1m", 0), reverse=True)
+            sorted_sectors = sorted(
+                sectors.items(), key=lambda x: x[1].get("change_1m", 0), reverse=True
+            )
             sector_lines = ["【セクター別1ヶ月パフォーマンス】"]
             for sector, data in sorted_sectors[:5]:
                 sector_lines.append(f"- {sector}: {data['change_1m']:+.1f}%")
@@ -96,15 +108,17 @@ def generate_portfolio_advice(
             for sector, data in sorted_sectors[-3:]:
                 sector_lines.append(f"- {sector}: {data['change_1m']:+.1f}%")
             sector_text = "\n".join(sector_lines)
-        
+
         # テーマエクスポージャー
         themes = get_theme_exposure_analysis(analysis["holdings"])
         if themes:
             theme_lines = ["【テーマ別エクスポージャー】"]
             for theme, data in list(themes.items())[:5]:
-                theme_lines.append(f"- {theme}: ${data['value']:,.0f} ({data['weight']:.1f}%)")
+                theme_lines.append(
+                    f"- {theme}: ${data['value']:,.0f} ({data['weight']:.1f}%)"
+                )
             theme_text = "\n".join(theme_lines)
-    
+
     if include_news:
         news = get_holdings_news(analysis["holdings"])
         if news:
@@ -112,17 +126,18 @@ def generate_portfolio_advice(
             for n in news[:8]:
                 news_lines.append(f"- [{n.get('ticker', '')}] {n.get('title', '')}")
             news_text = "\n".join(news_lines)
-    
+
     # ユーザー参照知識を取得
     from src.knowledge_storage import get_knowledge_for_ai_context
+
     knowledge_context = get_knowledge_for_ai_context(max_items=10)
 
     prompt = f"""あなたは経験豊富なポートフォリオマネージャー兼テクニカルアナリストです。
 以下の情報に基づいて、**テクニカル分析を重視した具体的な売買アドバイス**を提供してください。
 
 【ポートフォリオ概要】
-総資産: ${analysis['total_value']:,.0f}
-銘柄数: {analysis['num_holdings']}
+総資産: ${analysis["total_value"]:,.0f}
+銘柄数: {analysis["num_holdings"]}
 
 【保有銘柄詳細（テクニカル分析含む）】
 {chr(10).join(holdings_text)}
@@ -186,10 +201,9 @@ def generate_portfolio_advice(
 - 曖昧な表現を避け、明確なアクションを提示
 - 投資判断は自己責任である旨を最後に注記
 """
-    
+
     try:
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
         return f"アドバイス生成エラー: {str(e)}"
-

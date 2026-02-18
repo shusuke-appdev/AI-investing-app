@@ -10,7 +10,7 @@ MARKET_JP = "JP"
 GEMINI_MODEL_NAME = "gemini-3-flash-preview"
 
 # Cache Settings (Seconds)
-CACHE_TTL_SHORT = 60       # 1 min
-CACHE_TTL_MEDIUM = 300     # 5 min
-CACHE_TTL_LONG = 3600      # 1 hour
-CACHE_TTL_DAILY = 86400    # 24 hours
+CACHE_TTL_SHORT = 60  # 1 min
+CACHE_TTL_MEDIUM = 300  # 5 min
+CACHE_TTL_LONG = 3600  # 1 hour
+CACHE_TTL_DAILY = 86400  # 24 hours

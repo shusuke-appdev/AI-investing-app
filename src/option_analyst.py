@@ -3,18 +3,23 @@
 GEX (Gamma Exposure)、PCR (Put/Call Ratio)、Gamma Wallの計算を行います。
 Finnhub APIから取得したGreeksを活用し、より正確な分析を提供します。
 """
-import pandas as pd
-import numpy as np
-from typing import Optional, Tuple
-from .market_data import get_option_chain
-from .data_provider import DataProvider
 
+from typing import Optional, Tuple
+
+import numpy as np
+import pandas as pd
+
+from .data_provider import DataProvider
+from .market_data import get_option_chain
 
 # ============================================================
 # 内部ヘルパー: データ取得（1回だけ実行）
 # ============================================================
 
-def _fetch_option_data(ticker: str) -> Optional[Tuple[pd.DataFrame, pd.DataFrame, float]]:
+
+def _fetch_option_data(
+    ticker: str,
+) -> Optional[Tuple[pd.DataFrame, pd.DataFrame, float]]:
     """
     オプションチェーンと現在価格を1回で取得する内部ヘルパー。
 
@@ -39,6 +44,7 @@ def _fetch_option_data(ticker: str) -> Optional[Tuple[pd.DataFrame, pd.DataFrame
 # ============================================================
 # 個別計算関数（データを引数で受け取る版 + 後方互換のticker版）
 # ============================================================
+
 
 def calculate_pcr(
     ticker: str = "",
@@ -119,7 +125,9 @@ def calculate_gex(
         gamma = row.get("gamma", 0)
 
         if pd.isna(gamma) or gamma == 0:
-            moneyness = abs(strike - current_price) / current_price if current_price > 0 else 1
+            moneyness = (
+                abs(strike - current_price) / current_price if current_price > 0 else 1
+            )
             gamma = max(0.001, 0.05 * np.exp(-5 * moneyness))
 
         gex = gamma * oi * 100 * current_price
@@ -132,7 +140,9 @@ def calculate_gex(
         gamma = row.get("gamma", 0)
 
         if pd.isna(gamma) or gamma == 0:
-            moneyness = abs(strike - current_price) / current_price if current_price > 0 else 1
+            moneyness = (
+                abs(strike - current_price) / current_price if current_price > 0 else 1
+            )
             gamma = max(0.001, 0.05 * np.exp(-5 * moneyness))
 
         gex = -gamma * oi * 100 * current_price
@@ -149,16 +159,20 @@ def calculate_gex(
 
     nearby_range = current_price * 0.03
     nearby_gex = strike_gex[
-        (strike_gex["strike"] >= current_price - nearby_range) &
-        (strike_gex["strike"] <= current_price + nearby_range)
+        (strike_gex["strike"] >= current_price - nearby_range)
+        & (strike_gex["strike"] <= current_price + nearby_range)
     ]["gex"].sum()
 
     return {
         "ticker": ticker,
         "current_price": current_price,
         "strike_gex": strike_gex.to_dict("records"),
-        "positive_wall": positive_wall.iloc[0].to_dict() if len(positive_wall) > 0 else None,
-        "negative_wall": negative_wall.iloc[0].to_dict() if len(negative_wall) > 0 else None,
+        "positive_wall": positive_wall.iloc[0].to_dict()
+        if len(positive_wall) > 0
+        else None,
+        "negative_wall": negative_wall.iloc[0].to_dict()
+        if len(negative_wall) > 0
+        else None,
         "nearby_net_gex": nearby_gex,
         "total_gex": strike_gex["gex"].sum(),
     }
@@ -181,12 +195,16 @@ def calculate_max_pain(
     loss_data = []
 
     for k in strikes:
-        call_loss = calls[calls["strike"] < k].apply(
-            lambda r: (k - r["strike"]) * r["openInterest"], axis=1
-        ).sum()
-        put_loss = puts[puts["strike"] > k].apply(
-            lambda r: (r["strike"] - k) * r["openInterest"], axis=1
-        ).sum()
+        call_loss = (
+            calls[calls["strike"] < k]
+            .apply(lambda r: (k - r["strike"]) * r["openInterest"], axis=1)
+            .sum()
+        )
+        put_loss = (
+            puts[puts["strike"] > k]
+            .apply(lambda r: (r["strike"] - k) * r["openInterest"], axis=1)
+            .sum()
+        )
         loss_data.append({"strike": k, "loss": call_loss + put_loss})
 
     if not loss_data:
@@ -210,15 +228,18 @@ def calculate_atm_iv(
         calls, puts, current_price = fetched
 
     nearby_calls = calls[
-        (calls["strike"] >= current_price * 0.98) &
-        (calls["strike"] <= current_price * 1.02)
+        (calls["strike"] >= current_price * 0.98)
+        & (calls["strike"] <= current_price * 1.02)
     ]
     nearby_puts = puts[
-        (puts["strike"] >= current_price * 0.98) &
-        (puts["strike"] <= current_price * 1.02)
+        (puts["strike"] >= current_price * 0.98)
+        & (puts["strike"] <= current_price * 1.02)
     ]
 
-    ivs = nearby_calls["impliedVolatility"].tolist() + nearby_puts["impliedVolatility"].tolist()
+    ivs = (
+        nearby_calls["impliedVolatility"].tolist()
+        + nearby_puts["impliedVolatility"].tolist()
+    )
     valid_ivs = []
     for iv in ivs:
         if iv is None or iv == 0:
@@ -237,6 +258,7 @@ def calculate_atm_iv(
 # ============================================================
 # 統合分析（データを1回取得し、各関数に渡す）
 # ============================================================
+
 
 def analyze_option_sentiment(ticker: str) -> Optional[dict]:
     """
@@ -275,10 +297,14 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
         vol_pcr = pcr["volume_pcr"]
         if vol_pcr > 1.2:
             sentiment = "弱気"
-            analysis.append(f"PCR(Vol) ({vol_pcr:.2f}) が高く、プット取引活発 (弱気示唆)")
+            analysis.append(
+                f"PCR(Vol) ({vol_pcr:.2f}) が高く、プット取引活発 (弱気示唆)"
+            )
         elif vol_pcr < 0.7:
             sentiment = "強気"
-            analysis.append(f"PCR(Vol) ({vol_pcr:.2f}) が低く、コール取引活発 (強気示唆)")
+            analysis.append(
+                f"PCR(Vol) ({vol_pcr:.2f}) が低く、コール取引活発 (強気示唆)"
+            )
         else:
             analysis.append(f"PCR(Vol) ({vol_pcr:.2f}) は中立水準")
 

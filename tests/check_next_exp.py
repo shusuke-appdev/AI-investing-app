@@ -1,10 +1,11 @@
-
-import sys
 import os
+import sys
+
 import yfinance as yf
 
 # Add src to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 def test_next_expiration():
     ticker = "SPY"
@@ -23,9 +24,10 @@ def test_next_expiration():
         print(f"2nd Exp (Next): {exps[1]}")
         c2 = t.option_chain(exps[1]).calls
         print(f"   OI Sum: {c2['openInterest'].sum()}")
-        
+
     except Exception as e:
         print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     test_next_expiration()

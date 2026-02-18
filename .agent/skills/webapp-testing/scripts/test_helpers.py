@@ -1,15 +1,20 @@
 """
 Helper utilities for web application testing with Playwright (Python)
 """
-import time
+
 import datetime
-from typing import Callable, Any, List, Dict
+import time
+from typing import Any, Callable, Dict, List
+
 from playwright.sync_api import Page
 
-def wait_for_condition(condition: Callable[[], bool], timeout: float = 5.0, interval: float = 0.1) -> bool:
+
+def wait_for_condition(
+    condition: Callable[[], bool], timeout: float = 5.0, interval: float = 0.1
+) -> bool:
     """
     Wait for a condition to be true with timeout
-    
+
     Args:
         condition: Function that returns boolean
         timeout: Timeout in seconds
@@ -20,37 +25,42 @@ def wait_for_condition(condition: Callable[[], bool], timeout: float = 5.0, inte
         if condition():
             return True
         time.sleep(interval)
-    raise TimeoutError('Condition not met within timeout')
+    raise TimeoutError("Condition not met within timeout")
+
 
 def capture_console_logs(page: Page) -> List[Dict[str, Any]]:
     """
     Capture browser console logs
-    
+
     Args:
         page: Playwright page object
-    
+
     Returns:
         List of console messages
     """
     logs = []
+
     def handler(msg):
-        logs.append({
-            "type": msg.type,
-            "text": msg.text,
-            "timestamp": datetime.datetime.now().isoformat()
-        })
-    
+        logs.append(
+            {
+                "type": msg.type,
+                "text": msg.text,
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+        )
+
     page.on("console", handler)
     return logs
+
 
 def capture_screenshot(page: Page, name: str) -> str:
     """
     Take screenshot with automatic naming
-    
+
     Args:
         page: Playwright page object
         name: Base name for screenshot
-    
+
     Returns:
         Filename of the saved screenshot
     """

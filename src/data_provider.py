@@ -3,27 +3,47 @@ Data Provider Module
 アプリケーション全体の唯一のデータアクセスポイント。
 Finnhub + yfinance のハイブリッドフェッチとキャッシュを管理。
 """
-from datetime import datetime, timedelta
-from typing import Optional, Tuple, Dict, List
 
-import yfinance as yf
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple
+
 import pandas as pd
 import streamlit as st
-import requests
+import yfinance as yf
 
+from src.constants import (
+    CACHE_TTL_DAILY,
+    CACHE_TTL_MEDIUM,
+    CACHE_TTL_SHORT,
+    MARKET_US,
+)
 from src.finnhub_client import (
-    get_candles, get_quote as _finnhub_get_quote, get_company_profile,
-    get_basic_financials, get_company_news as _finnhub_get_company_news,
+    get_basic_financials,
+    get_candles,
+    get_company_profile,
     is_configured,
-    get_option_chain as _finnhub_get_option_chain,
+)
+from src.finnhub_client import (
+    get_company_news as _finnhub_get_company_news,
+)
+from src.finnhub_client import (
     get_earnings_calendar as _finnhub_get_earnings_calendar,
+)
+from src.finnhub_client import (
     get_earnings_surprises as _finnhub_get_earnings_surprises,
+)
+from src.finnhub_client import (
     get_financials_reported as _finnhub_get_financials_reported,
 )
-from src.market_config import get_market_config
-from src.constants import MARKET_US, CACHE_TTL_SHORT, CACHE_TTL_MEDIUM, CACHE_TTL_LONG, CACHE_TTL_DAILY
-from src.models import StockInfo, NewsItem, MarketIndex
+from src.finnhub_client import (
+    get_option_chain as _finnhub_get_option_chain,
+)
+from src.finnhub_client import (
+    get_quote as _finnhub_get_quote,
+)
 from src.log_config import get_logger
+from src.market_config import get_market_config
+from src.models import MarketIndex, NewsItem, StockInfo
 
 logger = get_logger(__name__)
 
@@ -60,12 +80,13 @@ def _get_stooq_data(ticker: str) -> Optional[Tuple[float, float]]:
         logger.info(f"[STOOQ_WARN] Failed to fetch {ticker}: {e}")
         return None
 
+
 class DataProvider:
     """
     Centralized data provider for the application.
     Handles switching between Finnhub and yfinance, and caching strategies.
     """
-    
+
     @staticmethod
     @st.cache_data(ttl=CACHE_TTL_SHORT)
     def get_current_price(ticker: str) -> float:
@@ -83,7 +104,10 @@ class DataProvider:
 
         try:
             ticker_obj = yf.Ticker(ticker)
-            if hasattr(ticker_obj, "fast_info") and "last_price" in ticker_obj.fast_info:
+            if (
+                hasattr(ticker_obj, "fast_info")
+                and "last_price" in ticker_obj.fast_info
+            ):
                 price = ticker_obj.fast_info["last_price"]
                 if price:
                     return float(price)
@@ -113,7 +137,15 @@ class DataProvider:
         # 2. Finnhub candles (fallback)
         if is_configured():
             try:
-                period_map = {"1d": 7, "5d": 7, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "max": 1825}
+                period_map = {
+                    "1d": 7,
+                    "5d": 7,
+                    "1mo": 30,
+                    "3mo": 90,
+                    "6mo": 180,
+                    "1y": 365,
+                    "max": 1825,
+                }
                 days = period_map.get(period, 30)
                 now = datetime.now()
                 _from = int((now - timedelta(days=days)).timestamp())
@@ -139,19 +171,21 @@ class DataProvider:
                 if result is not None:
                     return result
             except Exception as e:
-                logger.error(f"[DataProvider] Finnhub option chain error for {ticker}: {e}")
+                logger.error(
+                    f"[DataProvider] Finnhub option chain error for {ticker}: {e}"
+                )
 
         # 2. yfinance Fallback (Greeksなし)
         try:
             stock = yf.Ticker(ticker)
             try:
-                 expirations = stock.options
+                expirations = stock.options
             except Exception:
-                 return None
-            
+                return None
+
             if not expirations:
                 return None
-            
+
             all_calls = []
             all_puts = []
             # Finnhubと同一の満期日数（4）を取得して一貫性を確保
@@ -166,11 +200,13 @@ class DataProvider:
                     all_puts.append(puts)
                 except Exception:
                     continue
-            
+
             if not all_calls:
                 return None
-                
-            return pd.concat(all_calls, ignore_index=True), pd.concat(all_puts, ignore_index=True)
+
+            return pd.concat(all_calls, ignore_index=True), pd.concat(
+                all_puts, ignore_index=True
+            )
         except Exception as e:
             logger.error(f"[DataProvider] Option fetch error for {ticker}: {e}")
             return None
@@ -190,25 +226,26 @@ class DataProvider:
             for name, ticker in JP_STOOQ_TICKERS.items():
                 data = _get_stooq_data(ticker)
                 if data:
-                    result[name] = {"price": data[0], "change": data[1], "ticker": ticker}
+                    result[name] = {
+                        "price": data[0],
+                        "change": data[1],
+                        "ticker": ticker,
+                    }
             return result
 
         # --- 米国市場 (Finnhub移行 + YF併用) ---
-        
+
         # 1. Finnhub Targets
         finnhub_targets = {
             **config["indices"],
             **config["sectors"],
-            **config["commodities"], 
-            **config["crypto"], 
+            **config["commodities"],
+            **config["crypto"],
         }
-        
+
         # 2. yfinance Targets
-        yf_targets = {
-            **config["treasuries"],
-            **config["forex"]
-        }
-        
+        yf_targets = {**config["treasuries"], **config["forex"]}
+
         if not is_configured():
             yf_targets.update(finnhub_targets)
             finnhub_targets = {}
@@ -218,7 +255,11 @@ class DataProvider:
             try:
                 q = _finnhub_get_quote(ticker)
                 if isinstance(q, dict) and q.get("c") not in (0, None):
-                    result[name] = {"price": q.get("c"), "change": q.get("dp", 0), "ticker": ticker}
+                    result[name] = {
+                        "price": q.get("c"),
+                        "change": q.get("dp", 0),
+                        "ticker": ticker,
+                    }
                 else:
                     yf_targets[name] = ticker
             except Exception:
@@ -230,22 +271,40 @@ class DataProvider:
                 tickers_list = list(yf_targets.values())
                 if tickers_list:
                     batch_data = yf.download(tickers_list, period="5d", progress=False)
-                    
+
                     for name, ticker in yf_targets.items():
                         try:
                             if len(tickers_list) > 1:
-                                hist = batch_data.xs(ticker, level=1, axis=1) if isinstance(batch_data.columns, pd.MultiIndex) else batch_data
+                                hist = (
+                                    batch_data.xs(ticker, level=1, axis=1)
+                                    if isinstance(batch_data.columns, pd.MultiIndex)
+                                    else batch_data
+                                )
                             else:
                                 hist = batch_data
-                            
+
                             if not hist.empty and len(hist) >= 1:
                                 current = hist["Close"].iloc[-1]
-                                prev = hist["Close"].iloc[-2] if len(hist) >= 2 else current
-                                change = ((current - prev) / prev) * 100 if prev != 0 else 0
-                                
-                                result[name] = {"price": float(current), "change": float(change), "ticker": ticker}
+                                prev = (
+                                    hist["Close"].iloc[-2]
+                                    if len(hist) >= 2
+                                    else current
+                                )
+                                change = (
+                                    ((current - prev) / prev) * 100 if prev != 0 else 0
+                                )
+
+                                result[name] = {
+                                    "price": float(current),
+                                    "change": float(change),
+                                    "ticker": ticker,
+                                }
                             else:
-                                result[name] = {"price": 0.0, "change": 0.0, "ticker": ticker}
+                                result[name] = {
+                                    "price": 0.0,
+                                    "change": 0.0,
+                                    "ticker": ticker,
+                                }
                         except Exception:
                             pass
             except Exception:
@@ -266,13 +325,17 @@ class DataProvider:
             news = _finnhub_get_company_news(ticker)
             results: List[NewsItem] = []
             for item in news[:max_items]:
-                results.append({
-                    "title": item.get("headline", ""),
-                    "publisher": item.get("source", ""),
-                    "link": item.get("url", ""),
-                    "published": datetime.fromtimestamp(item.get("datetime", 0)).strftime("%Y-%m-%d %H:%M"),
-                    "summary": item.get("summary", "")
-                })
+                results.append(
+                    {
+                        "title": item.get("headline", ""),
+                        "publisher": item.get("source", ""),
+                        "link": item.get("url", ""),
+                        "published": datetime.fromtimestamp(
+                            item.get("datetime", 0)
+                        ).strftime("%Y-%m-%d %H:%M"),
+                        "summary": item.get("summary", ""),
+                    }
+                )
             return results
         except Exception:
             return []
@@ -306,15 +369,24 @@ class DataProvider:
             "country": "",
             "employees": 0,
             "exchange": "",
-            
-            "revenueGrowth": None, "earningsGrowth": None, 
-            "grossMargins": None, "operatingMargins": None, "currentRatio": None,
-            "debtToEquity": None, "returnOnAssets": None, "pegRatio": None,
-            "priceToBook": None, "beta": None,
-            "fifty_two_week_high": None, "fifty_two_week_low": None,
-            "target_price": None, "current_price": None,
-            "market_cap": None, "forward_pe": None, "pe_ratio": None,
-            "share_outstanding": None
+            "revenueGrowth": None,
+            "earningsGrowth": None,
+            "grossMargins": None,
+            "operatingMargins": None,
+            "currentRatio": None,
+            "debtToEquity": None,
+            "returnOnAssets": None,
+            "pegRatio": None,
+            "priceToBook": None,
+            "beta": None,
+            "fifty_two_week_high": None,
+            "fifty_two_week_low": None,
+            "target_price": None,
+            "current_price": None,
+            "market_cap": None,
+            "forward_pe": None,
+            "pe_ratio": None,
+            "share_outstanding": None,
         }
 
         # 1. Finnhub Data
@@ -323,39 +395,44 @@ class DataProvider:
                 # A. Profile
                 profile = get_company_profile(ticker)
                 if profile:
-                    info.update({
-                        "name": profile.get("name", ticker),
-                        "ticker": profile.get("ticker", ticker),
-                        "sector": profile.get("finnhubIndustry", "N/A"),
-                        "industry": profile.get("finnhubIndustry", "N/A"),
-                        "website": profile.get("weburl", ""),
-                        "logo": profile.get("logo", ""),
-                        "exchange": profile.get("exchange", ""),
-                        "country": profile.get("country", ""),
-                        "market_cap": profile.get("marketCapitalization", 0) * 1e6, # Finnhub results in Millions
-                        "share_outstanding": profile.get("shareOutstanding", 0)
-                    })
+                    info.update(
+                        {
+                            "name": profile.get("name", ticker),
+                            "ticker": profile.get("ticker", ticker),
+                            "sector": profile.get("finnhubIndustry", "N/A"),
+                            "industry": profile.get("finnhubIndustry", "N/A"),
+                            "website": profile.get("weburl", ""),
+                            "logo": profile.get("logo", ""),
+                            "exchange": profile.get("exchange", ""),
+                            "country": profile.get("country", ""),
+                            "market_cap": profile.get("marketCapitalization", 0)
+                            * 1e6,  # Finnhub results in Millions
+                            "share_outstanding": profile.get("shareOutstanding", 0),
+                        }
+                    )
 
                 # B. Basic Financials (Metrics)
                 basics = get_basic_financials(ticker)
                 if basics and "metric" in basics:
                     m = basics["metric"]
-                    info.update({
-                        "revenueGrowth": m.get("revenueGrowthQuarterlyYoy"),
-                        "earningsGrowth": m.get("epsGrowthQuarterlyYoy"),
-                        "grossMargins": m.get("grossMarginTTM"),
-                        "operatingMargins": m.get("operatingMarginTTM"),
-                        "currentRatio": m.get("currentRatioQuarterly"),
-                        "debtToEquity": m.get("totalDebt/totalEquityQuarterly"),
-                        "returnOnAssets": m.get("roaTTM"),
-                        "pegRatio": m.get("pegRatioTTM"),
-                        "priceToBook": m.get("pbAnnual"),
-                        "beta": m.get("beta"),
-                        "fifty_two_week_high": m.get("52WeekHigh"),
-                        "fifty_two_week_low": m.get("52WeekLow"),
-                        "pe_ratio": m.get("peTTM"),
-                    })
-                
+                    info.update(
+                        {
+                            "revenueGrowth": m.get("revenueGrowthQuarterlyYoy"),
+                            "earningsGrowth": m.get("epsGrowthQuarterlyYoy"),
+                            "grossMargins": m.get("grossMarginTTM"),
+                            "operatingMargins": m.get("operatingMarginTTM"),
+                            "currentRatio": m.get("currentRatioQuarterly"),
+                            "debtToEquity": m.get("totalDebt/totalEquityQuarterly"),
+                            "returnOnAssets": m.get("roaTTM"),
+                            "pegRatio": m.get("pegRatioTTM"),
+                            "priceToBook": m.get("pbAnnual"),
+                            "beta": m.get("beta"),
+                            "fifty_two_week_high": m.get("52WeekHigh"),
+                            "fifty_two_week_low": m.get("52WeekLow"),
+                            "pe_ratio": m.get("peTTM"),
+                        }
+                    )
+
                 # C. Quote for Current Price
                 quote = _finnhub_get_quote(ticker)
                 if quote:
@@ -369,45 +446,76 @@ class DataProvider:
             # Finnhubで情報が不足している場合、またはキー未設定の場合に実行
             # 必要なキーがNoneかどうかで判断
             needs_fallback = (
-                info["summary"] == "情報なし" or 
-                info["sector"] == "N/A" or 
-                info["revenueGrowth"] is None or
-                info["current_price"] is None
+                info["summary"] == "情報なし"
+                or info["sector"] == "N/A"
+                or info["revenueGrowth"] is None
+                or info["current_price"] is None
             )
-            
+
             if needs_fallback:
                 # Note: Do not pass custom session to yf.Ticker
                 yf_ticker = yf.Ticker(ticker)
                 yf_info = yf_ticker.info
-                
+
                 if yf_info:
                     # Basic Info
-                    if info["name"] == ticker: info["name"] = yf_info.get("longName", yf_info.get("shortName", ticker))
-                    if info["sector"] == "N/A": info["sector"] = yf_info.get("sector", "N/A")
-                    if info["industry"] == "N/A": info["industry"] = yf_info.get("industry", "N/A")
-                    if info["summary"] == "情報なし": info["summary"] = yf_info.get("longBusinessSummary", "")
-                    if not info["website"]: info["website"] = yf_info.get("website", "")
-                    if not info["logo"]: info["logo"] = yf_info.get("logo_url", "")
-                    if info["employees"] == 0: info["employees"] = yf_info.get("fullTimeEmployees", 0)
-                    
+                    if info["name"] == ticker:
+                        info["name"] = yf_info.get(
+                            "longName", yf_info.get("shortName", ticker)
+                        )
+                    if info["sector"] == "N/A":
+                        info["sector"] = yf_info.get("sector", "N/A")
+                    if info["industry"] == "N/A":
+                        info["industry"] = yf_info.get("industry", "N/A")
+                    if info["summary"] == "情報なし":
+                        info["summary"] = yf_info.get("longBusinessSummary", "")
+                    if not info["website"]:
+                        info["website"] = yf_info.get("website", "")
+                    if not info["logo"]:
+                        info["logo"] = yf_info.get("logo_url", "")
+                    if info["employees"] == 0:
+                        info["employees"] = yf_info.get("fullTimeEmployees", 0)
+
                     # Metrics Fallback
-                    if info["market_cap"] is None: info["market_cap"] = yf_info.get("marketCap")
-                    if info["current_price"] is None: info["current_price"] = yf_info.get("currentPrice", yf_info.get("regularMarketPrice"))
-                    if info["revenueGrowth"] is None: info["revenueGrowth"] = yf_info.get("revenueGrowth", 0) * 100 # yf is fraction
-                    if info["earningsGrowth"] is None: info["earningsGrowth"] = yf_info.get("earningsGrowth", 0) * 100
-                    if info["grossMargins"] is None: info["grossMargins"] = yf_info.get("grossMargins", 0) * 100
-                    if info["operatingMargins"] is None: info["operatingMargins"] = yf_info.get("operatingMargins", 0) * 100
-                    if info["currentRatio"] is None: info["currentRatio"] = yf_info.get("currentRatio")
-                    if info["debtToEquity"] is None: info["debtToEquity"] = yf_info.get("debtToEquity")
-                    if info["returnOnAssets"] is None: info["returnOnAssets"] = yf_info.get("returnOnAssets", 0) * 100
-                    if info["pegRatio"] is None: info["pegRatio"] = yf_info.get("pegRatio")
-                    if info["priceToBook"] is None: info["priceToBook"] = yf_info.get("priceToBook")
-                    if info["beta"] is None: info["beta"] = yf_info.get("beta")
-                    if info["fifty_two_week_high"] is None: info["fifty_two_week_high"] = yf_info.get("fiftyTwoWeekHigh")
-                    if info["forward_pe"] is None: info["forward_pe"] = yf_info.get("forwardPE")
-                    if info["target_price"] is None: info["target_price"] = yf_info.get("targetMeanPrice")
-                    if info["pe_ratio"] is None: info["pe_ratio"] = yf_info.get("trailingPE")
-                    
+                    if info["market_cap"] is None:
+                        info["market_cap"] = yf_info.get("marketCap")
+                    if info["current_price"] is None:
+                        info["current_price"] = yf_info.get(
+                            "currentPrice", yf_info.get("regularMarketPrice")
+                        )
+                    if info["revenueGrowth"] is None:
+                        info["revenueGrowth"] = (
+                            yf_info.get("revenueGrowth", 0) * 100
+                        )  # yf is fraction
+                    if info["earningsGrowth"] is None:
+                        info["earningsGrowth"] = yf_info.get("earningsGrowth", 0) * 100
+                    if info["grossMargins"] is None:
+                        info["grossMargins"] = yf_info.get("grossMargins", 0) * 100
+                    if info["operatingMargins"] is None:
+                        info["operatingMargins"] = (
+                            yf_info.get("operatingMargins", 0) * 100
+                        )
+                    if info["currentRatio"] is None:
+                        info["currentRatio"] = yf_info.get("currentRatio")
+                    if info["debtToEquity"] is None:
+                        info["debtToEquity"] = yf_info.get("debtToEquity")
+                    if info["returnOnAssets"] is None:
+                        info["returnOnAssets"] = yf_info.get("returnOnAssets", 0) * 100
+                    if info["pegRatio"] is None:
+                        info["pegRatio"] = yf_info.get("pegRatio")
+                    if info["priceToBook"] is None:
+                        info["priceToBook"] = yf_info.get("priceToBook")
+                    if info["beta"] is None:
+                        info["beta"] = yf_info.get("beta")
+                    if info["fifty_two_week_high"] is None:
+                        info["fifty_two_week_high"] = yf_info.get("fiftyTwoWeekHigh")
+                    if info["forward_pe"] is None:
+                        info["forward_pe"] = yf_info.get("forwardPE")
+                    if info["target_price"] is None:
+                        info["target_price"] = yf_info.get("targetMeanPrice")
+                    if info["pe_ratio"] is None:
+                        info["pe_ratio"] = yf_info.get("trailingPE")
+
         except Exception as e:
             logger.warning(f"yfinance profile fallback failed for {ticker}: {e}")
 

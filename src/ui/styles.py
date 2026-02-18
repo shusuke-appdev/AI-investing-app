@@ -4,6 +4,7 @@ Defines custom CSS for the Streamlit app.
 Adheres to ui-skills: no gradients, flat design, professional color scheme.
 """
 
+
 def get_custom_css() -> str:
     """Returns the custom CSS for the application."""
     return """

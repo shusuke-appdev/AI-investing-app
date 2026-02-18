@@ -2,12 +2,14 @@
 Settings Storage Module
 API設定やGAS URLなどをローカルに永続化します。
 """
+
 import json
-import os
 from pathlib import Path
-from typing import Optional, Any
-from .supabase_client import get_supabase_client
+from typing import Optional
+
 from src.log_config import get_logger
+
+from .supabase_client import get_supabase_client
 
 logger = get_logger(__name__)
 
@@ -86,7 +88,10 @@ def save_settings(settings: dict) -> bool:
         if settings.get("storage_type") == "supabase":
             client = get_supabase_client()
             if client:
-                upsert_data = [{"key": k, "value": str(v), "updated_at": "now()"} for k, v in settings.items()]
+                upsert_data = [
+                    {"key": k, "value": str(v), "updated_at": "now()"}
+                    for k, v in settings.items()
+                ]
                 client.table("user_settings").upsert(upsert_data).execute()
 
         _settings_cache = settings.copy()
@@ -100,11 +105,11 @@ def save_settings(settings: dict) -> bool:
 def get_setting(key: str, default=None):
     """
     特定の設定値を取得します。
-    
+
     Args:
         key: 設定キー
         default: デフォルト値
-        
+
     Returns:
         設定値
     """
@@ -115,11 +120,11 @@ def get_setting(key: str, default=None):
 def set_setting(key: str, value) -> bool:
     """
     特定の設定値を保存します。
-    
+
     Args:
         key: 設定キー
         value: 設定値
-        
+
     Returns:
         成功時True
     """
@@ -130,11 +135,13 @@ def set_setting(key: str, value) -> bool:
 
 # === 便利関数 ===
 
+
 def get_gemini_api_key() -> str:
     """Gemini APIキーを取得（Streamlit secrets対応）"""
     # 1. Streamlit secretsから取得
     try:
         import streamlit as st
+
         if "GEMINI_API_KEY" in st.secrets:
             return st.secrets["GEMINI_API_KEY"]
     except Exception:
@@ -153,6 +160,7 @@ def get_gas_url() -> str:
     # 1. Streamlit secretsから取得
     try:
         import streamlit as st
+
         if "GAS_WEBAPP_URL" in st.secrets:
             return st.secrets["GAS_WEBAPP_URL"]
     except Exception:
@@ -181,6 +189,7 @@ def get_finnhub_api_key() -> str:
     # 1. Streamlit secretsから取得
     try:
         import streamlit as st
+
         if "FINNHUB_API_KEY" in st.secrets:
             return st.secrets["FINNHUB_API_KEY"]
     except Exception:

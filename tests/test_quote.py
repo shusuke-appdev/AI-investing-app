@@ -1,5 +1,6 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.getcwd(), "src"))
 from finnhub_client import get_quote
 
@@ -8,9 +9,11 @@ sys.path.insert(0, os.getcwd())
 # Load .env
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
-except:
+except Exception:
     pass
+
 
 def main():
     ticker = "AAPL"
@@ -24,6 +27,7 @@ def main():
             print("Quote Fetch Failed or Empty")
     except Exception as e:
         print(f"Exception: {e}")
+
 
 if __name__ == "__main__":
     main()

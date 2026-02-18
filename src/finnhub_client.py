@@ -2,56 +2,75 @@
 Finnhub APIクライアントモジュール
 レート制限ハンドリング・リトライ・キャッシュ内蔵。
 """
+
 import json
-import time
 import threading
-import pandas as pd
+import time
+
 # import streamlit as st  # Removed UI dependency
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
+
 import finnhub
-from src.settings_storage import get_finnhub_api_key
+import pandas as pd
+
 from src.log_config import get_logger
+from src.settings_storage import get_finnhub_api_key
 
 logger = get_logger(__name__)
+
 
 # --- Custom Exceptions ---
 class FinnhubError(Exception):
     """Base exception for Finnhub client errors."""
+
     pass
+
 
 class FinnhubConfigError(FinnhubError):
     """Raised when API key is missing or invalid."""
+
     pass
+
 
 class FinnhubRateLimitError(FinnhubError):
     """Raised when rate limit is exceeded."""
+
     pass
+
 
 class FinnhubNetworkError(FinnhubError):
     """Raised when network issues occur."""
+
     pass
 
+
 # --- クライアント初期化 ---
+
 
 def _get_api_key() -> str:
     """APIキーを取得（Streamlit依存を最小限に）"""
     # 1. Session State (if available)
     try:
         import streamlit as st
+
         if hasattr(st, "session_state"):
             key = st.session_state.get("finnhub_api_key")
-            if key: return key
+            if key:
+                return key
     except ImportError:
         pass
 
     # 2. Environment Variable
     import os
+
     key = os.environ.get("FINNHUB_API_KEY")
-    if key: return key
+    if key:
+        return key
 
     # 3. Settings Storage
     return get_finnhub_api_key()
+
 
 def _get_client() -> Optional[finnhub.Client]:
     """Finnhubクライアントを取得"""
@@ -72,6 +91,7 @@ _last_call_time = 0.0
 _MIN_INTERVAL = 1.1  # 秒
 _rate_lock = threading.Lock()
 
+
 def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
     """
     レート制限付きAPI呼び出し。
@@ -90,7 +110,7 @@ def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
             return func(*args, **kwargs)
         except finnhub.FinnhubAPIException as e:
             if e.status_code == 429:
-                wait = 2 ** attempt
+                wait = 2**attempt
                 logger.warning(f"Rate Limit (429). Retrying in {wait}s...")
                 time.sleep(wait)
             elif e.status_code == 401 or e.status_code == 403:
@@ -105,12 +125,13 @@ def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
                 time.sleep(1)
             else:
                 raise FinnhubNetworkError(f"Network Error: {e}")
-    
-    logger.error(f"Max retries exceeded.")
+
+    logger.error("Max retries exceeded.")
     raise FinnhubRateLimitError("Max retries exceeded")
 
 
 # --- 株価データ ---
+
 
 def get_quote(symbol: str) -> Optional[dict]:
     """
@@ -128,7 +149,7 @@ def get_quote(symbol: str) -> Optional[dict]:
     try:
         data = _rate_limited_call(client.quote, symbol)
         if not data or data.get("c") == 0:
-             logger.warning(f"Quote for {symbol} is empty or zero: {data}")
+            logger.warning(f"Quote for {symbol} is empty or zero: {data}")
         return data
     except Exception as e:
         logger.error(f"Quote error ({symbol}): {e}")
@@ -140,7 +161,7 @@ def get_candles(
     resolution: str = "D",
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
-    period_days: int = 30
+    period_days: int = 30,
 ) -> pd.DataFrame:
     """
     OHLCVローソク足データを取得しDataFrameで返す。
@@ -168,24 +189,31 @@ def get_candles(
     to_ts = int(to_date.timestamp())
 
     try:
-        data = _rate_limited_call(client.stock_candles, symbol, resolution, from_ts, to_ts)
+        data = _rate_limited_call(
+            client.stock_candles, symbol, resolution, from_ts, to_ts
+        )
     except Exception as e:
         logger.error(f"Candles error ({symbol}): {e}")
         return pd.DataFrame()
 
     if not data or data.get("s") != "ok":
-        logger.warning(f"No candle data for {symbol} (status: {data.get('s') if data else 'None'})")
+        logger.warning(
+            f"No candle data for {symbol} (status: {data.get('s') if data else 'None'})"
+        )
         # DEBUG
         logger.debug(f"data={data}")
         return pd.DataFrame()
 
-    df = pd.DataFrame({
-        "Open": data["o"],
-        "High": data["h"],
-        "Low": data["l"],
-        "Close": data["c"],
-        "Volume": data["v"],
-    }, index=pd.to_datetime(data["t"], unit="s"))
+    df = pd.DataFrame(
+        {
+            "Open": data["o"],
+            "High": data["h"],
+            "Low": data["l"],
+            "Close": data["c"],
+            "Volume": data["v"],
+        },
+        index=pd.to_datetime(data["t"], unit="s"),
+    )
     df.index.name = "Date"
     df.sort_index(inplace=True)
     return df
@@ -193,9 +221,9 @@ def get_candles(
 
 # --- オプションデータ ---
 
+
 def get_option_chain(
-    symbol: str,
-    max_expirations: int = 4
+    symbol: str, max_expirations: int = 4
 ) -> Optional[Tuple[pd.DataFrame, pd.DataFrame]]:
     """
     Finnhubからオプションチェーンデータを取得。
@@ -294,6 +322,7 @@ def _normalize_option_contract(contract: dict, expiration_date: str) -> dict:
 
 # --- 企業情報 ---
 
+
 def get_company_profile(symbol: str) -> Optional[dict]:
     """
     企業プロフィールを取得。
@@ -330,7 +359,7 @@ def get_basic_financials(symbol: str) -> Optional[dict]:
     if not client:
         return None
     try:
-        return _rate_limited_call(client.company_basic_financials, symbol, 'all')
+        return _rate_limited_call(client.company_basic_financials, symbol, "all")
     except Exception as e:
         logger.error(f"Finnhub financials error ({symbol}): {e}")
         return None
@@ -338,10 +367,9 @@ def get_basic_financials(symbol: str) -> Optional[dict]:
 
 # --- ニュース ---
 
+
 def get_company_news(
-    symbol: str,
-    from_date: Optional[str] = None,
-    to_date: Optional[str] = None
+    symbol: str, from_date: Optional[str] = None, to_date: Optional[str] = None
 ) -> list[dict]:
     """
     銘柄関連ニュースを取得。
@@ -364,7 +392,10 @@ def get_company_news(
         from_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
 
     try:
-        return _rate_limited_call(client.company_news, symbol, _from=from_date, to=to_date) or []
+        return (
+            _rate_limited_call(client.company_news, symbol, _from=from_date, to=to_date)
+            or []
+        )
     except Exception as e:
         logger.error(f"Finnhub news error ({symbol}): {e}")
         return []
@@ -392,6 +423,7 @@ def get_market_news(category: str = "general") -> list[dict]:
 
 # --- 決算データ ---
 
+
 def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
     """
     EPSサプライズデータを取得。
@@ -414,8 +446,7 @@ def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
 
 
 def get_earnings_calendar(
-    from_date: Optional[str] = None,
-    to_date: Optional[str] = None
+    from_date: Optional[str] = None, to_date: Optional[str] = None
 ) -> list[dict]:
     """
     決算カレンダーを取得。
@@ -438,7 +469,9 @@ def get_earnings_calendar(
         from_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
 
     try:
-        result = _rate_limited_call(client.earnings_calendar, _from=from_date, to=to_date, symbol="")
+        result = _rate_limited_call(
+            client.earnings_calendar, _from=from_date, to=to_date, symbol=""
+        )
         return result.get("earningsCalendar", []) if result else []
     except Exception as e:
         logger.error(f"Finnhub earnings calendar error: {e}")
@@ -446,6 +479,7 @@ def get_earnings_calendar(
 
 
 # --- 財務諸表 ---
+
 
 def get_financials_reported(symbol: str, freq: str = "quarterly") -> list[dict]:
     """
@@ -463,7 +497,9 @@ def get_financials_reported(symbol: str, freq: str = "quarterly") -> list[dict]:
     if not client:
         return []
     try:
-        result = _rate_limited_call(client.financials_reported, symbol=symbol, freq=freq)
+        result = _rate_limited_call(
+            client.financials_reported, symbol=symbol, freq=freq
+        )
         return result.get("data", []) if result else []
     except Exception as e:
         logger.error(f"Finnhub financials reported error ({symbol}): {e}")

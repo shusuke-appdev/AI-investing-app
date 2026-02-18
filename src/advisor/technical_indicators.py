@@ -4,9 +4,8 @@
 RSI, MA乖離率, MAトレンド, MACD, ボリンジャーバンド, ATR,
 サポート/レジスタンス, 逆張りゾーンの計算関数を提供します。
 """
+
 import pandas as pd
-import numpy as np
-from typing import Optional
 
 
 def calculate_rsi(close_prices: pd.Series, period: int = 14) -> float:
@@ -32,11 +31,11 @@ def calculate_ma_trend(close_prices: pd.Series) -> str:
     """移動平均トレンドを判定（20/50/200日）。"""
     if len(close_prices) < 200:
         return "データ不足"
-    
+
     ma20 = close_prices.rolling(20).mean().iloc[-1]
     ma50 = close_prices.rolling(50).mean().iloc[-1]
     ma200 = close_prices.rolling(200).mean().iloc[-1]
-    
+
     if ma20 > ma50 > ma200:
         return "上昇トレンド"
     elif ma20 < ma50 < ma200:
@@ -81,7 +80,11 @@ def calculate_macd_signal(close_prices: pd.Series) -> dict:
 
     zero_filter = "above_zero" if macd.iloc[-1] > 0 else "below_zero"
 
-    return {"signal": basic_signal, "hist_slope": hist_slope, "zero_filter": zero_filter}
+    return {
+        "signal": basic_signal,
+        "hist_slope": hist_slope,
+        "zero_filter": zero_filter,
+    }
 
 
 def calculate_bollinger_bands(
@@ -90,15 +93,15 @@ def calculate_bollinger_bands(
     """ボリンジャーバンドを計算する。"""
     ma = close_prices.rolling(window=period).mean()
     std = close_prices.rolling(window=period).std()
-    
+
     upper = ma + (std * std_dev)
     lower = ma - (std * std_dev)
-    
+
     current_price = close_prices.iloc[-1]
     upper_val = upper.iloc[-1]
     lower_val = lower.iloc[-1]
     ma_val = ma.iloc[-1]
-    
+
     width = ((upper_val - lower_val) / ma_val * 100) if ma_val > 0 else 0
 
     if current_price > upper_val:
@@ -109,7 +112,7 @@ def calculate_bollinger_bands(
         position = "上半分"
     else:
         position = "下半分"
-    
+
     return {
         "upper": float(upper_val),
         "lower": float(lower_val),
@@ -124,15 +127,15 @@ def calculate_atr(
 ) -> dict:
     """ATR（Average True Range）を計算する。"""
     prev_close = close.shift(1)
-    tr = pd.concat([
-        high - low, abs(high - prev_close), abs(low - prev_close)
-    ], axis=1).max(axis=1)
+    tr = pd.concat(
+        [high - low, abs(high - prev_close), abs(low - prev_close)], axis=1
+    ).max(axis=1)
     atr = tr.rolling(window=period).mean()
-    
+
     atr_val = float(atr.iloc[-1]) if pd.notna(atr.iloc[-1]) else 0.0
     current_price = close.iloc[-1]
     atr_percent = (atr_val / current_price * 100) if current_price > 0 else 0.0
-    
+
     return {"atr": atr_val, "atr_percent": atr_percent}
 
 

@@ -2,10 +2,13 @@
 オプション分析UIコンポーネント
 個別銘柄のオプション市場構造（PCR, GEX, Max Pain, IV）を可視化します。
 """
-import streamlit as st
+
+from typing import Optional
+
 import pandas as pd
 import plotly.graph_objects as go
-from typing import Optional
+import streamlit as st
+
 from src.option_analyst import analyze_option_sentiment
 
 
@@ -31,7 +34,9 @@ def render_option_analysis(ticker: str) -> None:
             return
 
     if not analysis:
-        st.info("オプションデータが見つかりませんでした（非対象銘柄またはデータ不足）。")
+        st.info(
+            "オプションデータが見つかりませんでした（非対象銘柄またはデータ不足）。"
+        )
         return
 
     _render_sentiment_metrics(analysis)

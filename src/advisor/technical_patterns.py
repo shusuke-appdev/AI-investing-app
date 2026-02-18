@@ -4,9 +4,9 @@
 極値検出 (Higher Highs/Lower Lows) および
 ローソク足パターン認識 (pandas-ta利用) の関数を提供します。
 """
-import pandas as pd
+
 import numpy as np
-from typing import Optional
+import pandas as pd
 
 
 def detect_peaks_valleys(
@@ -50,8 +50,12 @@ def detect_peaks_valleys(
 
 
 def detect_candlestick_patterns(
-    open_: pd.Series, high: pd.Series, low: pd.Series, close: pd.Series,
-    rsi: float = 50.0, bb_position: str = "中間",
+    open_: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    rsi: float = 50.0,
+    bb_position: str = "中間",
 ) -> dict:
     """
     ローソク足パターン認識（pandas-ta）。
@@ -62,19 +66,35 @@ def detect_candlestick_patterns(
         {"patterns": list[dict], "summary": str, "score_adjustment": float}
     """
     try:
-        import pandas_ta as ta
+        import importlib.util
+
+        if importlib.util.find_spec("pandas_ta") is None:
+            raise ImportError
+        import pandas_ta as ta  # noqa: F401
     except ImportError:
         return {"patterns": [], "summary": "ライブラリなし", "score_adjustment": 0.0}
 
     target_patterns = [
-        "engulfing", "hammer", "invertedhammer", "morningstar", "eveningstar",
-        "3whitesoldiers", "3blackcrows", "doji", "shootingstar", "hangingman",
+        "engulfing",
+        "hammer",
+        "invertedhammer",
+        "morningstar",
+        "eveningstar",
+        "3whitesoldiers",
+        "3blackcrows",
+        "doji",
+        "shootingstar",
+        "hangingman",
     ]
 
-    df = pd.DataFrame({
-        "open": open_.values, "high": high.values,
-        "low": low.values, "close": close.values,
-    })
+    df = pd.DataFrame(
+        {
+            "open": open_.values,
+            "high": high.values,
+            "low": low.values,
+            "close": close.values,
+        }
+    )
 
     detected: list[dict] = []
     for pattern_name in target_patterns:

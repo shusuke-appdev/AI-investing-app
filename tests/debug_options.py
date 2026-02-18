@@ -1,19 +1,18 @@
-
-import sys
 import os
+import sys
+
 import yfinance as yf
-import pandas as pd
-from datetime import datetime
 
 # Add src to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.option_analyst import get_major_indices_options
 from src.market_data import get_option_chain
+from src.option_analyst import get_major_indices_options
+
 
 def test_options():
     print("\n--- Testing Option Data Fetching ---")
-    
+
     # Test 1: Direct yfinance call for SPY
     ticker = "SPY"
     print(f"1. Testing yf.Ticker('{ticker}').options...")
@@ -45,9 +44,12 @@ def test_options():
         analysis = get_major_indices_options("US")
         print(f"   Analysis result items: {len(analysis)}")
         for item in analysis:
-            print(f"   - {item.get('ticker')}: {item.get('sentiment')} (PCR: {item.get('pcr', {}).get('oi_pcr')})")
+            print(
+                f"   - {item.get('ticker')}: {item.get('sentiment')} (PCR: {item.get('pcr', {}).get('oi_pcr')})"
+            )
     except Exception as e:
         print(f"   [ERROR] get_major_indices_options error: {e}")
+
 
 if __name__ == "__main__":
     test_options()
