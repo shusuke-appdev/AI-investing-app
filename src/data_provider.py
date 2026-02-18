@@ -44,6 +44,8 @@ from src.finnhub_client import (
 from src.log_config import get_logger
 from src.market_config import get_market_config
 from src.models import MarketIndex, NewsItem, StockInfo
+from src.utils.translator import translate_to_japanese
+
 
 logger = get_logger(__name__)
 
@@ -537,6 +539,14 @@ class DataProvider:
 
         except Exception as e:
             logger.warning(f"yfinance profile fallback failed for {ticker}: {e}")
+
+        except Exception as e:
+            logger.warning(f"yfinance profile fallback failed for {ticker}: {e}")
+
+        # Translate summary to Japanese if needed
+        # This is cached by st.cache_data on get_stock_info, so we don't need extra caching here
+        if info["summary"] and info["summary"] != "情報なし":
+             info["summary"] = translate_to_japanese(info["summary"])
 
         return info
 
