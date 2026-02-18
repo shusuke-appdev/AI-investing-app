@@ -217,6 +217,11 @@ def _render_option_analysis(market_type: str = "US"):
             st.session_state.option_analysis = get_major_indices_options(market_type)
         option_analysis = st.session_state.option_analysis
 
+        # タイムスタンプ取得 (リストの最初の要素から代表して取得)
+        fetched_at = option_analysis[0].get("fetched_at") if option_analysis else None
+        if fetched_at:
+            st.caption(f"データ取得日時: {fetched_at}")
+
     if not option_analysis:
         st.info("オプションデータを取得できませんでした")
         return

@@ -4,6 +4,7 @@ GEX (Gamma Exposure)、PCR (Put/Call Ratio)、Gamma Wallの計算を行います
 Finnhub APIから取得したGreeksを活用し、より正確な分析を提供します。
 """
 
+from datetime import datetime
 from typing import Optional, Tuple
 
 import numpy as np
@@ -24,7 +25,7 @@ def _fetch_option_data(
     オプションチェーンと現在価格を1回で取得する内部ヘルパー。
 
     Returns:
-        (calls_df, puts_df, current_price) のタプル、またはNone
+        (calls_df, puts_df, current_price, fetched_at) のタプル、またはNone
     """
     option_data = get_option_chain(ticker)
     if option_data is None:
@@ -33,12 +34,16 @@ def _fetch_option_data(
     calls, puts = option_data
 
     # 現在価格取得（DataProvider経由: Finnhub→yfinanceフォールバック内蔵）
+    # Note: timestamp is not directly returned by get_current_price, so we use current time
+    # Strictly speaking we should get time from quote, but for now system time is enough for "freshness" check
+    # to show user when THIS analysis was run.
     current_price = DataProvider.get_current_price(ticker)
+    now_str = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
     if not current_price:
         return None
 
-    return calls, puts, current_price
+    return calls, puts, current_price, now_str
 
 
 # ============================================================
@@ -114,7 +119,7 @@ def calculate_gex(
         fetched = _fetch_option_data(ticker)
         if fetched is None:
             return None
-        calls, puts, current_price = fetched
+        calls, puts, current_price, _ = fetched
 
     gex_data = []
 
@@ -225,7 +230,7 @@ def calculate_atm_iv(
         fetched = _fetch_option_data(ticker)
         if fetched is None:
             return None
-        calls, puts, current_price = fetched
+        calls, puts, current_price, _ = fetched
 
     nearby_calls = calls[
         (calls["strike"] >= current_price * 0.98)
@@ -275,7 +280,7 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
     fetched = _fetch_option_data(ticker)
     if fetched is None:
         return None
-    calls, puts, current_price = fetched
+    calls, puts, current_price, fetched_at = fetched
 
     # === 各指標を事前取得済みデータで計算 ===
     pcr = calculate_pcr(ticker, calls=calls, puts=puts)
@@ -337,6 +342,7 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
         "iv": iv,
         "max_pain": max_pain,
         "analysis": analysis,
+        "fetched_at": fetched_at,
     }
 
 

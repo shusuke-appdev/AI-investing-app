@@ -283,6 +283,23 @@ class DataProvider:
                             else:
                                 hist = batch_data
 
+                            # Handle MultiIndex column issue where xs might fail or result is still DataFrame
+                            if isinstance(hist, pd.DataFrame):
+                                # If columns are MultiIndex, try to droplevel or access
+                                if isinstance(hist.columns, pd.MultiIndex):
+                                    try:
+                                        hist = hist.xs(ticker, level=1, axis=1)
+                                    except Exception:
+                                        pass
+                            
+                            # Fallback: specific manual fetch if batch failed for this ticker
+                            if hist.empty:
+                                try:
+                                    # Fallback for individual ticker (especially ^TNX can be tricky in batch)
+                                    hist = yf.Ticker(ticker).history(period="5d")
+                                except Exception:
+                                    pass
+
                             if not hist.empty and len(hist) >= 1:
                                 current = hist["Close"].iloc[-1]
                                 prev = (
@@ -401,6 +418,8 @@ class DataProvider:
                             "ticker": profile.get("ticker", ticker),
                             "sector": profile.get("finnhubIndustry", "N/A"),
                             "industry": profile.get("finnhubIndustry", "N/A"),
+                            # "description" is often where the summary is in Finnhub profile2
+                            "summary": profile.get("description", "情報なし"),
                             "website": profile.get("weburl", ""),
                             "logo": profile.get("logo", ""),
                             "exchange": profile.get("exchange", ""),
