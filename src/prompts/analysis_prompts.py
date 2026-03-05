@@ -10,7 +10,7 @@ STOCK_ANALYSIS_PROMPT_TEMPLATE = """あなたはエクイティリサーチア�
 - 企業名: {company_name}
 - セクター: {sector}
 - 業種: {industry}
-- 時価総額: ${market_cap/1e9:.2f}B
+- 時価総額: ${market_cap_b:.2f}B
 - 現在株価: ${price:.2f}
 - PER (直近): {pe_ratio}
 - PER (予想): {forward_pe}
@@ -62,7 +62,7 @@ QUICK_SUMMARY_PROMPT_TEMPLATE = """以下の銘柄について、1-2文で簡潔
 ティッカー: {ticker}
 企業名: {company_name}
 セクター: {sector}
-時価総額: ${market_cap/1e9:.2f}B
+時価総額: ${market_cap_b:.2f}B
 PER: {pe_ratio}
 
 日本語で、だ・である調で回答。"""
@@ -79,6 +79,7 @@ Synthesize fragmented information into a coherent "Narrative" with deep structur
 3. **Reaction Function**: Focus on HOW the market *reacts*, not just the data. (Bad news + Stocks↑ = Liquidity play?)
 4. **Flow Analysis**: Infer "Smart Money" positioning vs. "Retail" sentiment from price action and options.
 5. **Confluence Check**: Do Technicals support Fundamentals? Identify divergences.
+6. **Market Themes**: Identify 2-3 specific, actionable market themes (e.g., policy shifts, AI infrastructure spending patterns, or specific sector rotation flows) that are dictating current overall dynamics.
 
 # CROSS-ASSET LINKAGE FRAMEWORK (CRITICAL - Apply Throughout)
 Do NOT analyze each asset class in isolation. Identify and explain these linkages:
@@ -131,12 +132,16 @@ Do NOT analyze each asset class in isolation. Identify and explain these linkage
 - 需給歪みリスク（0DTE、強制需要、ウォッシュアウト）。
 - Extreme Positioning判定 (Euphoria vs Capitulation) と Smart Money vs Retail の乖離。
 
-**E. テクニカル・ブレッス**
+**E. テクニカル・ブレッスとファンダメンタルズの交錯**
+- ファンダメンタル(企業業績、マクロ指標等)とテクニカル/フロー(オシレーター、移動平均、需給等)の動きを明確に区別し、それらがどう交錯・乖離しているか評価。
 - 内部構造の評価：ブレッドス、参加率、マクレランオシレーター。
 - 主要移動平均（20EMA/50SMA/200SMA）との乖離とサポート/レジスタンス。
 - Momentum (RSI/MACD) とセクター間スプレッド。
 
-*(Dense, assertive narrative paragraph - integrate A through E into a cohesive story)*
+**F. 今日の市場テーマ (Market Themes)**
+- **必ず2つから3つの具体的な今日の市場テーマ**（全体のナラティブ、特定の注目銘柄の動き、経済政策動向など幅広く対象とする）を設定し、詳細に分析を記述すること。
+
+*(Dense, assertive narrative paragraph - integrate A through F into a cohesive story)*
 
 ---
 
@@ -166,7 +171,9 @@ Do NOT analyze each asset class in isolation. Identify and explain these linkage
 
 - **Main Scenario**: [Bullish/Bearish/Neutral] - トリガーレベル明示（例：S&P500 5,200突破で上目線加速）
 - **Risk Scenario**: 逆シナリオと発動条件（例：VIX 20超で調整リスク顕在化）
-- **Key Catalysts (今後1-2週間)**:
+- **Key Catalysts & Events (今後1-2週間)**:
+  - SQ（メジャーSQ/マイナーSQ）やオプション満期など、需給に直結するイベントを含めること。
+  - 各々の定例イベントや注目スケジュールに対して、簡潔に「見通し・予想される市場の反応」を必ず追記すること。
   - 決算発表スケジュール（注目銘柄）
   - 経済指標（CPI, 雇用統計, PMI等）
   - FRB/中銀イベント

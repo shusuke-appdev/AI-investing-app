@@ -70,3 +70,37 @@ def send_message(message: str, context: str = "") -> str:
         return response.text
     except Exception as e:
         return f"エラーが発生しました: {str(e)}"
+
+def get_market_chat_response(prompt: str, history: list[dict], system_context: str) -> str:
+    """市場分析チャット専用の応答生成"""
+    try:
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+        
+        system_prompt = f"""あなたはウォール街の凄腕マクロクオンツアナリストです。
+プロフェッショナルで、無駄のないトーン（だ・である調）で回答してください。
+以下の市場分析レポート（コンテキスト）を前提知識として、ユーザーの質問に答えてください。
+
+【コンテキスト】
+{system_context}
+
+回答ルール:
+- コンテキストの内容に関連する質問には、レポートの具体例や数値を引用して回答
+- 意見を聞かれた場合は、アナリストとしての客観的視点を述べる
+- 簡潔でデータドリブンな回答を心がける
+"""
+        
+        # historyをGeminiのフォーマットに変換
+        gemini_history = []
+        gemini_history.append({"role": "user", "parts": [system_prompt]})
+        gemini_history.append({"role": "model", "parts": ["承知した。"]})
+        
+        for msg in history:
+            role = "user" if msg["role"] == "user" else "model"
+            content = msg["content"]
+            gemini_history.append({"role": role, "parts": [content]})
+            
+        session = model.start_chat(history=gemini_history)
+        response = session.send_message(prompt)
+        return response.text
+    except Exception as e:
+        return f"考えをまとめるのに失敗したようだ: {str(e)}"

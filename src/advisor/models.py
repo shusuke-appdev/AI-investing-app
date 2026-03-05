@@ -127,6 +127,9 @@ class TechnicalScore:
     )  # [{"name": str, "signal": int}, ...]
     candlestick_summary: str = ""  # bullish/bearish/neutral
 
+    # === Minervini Extension ===
+    stage_data: dict = field(default_factory=dict) # {"stage": int, "description": str}
+    vcp_data: dict = field(default_factory=dict) # {"is_vcp": bool, "breakout_price": float, ...}
 
 @dataclass
 class TechnicalAnalysis:

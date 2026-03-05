@@ -293,14 +293,15 @@ class DataProvider:
                                         hist = hist.xs(ticker, level=1, axis=1)
                                     except Exception:
                                         pass
-                            
                             # Fallback: specific manual fetch if batch failed for this ticker
-                            if hist.empty:
-                                try:
-                                    # Fallback for individual ticker (especially ^TNX can be tricky in batch)
-                                    hist = yf.Ticker(ticker).history(period="5d")
-                                except Exception:
-                                    pass
+                            # Fallback for individual ticker (especially ^TNX can be tricky in batch)
+                            try:
+                                # Use a period of 5d to ensure we get at least some recent valid rows
+                                single_hist = yf.Ticker(ticker).history(period="5d")
+                                if not single_hist.empty:
+                                    hist = single_hist
+                            except Exception as e:
+                                logger.warning(f"Fallback fetch failed for {ticker}: {e}")
 
                             if not hist.empty and len(hist) >= 1:
                                 current = hist["Close"].iloc[-1]

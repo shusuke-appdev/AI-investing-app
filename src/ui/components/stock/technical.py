@@ -158,3 +158,26 @@ def _render_detail_section(tech) -> None:
             st.caption(f"ローソク足: {', '.join(names)}")
         else:
             st.caption("ローソク足: 検出なし")
+
+    # --- Minervini手法 ---
+    if getattr(tech, "stage_data", None) or getattr(tech, "vcp_data", None):
+        st.divider()
+        st.caption("**ミネルヴィニ分析**")
+        m1, m2 = st.columns(2)
+        with m1:
+            stage_info = getattr(tech, "stage_data", {})
+            stage_num = stage_info.get("stage", 0)
+            stage_desc = stage_info.get("description", "判定不能")
+            
+            stage_icon = "🚀" if stage_num == 2 else "📉" if stage_num == 4 else "⏳"
+            st.caption(f"ステージ: {stage_icon} **{stage_desc}**")
+            
+        with m2:
+            vcp_info = getattr(tech, "vcp_data", {})
+            if vcp_info.get("is_vcp"):
+                contractions = vcp_info.get("contractions", 0)
+                breakout = vcp_info.get("breakout_price", 0)
+                st.caption(f"VCP検知: 🟢 **{contractions}回の収縮**")
+                st.caption(f"ブレイクアウト目処: **${breakout:.2f}**")
+            else:
+                st.caption("VCP検知: ⚪ なし")

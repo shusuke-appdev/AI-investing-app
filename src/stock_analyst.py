@@ -62,12 +62,14 @@ def analyze_stock(
     # プロンプト構築
     from src.prompts.analysis_prompts import STOCK_ANALYSIS_PROMPT_TEMPLATE
 
+    market_cap_b = market_cap / 1e9 if isinstance(market_cap, (int, float)) else 0
+
     prompt = STOCK_ANALYSIS_PROMPT_TEMPLATE.format(
         ticker=ticker,
         company_name=company_name,
         sector=sector,
         industry=industry,
-        market_cap=market_cap,
+        market_cap_b=market_cap_b,
         price=price,
         pe_ratio=pe_ratio,
         forward_pe=forward_pe,
@@ -97,13 +99,15 @@ def get_quick_summary(ticker: str, stock_info: dict) -> str:
     market_cap = stock_info.get("marketCap", 0)
     pe_ratio = stock_info.get("trailingPE", "N/A")
 
+    market_cap_b = market_cap / 1e9 if isinstance(market_cap, (int, float)) else 0
+
     from src.prompts.analysis_prompts import QUICK_SUMMARY_PROMPT_TEMPLATE
 
     prompt = QUICK_SUMMARY_PROMPT_TEMPLATE.format(
         ticker=ticker,
         company_name=company_name,
         sector=sector,
-        market_cap=market_cap,
+        market_cap_b=market_cap_b,
         pe_ratio=pe_ratio,
     )
 

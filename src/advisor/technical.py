@@ -46,6 +46,7 @@ from src.advisor.technical_scoring import (
     calc_pattern_score,
     calc_trend_score,
 )
+from src.advisor.minervini_analyzer import analyze_stage, detect_vcp
 from src.market_data import get_stock_data
 
 
@@ -107,6 +108,13 @@ def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScor
     candlestick = detect_candlestick_patterns(
         open_, high, low, close, rsi, bb["position"]
     )
+
+    # Minervini分析
+    stage_res = analyze_stage(df)
+    is_vcp, vcp_res = detect_vcp(df)
+    vcp_data_out = vcp_res if is_vcp and vcp_res else {"is_vcp": False}
+    if is_vcp and vcp_res:
+        vcp_data_out["is_vcp"] = True
 
     # オプション分析 & スコアリング
     opt_data = analyze_options_data(ticker, current_price)
@@ -213,6 +221,8 @@ def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScor
         pcr_signal=opt_data["pcr_signal"],
         atm_iv=opt_data["atm_iv"],
         max_pain=opt_data["max_pain"],
+        stage_data=stage_res,
+        vcp_data=vcp_data_out,
     )
 
 

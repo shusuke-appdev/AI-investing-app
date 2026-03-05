@@ -45,7 +45,14 @@ def render_market_tab():
     if st.session_state.get("ai_recap"):
         st.divider()
         with st.container(border=True):
-            st.markdown("### 🤖 AI分析レポート")
+            cols = st.columns([4, 1])
+            with cols[0]:
+                st.markdown("### 🤖 AI分析レポート")
+            with cols[1]:
+                # チャット用Popover
+                with st.popover("💬 AIに質問", use_container_width=True):
+                    _render_market_chat()
+
             # Generate markdown, escaping dollar signs to prevent LaTeX rendering issues
             import re
 
@@ -84,6 +91,54 @@ def _generate_ai_recap(market_type: str = "US"):
             logger.error(f"AI Recap Error: {e}")
 
 
+def _render_market_chat():
+    """AIに質問するチャットUI"""
+    st.markdown("#### 💬 AIと議論する")
+    st.caption("AI分析レポートや現在のニュースについて質問できます")
+
+    if "market_chat_history" not in st.session_state:
+        st.session_state.market_chat_history = []
+
+    # チャット履歴表示エリア（高さ固定）
+    chat_container = st.container(height=400)
+    with chat_container:
+        for msg in st.session_state.market_chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+    # 入力フォーム
+    if prompt := st.chat_input("質問を入力してください...（例：金利はどう動いてた？）"):
+        # ユーザーの入力を履歴に追加して表示
+        st.session_state.market_chat_history.append(
+            {"role": "user", "content": prompt}
+        )
+        with chat_container:
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+        # AIからの応答を取得
+        with chat_container:
+            with st.chat_message("assistant"):
+                with st.spinner("思考中..."):
+                    from src.chat_service import get_market_chat_response
+
+                    context = st.session_state.get("ai_recap", "")
+                    # news_context could be fetched here or from market_analyst_service
+                    
+                    response = get_market_chat_response(
+                        prompt=prompt,
+                        history=st.session_state.market_chat_history,
+                        system_context=context,
+                    )
+                    st.markdown(response)
+
+        # AIの応答を履歴に追加
+        st.session_state.market_chat_history.append(
+            {"role": "assistant", "content": response}
+        )
+        st.rerun()
+
+
 def _render_flash_summary(market_data, market_type: str = "US"):
     """Flash Summaryを資産クラス別にボックス化して表示"""
     from src.market_config import get_market_config
@@ -91,6 +146,22 @@ def _render_flash_summary(market_data, market_type: str = "US"):
     config = get_market_config(market_type)
 
     st.markdown("### 📌 Flash Summary")
+    
+    # --- FTD (Follow-Through Day) アラート ---
+    from src.advisor.minervini_analyzer import detect_follow_through_day
+    from src.market_data import get_stock_data
+    
+    # 代表的な指数でFTDを監視
+    benchmarks = {"US": "SPY", "JP": "^N225"}
+    target_bm = benchmarks.get(market_type, "SPY")
+    bm_data = get_stock_data(target_bm, "3mo")
+    
+    if bm_data is not None and not bm_data.empty:
+        ftd_result = detect_follow_through_day(bm_data)
+        if ftd_result.get("is_ftd"):
+            st.success(f"🚀 **Market Alert:** {target_bm} にて **{ftd_result.get('status')}** (上昇率 {ftd_result.get('pct_change', 0):.2f}%) - 強気相場入りのシグナル点灯")
+        elif "ラリー試行中" in ftd_result.get("status", ""):
+            st.info(f"👀 **Market Alert:** {target_bm} は現在 **{ftd_result.get('status')}** - 出来高を伴う大幅高に要警戒")
 
     col1, col2, col3 = st.columns(3)
 

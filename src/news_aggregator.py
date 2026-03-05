@@ -138,6 +138,7 @@ def _get_news_cutoff_time(hours: int = 48) -> datetime:
 def get_aggregated_news(
     categories: list[str] = None,
     keywords: list[str] = None,
+    dynamic_keywords: list[str] = None,
     max_per_source: int = 10,
     max_total: int = 80,
     market_type: str = "US",
@@ -148,7 +149,8 @@ def get_aggregated_news(
 
     Args:
         categories: 取得するカテゴリ (BUSINESS, TECHNOLOGY, WORLD)
-        keywords: 検索キーワード
+        keywords: 静的な検索キーワード
+        dynamic_keywords: 動的に生成された検索キーワード
         max_per_source: 各ソース/カテゴリあたりの最大件数
         max_total: 合計最大件数
         market_type: "US" または "JP"
@@ -205,6 +207,11 @@ def get_aggregated_news(
                 "S&P 500",
                 "Nasdaq",
             ]
+            
+    # 動的キーワードがある場合は追加
+    if dynamic_keywords:
+        # 重複を排除しつつリストの先頭に追加して優先度を高くする
+        keywords = list(dict.fromkeys(dynamic_keywords + keywords))
 
     all_news = []
     seen_ids = set()

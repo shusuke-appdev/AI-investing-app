@@ -47,7 +47,7 @@ def render_stock_tab():
     with col_input:
         ticker = st.text_input(
             "銘柄コードを入力",
-            value=default_ticker,
+            value="",
             placeholder=f"例: {sample_tickers}",
         ).upper()
 

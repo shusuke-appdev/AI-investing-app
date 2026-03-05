@@ -16,6 +16,7 @@ from src.news_aggregator import get_aggregated_news, merge_with_finnhub_news
 from src.news_analyst import generate_market_recap
 from src.option_analyst import get_major_indices_options
 from src.theme_analyst import get_ranked_themes
+from src.services.query_generator import generate_dynamic_search_queries
 
 logger = get_logger(__name__)
 
@@ -34,6 +35,14 @@ def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
         return None
 
     config = get_market_config(market_type)
+    
+    # 0. Prepare Market Data (Needed for dynamic queries as well)
+    # We reuse st.session_state.market_data if available
+    market_data = (
+        st.session_state.market_data
+        if hasattr(st, "session_state") and "market_data" in st.session_state
+        else {}
+    )
 
     # 1. Fetch Company News from Finnhub (using configured targets)
     target_tickers = config.get("ai_analysis_targets", [])
@@ -54,12 +63,16 @@ def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
 
     # 2. Fetch Macro/Sector News from Google News
     keywords = config.get("news_keywords", [])
-    # Convert keywords list to format expected by get_aggregated_news if needed,
-    # but it seems it accepts list or string. Let's pass the list.
+    
+    # Generate dynamic search queries based on current market data
+    dynamic_keywords = generate_dynamic_search_queries(market_data, num_queries=3)
+    if dynamic_keywords:
+        logger.info(f"Generated dynamic search queries: {dynamic_keywords}")
 
     gnews_articles = get_aggregated_news(
         categories=["BUSINESS", "TECHNOLOGY"],
         keywords=keywords,
+        dynamic_keywords=dynamic_keywords,
         max_per_source=5,
         market_type=market_type,
     )
@@ -165,15 +178,7 @@ def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
     theme_analysis_str = "\n".join(theme_str_parts)
 
     # 7. Prepare Market Data for Prompt
-    # We reuse st.session_state.market_data if available for the summary
-    market_data = (
-        st.session_state.market_data
-        if hasattr(st, "session_state") and "market_data" in st.session_state
-        else {}
-    )
-    if not market_data:
-        market_data = {}  # Should query if not present, but usually present when calling this.
-
+    # (Already initialized at step 0)
     market_data["trend_1mo"] = trend_context
     market_data["weekly_performance"] = weekly_performance
 
