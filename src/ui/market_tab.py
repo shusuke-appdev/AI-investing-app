@@ -109,9 +109,7 @@ def _render_market_chat():
     # 入力フォーム
     if prompt := st.chat_input("質問を入力してください...（例：金利はどう動いてた？）"):
         # ユーザーの入力を履歴に追加して表示
-        st.session_state.market_chat_history.append(
-            {"role": "user", "content": prompt}
-        )
+        st.session_state.market_chat_history.append({"role": "user", "content": prompt})
         with chat_container:
             with st.chat_message("user"):
                 st.markdown(prompt)
@@ -124,7 +122,7 @@ def _render_market_chat():
 
                     context = st.session_state.get("ai_recap", "")
                     # news_context could be fetched here or from market_analyst_service
-                    
+
                     response = get_market_chat_response(
                         prompt=prompt,
                         history=st.session_state.market_chat_history,
@@ -146,22 +144,26 @@ def _render_flash_summary(market_data, market_type: str = "US"):
     config = get_market_config(market_type)
 
     st.markdown("### 📌 Flash Summary")
-    
+
     # --- FTD (Follow-Through Day) アラート ---
     from src.advisor.minervini_analyzer import detect_follow_through_day
     from src.market_data import get_stock_data
-    
+
     # 代表的な指数でFTDを監視
     benchmarks = {"US": "SPY", "JP": "^N225"}
     target_bm = benchmarks.get(market_type, "SPY")
     bm_data = get_stock_data(target_bm, "3mo")
-    
+
     if bm_data is not None and not bm_data.empty:
         ftd_result = detect_follow_through_day(bm_data)
         if ftd_result.get("is_ftd"):
-            st.success(f"🚀 **Market Alert:** {target_bm} にて **{ftd_result.get('status')}** (上昇率 {ftd_result.get('pct_change', 0):.2f}%) - 強気相場入りのシグナル点灯")
+            st.success(
+                f"🚀 **Market Alert:** {target_bm} にて **{ftd_result.get('status')}** (上昇率 {ftd_result.get('pct_change', 0):.2f}%) - 強気相場入りのシグナル点灯"
+            )
         elif "ラリー試行中" in ftd_result.get("status", ""):
-            st.info(f"👀 **Market Alert:** {target_bm} は現在 **{ftd_result.get('status')}** - 出来高を伴う大幅高に要警戒")
+            st.info(
+                f"👀 **Market Alert:** {target_bm} は現在 **{ftd_result.get('status')}** - 出来高を伴う大幅高に要警戒"
+            )
 
     col1, col2, col3 = st.columns(3)
 

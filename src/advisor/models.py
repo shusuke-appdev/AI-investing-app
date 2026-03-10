@@ -128,16 +128,19 @@ class TechnicalScore:
     candlestick_summary: str = ""  # bullish/bearish/neutral
 
     # === Minervini Extension ===
-    stage_data: dict = field(default_factory=dict) # {"stage": int, "description": str}
-    vcp_data: dict = field(default_factory=dict) # {"is_vcp": bool, "breakout_price": float, ...}
+    stage_data: dict = field(default_factory=dict)  # {"stage": int, "description": str}
+    vcp_data: dict = field(
+        default_factory=dict
+    )  # {"is_vcp": bool, "breakout_price": float, ...}
 
     # === Option Skew & Mean Reversion Extension ===
     skew: Optional[float] = None
     dte: Optional[float] = None
     price_range: Optional[tuple[float, float]] = None
-    
+
     mr_parabolic_state: dict = field(default_factory=dict)
     mr_rebound_state: dict = field(default_factory=dict)
+
 
 @dataclass
 class TechnicalAnalysis:

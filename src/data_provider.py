@@ -46,7 +46,6 @@ from src.market_config import get_market_config
 from src.models import MarketIndex, NewsItem, StockInfo
 from src.utils.translator import translate_to_japanese
 
-
 logger = get_logger(__name__)
 
 
@@ -301,7 +300,9 @@ class DataProvider:
                                 if not single_hist.empty:
                                     hist = single_hist
                             except Exception as e:
-                                logger.warning(f"Fallback fetch failed for {ticker}: {e}")
+                                logger.warning(
+                                    f"Fallback fetch failed for {ticker}: {e}"
+                                )
 
                             if not hist.empty and len(hist) >= 1:
                                 current = hist["Close"].iloc[-1]
@@ -371,6 +372,135 @@ class DataProvider:
             return []
 
     @staticmethod
+    def _extract_finnhub_profile(ticker: str, info: StockInfo) -> None:
+        """Finnhubから銘柄情報を取得してinfoを更新する"""
+        try:
+            profile = get_company_profile(ticker)
+            if profile:
+                info.update(
+                    {
+                        "name": profile.get("name", ticker),
+                        "ticker": profile.get("ticker", ticker),
+                        "sector": profile.get("finnhubIndustry", "N/A"),
+                        "industry": profile.get("finnhubIndustry", "N/A"),
+                        "summary": profile.get("description", "情報なし"),
+                        "website": profile.get("weburl", ""),
+                        "logo": profile.get("logo", ""),
+                        "exchange": profile.get("exchange", ""),
+                        "country": profile.get("country", ""),
+                        "market_cap": profile.get("marketCapitalization", 0) * 1e6,
+                        "share_outstanding": profile.get("shareOutstanding", 0),
+                    }
+                )
+
+            basics = get_basic_financials(ticker)
+            if basics and "metric" in basics:
+                m = basics["metric"]
+                info.update(
+                    {
+                        "revenueGrowth": m.get("revenueGrowthQuarterlyYoy"),
+                        "earningsGrowth": m.get("epsGrowthQuarterlyYoy"),
+                        "grossMargins": m.get("grossMarginTTM"),
+                        "operatingMargins": m.get("operatingMarginTTM"),
+                        "currentRatio": m.get("currentRatioQuarterly"),
+                        "debtToEquity": m.get("totalDebt/totalEquityQuarterly"),
+                        "returnOnAssets": m.get("roaTTM"),
+                        "pegRatio": m.get("pegRatioTTM"),
+                        "priceToBook": m.get("pbAnnual"),
+                        "beta": m.get("beta"),
+                        "fifty_two_week_high": m.get("52WeekHigh"),
+                        "fifty_two_week_low": m.get("52WeekLow"),
+                        "pe_ratio": m.get("peTTM"),
+                    }
+                )
+
+            quote = _finnhub_get_quote(ticker)
+            if quote:
+                info["current_price"] = quote.get("c")
+
+        except Exception as e:
+            logger.warning(f"Finnhub profile fetch failed for {ticker}: {e}")
+
+    @staticmethod
+    def _extract_yfinance_profile(ticker: str, info: StockInfo) -> None:
+        """yfinanceから情報取得を試み、不足している情報を補完する"""
+        needs_fallback = (
+            info["summary"] == "情報なし"
+            or info["sector"] == "N/A"
+            or info["revenueGrowth"] is None
+            or info["current_price"] is None
+        )
+        if not needs_fallback:
+            return
+
+        try:
+            yf_ticker = yf.Ticker(ticker)
+            yf_info = yf_ticker.info
+
+            if yf_info:
+                if info["name"] == ticker:
+                    info["name"] = yf_info.get(
+                        "longName", yf_info.get("shortName", ticker)
+                    )
+                if info["sector"] == "N/A":
+                    info["sector"] = yf_info.get("sector", "N/A")
+                if info["industry"] == "N/A":
+                    info["industry"] = yf_info.get("industry", "N/A")
+                if info["summary"] == "情報なし":
+                    info["summary"] = yf_info.get("longBusinessSummary", "")
+                if not info["website"]:
+                    info["website"] = yf_info.get("website", "")
+                if not info["logo"]:
+                    info["logo"] = yf_info.get("logo_url", "")
+                if info["employees"] == 0:
+                    info["employees"] = yf_info.get("fullTimeEmployees", 0)
+
+                if info["market_cap"] is None:
+                    info["market_cap"] = yf_info.get("marketCap")
+                if info["current_price"] is None:
+                    info["current_price"] = yf_info.get(
+                        "currentPrice", yf_info.get("regularMarketPrice")
+                    )
+
+                # yf returns fractions for percentages
+                rg = yf_info.get("revenueGrowth")
+                if info["revenueGrowth"] is None and rg is not None:
+                    info["revenueGrowth"] = rg * 100
+                eg = yf_info.get("earningsGrowth")
+                if info["earningsGrowth"] is None and eg is not None:
+                    info["earningsGrowth"] = eg * 100
+                gm = yf_info.get("grossMargins")
+                if info["grossMargins"] is None and gm is not None:
+                    info["grossMargins"] = gm * 100
+                om = yf_info.get("operatingMargins")
+                if info["operatingMargins"] is None and om is not None:
+                    info["operatingMargins"] = om * 100
+
+                if info["currentRatio"] is None:
+                    info["currentRatio"] = yf_info.get("currentRatio")
+                if info["debtToEquity"] is None:
+                    info["debtToEquity"] = yf_info.get("debtToEquity")
+                ra = yf_info.get("returnOnAssets")
+                if info["returnOnAssets"] is None and ra is not None:
+                    info["returnOnAssets"] = ra * 100
+                if info["pegRatio"] is None:
+                    info["pegRatio"] = yf_info.get("pegRatio")
+                if info["priceToBook"] is None:
+                    info["priceToBook"] = yf_info.get("priceToBook")
+                if info["beta"] is None:
+                    info["beta"] = yf_info.get("beta")
+                if info["fifty_two_week_high"] is None:
+                    info["fifty_two_week_high"] = yf_info.get("fiftyTwoWeekHigh")
+                if info["forward_pe"] is None:
+                    info["forward_pe"] = yf_info.get("forwardPE")
+                if info["target_price"] is None:
+                    info["target_price"] = yf_info.get("targetMeanPrice")
+                if info["pe_ratio"] is None:
+                    info["pe_ratio"] = yf_info.get("trailingPE")
+        except Exception as e:
+            logger.warning(f"yfinance profile fallback failed for {ticker}: {e}")
+
+    @staticmethod
     @st.cache_data(ttl=CACHE_TTL_DAILY)
     def get_stock_info(ticker: str) -> StockInfo:
         """
@@ -409,145 +539,15 @@ class DataProvider:
             "share_outstanding": None,
         }
 
-        # 1. Finnhub Data
         if is_configured():
-            try:
-                # A. Profile
-                profile = get_company_profile(ticker)
-                if profile:
-                    info.update(
-                        {
-                            "name": profile.get("name", ticker),
-                            "ticker": profile.get("ticker", ticker),
-                            "sector": profile.get("finnhubIndustry", "N/A"),
-                            "industry": profile.get("finnhubIndustry", "N/A"),
-                            # "description" is often where the summary is in Finnhub profile2
-                            "summary": profile.get("description", "情報なし"),
-                            "website": profile.get("weburl", ""),
-                            "logo": profile.get("logo", ""),
-                            "exchange": profile.get("exchange", ""),
-                            "country": profile.get("country", ""),
-                            "market_cap": profile.get("marketCapitalization", 0)
-                            * 1e6,  # Finnhub results in Millions
-                            "share_outstanding": profile.get("shareOutstanding", 0),
-                        }
-                    )
+            DataProvider._extract_finnhub_profile(ticker, info)
 
-                # B. Basic Financials (Metrics)
-                basics = get_basic_financials(ticker)
-                if basics and "metric" in basics:
-                    m = basics["metric"]
-                    info.update(
-                        {
-                            "revenueGrowth": m.get("revenueGrowthQuarterlyYoy"),
-                            "earningsGrowth": m.get("epsGrowthQuarterlyYoy"),
-                            "grossMargins": m.get("grossMarginTTM"),
-                            "operatingMargins": m.get("operatingMarginTTM"),
-                            "currentRatio": m.get("currentRatioQuarterly"),
-                            "debtToEquity": m.get("totalDebt/totalEquityQuarterly"),
-                            "returnOnAssets": m.get("roaTTM"),
-                            "pegRatio": m.get("pegRatioTTM"),
-                            "priceToBook": m.get("pbAnnual"),
-                            "beta": m.get("beta"),
-                            "fifty_two_week_high": m.get("52WeekHigh"),
-                            "fifty_two_week_low": m.get("52WeekLow"),
-                            "pe_ratio": m.get("peTTM"),
-                        }
-                    )
-
-                # C. Quote for Current Price
-                quote = _finnhub_get_quote(ticker)
-                if quote:
-                    info["current_price"] = quote.get("c")
-
-            except Exception as e:
-                logger.warning(f"Finnhub fetch failed for {ticker}: {e}")
-
-        # 2. yfinance Fallback (補完・代替)
-        try:
-            # Finnhubで情報が不足している場合、またはキー未設定の場合に実行
-            # 必要なキーがNoneかどうかで判断
-            needs_fallback = (
-                info["summary"] == "情報なし"
-                or info["sector"] == "N/A"
-                or info["revenueGrowth"] is None
-                or info["current_price"] is None
-            )
-
-            if needs_fallback:
-                # Note: Do not pass custom session to yf.Ticker
-                yf_ticker = yf.Ticker(ticker)
-                yf_info = yf_ticker.info
-
-                if yf_info:
-                    # Basic Info
-                    if info["name"] == ticker:
-                        info["name"] = yf_info.get(
-                            "longName", yf_info.get("shortName", ticker)
-                        )
-                    if info["sector"] == "N/A":
-                        info["sector"] = yf_info.get("sector", "N/A")
-                    if info["industry"] == "N/A":
-                        info["industry"] = yf_info.get("industry", "N/A")
-                    if info["summary"] == "情報なし":
-                        info["summary"] = yf_info.get("longBusinessSummary", "")
-                    if not info["website"]:
-                        info["website"] = yf_info.get("website", "")
-                    if not info["logo"]:
-                        info["logo"] = yf_info.get("logo_url", "")
-                    if info["employees"] == 0:
-                        info["employees"] = yf_info.get("fullTimeEmployees", 0)
-
-                    # Metrics Fallback
-                    if info["market_cap"] is None:
-                        info["market_cap"] = yf_info.get("marketCap")
-                    if info["current_price"] is None:
-                        info["current_price"] = yf_info.get(
-                            "currentPrice", yf_info.get("regularMarketPrice")
-                        )
-                    if info["revenueGrowth"] is None:
-                        info["revenueGrowth"] = (
-                            yf_info.get("revenueGrowth", 0) * 100
-                        )  # yf is fraction
-                    if info["earningsGrowth"] is None:
-                        info["earningsGrowth"] = yf_info.get("earningsGrowth", 0) * 100
-                    if info["grossMargins"] is None:
-                        info["grossMargins"] = yf_info.get("grossMargins", 0) * 100
-                    if info["operatingMargins"] is None:
-                        info["operatingMargins"] = (
-                            yf_info.get("operatingMargins", 0) * 100
-                        )
-                    if info["currentRatio"] is None:
-                        info["currentRatio"] = yf_info.get("currentRatio")
-                    if info["debtToEquity"] is None:
-                        info["debtToEquity"] = yf_info.get("debtToEquity")
-                    if info["returnOnAssets"] is None:
-                        info["returnOnAssets"] = yf_info.get("returnOnAssets", 0) * 100
-                    if info["pegRatio"] is None:
-                        info["pegRatio"] = yf_info.get("pegRatio")
-                    if info["priceToBook"] is None:
-                        info["priceToBook"] = yf_info.get("priceToBook")
-                    if info["beta"] is None:
-                        info["beta"] = yf_info.get("beta")
-                    if info["fifty_two_week_high"] is None:
-                        info["fifty_two_week_high"] = yf_info.get("fiftyTwoWeekHigh")
-                    if info["forward_pe"] is None:
-                        info["forward_pe"] = yf_info.get("forwardPE")
-                    if info["target_price"] is None:
-                        info["target_price"] = yf_info.get("targetMeanPrice")
-                    if info["pe_ratio"] is None:
-                        info["pe_ratio"] = yf_info.get("trailingPE")
-
-        except Exception as e:
-            logger.warning(f"yfinance profile fallback failed for {ticker}: {e}")
-
-        except Exception as e:
-            logger.warning(f"yfinance profile fallback failed for {ticker}: {e}")
+        DataProvider._extract_yfinance_profile(ticker, info)
 
         # Translate summary to Japanese if needed
-        # This is cached by st.cache_data on get_stock_info, so we don't need extra caching here
+        # This is cached by st.cache_data on get_stock_info
         if info["summary"] and info["summary"] != "情報なし":
-             info["summary"] = translate_to_japanese(info["summary"])
+            info["summary"] = translate_to_japanese(info["summary"])
 
         return info
 

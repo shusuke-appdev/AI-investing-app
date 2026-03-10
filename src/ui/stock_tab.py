@@ -36,7 +36,6 @@ def render_stock_tab():
 
     config = get_market_config(market_type)
 
-    default_ticker = config["default_ticker"]
     sample_tickers = ", ".join(config["sample_tickers"][:3])
     market_label = "🇯🇵 日本市場" if market_type == "JP" else "🇺🇸 米国市場"
 

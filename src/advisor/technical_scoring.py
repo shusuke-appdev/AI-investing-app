@@ -36,7 +36,7 @@ def analyze_options_data(ticker: str, current_price: float) -> dict:
         "score_adj": 0.0,
         "skew": None,
         "dte": None,
-        "price_range": None
+        "price_range": None,
     }
 
     try:

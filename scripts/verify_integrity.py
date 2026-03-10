@@ -1,6 +1,5 @@
-
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.append(os.getcwd())
@@ -9,8 +8,9 @@ print("Checking critical imports...")
 
 try:
     from src.data_provider import DataProvider
+
     print(f"[OK] imported DataProvider: {DataProvider}")
-    
+
     # Check if critical methods exist
     assert hasattr(DataProvider, "get_stock_info")
     assert hasattr(DataProvider, "get_stock_news")

@@ -15,8 +15,8 @@ from src.market_data import get_stock_data
 from src.news_aggregator import get_aggregated_news, merge_with_finnhub_news
 from src.news_analyst import generate_market_recap
 from src.option_analyst import get_major_indices_options
-from src.theme_analyst import get_ranked_themes
 from src.services.query_generator import generate_dynamic_search_queries
+from src.theme_analyst import get_ranked_themes
 
 logger = get_logger(__name__)
 
@@ -35,7 +35,7 @@ def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
         return None
 
     config = get_market_config(market_type)
-    
+
     # 0. Prepare Market Data (Needed for dynamic queries as well)
     # We reuse st.session_state.market_data if available
     market_data = (
@@ -63,7 +63,7 @@ def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
 
     # 2. Fetch Macro/Sector News from Google News
     keywords = config.get("news_keywords", [])
-    
+
     # Generate dynamic search queries based on current market data
     dynamic_keywords = generate_dynamic_search_queries(market_data, num_queries=3)
     if dynamic_keywords:

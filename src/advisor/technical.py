@@ -10,6 +10,8 @@ from typing import Optional
 
 import pandas as pd
 
+from src.advisor.mean_reversion import MeanReversionAnalyzer
+from src.advisor.minervini_analyzer import analyze_stage, detect_vcp
 from src.advisor.models import TechnicalScore
 from src.advisor.technical_extended import (
     analyze_multi_timeframe,
@@ -46,8 +48,6 @@ from src.advisor.technical_scoring import (
     calc_pattern_score,
     calc_trend_score,
 )
-from src.advisor.minervini_analyzer import analyze_stage, detect_vcp
-from src.advisor.mean_reversion import MeanReversionAnalyzer
 from src.market_data import get_stock_data
 
 
@@ -116,11 +116,11 @@ def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScor
     vcp_data_out = vcp_res if is_vcp and vcp_res else {"is_vcp": False}
     if is_vcp and vcp_res:
         vcp_data_out["is_vcp"] = True
-        
+
     # Mean Reversion 分析
     mr_analyzer = MeanReversionAnalyzer(ticker)
     mr_data = mr_analyzer.analyze(df)
-    
+
     # オプション分析 & スコアリング
     opt_data = analyze_options_data(ticker, current_price)
 
@@ -267,7 +267,7 @@ def get_technical_summary_for_ai(ticker: str) -> str:
         if tech.candlestick_patterns
         else "なし"
     )
-    
+
     # オプション拡張テキスト構築
     opt_extra = ""
     if tech.skew is not None:
@@ -275,13 +275,13 @@ def get_technical_summary_for_ai(ticker: str) -> str:
     if tech.price_range and tech.dte:
         lower, upper = tech.price_range
         opt_extra += f", 予想レンジ({int(tech.dte)}日): ${lower:.2f} - ${upper:.2f}"
-        
+
     # Mean Reversion拡張テキスト構築
     mr_str = ""
     if tech.mr_parabolic_state.get("is_parabolic"):
-         mr_str += f"[過熱警戒] {tech.mr_parabolic_state.get('description', '')} "
+        mr_str += f"[過熱警戒] {tech.mr_parabolic_state.get('description', '')} "
     if tech.mr_rebound_state.get("is_dip_buyable"):
-         mr_str += f"[DipBuy好機] {tech.mr_rebound_state.get('description', '')} "
+        mr_str += f"[DipBuy好機] {tech.mr_rebound_state.get('description', '')} "
 
     return f"""【{ticker} テクニカル分析】
 - 総合: {tech.overall_score}点 ({tech.overall_signal}) | トレンド: {tech.ma_trend}

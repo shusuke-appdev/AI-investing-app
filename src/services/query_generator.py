@@ -16,7 +16,10 @@ logger = get_logger(__name__)
 
 load_dotenv()
 
-def generate_dynamic_search_queries(market_data: dict, num_queries: int = 5) -> List[str]:
+
+def generate_dynamic_search_queries(
+    market_data: dict, num_queries: int = 5
+) -> List[str]:
     """
     現在の市場データと日付から、GNews検索で有用なキーワードリストを動的に生成します。
 
@@ -38,7 +41,7 @@ def generate_dynamic_search_queries(market_data: dict, num_queries: int = 5) -> 
     import google.generativeai as genai
 
     today_str = datetime.now().strftime("%Y-%m-%d")
-    
+
     # 簡易な市場概況文字列の作成
     market_summary = ""
     for name, data in market_data.items():
@@ -68,7 +71,7 @@ def generate_dynamic_search_queries(market_data: dict, num_queries: int = 5) -> 
     try:
         model = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content(prompt)
-        
+
         # 応答からJSON文字列の抽出（フォーマット崩れへの防御的処理）
         text = response.text.strip()
         if text.startswith("```json"):
@@ -76,7 +79,7 @@ def generate_dynamic_search_queries(market_data: dict, num_queries: int = 5) -> 
         if text.endswith("```"):
             text = text[:-3]
         text = text.strip()
-        
+
         queries = json.loads(text)
         if isinstance(queries, list):
             # 要素から不要な空白を取り除く
@@ -86,7 +89,9 @@ def generate_dynamic_search_queries(market_data: dict, num_queries: int = 5) -> 
             return []
 
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON from Gemini response: {e}\nResponse: {response.text}")
+        logger.error(
+            f"Failed to parse JSON from Gemini response: {e}\nResponse: {response.text}"
+        )
         return []
     except Exception as e:
         logger.error(f"Error generating dynamic queries with Gemini: {e}")

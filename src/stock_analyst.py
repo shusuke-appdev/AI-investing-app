@@ -42,14 +42,14 @@ def analyze_stock(
     model = _get_model()
 
     # 基本情報の抽出
-    company_name = stock_info.get("longName", ticker)
+    company_name = stock_info.get("name", ticker)
     sector = stock_info.get("sector", "不明")
     industry = stock_info.get("industry", "不明")
-    market_cap = stock_info.get("marketCap", 0)
-    pe_ratio = stock_info.get("trailingPE", "N/A")
-    forward_pe = stock_info.get("forwardPE", "N/A")
-    price = stock_info.get("currentPrice", stock_info.get("regularMarketPrice", 0))
-    target_price = stock_info.get("targetMeanPrice", "N/A")
+    market_cap = stock_info.get("market_cap", 0)
+    pe_ratio = stock_info.get("pe_ratio", "N/A")
+    forward_pe = stock_info.get("forward_pe", "N/A")
+    price = stock_info.get("current_price", 0)
+    target_price = stock_info.get("target_price", "N/A")
 
     # テクニカル分析を取得
     technical_summary = get_technical_summary_for_ai(ticker)
@@ -94,10 +94,10 @@ def get_quick_summary(ticker: str, stock_info: dict) -> str:
     """
     model = _get_model()
 
-    company_name = stock_info.get("longName", ticker)
+    company_name = stock_info.get("name", ticker)
     sector = stock_info.get("sector", "不明")
-    market_cap = stock_info.get("marketCap", 0)
-    pe_ratio = stock_info.get("trailingPE", "N/A")
+    market_cap = stock_info.get("market_cap", 0)
+    pe_ratio = stock_info.get("pe_ratio", "N/A")
 
     market_cap_b = market_cap / 1e9 if isinstance(market_cap, (int, float)) else 0
 

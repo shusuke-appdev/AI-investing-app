@@ -207,7 +207,7 @@ def get_aggregated_news(
                 "S&P 500",
                 "Nasdaq",
             ]
-            
+
     # 動的キーワードがある場合は追加
     if dynamic_keywords:
         # 重複を排除しつつリストの先頭に追加して優先度を高くする

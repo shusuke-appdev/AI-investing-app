@@ -39,7 +39,7 @@ def _fetch_option_data(
     # to show user when THIS analysis was run.
     # Cloud environment often uses UTC, so we convert to JST explicitly.
     current_price = DataProvider.get_current_price(ticker)
-    
+
     JST = timezone(timedelta(hours=9), "JST")
     now_utc = datetime.now(timezone.utc)
     now_jst = now_utc.astimezone(JST)
@@ -301,7 +301,7 @@ def calculate_skew(
     if otm_puts.empty:
         return None
     otm_put = otm_puts.iloc[(otm_puts["strike"] - target_put_strike).abs().argmin()]
-    
+
     # callはstrike >= current_price のOTM
     otm_calls = valid_calls[valid_calls["strike"] >= current_price]
     if otm_calls.empty:
@@ -310,34 +310,34 @@ def calculate_skew(
 
     put_iv = otm_put["impliedVolatility"]
     call_iv = otm_call["impliedVolatility"]
-    
+
     # yfinance(小数)とFinnhub(パーセンテージ)のスケール吸収
-    if put_iv > 2: put_iv /= 100.0
-    if call_iv > 2: call_iv /= 100.0
+    if put_iv > 2:
+        put_iv /= 100.0
+    if call_iv > 2:
+        call_iv /= 100.0
 
     return put_iv - call_iv
 
 
 def estimate_price_range(
-    current_price: float,
-    atm_iv: float,
-    days_to_expiry: float = 30.0
+    current_price: float, atm_iv: float, days_to_expiry: float = 30.0
 ) -> Tuple[float, float]:
     """
     IVと期間(DTE)から1標準偏差(約68%)の予想変動レンジを算出します。
-    
+
     Returns:
         (lower_bound, upper_bound)
     """
     if atm_iv is None or atm_iv <= 0:
         return current_price, current_price
-    
+
     # 予想変動率 = IV * sqrt(DTE / 365)
     expected_move_pct = atm_iv * np.sqrt(max(1.0, days_to_expiry) / 365.0)
-    
+
     lower_bound = current_price * (1.0 - expected_move_pct)
     upper_bound = current_price * (1.0 + expected_move_pct)
-    
+
     return lower_bound, upper_bound
 
 
@@ -375,7 +375,9 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
     if not calls.empty and "expiration" in calls.columns:
         exp_date_str = calls["expiration"].iloc[0]
         try:
-            exp_date = datetime.strptime(exp_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            exp_date = datetime.strptime(exp_date_str, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
             now_utc = datetime.now(timezone.utc)
             dte = max(1.0, (exp_date - now_utc).days)
         except Exception:
@@ -428,7 +430,9 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
         analysis.append(f"ATM IV: {iv:.1%}")
         if price_range:
             lower, upper = price_range
-            analysis.append(f"予想レンジ(1σ, {int(dte)}日): ${lower:.2f} - ${upper:.2f}")
+            analysis.append(
+                f"予想レンジ(1σ, {int(dte)}日): ${lower:.2f} - ${upper:.2f}"
+            )
 
     if skew is not None:
         if skew > 0.05:
