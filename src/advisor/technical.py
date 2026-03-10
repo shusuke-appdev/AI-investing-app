@@ -47,6 +47,7 @@ from src.advisor.technical_scoring import (
     calc_trend_score,
 )
 from src.advisor.minervini_analyzer import analyze_stage, detect_vcp
+from src.advisor.mean_reversion import MeanReversionAnalyzer
 from src.market_data import get_stock_data
 
 
@@ -115,7 +116,11 @@ def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScor
     vcp_data_out = vcp_res if is_vcp and vcp_res else {"is_vcp": False}
     if is_vcp and vcp_res:
         vcp_data_out["is_vcp"] = True
-
+        
+    # Mean Reversion 分析
+    mr_analyzer = MeanReversionAnalyzer(ticker)
+    mr_data = mr_analyzer.analyze(df)
+    
     # オプション分析 & スコアリング
     opt_data = analyze_options_data(ticker, current_price)
 
@@ -223,6 +228,11 @@ def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScor
         max_pain=opt_data["max_pain"],
         stage_data=stage_res,
         vcp_data=vcp_data_out,
+        skew=opt_data.get("skew"),
+        dte=opt_data.get("dte"),
+        price_range=opt_data.get("price_range"),
+        mr_parabolic_state=mr_data.get("parabolic_state", {}),
+        mr_rebound_state=mr_data.get("rebound_state", {}),
     )
 
 
@@ -257,6 +267,21 @@ def get_technical_summary_for_ai(ticker: str) -> str:
         if tech.candlestick_patterns
         else "なし"
     )
+    
+    # オプション拡張テキスト構築
+    opt_extra = ""
+    if tech.skew is not None:
+        opt_extra += f", Skew={tech.skew:.2%}"
+    if tech.price_range and tech.dte:
+        lower, upper = tech.price_range
+        opt_extra += f", 予想レンジ({int(tech.dte)}日): ${lower:.2f} - ${upper:.2f}"
+        
+    # Mean Reversion拡張テキスト構築
+    mr_str = ""
+    if tech.mr_parabolic_state.get("is_parabolic"):
+         mr_str += f"[過熱警戒] {tech.mr_parabolic_state.get('description', '')} "
+    if tech.mr_rebound_state.get("is_dip_buyable"):
+         mr_str += f"[DipBuy好機] {tech.mr_rebound_state.get('description', '')} "
 
     return f"""【{ticker} テクニカル分析】
 - 総合: {tech.overall_score}点 ({tech.overall_signal}) | トレンド: {tech.ma_trend}
@@ -264,9 +289,10 @@ def get_technical_summary_for_ai(ticker: str) -> str:
 - MACD: {tech.macd_signal} (Hist: {tech.macd_hist_slope})
 - 一目均衡表: {tech.ichimoku_signal} ({tech.ichimoku_regime})
 - ボリンジャー: {tech.bb_position}, スクイズ: {tech.bb_squeeze_signal}
-- 需給環境: GEX={tech.gex_regime}, PCR={tech.pcr_ratio:.2f}({tech.pcr_signal}), IV={tech.atm_iv:.1%}, MaxPain=${tech.max_pain:.0f}
+- 需給環境: GEX={tech.gex_regime}, PCR={tech.pcr_ratio:.2f}({tech.pcr_signal}), IV={tech.atm_iv:.1%}, MaxPain=${tech.max_pain:.0f}{opt_extra}
 - OBV: {tech.obv_trend} (Div: {tech.obv_divergence})
 - パターン: 極値={tech.peak_valley_signal}, ローソク足={cdl_str}
 - サポート/レジスタンス: ${tech.support_price:.2f} / ${tech.resistance_price:.2f}
+- 平均回帰・過熱感: {mr_str if mr_str else "目立った過熱感・反発セットアップなし"}
 - AVWAP(YTD): ${tech.avwap_ytd:.2f} (乖離 {tech.avwap_deviation:+.1f}%)
 """

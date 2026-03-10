@@ -19,7 +19,10 @@ def analyze_options_data(ticker: str, current_price: float) -> dict:
             "pcr_signal": str,
             "atm_iv": float,
             "max_pain": float,
-            "score_adj": float
+            "score_adj": float,
+            "skew": Optional[float],
+            "dte": Optional[float],
+            "price_range": Optional[tuple[float, float]]
         }
     """
     res = {
@@ -31,18 +34,20 @@ def analyze_options_data(ticker: str, current_price: float) -> dict:
         "atm_iv": 0.0,
         "max_pain": 0.0,
         "score_adj": 0.0,
+        "skew": None,
+        "dte": None,
+        "price_range": None
     }
 
     try:
-        from src.option_analyst import (
-            calculate_atm_iv,
-            calculate_gex,
-            calculate_max_pain,
-            calculate_pcr,
-        )
+        from src.option_analyst import analyze_option_sentiment
+
+        opt_sentiment = analyze_option_sentiment(ticker)
+        if not opt_sentiment:
+            return res
 
         # GEX
-        gex = calculate_gex(ticker)
+        gex = opt_sentiment.get("gex")
         if gex and "nearby_net_gex" in gex:
             gex_val = gex["nearby_net_gex"]
             res["gex_regime"] = "positive_gamma" if gex_val > 0 else "negative_gamma"
@@ -59,7 +64,7 @@ def analyze_options_data(ticker: str, current_price: float) -> dict:
                     res["score_adj"] += 0.3
 
         # PCR
-        pcr = calculate_pcr(ticker)
+        pcr = opt_sentiment.get("pcr")
         if pcr:
             res["pcr_ratio"] = pcr.get("oi_pcr", 0.0)
             if res["pcr_ratio"] > 1.2:
@@ -70,20 +75,24 @@ def analyze_options_data(ticker: str, current_price: float) -> dict:
                 res["pcr_signal"] = "強気"
 
         # IV
-        iv = calculate_atm_iv(ticker)
-        if iv:
+        iv = opt_sentiment.get("iv")
+        if iv is not None:
             res["atm_iv"] = iv
             if iv > 0.4:
                 res["score_adj"] -= 0.2
 
         # Max Pain
-        mp = calculate_max_pain(ticker)
-        if mp:
+        mp = opt_sentiment.get("max_pain")
+        if mp is not None:
             res["max_pain"] = mp
             if current_price < mp * 0.95:
                 res["score_adj"] += 0.3
             elif current_price > mp * 1.05:
                 res["score_adj"] -= 0.3
+
+        res["skew"] = opt_sentiment.get("skew")
+        res["dte"] = opt_sentiment.get("dte")
+        res["price_range"] = opt_sentiment.get("price_range")
 
     except ImportError:
         pass

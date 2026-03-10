@@ -265,6 +265,82 @@ def calculate_atm_iv(
     return sum(valid_ivs) / len(valid_ivs)
 
 
+def calculate_skew(
+    ticker: str = "",
+    *,
+    calls: Optional[pd.DataFrame] = None,
+    puts: Optional[pd.DataFrame] = None,
+    current_price: float = 0.0,
+) -> Optional[float]:
+    """
+    OTM Put IVとOTM Call IVの差からスキュー(Skew)を計算します。
+    正の値は下落リスク（Putの割高感）を、負の値は上昇リスクを強く織り込んでいることを示します。
+    """
+    if calls is None or puts is None or current_price == 0.0:
+        fetched = _fetch_option_data(ticker)
+        if fetched is None:
+            return None
+        calls, puts, current_price, _ = fetched
+
+    if puts.empty or calls.empty:
+        return None
+
+    # 10% OTMのストライクを目安に
+    target_put_strike = current_price * 0.90
+    target_call_strike = current_price * 1.10
+
+    # 有効なIVを持つデータに絞る
+    valid_puts = puts[puts["impliedVolatility"] > 0]
+    valid_calls = calls[calls["impliedVolatility"] > 0]
+
+    if valid_puts.empty or valid_calls.empty:
+        return None
+
+    # putはstrike <= current_price のOTM
+    otm_puts = valid_puts[valid_puts["strike"] <= current_price]
+    if otm_puts.empty:
+        return None
+    otm_put = otm_puts.iloc[(otm_puts["strike"] - target_put_strike).abs().argmin()]
+    
+    # callはstrike >= current_price のOTM
+    otm_calls = valid_calls[valid_calls["strike"] >= current_price]
+    if otm_calls.empty:
+        return None
+    otm_call = otm_calls.iloc[(otm_calls["strike"] - target_call_strike).abs().argmin()]
+
+    put_iv = otm_put["impliedVolatility"]
+    call_iv = otm_call["impliedVolatility"]
+    
+    # yfinance(小数)とFinnhub(パーセンテージ)のスケール吸収
+    if put_iv > 2: put_iv /= 100.0
+    if call_iv > 2: call_iv /= 100.0
+
+    return put_iv - call_iv
+
+
+def estimate_price_range(
+    current_price: float,
+    atm_iv: float,
+    days_to_expiry: float = 30.0
+) -> Tuple[float, float]:
+    """
+    IVと期間(DTE)から1標準偏差(約68%)の予想変動レンジを算出します。
+    
+    Returns:
+        (lower_bound, upper_bound)
+    """
+    if atm_iv is None or atm_iv <= 0:
+        return current_price, current_price
+    
+    # 予想変動率 = IV * sqrt(DTE / 365)
+    expected_move_pct = atm_iv * np.sqrt(max(1.0, days_to_expiry) / 365.0)
+    
+    lower_bound = current_price * (1.0 - expected_move_pct)
+    upper_bound = current_price * (1.0 + expected_move_pct)
+    
+    return lower_bound, upper_bound
+
+
 # ============================================================
 # 統合分析（データを1回取得し、各関数に渡す）
 # ============================================================
@@ -292,6 +368,22 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
     gex = calculate_gex(ticker, calls=calls, puts=puts, current_price=current_price)
     iv = calculate_atm_iv(ticker, calls=calls, puts=puts, current_price=current_price)
     max_pain = calculate_max_pain(ticker, calls=calls, puts=puts)
+    skew = calculate_skew(ticker, calls=calls, puts=puts, current_price=current_price)
+
+    # DTE (Days to Expiry) 計算
+    dte = 30.0
+    if not calls.empty and "expiration" in calls.columns:
+        exp_date_str = calls["expiration"].iloc[0]
+        try:
+            exp_date = datetime.strptime(exp_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            now_utc = datetime.now(timezone.utc)
+            dte = max(1.0, (exp_date - now_utc).days)
+        except Exception:
+            pass
+
+    price_range = None
+    if iv:
+        price_range = estimate_price_range(current_price, iv, dte)
 
     if pcr is None and gex is None:
         return None
@@ -334,6 +426,17 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
 
     if iv:
         analysis.append(f"ATM IV: {iv:.1%}")
+        if price_range:
+            lower, upper = price_range
+            analysis.append(f"予想レンジ(1σ, {int(dte)}日): ${lower:.2f} - ${upper:.2f}")
+
+    if skew is not None:
+        if skew > 0.05:
+            analysis.append(f"Skew: {skew:.1%} (下落警戒強め)")
+        elif skew < -0.05:
+            analysis.append(f"Skew: {skew:.1%} (上昇警戒強め)")
+        else:
+            analysis.append(f"Skew: {skew:.1%} (中立水準)")
 
     if max_pain:
         analysis.append(f"Max Pain: ${max_pain:.0f}")
@@ -345,6 +448,9 @@ def analyze_option_sentiment(ticker: str) -> Optional[dict]:
         "pcr": pcr,
         "gex": gex,
         "iv": iv,
+        "skew": skew,
+        "dte": dte,
+        "price_range": price_range,
         "max_pain": max_pain,
         "analysis": analysis,
         "fetched_at": fetched_at,

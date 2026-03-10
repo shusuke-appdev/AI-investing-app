@@ -181,3 +181,39 @@ def _render_detail_section(tech) -> None:
                 st.caption(f"ブレイクアウト目処: **${breakout:.2f}**")
             else:
                 st.caption("VCP検知: ⚪ なし")
+
+    # --- Option Extension / Mean Reversion ---
+    if getattr(tech, "skew", None) is not None or getattr(tech, "mr_parabolic_state", {}):
+        st.divider()
+        st.caption("**モメンタム過熱度 & テールリスク**")
+        o1, o2 = st.columns(2)
+        with o1:
+            mr_p = getattr(tech, "mr_parabolic_state", {})
+            mr_r = getattr(tech, "mr_rebound_state", {})
+            
+            mr_status = "⚪ 正常範囲"
+            if mr_p.get("is_parabolic"):
+                 dev10 = mr_p.get('deviation_10ma')
+                 dev_str = f"MA10乖離 {dev10:+.1%}" if dev10 is not None else "MA大きく乖離"
+                 mr_status = f"🔴 **過熱** ({dev_str})"
+            elif mr_r.get("is_dip_buyable"):
+                 mr_status = "🟢 **Dip Buy 好機** (サポート近辺)"
+                 
+            st.caption(f"Mean Reversion: {mr_status}")
+            target_rev = mr_p.get("target_reversion_price")
+            if target_rev:
+                 st.caption(f"平均回帰目処: **${target_rev:.2f}** (MA10等)")
+                 
+        with o2:
+            skew_val = getattr(tech, "skew", None)
+            if skew_val is not None:
+                skew_icon = "🔴" if skew_val > 0.05 else "🟢" if skew_val < -0.05 else "⚪"
+                st.caption(f"オプションSkew: {skew_icon} **{skew_val:.1%}**")
+            
+            p_range = getattr(tech, "price_range", None)
+            dte_val = getattr(tech, "dte", None)
+            if p_range and dte_val:
+                lower, upper = p_range
+                st.caption(f"予想変動レンジ(1σ, {int(dte_val)}日):")
+                st.caption(f"**${lower:.2f} - ${upper:.2f}**")
+
