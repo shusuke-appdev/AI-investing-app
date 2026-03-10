@@ -175,16 +175,19 @@ class DataProvider:
                 logger.error(
                     f"[DataProvider] Finnhub option chain error for {ticker}: {e}"
                 )
+                logger.info(f"[DataProvider] Falling back to yfinance for {ticker}")
 
         # 2. yfinance Fallback (Greeksなし)
         try:
             stock = yf.Ticker(ticker)
             try:
                 expirations = stock.options
-            except Exception:
+            except Exception as e:
+                logger.warning(f"[DataProvider] yfinance stock.options failed for {ticker}: {e}")
                 return None
 
             if not expirations:
+                logger.warning(f"[DataProvider] yfinance returned no expirations for {ticker}")
                 return None
 
             all_calls = []
@@ -199,10 +202,12 @@ class DataProvider:
                     puts["expiration"] = exp
                     all_calls.append(calls)
                     all_puts.append(puts)
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"[DataProvider] yfinance option_chain({exp}) failed for {ticker}: {e}")
                     continue
 
             if not all_calls:
+                logger.warning(f"[DataProvider] yfinance returned no option chains for {ticker}")
                 return None
 
             return pd.concat(all_calls, ignore_index=True), pd.concat(

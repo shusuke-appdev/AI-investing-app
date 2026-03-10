@@ -11,7 +11,10 @@ import numpy as np
 import pandas as pd
 
 from .data_provider import DataProvider
+from .log_config import get_logger
 from .market_data import get_option_chain
+
+logger = get_logger(__name__)
 
 # ============================================================
 # 内部ヘルパー: データ取得（1回だけ実行）
@@ -477,10 +480,21 @@ def get_major_indices_options(market_type: str = "US") -> list[dict]:
 
     indices = ["SPY", "QQQ", "IWM"]
     results = []
+    failed_tickers = []
 
     for ticker in indices:
-        analysis = analyze_option_sentiment(ticker)
-        if analysis:
-            results.append(analysis)
+        try:
+            analysis = analyze_option_sentiment(ticker)
+            if analysis:
+                results.append(analysis)
+            else:
+                failed_tickers.append(ticker)
+                logger.warning(f"[OptionAnalyst] analyze_option_sentiment returned None for {ticker}")
+        except Exception as e:
+            failed_tickers.append(ticker)
+            logger.error(f"[OptionAnalyst] Exception analyzing {ticker}: {e}")
+
+    if failed_tickers:
+        logger.warning(f"[OptionAnalyst] Failed tickers: {failed_tickers}")
 
     return results

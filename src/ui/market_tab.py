@@ -304,7 +304,13 @@ def _render_option_analysis(market_type: str = "US"):
             st.caption(f"データ取得日時: {fetched_at}")
 
     if not option_analysis:
-        st.info("オプションデータを取得できませんでした")
+        st.warning(
+            "⚠️ オプションデータを取得できませんでした（SPY, QQQ, IWM 全て失敗）\n\n"
+            "**考えられる原因:**\n"
+            "- Finnhub無料プランではオプションAPI非対応 (403)\n"
+            "- yfinance (Yahoo Finance) が一時的にアクセス制限中\n\n"
+            "詳細はアプリログを確認してください。"
+        )
         return
 
     # 全体センチメント（コンパクト）
