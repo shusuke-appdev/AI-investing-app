@@ -347,6 +347,7 @@ class DataProvider:
         return result
 
     @staticmethod
+    @st.cache_data(ttl=CACHE_TTL_MEDIUM)
     def get_stock_news(ticker: str, max_items: int = 10) -> List[NewsItem]:
         """
         Get stock news.
@@ -375,6 +376,7 @@ class DataProvider:
             return []
 
     @staticmethod
+    @st.cache_data(ttl=CACHE_TTL_MEDIUM)
     def get_company_news_raw(ticker: str) -> list[dict]:
         """Finnhub Company Newsの生データを返す（market_analyst_service用）"""
         if not is_configured():
@@ -567,6 +569,7 @@ class DataProvider:
     # --- 追加メソッド（finnhub_client直接呼び出しを排除するためのラッパー） ---
 
     @staticmethod
+    @st.cache_data(ttl=CACHE_TTL_SHORT)
     def get_quote(ticker: str) -> Optional[dict]:
         """Finnhub Quote APIのラッパー。"""
         if not is_configured():
@@ -577,6 +580,7 @@ class DataProvider:
             return None
 
     @staticmethod
+    @st.cache_data(ttl=CACHE_TTL_DAILY)
     def get_earnings_calendar(
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
@@ -590,6 +594,7 @@ class DataProvider:
             return []
 
     @staticmethod
+    @st.cache_data(ttl=CACHE_TTL_DAILY)
     def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
         """EPSサプライズデータを取得（Finnhub経由）。"""
         if not is_configured():
@@ -600,6 +605,7 @@ class DataProvider:
             return []
 
     @staticmethod
+    @st.cache_data(ttl=CACHE_TTL_DAILY)
     def get_financials_reported(symbol: str, freq: str = "quarterly") -> list[dict]:
         """報告済み財務諸表を取得（Finnhub経由）。"""
         if not is_configured():

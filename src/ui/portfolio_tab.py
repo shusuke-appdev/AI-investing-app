@@ -3,7 +3,7 @@ Portfolio Advisor Tab Module
 ポートフォリオ管理、分析、可視化、AIアドバイスを提供します。
 
 サイドバーのサブモードに応じて表示を切り替えます:
-- input: 入力・管理
+- input: 管理
 - analysis: 分析・可視化
 - advice: AIアドバイス
 """
@@ -27,7 +27,7 @@ def render_portfolio_tab():
 
 
 def _render_input_section():
-    """入力・管理セクション (単一画面・Google Financeライク)"""
+    """管理セクション (単一画面・Google Financeライク)"""
     from src.portfolio_storage import list_portfolios, load_portfolio, delete_portfolio
     from src.ui.portfolio_input import render_portfolio_manager
 
