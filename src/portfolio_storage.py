@@ -36,7 +36,7 @@ def get_storage_type() -> StorageType:
     """現在のストレージタイプを取得"""
     import streamlit as st
 
-    return st.session_state.get("_storage_type", "local")
+    return st.session_state.get("_storage_type", "supabase")
 
 
 @dataclass

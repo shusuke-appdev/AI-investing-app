@@ -175,8 +175,8 @@ def set_gas_url(url: str) -> bool:
 
 
 def get_storage_type() -> str:
-    """ストレージタイプを取得（local/gas）"""
-    return get_setting("storage_type", "local")
+    """ストレージタイプを取得（local/gas/supabase）"""
+    return get_setting("storage_type", "supabase")
 
 
 def set_storage_type_setting(storage_type: str) -> bool:

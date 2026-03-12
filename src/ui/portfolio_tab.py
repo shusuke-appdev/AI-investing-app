@@ -28,7 +28,7 @@ def render_portfolio_tab():
 
 def _render_input_section():
     """入力・管理セクション (単一画面・Google Financeライク)"""
-    from src.portfolio_storage import list_portfolios, load_portfolio
+    from src.portfolio_storage import list_portfolios, load_portfolio, delete_portfolio
     from src.ui.portfolio_input import render_portfolio_manager
 
     # ヘッダーUI: ポートフォリオ選択
@@ -37,25 +37,33 @@ def _render_input_section():
 
     st.markdown("### 💼 ポートフォリオ")
 
-    header_col1, header_col2, _ = st.columns([3, 2, 5])
+    # 選択されているポートフォリオが存在しない場合は新規扱いにする
+    if current_name not in portfolios and current_name != "新規ポートフォリオ":
+        current_name = "新規ポートフォリオ"
+        st.session_state.current_portfolio_name = current_name
+        st.session_state.managed_holdings = []
+
+    header_col1, header_col2, header_col3 = st.columns([6, 2, 2])
     with header_col1:
-        options = ["新規ポートフォリオ"] + portfolios
-        selected_index = options.index(current_name) if current_name in options else 0
-        selected = st.selectbox(
+        selected = st.pills(
             "ポートフォリオ選択",
-            options=options,
-            index=selected_index,
+            options=portfolios,
+            selection_mode="single",
+            default=current_name if current_name in portfolios else None,
             label_visibility="collapsed",
         )
-        if selected != current_name:
-            if selected == "新規ポートフォリオ":
-                st.session_state.managed_holdings = []
-                st.session_state.current_portfolio_name = "新規ポートフォリオ"
-            else:
-                data = load_portfolio(selected)
-                if data:
-                    st.session_state.managed_holdings = data.get("holdings", [])
-                    st.session_state.current_portfolio_name = selected
+
+        # 別のポートフォリオが選択された場合
+        if selected and selected != current_name:
+            data = load_portfolio(selected)
+            if data:
+                st.session_state.managed_holdings = data.get("holdings", [])
+                st.session_state.current_portfolio_name = selected
+            st.rerun()
+        # 選択が解除された場合は「新規ポートフォリオ」画面にする
+        elif not selected and current_name != "新規ポートフォリオ":
+            st.session_state.managed_holdings = []
+            st.session_state.current_portfolio_name = "新規ポートフォリオ"
             st.rerun()
 
     with header_col2:
@@ -63,6 +71,19 @@ def _render_input_section():
             st.session_state.managed_holdings = []
             st.session_state.current_portfolio_name = "新規ポートフォリオ"
             st.rerun()
+
+    with header_col3:
+        if current_name != "新規ポートフォリオ":
+            if st.button(
+                "🗑️ 削除",
+                help="ポートフォリオ全体を完全に削除します",
+                type="tertiary",
+                use_container_width=True,
+            ):
+                delete_portfolio(current_name)
+                st.session_state.managed_holdings = []
+                st.session_state.current_portfolio_name = "新規ポートフォリオ"
+                st.rerun()
 
     st.divider()
 
@@ -81,7 +102,7 @@ def _render_analysis_section():
 
     analysis = st.session_state.get("portfolio_analysis")
     holdings_data = st.session_state.get("managed_holdings", [])
-    
+
     if not holdings_data:
         st.info("📈 先に「ポートフォリオ」画面で銘柄を追加してください")
         if st.button("← ポートフォリオに戻る"):
