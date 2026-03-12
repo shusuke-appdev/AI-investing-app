@@ -430,10 +430,3 @@ def _render_ticker_compact(opt: dict):
                 walls.append(f"-Wall ${n_wall:,.0f}")
             if walls:
                 st.caption(f"抵抗帯: {', '.join(walls)}")
-
-
-def _render_detailed_analysis_enhanced(
-    opt: dict, pcr_val: float, vol_pcr: float, net_gex: float, price: float
-):
-    # Old function - logic moved to _render_ticker_compact
-    pass

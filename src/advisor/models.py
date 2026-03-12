@@ -1,5 +1,51 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
+
+
+class MinerviniStageResult(TypedDict):
+    stage: int
+    description: str
+
+
+class MinerviniVcpResult(TypedDict, total=False):
+    is_vcp: bool
+    contractions: int
+    breakout_price: float
+    points: List[Dict[str, Any]]
+    current_price: float
+
+
+class MinerviniFtdResult(TypedDict, total=False):
+    is_ftd: bool
+    status: str
+    days_since_bottom: int
+    pct_change: float
+
+
+class MeanReversionParabolicState(TypedDict, total=False):
+    is_parabolic: bool
+    description: str
+    deviation_10ma: Optional[float]
+    deviation_20ma: Optional[float]
+    target_reversion_price: Optional[float]
+
+
+class MeanReversionReboundState(TypedDict, total=False):
+    is_dip_buyable: bool
+    is_perfect_order: bool
+    description: str
+    near_support: str
+
+
+class MeanReversionResult(TypedDict, total=False):
+    ticker: str
+    current_price: float
+    parabolic_state: MeanReversionParabolicState
+    rebound_state: MeanReversionReboundState
+    ma_10: Optional[float]
+    ma_20: Optional[float]
+    ma_50: Optional[float]
+    error: str
 
 
 @dataclass
@@ -128,18 +174,18 @@ class TechnicalScore:
     candlestick_summary: str = ""  # bullish/bearish/neutral
 
     # === Minervini Extension ===
-    stage_data: dict = field(default_factory=dict)  # {"stage": int, "description": str}
-    vcp_data: dict = field(
-        default_factory=dict
-    )  # {"is_vcp": bool, "breakout_price": float, ...}
+    stage_data: MinerviniStageResult = field(
+        default_factory=lambda: {"stage": 0, "description": ""}
+    )
+    vcp_data: MinerviniVcpResult = field(default_factory=dict)
 
     # === Option Skew & Mean Reversion Extension ===
     skew: Optional[float] = None
     dte: Optional[float] = None
-    price_range: Optional[tuple[float, float]] = None
+    price_range: Optional[Tuple[float, float]] = None
 
-    mr_parabolic_state: dict = field(default_factory=dict)
-    mr_rebound_state: dict = field(default_factory=dict)
+    mr_parabolic_state: MeanReversionParabolicState = field(default_factory=dict)
+    mr_rebound_state: MeanReversionReboundState = field(default_factory=dict)
 
 
 @dataclass

@@ -1,6 +1,12 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 import pandas as pd
+
+from src.advisor.models import (
+    MinerviniFtdResult,
+    MinerviniStageResult,
+    MinerviniVcpResult,
+)
 
 
 def detect_vcp(
@@ -8,7 +14,7 @@ def detect_vcp(
     min_contractions: int = 2,
     max_contractions: int = 4,
     vol_reduction_threshold: float = 0.5,
-) -> Tuple[bool, Optional[Dict[str, Any]]]:
+) -> Tuple[bool, Optional[MinerviniVcpResult]]:
     """
     株価データからVolatility Contraction Pattern (VCP) を検出します。
     """
@@ -113,7 +119,7 @@ def detect_vcp(
     return False, None
 
 
-def analyze_stage(data: pd.DataFrame) -> Dict[str, Any]:
+def analyze_stage(data: pd.DataFrame) -> MinerviniStageResult:
     """
     Minerviniのトレンドテンプレートに基づき、4つのステージを判定します。
     """
@@ -162,7 +168,7 @@ def analyze_stage(data: pd.DataFrame) -> Dict[str, Any]:
     return {"stage": 0, "description": "ステージ判定不能（移行期）"}
 
 
-def detect_follow_through_day(data: pd.DataFrame) -> Dict[str, Any]:
+def detect_follow_through_day(data: pd.DataFrame) -> MinerviniFtdResult:
     """
     市場指数からフォロースルーデー (FTD) を検出します。
     通常、下落からの反発ラリー4日目以降に発生する、出来高増を伴う大幅高（1.5%以上）を指します。

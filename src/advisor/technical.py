@@ -10,6 +10,29 @@ from typing import Optional
 
 import pandas as pd
 
+# スコアリングの重み付け定数
+SCORE_WEIGHTS_DEFAULT = {
+    "trend": 0.30,
+    "mom": 0.20,
+    "pat": 0.20,
+    "flow": 0.20,
+    "mtf": 0.10,
+}
+SCORE_WEIGHTS_POS_GAMMA = {
+    "trend": 0.20,
+    "mom": 0.30,
+    "pat": 0.20,
+    "flow": 0.20,
+    "mtf": 0.10,
+}
+SCORE_WEIGHTS_NEG_GAMMA = {
+    "trend": 0.40,
+    "mom": 0.10,
+    "pat": 0.20,
+    "flow": 0.20,
+    "mtf": 0.10,
+}
+
 from src.advisor.mean_reversion import MeanReversionAnalyzer
 from src.advisor.minervini_analyzer import analyze_stage, detect_vcp
 from src.advisor.models import TechnicalScore
@@ -137,18 +160,19 @@ def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScor
     )
 
     # 重み付き集約 (Pattern 20%, Flow 20%)
-    w_trend, w_mom, w_pat, w_flow, w_mtf = 0.30, 0.20, 0.20, 0.20, 0.10
     if opt_data["gex_regime"] == "positive_gamma":
-        w_trend, w_mom, w_pat = 0.20, 0.30, 0.20
+        weights = SCORE_WEIGHTS_POS_GAMMA
     elif opt_data["gex_regime"] == "negative_gamma":
-        w_trend, w_mom, w_pat = 0.40, 0.10, 0.20
+        weights = SCORE_WEIGHTS_NEG_GAMMA
+    else:
+        weights = SCORE_WEIGHTS_DEFAULT
 
     weighted = (
-        trend_score * w_trend
-        + momentum_score * w_mom
-        + pattern_score * w_pat
-        + flow_score * w_flow
-        + mtf_score * w_mtf
+        trend_score * weights["trend"]
+        + momentum_score * weights["mom"]
+        + pattern_score * weights["pat"]
+        + flow_score * weights["flow"]
+        + mtf_score * weights["mtf"]
     )
     score = int(max(-100, min(100, weighted * 50)))
 

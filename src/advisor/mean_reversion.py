@@ -6,6 +6,12 @@ Mean Reversion Analyzer モジュール
 
 import pandas as pd
 
+from src.advisor.models import (
+    MeanReversionParabolicState,
+    MeanReversionReboundState,
+    MeanReversionResult,
+)
+
 
 class MeanReversionAnalyzer:
     """
@@ -16,7 +22,7 @@ class MeanReversionAnalyzer:
     def __init__(self, ticker: str):
         self.ticker = ticker
 
-    def analyze(self, df_daily: pd.DataFrame) -> dict:
+    def analyze(self, df_daily: pd.DataFrame) -> MeanReversionResult:
         """
         日足データからMean Reversionの観点で状態を評価する。
 
@@ -60,7 +66,9 @@ class MeanReversionAnalyzer:
         df["SMA_50"] = df["Close"].rolling(window=50).mean()
         return df
 
-    def _check_parabolic_extension(self, df: pd.DataFrame) -> dict:
+    def _check_parabolic_extension(
+        self, df: pd.DataFrame
+    ) -> MeanReversionParabolicState:
         """
         急激な上昇によるParabolicな状態（過熱感）を検知。
         10MA/20MAからの大きな乖離、および連続する大陽線などで判定。
@@ -116,7 +124,7 @@ class MeanReversionAnalyzer:
             "target_reversion_price": target_reversion,
         }
 
-    def _check_rebound_setup(self, df: pd.DataFrame) -> dict:
+    def _check_rebound_setup(self, df: pd.DataFrame) -> MeanReversionReboundState:
         """
         サポートライン（主にMA）付近からの反発可能性や、Dip Buyの適性を確認する。
         """

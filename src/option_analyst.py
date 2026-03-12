@@ -489,7 +489,9 @@ def get_major_indices_options(market_type: str = "US") -> list[dict]:
                 results.append(analysis)
             else:
                 failed_tickers.append(ticker)
-                logger.warning(f"[OptionAnalyst] analyze_option_sentiment returned None for {ticker}")
+                logger.warning(
+                    f"[OptionAnalyst] analyze_option_sentiment returned None for {ticker}"
+                )
         except Exception as e:
             failed_tickers.append(ticker)
             logger.error(f"[OptionAnalyst] Exception analyzing {ticker}: {e}")
