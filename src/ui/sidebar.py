@@ -35,8 +35,7 @@ PAGES = {
 # ポートフォリオのサブモード
 PORTFOLIO_SUBMODES = {
     "input": {"icon": "📝", "name": "入力・管理"},
-    "analysis": {"icon": "📊", "name": "分析・可視化"},
-    "advice": {"icon": "🤖", "name": "AIアドバイス"},
+    "analysis": {"icon": "📊", "name": "分析"},
 }
 
 

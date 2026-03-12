@@ -1,458 +1,396 @@
 """
 Portfolio Input Module
-ポートフォリオ入力関連のUI機能を提供します。
+ポートフォリオ入力・管理およびGoogle Financeライクな機能を提供します。
 """
 
+import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
+import datetime
 
 from src.market_data import get_stock_info
+from src.data_provider import DataProvider
 from src.portfolio_advisor import PortfolioHolding, parse_csv_portfolio
-from src.portfolio_storage import (
-    delete_portfolio,
-    list_portfolios,
-    load_portfolio,
-    save_portfolio,
-)
+from src.portfolio_storage import save_portfolio
+from src.portfolio_history import get_value_series
 
 
 def render_portfolio_manager() -> list[PortfolioHolding]:
     """
-    インタラクティブなポートフォリオ管理UI
-    銘柄の追加・削除・編集が可能
+    Google Finance風のポートフォリオ管理UI
+    上部に評価額推移、メインに銘柄一覧、下部にニュースを配置し、右側にハイライト円グラフを表示
     """
-    st.markdown("### 📊 ポートフォリオ管理")
-
-    # 現在編集中のポートフォリオ名を明示
+    holdings_data = st.session_state.get("managed_holdings", [])
     current_name = st.session_state.get("current_portfolio_name", "新規ポートフォリオ")
-    st.info(f"**📄 編集中:** {current_name}")
 
-    # セッションステートでポートフォリオを管理
-    if "managed_holdings" not in st.session_state:
-        st.session_state.managed_holdings = []
-
-    holdings_data = st.session_state.managed_holdings
-
-    # 新規銘柄追加フォーム
-    st.markdown("#### ➕ 銘柄を追加")
-
-    # ラベル行（明確化）
-    label_cols = st.columns([2, 1, 1, 1])
-    with label_cols[0]:
-        st.caption("**銘柄コード**")
-    with label_cols[1]:
-        st.caption("**株数**")
-    with label_cols[2]:
-        st.caption("**取得単価 ($)**")
-    with label_cols[3]:
-        st.caption("")
-
-    # 入力行
-    add_cols = st.columns([2, 1, 1, 1])
-    with add_cols[0]:
-        new_ticker = st.text_input(
-            "銘柄コード",
-            key="new_ticker",
-            placeholder="AAPL",
-            label_visibility="collapsed",
-        ).upper()
-    with add_cols[1]:
-        new_shares = st.number_input(
-            "株数",
-            min_value=0.0,
-            value=0.0,
-            step=1.0,
-            key="new_shares",
-            label_visibility="collapsed",
-            format="%.2f",
-            placeholder="10",
-        )
-    with add_cols[2]:
-        new_cost = st.number_input(
-            "取得単価",
-            min_value=0.0,
-            value=0.0,
-            step=1.0,
-            key="new_cost",
-            label_visibility="collapsed",
-            format="%.2f",
-            placeholder="150.00",
-        )
-    with add_cols[3]:
-        if st.button("➕ 追加", use_container_width=True, type="primary"):
-            if new_ticker and new_shares > 0:
-                existing = next(
-                    (h for h in holdings_data if h["ticker"] == new_ticker), None
-                )
-                if existing:
-                    existing["shares"] += new_shares
-                    st.success(f"✅ {new_ticker} を更新 (合計: {existing['shares']}株)")
-                else:
-                    holdings_data.append(
-                        {
-                            "ticker": new_ticker,
-                            "shares": new_shares,
-                            "avg_cost": new_cost if new_cost > 0 else None,
-                        }
-                    )
-                    st.success(f"✅ {new_ticker} を追加")
-                st.session_state.managed_holdings = holdings_data
-                st.rerun()
-            else:
-                st.warning("ティッカーと株数を入力してください")
+    # 1. Top Graph (Asset History)
+    _render_top_history_graph(current_name, holdings_data)
 
     st.markdown("---")
 
+    # 2. 2-Column Layout (7:3 ratio)
+    col_main, col_side = st.columns([7, 3])
+
+    with col_main:
+        # A. Holdings Table
+        updated_holdings = _render_holdings_table(holdings_data)
+        
+        # 変更検知のロジックを厳密にする（無限rerun防止）
+        is_changed = False
+        if len(updated_holdings) != len(holdings_data):
+            is_changed = True
+        else:
+            for u, h in zip(updated_holdings, holdings_data):
+                if u["ticker"] != h["ticker"] or float(u["shares"]) != float(h["shares"]):
+                    is_changed = True
+                    break
+
+        if is_changed:
+            st.session_state.managed_holdings = updated_holdings
+            # 自動保存（新規でなければ）
+            if current_name != "新規ポートフォリオ":
+                save_portfolio(current_name, updated_holdings)
+            st.rerun()
+
+        # B. Add Button
+        _render_add_button(updated_holdings, current_name)
+
+        # C. News
+        if updated_holdings:
+            st.markdown("### 📰 ニュースとイベント")
+            _render_news([h["ticker"] for h in updated_holdings])
+
+    with col_side:
+        if updated_holdings:
+            _render_highlights(updated_holdings)
+            _render_earnings_calendar([h["ticker"] for h in updated_holdings])
+
+    return [PortfolioHolding(**h) for h in updated_holdings if h["shares"] > 0]
+
+
+def _render_top_history_graph(portfolio_name: str, holdings_data: list):
+    """上部の評価額推移グラフを描画"""
+    dates, values = get_value_series(portfolio_name, 30)
+
+    # 履歴がない場合、現在の評価額のみを即時計算して表示する
+    if not dates or len(dates) < 2:
+        current_val = 0.0
+        for h in holdings_data:
+            quote = DataProvider.get_quote(h["ticker"]) or {}
+            price = quote.get("c") or 0.0
+            current_val += price * h["shares"]
+
+        st.markdown(
+            f"<h1 style='margin-bottom:0px;'>${current_val:,.2f}</h1>",
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "評価額の推移データがありません。スナップショットを記録するとグラフが表示されます。"
+        )
+        return
+
+    df = pd.DataFrame({"Date": dates, "Value": values})
+    fig = go.Figure(
+        go.Scatter(
+            x=df["Date"],
+            y=df["Value"],
+            mode="lines",
+            fill="tozeroy",
+            line=dict(color="#1a73e8", width=2),
+            fillcolor="rgba(26, 115, 232, 0.1)",
+        )
+    )
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=10, b=0),
+        height=250,
+        xaxis=dict(showgrid=False),
+        yaxis=dict(showgrid=True),
+        hovermode="x unified",
+    )
+
+    # Highlight current value and 1-day change
+    current_val = values[-1]
+    prev_val = values[-2] if len(values) > 1 else current_val
+    diff = current_val - prev_val
+    diff_pct = (diff / prev_val * 100) if prev_val else 0.0
+
+    st.markdown(f"<h1 style='margin-bottom:0px;'>${current_val:,.2f}</h1>", unsafe_allow_html=True)
+    color = "green" if diff >= 0 else "red"
+    bg_color = "rgba(0,255,0,0.1)" if color == 'green' else "rgba(255,0,0,0.1)"
+    sign = "+" if diff >= 0 else ""
+    st.markdown(
+        f"<span style='color:{color}; font-weight:bold; background-color: {bg_color}; padding: 5px; border-radius: 5px;'>"
+        f"{sign}{diff_pct:.2f}% ({sign}${diff:,.2f}) 今日</span>", 
+        unsafe_allow_html=True
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_holdings_table(holdings_data: list) -> list:
+    """銘柄一覧テーブルの描画"""
     if not holdings_data:
-        st.info("銘柄を追加してください")
-        return []
+        st.info("銘柄が登録されていません。下の「＋」ボタンから追加してください。")
+        return holdings_data
 
-    st.markdown(f"#### 📋 保有銘柄 ({len(holdings_data)}銘柄)")
+    # Table header
+    cols = st.columns([1.5, 2, 1, 1, 1.5, 1, 0.5])
+    with cols[0]:
+        st.caption("**セクター**")
+    with cols[1]:
+        st.caption("**シンボル・名前**")
+    with cols[2]:
+        st.caption("**価格**")
+    with cols[3]:
+        st.caption("**数量**")
+    with cols[4]:
+        st.caption("**1日の収益**")
+    with cols[5]:
+        st.caption("**評価額**")
+    with cols[6]:
+        st.caption("")
 
-    # ヘッダー
-    header_cols = st.columns([2, 1.5, 1.5, 1, 0.5])
-    with header_cols[0]:
-        st.markdown("**銘柄**")
-    with header_cols[1]:
-        st.markdown("**株数**")
-    with header_cols[2]:
-        st.markdown("**取得単価**")
-    with header_cols[3]:
-        st.markdown("**評価額**")
-    with header_cols[4]:
-        st.markdown("**操作**")
-
-    # 各銘柄の編集行
-    updated_holdings = []
+    updated = []
     to_delete = []
 
     for i, h in enumerate(holdings_data):
-        cols = st.columns([2, 1.5, 1.5, 1, 0.5])
+        info = get_stock_info(h["ticker"])
+        quote = DataProvider.get_quote(h["ticker"]) or {}
 
-        with cols[0]:
-            info = get_stock_info(h["ticker"])
-            name = info.get("name", h["ticker"])[:20]
-            st.markdown(f"**{h['ticker']}**  \n{name}")
+        current_price = quote.get("c") or info.get("current_price") or 0.0
+        dp = quote.get("dp") or 0.0
+        d = quote.get("d") or 0.0
 
-        with cols[1]:
-            new_shares = st.number_input(
-                "株数",
-                min_value=0.0,
-                value=float(h["shares"]),
-                step=1.0,
-                key=f"edit_shares_{i}",
-                label_visibility="collapsed",
-                format="%.2f",
-            )
+        c = st.columns([1.5, 2, 1, 1, 1.5, 1, 0.5])
 
-        with cols[2]:
-            current_cost = h.get("avg_cost") or 0.0
-            new_cost = st.number_input(
-                "単価",
-                min_value=0.0,
-                value=float(current_cost),
-                step=1.0,
-                key=f"edit_cost_{i}",
-                label_visibility="collapsed",
-                format="%.2f",
-            )
+        # Sector
+        c[0].write(info.get("sector", "N/A"))
 
-        with cols[3]:
-            current_price = info.get("current_price", 0)
-            value = current_price * new_shares
-            st.markdown(f"${value:,.0f}")
+        # Name
+        c[1].write(f"**{h['ticker']}**\n{info.get('name', '')[:15]}")
 
-        with cols[4]:
-            if st.button("🗑️", key=f"del_{i}", help="削除"):
-                to_delete.append(i)
+        # Price
+        c[2].write(f"${current_price:,.2f}")
 
-        if new_shares > 0:
-            updated_holdings.append(
-                {
-                    "ticker": h["ticker"],
-                    "shares": new_shares,
-                    "avg_cost": new_cost if new_cost > 0 else None,
-                }
-            )
-
-    if to_delete:
-        for idx in sorted(to_delete, reverse=True):
-            holdings_data.pop(idx)
-        st.session_state.managed_holdings = holdings_data
-        st.rerun()
-
-    if updated_holdings != holdings_data:
-        st.session_state.managed_holdings = updated_holdings
-
-    # 一括操作
-    st.markdown("---")
-    action_cols = st.columns(3)
-    with action_cols[0]:
-        if st.button("🔄 全クリア", type="secondary", use_container_width=True):
-            st.session_state.managed_holdings = []
-            st.session_state.pop("current_portfolio_name", None)
-            st.rerun()
-    with action_cols[1]:
-        if st.button("📥 保存済みから読込", type="secondary", use_container_width=True):
-            st.session_state.portfolio_input_mode = "saved"
-            st.rerun()
-
-    return [
-        PortfolioHolding(
-            ticker=h["ticker"], shares=h["shares"], avg_cost=h.get("avg_cost")
+        # Shares
+        new_shares = c[3].number_input(
+            "株数",
+            value=float(h["shares"]),
+            min_value=0.0,
+            label_visibility="collapsed",
+            key=f"sh_{i}",
         )
-        for h in st.session_state.managed_holdings
-        if h["shares"] > 0
-    ]
 
-
-def render_save_portfolio(holdings: list[PortfolioHolding]):
-    """ポートフォリオ保存UI"""
-    with st.expander("💾 ポートフォリオを保存"):
-        current_name = st.session_state.get("current_portfolio_name", "")
-        portfolio_name = st.text_input(
-            "ポートフォリオ名", value=current_name, placeholder="メインポートフォリオ"
+        # 1-day return
+        color = "green" if d >= 0 else "red"
+        bg_color = "rgba(0,255,0,0.1)" if color == 'green' else "rgba(255,0,0,0.1)"
+        arrow = "↑" if d >= 0 else "↓"
+        sign = "+" if d >= 0 else ""
+        daily_return_val = d * new_shares
+        c[4].markdown(
+            f"<span style='color:{color}; font-weight:bold; background-color: {bg_color}; padding: 3px; border-radius: 3px;'>"
+            f"{arrow}{abs(dp):.2f}%</span><br><span style='color:{color};'>{sign}${abs(daily_return_val):.2f}</span>", 
+            unsafe_allow_html=True
         )
-        if st.button("保存", use_container_width=True):
-            if portfolio_name:
-                holdings_data = [
-                    {"ticker": h.ticker, "shares": h.shares, "avg_cost": h.avg_cost}
-                    for h in holdings
-                ]
-                if save_portfolio(portfolio_name, holdings_data):
-                    st.success(f"✅ 「{portfolio_name}」を保存しました")
-                    st.session_state.current_portfolio_name = portfolio_name
-                else:
-                    st.error("保存に失敗しました")
-            else:
-                st.warning("ポートフォリオ名を入力してください")
+
+        # Value
+        val = current_price * new_shares
+        c[5].write(f"**${val:,.2f}**")
+
+        # Delete
+        if c[6].button("🗑️", key=f"del_{i}", help="削除"):
+            to_delete.append(i)
+
+        updated.append(
+            {"ticker": h["ticker"], "shares": new_shares, "avg_cost": h.get("avg_cost")}
+        )
+
+    for i in sorted(to_delete, reverse=True):
+        updated.pop(i)
+
+    return updated
 
 
-def render_saved_portfolios() -> list[PortfolioHolding]:
-    """保存済みポートフォリオUI"""
-    portfolios = list_portfolios()
+def _render_add_button(holdings_data: list, current_name: str):
+    """中央揃えの「＋」ボタンと追加UI"""
+    if "show_add_panel" not in st.session_state:
+        st.session_state.show_add_panel = False
 
-    if not portfolios:
-        st.info("保存済みポートフォリオがありません")
-        return []
+    # 横長で中央の＋ボタン
+    _, center_col, _ = st.columns([3, 4, 3])
+    with center_col:
+        # ボタンのテキストはシンプルに「＋」のみ、横幅最大
+        if st.button("＋", use_container_width=True, type="primary"):
+            st.session_state.show_add_panel = not st.session_state.show_add_panel
+            st.rerun()
 
-    selected = st.selectbox("📂 ポートフォリオを選択", portfolios)
+    if st.session_state.show_add_panel:
+        with st.container(border=True):
+            tab_manual, tab_file = st.tabs(["✏️ 手動入力", "📁 ファイルアップロード"])
 
-    if selected:
-        data = load_portfolio(selected)
-        if data:
-            holdings = []
-            for h in data.get("holdings", []):
-                holdings.append(
-                    PortfolioHolding(
-                        ticker=h["ticker"],
-                        shares=h["shares"],
-                        avg_cost=h.get("avg_cost"),
-                    )
+            with tab_manual:
+                new_ticker = st.text_input("銘柄コード", placeholder="AAPL").upper()
+                new_shares = st.number_input("株数", min_value=0.0, value=0.0, step=1.0)
+                new_cost = st.number_input(
+                    "取得単価", min_value=0.0, value=0.0, step=1.0
                 )
 
-            if holdings:
-                st.success(f"✅ {len(holdings)}銘柄を読み込み")
-                show_holdings_preview(holdings)
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("📊 管理モードで編集", use_container_width=True):
-                        st.session_state.managed_holdings = [
-                            {
-                                "ticker": h.ticker,
-                                "shares": h.shares,
-                                "avg_cost": h.avg_cost,
-                            }
-                            for h in holdings
-                        ]
-                        st.session_state.portfolio_input_mode = "manage"
-                        st.session_state.current_portfolio_name = selected
+                if st.button("追加する", key="btn_manual_add"):
+                    if new_ticker and new_shares > 0:
+                        existing = next(
+                            (h for h in holdings_data if h["ticker"] == new_ticker),
+                            None,
+                        )
+                        if existing:
+                            existing["shares"] += new_shares
+                        else:
+                            holdings_data.append(
+                                {
+                                    "ticker": new_ticker,
+                                    "shares": new_shares,
+                                    "avg_cost": new_cost if new_cost > 0 else None,
+                                }
+                            )
+                        st.session_state.managed_holdings = holdings_data
+                        if current_name != "新規ポートフォリオ":
+                            save_portfolio(current_name, holdings_data)
+                        st.session_state.show_add_panel = False
                         st.rerun()
-                with col2:
-                    if st.button(
-                        "🗑️ このポートフォリオを削除",
-                        type="secondary",
-                        use_container_width=True,
-                    ):
-                        if delete_portfolio(selected):
-                            st.success("削除しました")
-                            st.rerun()
 
-                return holdings
-
-    return []
-
-
-def render_manual_input() -> list[PortfolioHolding]:
-    """手動入力UI"""
-    holdings = []
-
-    if "manual_input_rows" not in st.session_state:
-        st.session_state.manual_input_rows = 3
-
-    st.markdown("#### 保有銘柄")
-    st.caption("※ティッカー、数量、取得単価を入力してください。")
-
-    # 分かりやすいヘッダー
-    header_cols = st.columns([2, 1, 1])
-    with header_cols[0]:
-        st.markdown("**銘柄コード**")
-    with header_cols[1]:
-        st.markdown("**数量（株数）**")
-    with header_cols[2]:
-        st.markdown("**取得単価 ($)**")
-
-    for i in range(st.session_state.manual_input_rows):
-        cols = st.columns([2, 1, 1])
-        with cols[0]:
-            ticker = st.text_input(
-                f"銘柄{i + 1}",
-                key=f"ticker_{i}",
-                placeholder="AAPL",
-                label_visibility="collapsed",
-            ).upper()
-        with cols[1]:
-            shares = st.number_input(
-                "数量",
-                min_value=0.0,
-                value=0.0,
-                step=1.0,
-                key=f"shares_{i}",
-                label_visibility="collapsed",
-                format="%.2f",
-                placeholder="10",
-            )
-        with cols[2]:
-            avg_cost = st.number_input(
-                "取得単価",
-                min_value=0.0,
-                value=0.0,
-                step=1.0,
-                key=f"cost_{i}",
-                label_visibility="collapsed",
-                format="%.2f",
-                placeholder="150",
-            )
-
-        if ticker and shares > 0:
-            holdings.append(
-                PortfolioHolding(
-                    ticker=ticker,
-                    shares=shares,
-                    avg_cost=avg_cost if avg_cost > 0 else None,
+            with tab_file:
+                uploaded = st.file_uploader(
+                    "CSVファイルをアップロード",
+                    type=["csv"],
+                    help="ticker,shares,avg_cost のカラムを含むCSV",
                 )
-            )
-
-    if st.button("➕ 入力欄を追加", type="secondary"):
-        st.session_state.manual_input_rows += 1
-        st.rerun()
-
-    return holdings
-
-
-def render_text_paste() -> list[PortfolioHolding]:
-    """テキスト貼付け入力UI"""
-    st.markdown("""
-    **CSV形式で貼り付け:**
-    ```
-    ticker,shares,avg_cost
-    AAPL,10,150.00
-    NVDA,5,500.00
-    TSLA,3,
-    ```
-    """)
-
-    csv_text = st.text_area(
-        "CSVデータを貼り付け",
-        height=200,
-        placeholder="ticker,shares,avg_cost\nAAPL,10,150.00\nNVDA,5,500.00",
-    )
-
-    if csv_text.strip():
-        holdings = parse_csv_portfolio(csv_text)
-        if holdings:
-            st.success(f"✅ {len(holdings)}銘柄を認識")
-            show_holdings_preview(holdings)
-            return holdings
-        else:
-            st.warning("⚠️ データを認識できませんでした")
-
-    return []
+                if uploaded:
+                    content = uploaded.read().decode("utf-8")
+                    parsed = parse_csv_portfolio(content)
+                    if parsed:
+                        for p in parsed:
+                            existing = next(
+                                (h for h in holdings_data if h["ticker"] == p.ticker),
+                                None,
+                            )
+                            if existing:
+                                existing["shares"] += p.shares
+                            else:
+                                holdings_data.append(
+                                    {
+                                        "ticker": p.ticker,
+                                        "shares": p.shares,
+                                        "avg_cost": p.avg_cost,
+                                    }
+                                )
+                        st.session_state.managed_holdings = holdings_data
+                        if current_name != "新規ポートフォリオ":
+                            save_portfolio(current_name, holdings_data)
+                        st.session_state.show_add_panel = False
+                        st.success(f"{len(parsed)}銘柄を追加しました")
+                        st.rerun()
 
 
-def render_file_import() -> list[PortfolioHolding]:
-    """ファイルインポートUI"""
-
-    tab1, tab2 = st.tabs(["📁 ローカルCSV", "☁️ Google Drive"])
-
-    with tab1:
-        uploaded = st.file_uploader(
-            "CSVファイルをアップロード",
-            type=["csv"],
-            help="ticker,shares,avg_cost のカラムを含むCSV",
+def _render_highlights(holdings_data: list):
+    """ポートフォリオハイライト（円グラフ）"""
+    with st.container(border=True):
+        st.markdown(
+            "<div style='text-align:center; font-weight:bold; padding-bottom:10px;'>ポートフォリオのハイライト</div>",
+            unsafe_allow_html=True,
         )
 
-        if uploaded:
-            content = uploaded.read().decode("utf-8")
-            holdings = parse_csv_portfolio(content)
-            if holdings:
-                st.success(f"✅ {len(holdings)}銘柄を読み込み")
-                show_holdings_preview(holdings)
-                return holdings
+        total_val = 0
+        sectors = {}
+        caps = {"大企業": 0, "中規模": 0, "小規模": 0}
 
-    with tab2:
-        st.markdown("""
-        **Google Sheets共有リンクで取得:**
-        """)
+        for h in holdings_data:
+            info = get_stock_info(h["ticker"])
+            quote = DataProvider.get_quote(h["ticker"]) or {}
+            price = quote.get("c") or info.get("current_price") or 0.0
+            val = price * h["shares"]
+            total_val += val
 
-        drive_url = st.text_input(
-            "Google Sheets共有URL",
-            placeholder="https://docs.google.com/spreadsheets/d/...",
-        )
+            # Sector
+            sec = info.get("sector", "N/A")
+            sectors[sec] = sectors.get(sec, 0) + val
 
-        if drive_url and "docs.google.com/spreadsheets" in drive_url:
-            # URLを安全に解析
-            parts = drive_url.split("/d/")
-            if len(parts) < 2:
-                st.warning(
-                    "⚠️ URLの形式が正しくありません。/d/ を含むURLを入力してください"
-                )
+            # Market Cap (Mega/Large: 大企業 > $10B, Mid: 中規模 > $2B, Small: 小規模 < $2B)
+            mcap = info.get("market_cap") or 0
+            if mcap >= 10_000_000_000:
+                caps["大企業"] += val
+            elif mcap >= 2_000_000_000:
+                caps["中規模"] += val
             else:
-                sheet_parts = parts[1].split("/")
-                if not sheet_parts or not sheet_parts[0]:
-                    st.warning("⚠️ スプレッドシートIDを抽出できませんでした")
-                else:
-                    sheet_id = sheet_parts[0]
-                    csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+                caps["小規模"] += val
 
-                    if st.button("📥 スプレッドシートを読み込み"):
-                        import requests
+        if total_val == 0:
+            st.caption("評価額が0のためハイライトを表示できません")
+            return
 
-                        try:
-                            resp = requests.get(csv_url, timeout=10)
-                            resp.raise_for_status()
-                            holdings = parse_csv_portfolio(resp.text)
-                            if holdings:
-                                st.success(f"✅ {len(holdings)}銘柄を読み込み")
-                                show_holdings_preview(holdings)
-                                st.session_state.drive_holdings = holdings
-                        except Exception as e:
-                            st.error(f"❌ 読み込みエラー: {str(e)}")
+        def make_pie(data_dict):
+            labels = [k for k, v in data_dict.items() if v > 0]
+            values = [v for k, v in data_dict.items() if v > 0]
+            fig = go.Figure(
+                go.Pie(
+                    labels=labels,
+                    values=values,
+                    hole=0.5,
+                    textinfo="label+percent",
+                    textposition="inside",
+                )
+            )
+            fig.update_layout(
+                margin=dict(t=0, b=0, l=0, r=0), height=220, showlegend=False
+            )
+            return fig
 
-                    if "drive_holdings" in st.session_state:
-                        return st.session_state.drive_holdings
+        st.caption("株・セクター構成比")
+        st.plotly_chart(make_pie(sectors), use_container_width=True)
+        st.caption("企業規模別構成比")
+        st.plotly_chart(make_pie(caps), use_container_width=True)
 
-    return []
+
+def _render_news(tickers: list):
+    """ニュースコンポーネント"""
+    news_items = []
+    # API呼び出しの負担を減らすため最大3銘柄のニュースを取得
+    for t in tickers[:3]:
+        items = DataProvider.get_stock_news(t, max_items=2)
+        news_items.extend(items)
+
+    news_items.sort(key=lambda x: x.get("published", ""), reverse=True)
+
+    if not news_items:
+        st.info("関連ニュースが見つかりませんでした。")
+        return
+
+    for item in news_items[:5]:
+        with st.container(border=True):
+            st.markdown(f"**[{item['title']}]({item['link']})**")
+            # `published` works if dictionary has it
+            st.caption(f"{item.get('publisher', '')} - {item.get('published', '')}")
 
 
-def show_holdings_preview(holdings: list[PortfolioHolding]):
-    """保有銘柄のプレビュー表示"""
-    preview_data = [
-        {
-            "銘柄": h.ticker,
-            "株数": h.shares,
-            "取得単価": f"${h.avg_cost:.2f}" if h.avg_cost else "-",
-        }
-        for h in holdings
-    ]
-    st.dataframe(preview_data, use_container_width=True, hide_index=True)
+def _render_earnings_calendar(tickers: list):
+    """決算カレンダーコンポーネント"""
+    with st.container(border=True):
+        st.markdown(
+            "<div style='text-align:center; font-weight:bold; padding-bottom:10px;'>収益カレンダー</div>",
+            unsafe_allow_html=True,
+        )
+
+        today = datetime.date.today()
+        next_month = today + datetime.timedelta(days=30)
+
+        try:
+            data = DataProvider.get_earnings_calendar(
+                today.strftime("%Y-%m-%d"), next_month.strftime("%Y-%m-%d")
+            )
+            found = [d for d in data if d.get("symbol") in tickers]
+
+            if found:
+                found.sort(key=lambda x: x.get("date", ""))
+                for item in found[:5]:
+                    st.write(f"📅 **{item['symbol']}**: {item.get('date', '')}")
+            else:
+                st.caption("直近30日の決算発表予定はありません。")
+        except Exception:
+            st.caption("データ取得エラー")
