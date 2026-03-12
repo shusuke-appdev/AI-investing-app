@@ -31,7 +31,6 @@ def render_portfolio_tab():
 def _render_input_section():
     """入力・管理セクション"""
     # Lazy imports
-    from src.ui.portfolio_analysis import run_analysis
     from src.ui.portfolio_input import (
         render_file_import,
         render_manual_input,
@@ -44,23 +43,31 @@ def _render_input_section():
     if "portfolio_input_mode" not in st.session_state:
         st.session_state.portfolio_input_mode = "manage"
 
-    # スタイリッシュなセグメントコントロール
-    input_mode = st.segmented_control(
-        "入力方式",
-        options=["📊 管理", "✏️ 手動", "📋 貼付", "📁 ファイル", "💾 読込"],
-        default="📊 管理",
+    # 階層化UIによる入力方式の選択
+    st.markdown("### ⚙️ 入力・管理メニュー")
+    main_action = st.radio(
+        "操作を選択",
+        options=["📊 ポートフォリオ管理", "➕ 新規入力", "📁 データ読込"],
+        horizontal=True,
         label_visibility="collapsed",
     )
 
-    mode_map = {
-        "📊 管理": "manage",
-        "✏️ 手動": "manual",
-        "📋 貼付": "paste",
-        "📁 ファイル": "file",
-        "💾 読込": "saved",
-    }
-    st.session_state.portfolio_input_mode = mode_map.get(input_mode, "manage")
-    mode = st.session_state.portfolio_input_mode
+    if main_action == "📊 ポートフォリオ管理":
+        mode = "manage"
+    elif main_action == "➕ 新規入力":
+        sub_action = st.radio(
+            "入力方法", options=["✏️ 手動", "📋 貼付"], horizontal=True
+        )
+        mode = "manual" if sub_action == "✏️ 手動" else "paste"
+    else:  # 📁 データ読込
+        sub_action = st.radio(
+            "読込方法",
+            options=["📁 ファイル", "💾 保存済みポートフォリオ"],
+            horizontal=True,
+        )
+        mode = "file" if sub_action == "📁 ファイル" else "saved"
+
+    st.session_state.portfolio_input_mode = mode
 
     st.divider()
 
@@ -84,14 +91,6 @@ def _render_input_section():
 
     # 保存機能
     render_save_portfolio(holdings)
-
-    st.divider()
-
-    # 分析実行ボタン
-    if st.button("🔍 ポートフォリオを分析", use_container_width=True, type="primary"):
-        run_analysis(holdings)
-        st.session_state.portfolio_submode = "analysis"
-        st.rerun()
 
 
 def _render_analysis_section():

@@ -22,6 +22,10 @@ def render_portfolio_manager() -> list[PortfolioHolding]:
     """
     st.markdown("### 📊 ポートフォリオ管理")
 
+    # 現在編集中のポートフォリオ名を明示
+    current_name = st.session_state.get("current_portfolio_name", "新規ポートフォリオ")
+    st.info(f"**📄 編集中:** {current_name}")
+
     # セッションステートでポートフォリオを管理
     if "managed_holdings" not in st.session_state:
         st.session_state.managed_holdings = []
@@ -185,6 +189,7 @@ def render_portfolio_manager() -> list[PortfolioHolding]:
     with action_cols[0]:
         if st.button("🔄 全クリア", type="secondary", use_container_width=True):
             st.session_state.managed_holdings = []
+            st.session_state.pop("current_portfolio_name", None)
             st.rerun()
     with action_cols[1]:
         if st.button("📥 保存済みから読込", type="secondary", use_container_width=True):
@@ -203,8 +208,9 @@ def render_portfolio_manager() -> list[PortfolioHolding]:
 def render_save_portfolio(holdings: list[PortfolioHolding]):
     """ポートフォリオ保存UI"""
     with st.expander("💾 ポートフォリオを保存"):
+        current_name = st.session_state.get("current_portfolio_name", "")
         portfolio_name = st.text_input(
-            "ポートフォリオ名", placeholder="メインポートフォリオ"
+            "ポートフォリオ名", value=current_name, placeholder="メインポートフォリオ"
         )
         if st.button("保存", use_container_width=True):
             if portfolio_name:
@@ -214,6 +220,7 @@ def render_save_portfolio(holdings: list[PortfolioHolding]):
                 ]
                 if save_portfolio(portfolio_name, holdings_data):
                     st.success(f"✅ 「{portfolio_name}」を保存しました")
+                    st.session_state.current_portfolio_name = portfolio_name
                 else:
                     st.error("保存に失敗しました")
             else:
@@ -259,6 +266,7 @@ def render_saved_portfolios() -> list[PortfolioHolding]:
                             for h in holdings
                         ]
                         st.session_state.portfolio_input_mode = "manage"
+                        st.session_state.current_portfolio_name = selected
                         st.rerun()
                 with col2:
                     if st.button(
@@ -279,11 +287,22 @@ def render_manual_input() -> list[PortfolioHolding]:
     """手動入力UI"""
     holdings = []
 
-    num_holdings = st.slider("保有銘柄数", 1, 15, 3)
+    if "manual_input_rows" not in st.session_state:
+        st.session_state.manual_input_rows = 3
 
     st.markdown("#### 保有銘柄")
+    st.caption("※ティッカー、数量、取得単価を入力してください。")
 
-    for i in range(num_holdings):
+    # 分かりやすいヘッダー
+    header_cols = st.columns([2, 1, 1])
+    with header_cols[0]:
+        st.markdown("**銘柄コード**")
+    with header_cols[1]:
+        st.markdown("**数量（株数）**")
+    with header_cols[2]:
+        st.markdown("**取得単価 ($)**")
+
+    for i in range(st.session_state.manual_input_rows):
         cols = st.columns([2, 1, 1])
         with cols[0]:
             ticker = st.text_input(
@@ -294,12 +313,14 @@ def render_manual_input() -> list[PortfolioHolding]:
             ).upper()
         with cols[1]:
             shares = st.number_input(
-                "株数",
+                "数量",
                 min_value=0.0,
                 value=0.0,
                 step=1.0,
                 key=f"shares_{i}",
                 label_visibility="collapsed",
+                format="%.2f",
+                placeholder="10",
             )
         with cols[2]:
             avg_cost = st.number_input(
@@ -309,6 +330,8 @@ def render_manual_input() -> list[PortfolioHolding]:
                 step=1.0,
                 key=f"cost_{i}",
                 label_visibility="collapsed",
+                format="%.2f",
+                placeholder="150",
             )
 
         if ticker and shares > 0:
@@ -319,6 +342,10 @@ def render_manual_input() -> list[PortfolioHolding]:
                     avg_cost=avg_cost if avg_cost > 0 else None,
                 )
             )
+
+    if st.button("➕ 入力欄を追加", type="secondary"):
+        st.session_state.manual_input_rows += 1
+        st.rerun()
 
     return holdings
 
