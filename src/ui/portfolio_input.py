@@ -33,39 +33,22 @@ def render_portfolio_manager() -> list[PortfolioHolding]:
 
     with col_main:
         # A. Holdings Table
-        updated_holdings = _render_holdings_table(holdings_data)
-        
-        # 変更検知のロジックを厳密にする（無限rerun防止）
-        is_changed = False
-        if len(updated_holdings) != len(holdings_data):
-            is_changed = True
-        else:
-            for u, h in zip(updated_holdings, holdings_data):
-                if u["ticker"] != h["ticker"] or float(u["shares"]) != float(h["shares"]):
-                    is_changed = True
-                    break
-
-        if is_changed:
-            st.session_state.managed_holdings = updated_holdings
-            # 自動保存（新規でなければ）
-            if current_name != "新規ポートフォリオ":
-                save_portfolio(current_name, updated_holdings)
-            st.rerun()
+        _render_holdings_table(holdings_data)
 
         # B. Add Button
-        _render_add_button(updated_holdings, current_name)
+        _render_add_button(holdings_data, current_name)
 
         # C. News
-        if updated_holdings:
+        if holdings_data:
             st.markdown("### 📰 ニュースとイベント")
-            _render_news([h["ticker"] for h in updated_holdings])
+            _render_news([h["ticker"] for h in holdings_data])
 
     with col_side:
-        if updated_holdings:
-            _render_highlights(updated_holdings)
-            _render_earnings_calendar([h["ticker"] for h in updated_holdings])
+        if holdings_data:
+            _render_highlights(holdings_data)
+            _render_earnings_calendar([h["ticker"] for h in holdings_data])
 
-    return [PortfolioHolding(**h) for h in updated_holdings if h["shares"] > 0]
+    return [PortfolioHolding(**h) for h in holdings_data if h["shares"] > 0]
 
 
 def _render_top_history_graph(portfolio_name: str, holdings_data: list):
@@ -114,23 +97,36 @@ def _render_top_history_graph(portfolio_name: str, holdings_data: list):
     diff = current_val - prev_val
     diff_pct = (diff / prev_val * 100) if prev_val else 0.0
 
-    st.markdown(f"<h1 style='margin-bottom:0px;'>${current_val:,.2f}</h1>", unsafe_allow_html=True)
+    st.markdown(
+        f"<h1 style='margin-bottom:0px;'>${current_val:,.2f}</h1>",
+        unsafe_allow_html=True,
+    )
     color = "green" if diff >= 0 else "red"
-    bg_color = "rgba(0,255,0,0.1)" if color == 'green' else "rgba(255,0,0,0.1)"
+    bg_color = "rgba(0,255,0,0.1)" if color == "green" else "rgba(255,0,0,0.1)"
     sign = "+" if diff >= 0 else ""
     st.markdown(
         f"<span style='color:{color}; font-weight:bold; background-color: {bg_color}; padding: 5px; border-radius: 5px;'>"
-        f"{sign}{diff_pct:.2f}% ({sign}${diff:,.2f}) 今日</span>", 
-        unsafe_allow_html=True
+        f"{sign}{diff_pct:.2f}% ({sign}${diff:,.2f}) 今日</span>",
+        unsafe_allow_html=True,
     )
     st.plotly_chart(fig, use_container_width=True)
 
 
-def _render_holdings_table(holdings_data: list) -> list:
+def _delete_holding(ticker: str):
+    """銘柄削除のコールバック関数"""
+    holdings = st.session_state.get("managed_holdings", [])
+    updated = [h for h in holdings if h["ticker"] != ticker]
+    st.session_state.managed_holdings = updated
+    current_name = st.session_state.get("current_portfolio_name", "新規ポートフォリオ")
+    if current_name != "新規ポートフォリオ":
+        save_portfolio(current_name, updated)
+
+
+def _render_holdings_table(holdings_data: list):
     """銘柄一覧テーブルの描画"""
     if not holdings_data:
         st.info("銘柄が登録されていません。下の「＋」ボタンから追加してください。")
-        return holdings_data
+        return
 
     # Table header
     cols = st.columns([1.5, 2, 1, 1, 1.5, 1, 0.5])
@@ -171,43 +167,35 @@ def _render_holdings_table(holdings_data: list) -> list:
         # Price
         c[2].write(f"${current_price:,.2f}")
 
-        # Shares
-        new_shares = c[3].number_input(
-            "株数",
-            value=float(h["shares"]),
-            min_value=0.0,
-            label_visibility="collapsed",
-            key=f"sh_{i}",
-        )
+        # Shares: 整数表示に変更し、入力欄を廃止
+        shares_int = int(h["shares"])
+        c[3].write(f"{shares_int}")
 
         # 1-day return
         color = "green" if d >= 0 else "red"
-        bg_color = "rgba(0,255,0,0.1)" if color == 'green' else "rgba(255,0,0,0.1)"
+        bg_color = "rgba(0,255,0,0.1)" if color == "green" else "rgba(255,0,0,0.1)"
         arrow = "↑" if d >= 0 else "↓"
         sign = "+" if d >= 0 else ""
-        daily_return_val = d * new_shares
+        daily_return_val = d * shares_int
         c[4].markdown(
             f"<span style='color:{color}; font-weight:bold; background-color: {bg_color}; padding: 3px; border-radius: 3px;'>"
-            f"{arrow}{abs(dp):.2f}%</span><br><span style='color:{color};'>{sign}${abs(daily_return_val):.2f}</span>", 
-            unsafe_allow_html=True
+            f"{arrow}{abs(dp):.2f}%</span><br><span style='color:{color};'>{sign}${abs(daily_return_val):.2f}</span>",
+            unsafe_allow_html=True,
         )
 
         # Value
-        val = current_price * new_shares
+        val = current_price * shares_int
         c[5].write(f"**${val:,.2f}**")
 
-        # Delete
-        if c[6].button("🗑️", key=f"del_{i}", help="削除"):
-            to_delete.append(i)
-
-        updated.append(
-            {"ticker": h["ticker"], "shares": new_shares, "avg_cost": h.get("avg_cost")}
+        # Delete: コールバックによる即時削除（tertiaryタイプでUIの違和感解消）
+        c[6].button(
+            "🗑️",
+            key=f"del_{h['ticker']}",
+            help="削除",
+            type="tertiary",
+            on_click=_delete_holding,
+            args=(h["ticker"],),
         )
-
-    for i in sorted(to_delete, reverse=True):
-        updated.pop(i)
-
-    return updated
 
 
 def _render_add_button(holdings_data: list, current_name: str):
@@ -354,6 +342,8 @@ def _render_news(tickers: list):
     # API呼び出しの負担を減らすため最大3銘柄のニュースを取得
     for t in tickers[:3]:
         items = DataProvider.get_stock_news(t, max_items=2)
+        for item in items:
+            item["ticker"] = t
         news_items.extend(items)
 
     news_items.sort(key=lambda x: x.get("published", ""), reverse=True)
@@ -364,7 +354,9 @@ def _render_news(tickers: list):
 
     for item in news_items[:5]:
         with st.container(border=True):
-            st.markdown(f"**[{item['title']}]({item['link']})**")
+            st.markdown(
+                f"**[{item.get('ticker', '')}]** [{item['title']}]({item['link']})"
+            )
             # `published` works if dictionary has it
             st.caption(f"{item.get('publisher', '')} - {item.get('published', '')}")
 
