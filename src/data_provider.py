@@ -89,6 +89,18 @@ class DataProvider:
     """
 
     @staticmethod
+    def _get_yf_session():
+        """yfinance用の共通セッション（User-Agent指定でStreamlit CloudでのIPブロックを回避）"""
+        import requests
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+            "Connection": "keep-alive"
+        })
+        return session
+
+    @staticmethod
     @st.cache_data(ttl=CACHE_TTL_SHORT)
     def get_current_price(ticker: str) -> float:
         """
@@ -104,7 +116,7 @@ class DataProvider:
                 pass
 
         try:
-            ticker_obj = yf.Ticker(ticker)
+            ticker_obj = yf.Ticker(ticker, session=DataProvider._get_yf_session())
             if (
                 hasattr(ticker_obj, "fast_info")
                 and "last_price" in ticker_obj.fast_info
@@ -129,7 +141,7 @@ class DataProvider:
         """
         # 1. yfinance (primary)
         try:
-            df = yf.Ticker(ticker).history(period=period)
+            df = yf.Ticker(ticker, session=DataProvider._get_yf_session()).history(period=period)
             if not df.empty:
                 return df
         except Exception:
@@ -179,7 +191,7 @@ class DataProvider:
 
         # 2. yfinance Fallback (Greeksなし)
         try:
-            stock = yf.Ticker(ticker)
+            stock = yf.Ticker(ticker, session=DataProvider._get_yf_session())
             try:
                 expirations = stock.options
             except Exception as e:
@@ -284,7 +296,7 @@ class DataProvider:
             try:
                 tickers_list = list(yf_targets.values())
                 if tickers_list:
-                    batch_data = yf.download(tickers_list, period="5d", progress=False)
+                    batch_data = yf.download(tickers_list, period="5d", progress=False, session=DataProvider._get_yf_session())
 
                     for name, ticker in yf_targets.items():
                         try:
@@ -309,7 +321,7 @@ class DataProvider:
                             # Fallback for individual ticker (especially ^TNX can be tricky in batch)
                             try:
                                 # Use a period of 5d to ensure we get at least some recent valid rows
-                                single_hist = yf.Ticker(ticker).history(period="5d")
+                                single_hist = yf.Ticker(ticker, session=DataProvider._get_yf_session()).history(period="5d")
                                 if not single_hist.empty:
                                     hist = single_hist
                             except Exception as e:
@@ -449,7 +461,7 @@ class DataProvider:
             return
 
         try:
-            yf_ticker = yf.Ticker(ticker)
+            yf_ticker = yf.Ticker(ticker, session=DataProvider._get_yf_session())
             yf_info = yf_ticker.info
 
             if yf_info:
