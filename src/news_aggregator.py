@@ -5,7 +5,6 @@
 
 import hashlib
 from datetime import datetime, timedelta
-from typing import Optional
 
 from src.log_config import get_logger
 
@@ -20,7 +19,7 @@ def _generate_news_id(title: str, link: str) -> str:
 
 def get_gnews_articles(
     topic: str = "BUSINESS",
-    query: Optional[str] = None,
+    query: str | None = None,
     max_results: int = 15,
     language: str = "en",
     country: str = "US",

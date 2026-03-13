@@ -35,7 +35,11 @@ ENV/
 .env
 .env.local
 
-# Streamlit secrets (DO NOT COMMIT)
+# Secrets (DO NOT COMMIT)
+.env*
+*.key
+*.pem
+secrets/
 .streamlit/secrets.toml
 
 # Data files

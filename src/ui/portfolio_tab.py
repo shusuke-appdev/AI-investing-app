@@ -28,7 +28,7 @@ def render_portfolio_tab():
 
 def _render_input_section():
     """管理セクション (単一画面・Google Financeライク)"""
-    from src.portfolio_storage import list_portfolios, load_portfolio, delete_portfolio
+    from src.portfolio_storage import delete_portfolio, list_portfolios, load_portfolio
     from src.ui.portfolio_input import render_portfolio_manager
 
     # ヘッダーUI: ポートフォリオ選択
@@ -93,12 +93,12 @@ def _render_input_section():
 
 def _render_analysis_section():
     """分析・可視化セクション (AIアドバイス統合版)"""
+    from src.portfolio_advisor import PortfolioHolding, analyze_portfolio
     from src.ui.portfolio_analysis import render_analysis_results
     from src.ui.portfolio_views import (
         render_comparison_view,
         render_history_view,
     )
-    from src.portfolio_advisor import analyze_portfolio, PortfolioHolding
 
     analysis = st.session_state.get("portfolio_analysis")
     holdings_data = st.session_state.get("managed_holdings", [])

@@ -5,7 +5,6 @@
 
 import re
 from pathlib import Path
-from typing import Optional
 
 # Gemini API
 try:
@@ -125,7 +124,7 @@ def extract_from_youtube(video_url: str) -> str:
         return f"[YouTubeトランスクリプト取得エラー: {e}]"
 
 
-def _extract_youtube_video_id(url: str) -> Optional[str]:
+def _extract_youtube_video_id(url: str) -> str | None:
     """URLからYouTube Video IDを抽出"""
     patterns = [
         r"(?:v=|/v/|youtu\.be/|/embed/)([a-zA-Z0-9_-]{11})",

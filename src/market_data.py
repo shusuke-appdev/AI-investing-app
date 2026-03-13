@@ -6,8 +6,6 @@ Note: キャッシュは DataProvider 側で管理。
       このモジュールは既存13箇所の import を壊さないための薄いラッパー。
 """
 
-from typing import Dict, List, Optional
-
 import pandas as pd
 
 from src.constants import MARKET_US
@@ -19,17 +17,17 @@ def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
     return DataProvider.get_historical_data(ticker, period)
 
 
-def get_option_chain(ticker: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]:
+def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """オプションチェーンデータを取得（DataProvider委譲）。"""
     return DataProvider.get_option_chain(ticker)
 
 
-def get_market_indices(market_type: str = MARKET_US) -> Dict[str, dict]:
+def get_market_indices(market_type: str = MARKET_US) -> dict[str, dict]:
     """主要市場指数のデータを取得（DataProvider委譲）。"""
     return DataProvider.get_market_indices(market_type)
 
 
-def get_stock_news(ticker: str, max_items: int = 10) -> List[dict]:
+def get_stock_news(ticker: str, max_items: int = 10) -> list[dict]:
     """銘柄ニュース取得（DataProvider委譲）。"""
     return DataProvider.get_stock_news(ticker, max_items)
 

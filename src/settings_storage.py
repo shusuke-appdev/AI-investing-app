@@ -5,7 +5,6 @@ API設定やGAS URLなどをローカルに永続化します。
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from src.log_config import get_logger
 
@@ -19,7 +18,7 @@ SETTINGS_DIR = Path(__file__).parent.parent / "data"
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 
 # メモリキャッシュ（ファイルI/O削減用）
-_settings_cache: Optional[dict] = None
+_settings_cache: dict | None = None
 
 
 def _ensure_dir():
@@ -52,7 +51,7 @@ def load_settings(force_reload: bool = False) -> dict:
                 target_file = cwd_file
 
         if target_file.exists():
-            with open(target_file, "r", encoding="utf-8") as f:
+            with open(target_file, encoding="utf-8") as f:
                 data = json.load(f)
 
     except Exception as e:

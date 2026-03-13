@@ -3,8 +3,6 @@
 個別銘柄のオプション市場構造（PCR, GEX, Max Pain, IV）を可視化します。
 """
 
-from typing import Optional
-
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -118,7 +116,7 @@ def _render_charts(analysis: dict) -> None:
 
     df_gex = pd.DataFrame(gex_data["strike_gex"])
     current_price: float = analysis.get("current_price", 0)
-    max_pain: Optional[float] = analysis.get("max_pain")
+    max_pain: float | None = analysis.get("max_pain")
 
     # 現在価格 ±15% に絞って表示
     if current_price > 0:
@@ -143,7 +141,7 @@ def _render_charts(analysis: dict) -> None:
 
 
 def _draw_gex_chart(
-    df: pd.DataFrame, current_price: float, max_pain: Optional[float]
+    df: pd.DataFrame, current_price: float, max_pain: float | None
 ) -> None:
     """GEX棒グラフを描画します。"""
     fig = go.Figure()

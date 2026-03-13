@@ -5,7 +5,6 @@ Finnhub APIから取得したGreeksを活用し、より正確な分析を提供
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -23,7 +22,7 @@ logger = get_logger(__name__)
 
 def _fetch_option_data(
     ticker: str,
-) -> Optional[Tuple[pd.DataFrame, pd.DataFrame, float]]:
+) -> tuple[pd.DataFrame, pd.DataFrame, float] | None:
     """
     オプションチェーンと現在価格を1回で取得する内部ヘルパー。
 
@@ -62,9 +61,9 @@ def _fetch_option_data(
 def calculate_pcr(
     ticker: str = "",
     *,
-    calls: Optional[pd.DataFrame] = None,
-    puts: Optional[pd.DataFrame] = None,
-) -> Optional[dict]:
+    calls: pd.DataFrame | None = None,
+    puts: pd.DataFrame | None = None,
+) -> dict | None:
     """
     Put/Call Ratioを計算します。
 
@@ -106,10 +105,10 @@ def calculate_pcr(
 def calculate_gex(
     ticker: str = "",
     *,
-    calls: Optional[pd.DataFrame] = None,
-    puts: Optional[pd.DataFrame] = None,
+    calls: pd.DataFrame | None = None,
+    puts: pd.DataFrame | None = None,
     current_price: float = 0.0,
-) -> Optional[dict]:
+) -> dict | None:
     """
     Gamma Exposure (GEX) を計算します。
     Finnhub APIから取得したGreeksを使用し、APIデータがない場合のみ推定値を使用。
@@ -194,9 +193,9 @@ def calculate_gex(
 def calculate_max_pain(
     ticker: str = "",
     *,
-    calls: Optional[pd.DataFrame] = None,
-    puts: Optional[pd.DataFrame] = None,
-) -> Optional[float]:
+    calls: pd.DataFrame | None = None,
+    puts: pd.DataFrame | None = None,
+) -> float | None:
     """Max Pain (最もオプション価値が失効するストライク価格) を計算"""
     if calls is None or puts is None:
         option_data = get_option_chain(ticker)
@@ -229,10 +228,10 @@ def calculate_max_pain(
 def calculate_atm_iv(
     ticker: str = "",
     *,
-    calls: Optional[pd.DataFrame] = None,
-    puts: Optional[pd.DataFrame] = None,
+    calls: pd.DataFrame | None = None,
+    puts: pd.DataFrame | None = None,
     current_price: float = 0.0,
-) -> Optional[float]:
+) -> float | None:
     """ATM (At The Money) の平均IVを計算"""
     if calls is None or puts is None or current_price == 0.0:
         fetched = _fetch_option_data(ticker)
@@ -271,10 +270,10 @@ def calculate_atm_iv(
 def calculate_skew(
     ticker: str = "",
     *,
-    calls: Optional[pd.DataFrame] = None,
-    puts: Optional[pd.DataFrame] = None,
+    calls: pd.DataFrame | None = None,
+    puts: pd.DataFrame | None = None,
     current_price: float = 0.0,
-) -> Optional[float]:
+) -> float | None:
     """
     OTM Put IVとOTM Call IVの差からスキュー(Skew)を計算します。
     正の値は下落リスク（Putの割高感）を、負の値は上昇リスクを強く織り込んでいることを示します。
@@ -325,7 +324,7 @@ def calculate_skew(
 
 def estimate_price_range(
     current_price: float, atm_iv: float, days_to_expiry: float = 30.0
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """
     IVと期間(DTE)から1標準偏差(約68%)の予想変動レンジを算出します。
 
@@ -349,7 +348,7 @@ def estimate_price_range(
 # ============================================================
 
 
-def analyze_option_sentiment(ticker: str) -> Optional[dict]:
+def analyze_option_sentiment(ticker: str) -> dict | None:
     """
     オプションセンチメント分析を行います。
     option_chain と quote を1回だけ取得し、全計算に共有します。

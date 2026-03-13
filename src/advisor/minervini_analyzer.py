@@ -1,5 +1,3 @@
-from typing import Optional, Tuple
-
 import pandas as pd
 
 from src.advisor.models import (
@@ -14,7 +12,7 @@ def detect_vcp(
     min_contractions: int = 2,
     max_contractions: int = 4,
     vol_reduction_threshold: float = 0.5,
-) -> Tuple[bool, Optional[MinerviniVcpResult]]:
+) -> tuple[bool, MinerviniVcpResult | None]:
     """
     株価データからVolatility Contraction Pattern (VCP) を検出します。
     """

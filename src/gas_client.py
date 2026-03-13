@@ -5,7 +5,7 @@ GAS (Google Apps Script) クライアントモジュール
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 
 import requests
 
@@ -71,7 +71,7 @@ class GasClient:
         result = self._get({"action": "list"})
         return result.get("portfolios", [])
 
-    def load_portfolio(self, name: str) -> Optional[dict]:
+    def load_portfolio(self, name: str) -> dict | None:
         """
         ポートフォリオを読み込み
 
@@ -208,7 +208,7 @@ class GasClient:
         )
         return result.get("success", False)
 
-    def get_alerts(self, portfolio_name: Optional[str] = None) -> list[dict]:
+    def get_alerts(self, portfolio_name: str | None = None) -> list[dict]:
         """
         アラート一覧を取得
 
@@ -283,7 +283,7 @@ class GasClient:
 
 
 # シングルトンインスタンス（設定後に使用）
-_gas_client: Optional[GasClient] = None
+_gas_client: GasClient | None = None
 
 
 def configure_gas(script_url: str, timeout: int = 30) -> GasClient:
@@ -302,6 +302,6 @@ def configure_gas(script_url: str, timeout: int = 30) -> GasClient:
     return _gas_client
 
 
-def get_gas_client() -> Optional[GasClient]:
+def get_gas_client() -> GasClient | None:
     """設定済みのGASクライアントを取得"""
     return _gas_client

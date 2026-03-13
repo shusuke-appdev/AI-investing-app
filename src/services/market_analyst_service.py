@@ -4,8 +4,6 @@ Handles the orchestration of AI market analysis, aggregating data from multiple 
 and generating a comprehensive market report.
 """
 
-from typing import Optional
-
 import streamlit as st
 
 from src.data_provider import DataProvider
@@ -21,7 +19,7 @@ from src.theme_analyst import get_ranked_themes
 logger = get_logger(__name__)
 
 
-def generate_market_analysis_report(market_type: str = "US") -> Optional[str]:
+def generate_market_analysis_report(market_type: str = "US") -> str | None:
     """
     Generates a comprehensive AI market analysis report.
 

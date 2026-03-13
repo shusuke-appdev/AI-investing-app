@@ -4,7 +4,6 @@
 """
 
 from datetime import datetime, timedelta
-from typing import Optional
 
 from src.data_provider import DataProvider
 from src.finnhub_client import is_configured
@@ -215,7 +214,7 @@ def format_earnings_for_prompt(earnings: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def get_earnings_context_for_recap() -> Optional[str]:
+def get_earnings_context_for_recap() -> str | None:
     """
     AIレポート用の決算コンテキストを取得します。
     決算シーズン外または決算がない場合はNoneを返します。

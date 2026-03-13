@@ -152,7 +152,7 @@ class MeanReversionAnalyzer:
 
         if is_perfect_order:
             if near_10ma or near_20ma:
-                is_dip_buyable = bool(True)
+                is_dip_buyable = True
                 description = "上昇トレンド継続中 (パーフェクトオーダー)。10/20MA付近での押し目買い(Dip Buy)の好機に近い水準です。"
             else:
                 description = "強い上昇トレンド(パーフェクトオーダー)ですが、現在サポートからはやや離れています。"

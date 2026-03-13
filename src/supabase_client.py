@@ -4,7 +4,6 @@ Provides a singleton instance of the Supabase client.
 """
 
 import os
-from typing import Optional
 
 import streamlit as st
 from supabase import Client, create_client
@@ -13,10 +12,10 @@ from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
-_supabase_client: Optional[Client] = None
+_supabase_client: Client | None = None
 
 
-def get_supabase_client() -> Optional[Client]:
+def get_supabase_client() -> Client | None:
     """
     Get or create the Supabase client singleton.
     Reads credentials from Streamlit secrets or environment variables.

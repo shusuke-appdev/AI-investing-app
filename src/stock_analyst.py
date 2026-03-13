@@ -3,8 +3,6 @@
 テクニカル分析を統合した詳細な銘柄分析を提供します。
 """
 
-from typing import Optional
-
 import google.generativeai as genai
 import streamlit as st
 
@@ -24,8 +22,8 @@ def _get_model():
 def analyze_stock(
     ticker: str,
     stock_info: dict,
-    historical_data: Optional[dict] = None,
-    news_headlines: Optional[list[str]] = None,
+    historical_data: dict | None = None,
+    news_headlines: list[str] | None = None,
 ) -> str:
     """
     銘柄の詳細分析を生成します（テクニカル分析統合版）。

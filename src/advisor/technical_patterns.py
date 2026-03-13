@@ -117,9 +117,12 @@ def detect_candlestick_patterns(
             raw *= 1.5
         elif p["signal"] > 0 and rsi > 65:
             raw *= 0.3
-        if p["signal"] > 0 and bb_position in ("下限突破", "下半分"):
-            raw *= 1.3
-        elif p["signal"] < 0 and bb_position in ("上限突破", "上半分"):
+        if (
+            p["signal"] > 0
+            and bb_position in ("下限突破", "下半分")
+            or p["signal"] < 0
+            and bb_position in ("上限突破", "上半分")
+        ):
             raw *= 1.3
         score_adj += raw
 

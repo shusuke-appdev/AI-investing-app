@@ -1,5 +1,3 @@
-from typing import Optional
-
 import google.generativeai as genai
 
 from .analysis import (
@@ -16,7 +14,7 @@ from .technical import (
 def generate_portfolio_advice(
     analysis: dict,
     market_sentiment: str = "中立",
-    option_summary: Optional[str] = None,
+    option_summary: str | None = None,
     include_macro: bool = True,
     include_news: bool = True,
 ) -> str:

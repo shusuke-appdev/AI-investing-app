@@ -3,16 +3,17 @@ Portfolio Input Module
 ポートフォリオ入力・管理およびGoogle Financeライクな機能を提供します。
 """
 
+import datetime
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-import datetime
 
-from src.market_data import get_stock_info
 from src.data_provider import DataProvider
+from src.market_data import get_stock_info
 from src.portfolio_advisor import PortfolioHolding, parse_csv_portfolio
-from src.portfolio_storage import save_portfolio
 from src.portfolio_history import get_value_series
+from src.portfolio_storage import save_portfolio
 
 
 def render_portfolio_manager() -> list[PortfolioHolding]:
@@ -63,12 +64,14 @@ def _render_top_history_graph(portfolio_name: str, holdings_data: list):
         price = quote.get("c") or info.get("current_price") or 0.0
         shares = h["shares"]
         current_val += price * shares
-        
+
         avg_cost = h.get("avg_cost")
         if avg_cost and avg_cost > 0:
             total_cost += avg_cost * shares
         else:
-            total_cost += price * shares  # 取得価格不明な場合は現在の価格を取得価格として扱い損益を0とする
+            total_cost += (
+                price * shares
+            )  # 取得価格不明な場合は現在の価格を取得価格として扱い損益を0とする
 
     total_return_val = current_val - total_cost
     total_return_pct = (total_return_val / total_cost * 100) if total_cost > 0 else 0.0
@@ -97,7 +100,7 @@ def _render_top_history_graph(portfolio_name: str, holdings_data: list):
             combined_df = pd.concat(price_series_list, axis=1)
             combined_df = combined_df.ffill().fillna(0)
             combined_val = combined_df.sum(axis=1)
-            
+
             try:
                 dates = [d.strftime("%Y-%m-%d") for d in combined_val.index]
                 values = combined_val.tolist()
@@ -109,10 +112,15 @@ def _render_top_history_graph(portfolio_name: str, holdings_data: list):
         # フォールバック表示: やはりデータが生成できなかった場合
         c1, c2 = st.columns([1, 4])
         with c1:
-            st.markdown(f"<h1 style='margin-bottom:0px;'>${current_val:,.2f}</h1>", unsafe_allow_html=True)
+            st.markdown(
+                f"<h1 style='margin-bottom:0px;'>${current_val:,.2f}</h1>",
+                unsafe_allow_html=True,
+            )
         with c2:
             _render_total_return_header(total_return_val, total_return_pct)
-        st.caption("評価額の推移データがありません。スナップショットを記録するとグラフが表示されます。")
+        st.caption(
+            "評価額の推移データがありません。スナップショットを記録するとグラフが表示されます。"
+        )
         return
 
     df = pd.DataFrame({"Date": dates, "Value": values})
@@ -292,7 +300,7 @@ def _render_holdings_table(holdings_data: list):
                 unsafe_allow_html=True,
             )
         else:
-             c[7].write("-")
+            c[7].write("-")
 
         # 9. Delete
         if show_bulk_delete:
@@ -458,16 +466,16 @@ def _render_highlights(holdings_data: list):
             quote = DataProvider.get_quote(h["ticker"]) or {}
             price = quote.get("c") or info.get("current_price") or 0.0
             daily_change = quote.get("d") or 0.0
-            
+
             val = price * h["shares"]
             total_val += val
-            
+
             avg_cost = h.get("avg_cost")
             if avg_cost and avg_cost > 0:
                 total_cost += avg_cost * h["shares"]
             else:
-                total_cost += price * h["shares"] # 価格不明は損益0として扱う
-                
+                total_cost += price * h["shares"]  # 価格不明は損益0として扱う
+
             total_daily_val += daily_change * h["shares"]
             prev_price = price - daily_change
             total_prev_val += prev_price * h["shares"]
@@ -488,23 +496,28 @@ def _render_highlights(holdings_data: list):
         if total_val == 0:
             st.caption("評価額が0のためハイライトを表示できません")
             return
-            
+
         # UI for 1 day return and total return
-        total_daily_pct = (total_daily_val / total_prev_val * 100) if total_prev_val > 0 else 0.0
+        total_daily_pct = (
+            (total_daily_val / total_prev_val * 100) if total_prev_val > 0 else 0.0
+        )
         total_return_val = total_val - total_cost
-        total_return_pct = (total_return_val / total_cost * 100) if total_cost > 0 else 0.0
+        total_return_pct = (
+            (total_return_val / total_cost * 100) if total_cost > 0 else 0.0
+        )
 
         daily_color = "#10b981" if total_daily_val >= 0 else "#ef4444"
         daily_bg = "#ecfdf5" if total_daily_val >= 0 else "#fef2f2"
         daily_sign = "+" if total_daily_val >= 0 else ""
         daily_arrow = "↑" if total_daily_val >= 0 else "↓"
-        
+
         total_color = "#10b981" if total_return_val >= 0 else "#ef4444"
         total_bg = "#ecfdf5" if total_return_val >= 0 else "#fef2f2"
         total_sign = "+" if total_return_val >= 0 else ""
         total_arrow = "↑" if total_return_val >= 0 else "↓"
 
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div style="display:flex; gap:10px; margin-bottom:20px;">
             <div style="flex:1; background-color:{daily_bg}; padding:15px; border-radius:8px;">
                 <div style="font-size:0.9rem; color:#4b5563; margin-bottom:5px;">1日の収益</div>
@@ -517,7 +530,9 @@ def _render_highlights(holdings_data: list):
                 <div style="font-size:1rem; font-weight:bold; color:{total_color};">{total_arrow} {abs(total_return_pct):.2f}%</div>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         def make_pie(data_dict):
             labels = [k for k, v in data_dict.items() if v > 0]

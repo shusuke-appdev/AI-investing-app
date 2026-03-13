@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
+from typing import Any, TypedDict
 
 
 class MinerviniStageResult(TypedDict):
@@ -11,7 +11,7 @@ class MinerviniVcpResult(TypedDict, total=False):
     is_vcp: bool
     contractions: int
     breakout_price: float
-    points: List[Dict[str, Any]]
+    points: list[dict[str, Any]]
     current_price: float
 
 
@@ -25,9 +25,9 @@ class MinerviniFtdResult(TypedDict, total=False):
 class MeanReversionParabolicState(TypedDict, total=False):
     is_parabolic: bool
     description: str
-    deviation_10ma: Optional[float]
-    deviation_20ma: Optional[float]
-    target_reversion_price: Optional[float]
+    deviation_10ma: float | None
+    deviation_20ma: float | None
+    target_reversion_price: float | None
 
 
 class MeanReversionReboundState(TypedDict, total=False):
@@ -42,9 +42,9 @@ class MeanReversionResult(TypedDict, total=False):
     current_price: float
     parabolic_state: MeanReversionParabolicState
     rebound_state: MeanReversionReboundState
-    ma_10: Optional[float]
-    ma_20: Optional[float]
-    ma_50: Optional[float]
+    ma_10: float | None
+    ma_20: float | None
+    ma_50: float | None
     error: str
 
 
@@ -54,7 +54,7 @@ class PortfolioHolding:
 
     ticker: str
     shares: float
-    avg_cost: Optional[float] = None
+    avg_cost: float | None = None
 
 
 @dataclass
@@ -180,9 +180,9 @@ class TechnicalScore:
     vcp_data: MinerviniVcpResult = field(default_factory=dict)
 
     # === Option Skew & Mean Reversion Extension ===
-    skew: Optional[float] = None
-    dte: Optional[float] = None
-    price_range: Optional[Tuple[float, float]] = None
+    skew: float | None = None
+    dte: float | None = None
+    price_range: tuple[float, float] | None = None
 
     mr_parabolic_state: MeanReversionParabolicState = field(default_factory=dict)
     mr_rebound_state: MeanReversionReboundState = field(default_factory=dict)
@@ -196,5 +196,5 @@ class TechnicalAnalysis:
     score: TechnicalScore
     summary: str  # AI生成サマリー
     recommendation: str  # 買い/売り/ホールド
-    target_buy_price: Optional[float] = None  # 推奨買い価格
-    stop_loss_price: Optional[float] = None  # 損切りライン
+    target_buy_price: float | None = None  # 推奨買い価格
+    stop_loss_price: float | None = None  # 損切りライン

@@ -61,14 +61,13 @@ class TestCalculateGEX:
 
         with patch(
             "src.option_analyst.get_option_chain", return_value=(mock_calls, mock_puts)
+        ), patch(
+            "src.option_analyst.DataProvider.get_current_price", return_value=0.0
         ):
-            with patch(
-                "src.option_analyst.DataProvider.get_current_price", return_value=0.0
-            ):
-                from src.option_analyst import calculate_gex
+            from src.option_analyst import calculate_gex
 
-                result = calculate_gex("SPY")
-                assert result is None
+            result = calculate_gex("SPY")
+            assert result is None
 
 
 class TestGammaEstimation:

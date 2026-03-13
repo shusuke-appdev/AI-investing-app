@@ -5,7 +5,6 @@
 
 import json
 from datetime import datetime
-from typing import List
 
 from dotenv import load_dotenv
 
@@ -19,7 +18,7 @@ load_dotenv()
 
 def generate_dynamic_search_queries(
     market_data: dict, num_queries: int = 5
-) -> List[str]:
+) -> list[str]:
     """
     現在の市場データと日付から、GNews検索で有用なキーワードリストを動的に生成します。
 

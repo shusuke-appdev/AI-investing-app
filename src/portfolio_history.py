@@ -7,7 +7,6 @@ import json
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Optional
 
 from src.log_config import get_logger
 
@@ -98,7 +97,7 @@ def save_snapshot(
         return False
 
 
-def load_history(portfolio_name: str, days: Optional[int] = None) -> list[dict]:
+def load_history(portfolio_name: str, days: int | None = None) -> list[dict]:
     """
     ポートフォリオの履歴を読み込みます。
 
@@ -115,7 +114,7 @@ def load_history(portfolio_name: str, days: Optional[int] = None) -> list[dict]:
         return []
 
     try:
-        with open(history_file, "r", encoding="utf-8") as f:
+        with open(history_file, encoding="utf-8") as f:
             history = json.load(f)
 
         if days:

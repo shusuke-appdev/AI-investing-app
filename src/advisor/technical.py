@@ -6,8 +6,6 @@
 skills準拠のため、ロジックは細分化されたモジュールに委譲しています。
 """
 
-from typing import Optional
-
 import pandas as pd
 
 # スコアリングの重み付け定数
@@ -74,7 +72,7 @@ from src.advisor.technical_scoring import (
 from src.market_data import get_stock_data
 
 
-def analyze_technical(ticker: str, period: str = "1y") -> Optional[TechnicalScore]:
+def analyze_technical(ticker: str, period: str = "1y") -> TechnicalScore | None:
     """銘柄の包括的テクニカル分析を実行します。"""
     df = get_stock_data(ticker, period)
     if df.empty or len(df) < 50:

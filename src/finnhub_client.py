@@ -9,7 +9,6 @@ import time
 
 # import streamlit as st  # Removed UI dependency
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
 
 import finnhub
 import pandas as pd
@@ -72,7 +71,7 @@ def _get_api_key() -> str:
     return get_finnhub_api_key()
 
 
-def _get_client() -> Optional[finnhub.Client]:
+def _get_client() -> finnhub.Client | None:
     """Finnhubクライアントを取得"""
     api_key = _get_api_key()
     if not api_key:
@@ -133,7 +132,7 @@ def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
 # --- 株価データ ---
 
 
-def get_quote(symbol: str) -> Optional[dict]:
+def get_quote(symbol: str) -> dict | None:
     """
     リアルタイム株価クォートを取得。
 
@@ -159,8 +158,8 @@ def get_quote(symbol: str) -> Optional[dict]:
 def get_candles(
     symbol: str,
     resolution: str = "D",
-    from_date: Optional[datetime] = None,
-    to_date: Optional[datetime] = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
     period_days: int = 30,
 ) -> pd.DataFrame:
     """
@@ -224,7 +223,7 @@ def get_candles(
 
 def get_option_chain(
     symbol: str, max_expirations: int = 4
-) -> Optional[Tuple[pd.DataFrame, pd.DataFrame]]:
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """
     Finnhubからオプションチェーンデータを取得。
 
@@ -323,7 +322,7 @@ def _normalize_option_contract(contract: dict, expiration_date: str) -> dict:
 # --- 企業情報 ---
 
 
-def get_company_profile(symbol: str) -> Optional[dict]:
+def get_company_profile(symbol: str) -> dict | None:
     """
     企業プロフィールを取得。
 
@@ -345,7 +344,7 @@ def get_company_profile(symbol: str) -> Optional[dict]:
         return None
 
 
-def get_basic_financials(symbol: str) -> Optional[dict]:
+def get_basic_financials(symbol: str) -> dict | None:
     """
     基本的な財務指標を取得。
 
@@ -369,7 +368,7 @@ def get_basic_financials(symbol: str) -> Optional[dict]:
 
 
 def get_company_news(
-    symbol: str, from_date: Optional[str] = None, to_date: Optional[str] = None
+    symbol: str, from_date: str | None = None, to_date: str | None = None
 ) -> list[dict]:
     """
     銘柄関連ニュースを取得。
@@ -446,7 +445,7 @@ def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
 
 
 def get_earnings_calendar(
-    from_date: Optional[str] = None, to_date: Optional[str] = None
+    from_date: str | None = None, to_date: str | None = None
 ) -> list[dict]:
     """
     決算カレンダーを取得。

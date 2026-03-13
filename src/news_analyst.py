@@ -5,7 +5,6 @@ Gemini APIを使用して市場ニュースの要約・分析レポートを生�
 
 import os
 from datetime import datetime
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -24,7 +23,7 @@ except ImportError:
     GEMINI_AVAILABLE = False
 
 
-def configure_gemini(api_key: Optional[str] = None) -> bool:
+def configure_gemini(api_key: str | None = None) -> bool:
     """
     Gemini APIを設定します。
 
@@ -61,7 +60,7 @@ def configure_gemini(api_key: Optional[str] = None) -> bool:
 
 
 def generate_flash_summary(
-    market_data: dict, news_headlines: list[str], option_summary: Optional[str] = None
+    market_data: dict, news_headlines: list[str], option_summary: str | None = None
 ) -> str:
     """
     Flash Summary（速報箇条書き）を生成します。
@@ -123,7 +122,7 @@ def generate_market_recap(
     market_data: dict,
     news_data: list[dict],
     option_analysis: list[dict],
-    theme_analysis: Optional[str] = None,
+    theme_analysis: str | None = None,
 ) -> str:
     """
     Gemini APIを使用してMarket Recap（ナラティブ解説）を生成します。

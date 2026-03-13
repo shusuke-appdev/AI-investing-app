@@ -4,7 +4,7 @@ Using TypedDict for dictionary-based structures to maintain compatibility with e
 while providing better developer experience and validation capabilities.
 """
 
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 
 class StockInfo(TypedDict, total=False):
@@ -24,27 +24,27 @@ class StockInfo(TypedDict, total=False):
     exchange: str
 
     # Financial Metrics
-    market_cap: Optional[float]
-    current_price: Optional[float]
-    pe_ratio: Optional[float]
-    forward_pe: Optional[float]
-    beta: Optional[float]
+    market_cap: float | None
+    current_price: float | None
+    pe_ratio: float | None
+    forward_pe: float | None
+    beta: float | None
 
-    revenueGrowth: Optional[float]
-    earningsGrowth: Optional[float]
-    grossMargins: Optional[float]
-    operatingMargins: Optional[float]
-    currentRatio: Optional[float]
-    debtToEquity: Optional[float]
-    returnOnAssets: Optional[float]
-    pegRatio: Optional[float]
-    priceToBook: Optional[float]
+    revenueGrowth: float | None
+    earningsGrowth: float | None
+    grossMargins: float | None
+    operatingMargins: float | None
+    currentRatio: float | None
+    debtToEquity: float | None
+    returnOnAssets: float | None
+    pegRatio: float | None
+    priceToBook: float | None
 
-    fifty_two_week_high: Optional[float]
-    fifty_two_week_low: Optional[float]
-    target_price: Optional[float]
+    fifty_two_week_high: float | None
+    fifty_two_week_low: float | None
+    target_price: float | None
 
-    share_outstanding: Optional[float]
+    share_outstanding: float | None
 
 
 class NewsItem(TypedDict):
@@ -81,10 +81,10 @@ class OptionData(TypedDict, total=False):
     inTheMoney: str
     expiration: str
     # Greeks (Finnhub APIから直接取得)
-    delta: Optional[float]
-    gamma: Optional[float]
-    theta: Optional[float]
-    vega: Optional[float]
-    rho: Optional[float]
-    intrinsicValue: Optional[float]
-    timeValue: Optional[float]
+    delta: float | None
+    gamma: float | None
+    theta: float | None
+    vega: float | None
+    rho: float | None
+    intrinsicValue: float | None
+    timeValue: float | None

@@ -1,5 +1,3 @@
-from typing import Optional
-
 from src.market_data import (
     get_market_indices,
     get_stock_data,
@@ -130,7 +128,7 @@ def get_holdings_news(holdings: list[dict], max_per_stock: int = 3) -> list[dict
 
 
 def analyze_portfolio(
-    holdings: list[PortfolioHolding], market_context: Optional[str] = None
+    holdings: list[PortfolioHolding], market_context: str | None = None
 ) -> dict:
     """ポートフォリオ全体を分析"""
     results = []
