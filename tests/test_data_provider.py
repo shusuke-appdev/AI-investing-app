@@ -4,10 +4,10 @@ from src.data_provider import DataProvider
 
 
 class TestDataProvider:
-    @patch("src.data_provider.get_company_profile")
-    @patch("src.data_provider.get_basic_financials")
-    @patch("src.data_provider._finnhub_get_quote")
-    @patch("src.data_provider.is_configured", return_value=True)
+    @patch("src.stock_data_provider.get_company_profile")
+    @patch("src.stock_data_provider.get_basic_financials")
+    @patch("src.stock_data_provider._finnhub_get_quote")
+    @patch("src.stock_data_provider.is_configured", return_value=True)
     def test_get_stock_info_structure(
         self, mock_is_conf, mock_quote, mock_basic, mock_profile
     ):
@@ -33,8 +33,8 @@ class TestDataProvider:
         assert info["current_price"] == 145.0
         assert "beta" in info  # Check key existence even if None
 
-    @patch("src.data_provider._finnhub_get_company_news")
-    @patch("src.data_provider.is_configured", return_value=True)
+    @patch("src.news_provider._finnhub_get_company_news")
+    @patch("src.news_provider.is_configured", return_value=True)
     def test_get_stock_news_structure(self, mock_is_conf, mock_news):
         """Test news item structure."""
         mock_news.return_value = [

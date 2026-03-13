@@ -58,9 +58,10 @@ def render_chart(ticker: str):
         st.markdown("### 📈 株価チャート")
 
     if not df.empty:
-        # 移動平均線の計算
+        # 移動平均線の計算 (25日, 50日, 100日, 200日)
         df["SMA25"] = df["Close"].rolling(window=25).mean()
-        df["SMA75"] = df["Close"].rolling(window=75).mean()
+        df["SMA50"] = df["Close"].rolling(window=50).mean()
+        df["SMA100"] = df["Close"].rolling(window=100).mean()
         df["SMA200"] = df["Close"].rolling(window=200).mean()
 
         # サブプロット作成 (上が価格、下が出来高)
@@ -102,12 +103,25 @@ def render_chart(ticker: str):
             col=1,
         )
 
-        # SMA75
+        # SMA50 (紫)
         fig.add_trace(
             go.Scatter(
                 x=df.index,
-                y=df["SMA75"],
-                name="SMA 75",
+                y=df["SMA50"],
+                name="SMA 50",
+                line=dict(color="#9b51e0", width=1.5),
+                opacity=0.8,
+            ),
+            row=1,
+            col=1,
+        )
+
+        # SMA100 (青緑)
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["SMA100"],
+                name="SMA 100",
                 line=dict(color="#00BFA5", width=1.5),
                 opacity=0.8,
             ),
