@@ -13,7 +13,6 @@ from src.finnhub_client import (
     is_configured,
 )
 from src.log_config import get_logger
-from src.utils.http_session import get_yf_session
 
 logger = get_logger(__name__)
 
@@ -30,7 +29,7 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
             logger.info(f"[DataProvider] Falling back to yfinance for {ticker}")
 
     try:
-        stock = yf.Ticker(ticker, session=get_yf_session())
+        stock = yf.Ticker(ticker)
         try:
             expirations = stock.options
         except Exception as e:

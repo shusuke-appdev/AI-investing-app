@@ -32,12 +32,6 @@ class DataProvider:
     """
 
     @staticmethod
-    def _get_yf_session():
-        from src.utils.http_session import get_yf_session
-
-        return get_yf_session()
-
-    @staticmethod
     def get_current_price(ticker: str) -> float:
         return get_current_price(ticker)
 

@@ -13,7 +13,6 @@ from src.finnhub_client import is_configured
 from src.log_config import get_logger
 from src.market_config import get_market_config
 from src.models import MarketIndex
-from src.utils.http_session import get_yf_session
 
 logger = get_logger(__name__)
 
@@ -89,7 +88,6 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                     tickers_list,
                     period="5d",
                     progress=False,
-                    session=get_yf_session(),
                 )
 
                 for name, ticker in yf_targets.items():
@@ -109,7 +107,7 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                                 pass
                         try:
                             single_hist = yf.Ticker(
-                                ticker, session=get_yf_session()
+                                ticker
                             ).history(period="5d")
                             if not single_hist.empty:
                                 hist = single_hist

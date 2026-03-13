@@ -30,7 +30,6 @@ from src.finnhub_client import (
 )
 from src.log_config import get_logger
 from src.models import StockInfo
-from src.utils.http_session import get_yf_session
 from src.utils.translator import translate_to_japanese
 
 logger = get_logger(__name__)
@@ -46,7 +45,7 @@ def get_current_price(ticker: str) -> float:
         except Exception:
             pass
     try:
-        ticker_obj = yf.Ticker(ticker, session=get_yf_session())
+        ticker_obj = yf.Ticker(ticker)
         if hasattr(ticker_obj, "fast_info") and "last_price" in ticker_obj.fast_info:
             price = ticker_obj.fast_info["last_price"]
             if price:
@@ -62,7 +61,7 @@ def get_current_price(ticker: str) -> float:
 @st.cache_data(ttl=CACHE_TTL_MEDIUM)
 def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
     try:
-        df = yf.Ticker(ticker, session=get_yf_session()).history(period=period)
+        df = yf.Ticker(ticker).history(period=period)
         if not df.empty:
             return df
     except Exception:
@@ -80,8 +79,8 @@ def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
             }
             days = period_map.get(period, 30)
             now = datetime.now()
-            _from = int((now - timedelta(days=days)).timestamp())
-            _to = int(now.timestamp())
+            _from = now - timedelta(days=days)
+            _to = now
             df = get_candles(ticker, "D", _from, _to)
             if df is not None and not df.empty:
                 return df
@@ -146,7 +145,7 @@ def _extract_yfinance_profile(ticker: str, info: StockInfo) -> None:
     if not needs_fallback:
         return
     try:
-        yf_ticker = yf.Ticker(ticker, session=get_yf_session())
+        yf_ticker = yf.Ticker(ticker)
         yf_info = yf_ticker.info
         if yf_info:
             if info["name"] == ticker:
