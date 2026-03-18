@@ -90,6 +90,11 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                 for name, ticker in yf_targets.items():
                     try:
                         hist = yf.Ticker(ticker).history(period="5d")
+                        if "Close" in hist.columns:
+                            hist.dropna(subset=["Close"], inplace=True)
+                        else:
+                            hist.dropna(inplace=True)
+
                         if not hist.empty and len(hist) >= 1:
                             if "Close" in hist.columns:
                                 current = hist["Close"].iloc[-1]

@@ -6,28 +6,13 @@ Option Data Provider
 import pandas as pd
 import yfinance as yf
 
-from src.finnhub_client import (
-    get_option_chain as _finnhub_get_option_chain,
-)
-from src.finnhub_client import (
-    is_configured,
-)
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
 
 def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
-    """Get option chain data. Priority: Finnhub (Greeks included) -> yfinance fallback."""
-    if is_configured():
-        try:
-            result = _finnhub_get_option_chain(ticker)
-            if result is not None:
-                return result
-        except Exception as e:
-            logger.error(f"[DataProvider] Finnhub option chain error for {ticker}: {e}")
-            logger.info(f"[DataProvider] Falling back to yfinance for {ticker}")
-
+    """Get option chain data. Uses strictly yfinance to avoid Finnhub 403 API errors."""
     try:
         stock = yf.Ticker(ticker)
         try:

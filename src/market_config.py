@@ -68,9 +68,9 @@ US_CONFIG: MarketSettings = {
         "US 30Y Yield": "^TYX",
     },
     "commodities": {
-        "WTI Oil (ETF)": "USO",
-        "Gold (ETF)": "GLD",
-        "Copper (ETF)": "CPER",
+        "WTI Oil": "CL=F",
+        "Gold": "GC=F",
+        "Copper": "HG=F",
     },
     "crypto": {
         "Bitcoin": "BINANCE:BTCUSDT",

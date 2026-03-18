@@ -187,6 +187,7 @@ def detect_follow_through_day(data: pd.DataFrame) -> MinerviniFtdResult:
     df["Vol_Increase"] = df["Volume"] > df["Volume"].shift(1)
     df["MA50"] = df["Close"].rolling(window=50).mean()
     df["MA21"] = df["Close"].rolling(window=21).mean()
+    df["High50"] = df["High"].rolling(window=50).max()
 
     # 状態変数の初期化（過去50日時点での仮の状態）
     state = MarketState.UPTREND
@@ -200,8 +201,11 @@ def detect_follow_through_day(data: pd.DataFrame) -> MinerviniFtdResult:
         current = df.iloc[i]
         prev = df.iloc[i-1]
         
-        # 調整局面の条件: 短期/中期トレンドの崩れ、または大幅下落
-        is_correction = current["Close"] < current["MA50"] and current["MA21"] < current["MA50"]
+        # 直近高値からの下落率（ドローダウン）
+        drawdown = (current["High50"] - current["Close"]) / current["High50"] * 100
+        
+        # 調整局面の条件: 価格が50日線を下回り、かつ直近高値から5%以上下落していること（ノイズ排除）
+        is_correction = current["Close"] < current["MA50"] and drawdown >= 5.0
         
         if state in (MarketState.UPTREND, MarketState.CONFIRMED_UPTREND):
             if is_correction:
