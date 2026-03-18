@@ -20,10 +20,11 @@ def render_ticker_compact(opt: dict):
     icon = "🟢" if sentiment == "強気" else "🔴" if sentiment == "弱気" else "⚪"
     stock_info = get_stock_info(ticker)
     current_price = stock_info.get("current_price", 0)
+    dollar = "$"
 
     with st.container(border=True):
         st.markdown(
-            f"**{icon} {ticker}** ${current_price:,.2f}"
+            f"**{icon} {ticker}** {dollar}{current_price:,.2f}"
             if current_price
             else f"**{icon} {ticker}**"
         )
@@ -82,7 +83,7 @@ def render_ticker_compact(opt: dict):
             narrative += f" IVは{iv:.1%}とやや高まっており警戒が必要です。"
 
         if max_pain:
-            narrative += f" **Max Painは${max_pain:.0f}**に位置しており、SQに向けて意識される可能性があります。"
+            narrative += f" **Max Painは{dollar}{max_pain:.0f}**に位置しており、SQに向けて意識される可能性があります。"
 
         st.caption(narrative)
 
@@ -91,9 +92,9 @@ def render_ticker_compact(opt: dict):
             n_wall = (gex.get("negative_wall") or {}).get("strike")
             walls = []
             if p_wall:
-                walls.append(f"+Wall ${p_wall:,.0f}")
+                walls.append(f"+Wall {dollar}{p_wall:,.0f}")
             if n_wall:
-                walls.append(f"-Wall ${n_wall:,.0f}")
+                walls.append(f"-Wall {dollar}{n_wall:,.0f}")
             if walls:
                 st.caption(f"抵抗帯: {', '.join(walls)}")
 
