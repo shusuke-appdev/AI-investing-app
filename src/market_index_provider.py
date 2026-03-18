@@ -80,43 +80,24 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
         except Exception:
             yf_targets[name] = ticker
 
+
     if yf_targets:
         try:
             tickers_list = list(yf_targets.values())
             if tickers_list:
-                batch_data = yf.download(
-                    tickers_list,
-                    period="5d",
-                    progress=False,
-                )
-
+                # 複数銘柄の場合、エラーを防ぐため順次取得（yfinanceのマルチカラム仕様変更等のトラブルを回避）
+                # 取得する銘柄数は通常5〜10個程度のため、直列でも大きな遅延にはならない
                 for name, ticker in yf_targets.items():
                     try:
-                        hist = batch_data
-                        if len(tickers_list) > 1 and isinstance(
-                            batch_data.columns, pd.MultiIndex
-                        ):
-                            hist = batch_data.xs(ticker, level=1, axis=1)
-
-                        if isinstance(hist, pd.DataFrame) and isinstance(
-                            hist.columns, pd.MultiIndex
-                        ):
-                            try:
-                                hist = hist.xs(ticker, level=1, axis=1)
-                            except Exception:
-                                pass
-                        try:
-                            single_hist = yf.Ticker(
-                                ticker
-                            ).history(period="5d")
-                            if not single_hist.empty:
-                                hist = single_hist
-                        except Exception as e:
-                            logger.warning(f"Fallback fetch failed for {ticker}: {e}")
-
+                        hist = yf.Ticker(ticker).history(period="5d")
                         if not hist.empty and len(hist) >= 1:
-                            current = hist["Close"].iloc[-1]
-                            prev = hist["Close"].iloc[-2] if len(hist) >= 2 else current
+                            if "Close" in hist.columns:
+                                current = hist["Close"].iloc[-1]
+                                prev = hist["Close"].iloc[-2] if len(hist) >= 2 else current
+                            else:
+                                current = hist.iloc[-1, 0]
+                                prev = hist.iloc[-2, 0] if len(hist) >= 2 else current
+
                             change = ((current - prev) / prev) * 100 if prev != 0 else 0
                             result[name] = {
                                 "price": float(current),
@@ -129,9 +110,15 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                                 "change": 0.0,
                                 "ticker": ticker,
                             }
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                    except Exception as e:
+                        logger.warning(f"[MarketIndexProvider] Failed to fetch {ticker}: {e}")
+                        result[name] = {
+                            "price": 0.0,
+                            "change": 0.0,
+                            "ticker": ticker,
+                        }
+        except Exception as e:
+            logger.error(f"[MarketIndexProvider] Batch download preparation failed: {e}")
+
 
     return result

@@ -5,6 +5,7 @@
 
 from datetime import timedelta
 
+import pandas as pd
 import streamlit as st
 import yfinance as yf
 
@@ -81,10 +82,13 @@ def fetch_and_calculate_all_performances(
         for ticker in all_tickers:
             try:
                 # データ抽出
-                if len(all_tickers) > 1:
-                    if ticker not in df.columns.levels[0]:
+                if isinstance(df.columns, pd.MultiIndex):
+                    if ticker in df.columns.get_level_values(0):
+                        stock_df = df[ticker]
+                    elif ticker in df.columns.get_level_values(1):
+                        stock_df = df.xs(ticker, axis=1, level=1)
+                    else:
                         continue
-                    stock_df = df[ticker]
                 else:
                     stock_df = df
 
@@ -111,12 +115,12 @@ def fetch_and_calculate_all_performances(
                 if past_data.empty:
                     # データ不足（上場から日が浅いなど）の場合は、ある最古データを使うか、計算しないか。
                     # ここでは最古データを使う（期間が短くなるがエラーにはしない）
-                    start_price = closes.iloc[0]
+                    start_price = float(closes.iloc[0])
                 else:
-                    start_price = past_data.iloc[-1]
+                    start_price = float(past_data.iloc[-1])
 
                 if start_price != 0:
-                    perf = ((current_price - start_price) / start_price) * 100
+                    perf = ((float(current_price) - start_price) / start_price) * 100
                     performance_map[ticker] = perf
 
             except Exception:

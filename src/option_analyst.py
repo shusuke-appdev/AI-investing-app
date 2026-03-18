@@ -124,9 +124,12 @@ def calculate_gex(
     """
     if calls is None or puts is None or current_price == 0.0:
         fetched = _fetch_option_data(ticker)
-        if fetched is None:
-            return None
         calls, puts, current_price, _ = fetched
+
+    total_oi = calls["openInterest"].sum() + puts["openInterest"].sum()
+    if total_oi == 0:
+        logger.warning(f"[OptionAnalyst] {ticker}: OpenInterest is 0. Cannot calculate GEX.")
+        return None
 
     gex_data = []
 
@@ -203,18 +206,33 @@ def calculate_max_pain(
             return None
         calls, puts = option_data
 
+    # 建玉データがない場合のフォールバック（週末などのyfinance不具合対策）
+    total_oi = calls["openInterest"].sum() + puts["openInterest"].sum()
+    use_vol = total_oi == 0
+    total_vol = 0
+    if use_vol and "volume" in calls.columns and "volume" in puts.columns:
+        total_vol = calls["volume"].fillna(0).sum() + puts["volume"].fillna(0).sum()
+        if total_vol > 0:
+            logger.warning(f"[OptionAnalyst] {ticker}: OpenInterest is 0. Falling back to Volume for Max Pain.")
+            
+    if total_oi == 0 and total_vol == 0:
+        logger.warning(f"[OptionAnalyst] {ticker}: No OI and Volume data. Cannot calculate Max Pain.")
+        return None
+
+    weight_col = "volume" if use_vol else "openInterest"
+
     strikes = sorted(set(calls["strike"].tolist() + puts["strike"].tolist()))
     loss_data = []
 
     for k in strikes:
         call_loss = (
             calls[calls["strike"] < k]
-            .apply(lambda r: (k - r["strike"]) * r["openInterest"], axis=1)
+            .apply(lambda r, current_k=k: (current_k - r["strike"]) * r.get(weight_col, 0), axis=1)
             .sum()
         )
         put_loss = (
             puts[puts["strike"] > k]
-            .apply(lambda r: (r["strike"] - k) * r["openInterest"], axis=1)
+            .apply(lambda r, current_k=k: (r["strike"] - current_k) * r.get(weight_col, 0), axis=1)
             .sum()
         )
         loss_data.append({"strike": k, "loss": call_loss + put_loss})
@@ -222,7 +240,7 @@ def calculate_max_pain(
     if not loss_data:
         return None
     df = pd.DataFrame(loss_data)
-    return df.loc[df["loss"].idxmin()]["strike"]
+    return float(df.loc[df["loss"].idxmin()]["strike"])
 
 
 def calculate_atm_iv(

@@ -1,3 +1,4 @@
+from enum import Enum
 import pandas as pd
 
 from src.advisor.models import (
@@ -164,50 +165,101 @@ def analyze_stage(data: pd.DataFrame) -> MinerviniStageResult:
         return {"stage": 3, "description": "ステージ3 (天井圏・分布局面)"}
 
     return {"stage": 0, "description": "ステージ判定不能（移行期）"}
-
+class MarketState(str, Enum):
+    """市場の位相（ステート）"""
+    UPTREND = "UPTREND"
+    CORRECTION = "CORRECTION"
+    RALLY_ATTEMPT = "RALLY_ATTEMPT"
+    CONFIRMED_UPTREND = "CONFIRMED_UPTREND"
 
 def detect_follow_through_day(data: pd.DataFrame) -> MinerviniFtdResult:
     """
     市場指数からフォロースルーデー (FTD) を検出します。
-    通常、下落からの反発ラリー4日目以降に発生する、出来高増を伴う大幅高（1.5%以上）を指します。
+    ステートマシンアプローチを取り入れ、調整局面からの反発時のみに絞り込みます。
     """
-    if data is None or len(data) < 20:
-        return {"is_ftd": False, "status": "データ不足"}
+    if data is None or len(data) < 50:
+        return {"is_ftd": False, "status": "データ不足", "days_since_bottom": 0}
 
     df = data.copy()
 
-    # 変化率と出来高増加の計算
+    # 変化率、出来高増加、移動平均の計算
     df["Pct_Change"] = df["Close"].pct_change() * 100
     df["Vol_Increase"] = df["Volume"] > df["Volume"].shift(1)
+    df["MA50"] = df["Close"].rolling(window=50).mean()
+    df["MA21"] = df["Close"].rolling(window=21).mean()
 
-    # 直近20日の最安値（ボトム）を探す
-    recent_low_idx = df["Low"].iloc[-20:].idxmin()
-    recent_low_loc = df.index.get_loc(recent_low_idx)
-    days_since_bottom = len(df) - 1 - recent_low_loc
+    # 状態変数の初期化（過去50日時点での仮の状態）
+    state = MarketState.UPTREND
+    rally_day = 0
+    support_low = 0.0
+    days_since_bottom = 0
 
-    # FTDはボトムから4日目以降に発生する
-    if days_since_bottom >= 4:
-        # FTDの条件: 大幅な上昇(通常1.5%以上) ＆ 出来高増
-        latest = df.iloc[-1]
+    # 時系列に沿って状態遷移をシミュレーションし、現在のステートを特定する
+    # 少なくともMA50が計算できる50日目以降から開始
+    for i in range(50, len(df)):
+        current = df.iloc[i]
+        prev = df.iloc[i-1]
+        
+        # 調整局面の条件: 短期/中期トレンドの崩れ、または大幅下落
+        is_correction = current["Close"] < current["MA50"] and current["MA21"] < current["MA50"]
+        
+        if state in (MarketState.UPTREND, MarketState.CONFIRMED_UPTREND):
+            if is_correction:
+                state = MarketState.CORRECTION
+                
+        elif state == MarketState.CORRECTION:
+            # ラリー試行の開始 (Day 1): 前日の安値を下回らず、高く引けた場合
+            if current["Close"] > prev["Close"] and current["Low"] >= prev["Low"]:
+                state = MarketState.RALLY_ATTEMPT
+                rally_day = 1
+                support_low = prev["Low"]  # Day 1の安値を動的サポートとする
+                days_since_bottom = 1
+            # 調整を脱して直接アップトレンドへ戻るケース（V字回復）
+            elif not is_correction and current["Close"] > current["MA50"]:
+                state = MarketState.UPTREND
 
-        if latest["Pct_Change"] >= 1.5 and latest["Vol_Increase"]:
-            return {
-                "is_ftd": True,
-                "status": f"フォロースルーデー発生確認（ボトムから{days_since_bottom}日目）",
-                "days_since_bottom": days_since_bottom,
-                "pct_change": latest["Pct_Change"],
-            }
+        elif state == MarketState.RALLY_ATTEMPT:
+            # サポートを割ったらラリー失敗、再び調整局面へ
+            if current["Low"] < support_low:
+                state = MarketState.CORRECTION
+                rally_day = 0
+                days_since_bottom = 0
+            else:
+                rally_day += 1
+                days_since_bottom += 1
+                
+                # FTDの判定: Day 4以降、1.5%以上の価格上昇かつ出来高増
+                if rally_day >= 4 and current["Pct_Change"] >= 1.5 and current["Vol_Increase"]:
+                    state = MarketState.CONFIRMED_UPTREND
+                # ラリーが長期間（20日以上）続き、MA50を上回っている場合は自然にアップトレンド復帰とみなす
+                elif rally_day > 20 and current["Close"] > current["MA50"]:
+                    state = MarketState.UPTREND
 
-    # ラリー試行中かどうか（ボトムから1〜3日目）
-    if 1 <= days_since_bottom <= 3:
+    # 最終的な状態を元に出力結果を構築
+    latest = df.iloc[-1]
+    
+    if state == MarketState.CONFIRMED_UPTREND:
+        return {
+            "is_ftd": True,
+            "status": f"強気相場入り確認（FTD点灯、ボトムから{days_since_bottom}日目）",
+            "days_since_bottom": days_since_bottom,
+            "pct_change": float(latest["Pct_Change"]),
+        }
+    elif state == MarketState.RALLY_ATTEMPT:
         return {
             "is_ftd": False,
-            "status": f"ラリー試行中（ボトムから{days_since_bottom}日目）- FTDを監視中",
+            "status": f"ラリー試行中（Day {rally_day}）- FTDを監視中",
             "days_since_bottom": days_since_bottom,
         }
-
-    return {
-        "is_ftd": False,
-        "status": "下落トレンド進行中、またはすでに強気相場",
-        "days_since_bottom": days_since_bottom,
-    }
+    elif state == MarketState.CORRECTION:
+        return {
+            "is_ftd": False,
+            "status": "調整・下落局面",
+            "days_since_bottom": 0,
+        }
+    else:
+        return {
+            "is_ftd": False,
+            "status": "上昇トレンド継続中",
+            "days_since_bottom": 0,
+        }

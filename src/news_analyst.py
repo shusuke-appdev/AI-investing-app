@@ -78,36 +78,36 @@ def generate_flash_summary(
     # 指数
     if "S&P 500" in market_data:
         sp = market_data["S&P 500"]
-        lines.append(f"■ S&P500 {sp['change']:+.2f}%")
+        lines.append(f"■ S&P500 {sp.get('change', 0):+.2f}%")
     if "Nasdaq" in market_data:
         nq = market_data["Nasdaq"]
-        lines.append(f"■ ナスダック {nq['change']:+.2f}%")
+        lines.append(f"■ ナスダック {nq.get('change', 0):+.2f}%")
 
     # 金利
     treasury_line = []
     if "2Y Treasury" in market_data:
-        treasury_line.append(f"2y {market_data['2Y Treasury']['price']:.3f}%")
+        treasury_line.append(f"2y {market_data['2Y Treasury'].get('price', 0):.3f}%")
     if "10Y Treasury" in market_data:
-        treasury_line.append(f"10y {market_data['10Y Treasury']['price']:.3f}%")
+        treasury_line.append(f"10y {market_data['10Y Treasury'].get('price', 0):.3f}%")
     if "30Y Treasury" in market_data:
-        treasury_line.append(f"30y {market_data['30Y Treasury']['price']:.3f}%")
+        treasury_line.append(f"30y {market_data['30Y Treasury'].get('price', 0):.3f}%")
     if treasury_line:
         lines.append(f"■ {', '.join(treasury_line)}")
 
     # 為替・商品
     fx_commodity = []
     if "USD/JPY" in market_data:
-        fx_commodity.append(f"ドル円 {market_data['USD/JPY']['price']:.2f}")
+        fx_commodity.append(f"ドル円 {market_data['USD/JPY'].get('price', 0):.2f}")
     if "WTI Crude" in market_data:
-        fx_commodity.append(f"WTI {market_data['WTI Crude']['change']:+.2f}%")
+        fx_commodity.append(f"WTI {market_data['WTI Crude'].get('change', 0):+.2f}%")
     if "Bitcoin" in market_data:
-        fx_commodity.append(f"₿ {market_data['Bitcoin']['change']:+.2f}%")
+        fx_commodity.append(f"₿ {market_data['Bitcoin'].get('change', 0):+.2f}%")
     if "Gold" in market_data:
-        fx_commodity.append(f"金 {market_data['Gold']['change']:+.2f}%")
+        fx_commodity.append(f"金 {market_data['Gold'].get('change', 0):+.2f}%")
     if "Silver" in market_data:
-        fx_commodity.append(f"銀 {market_data['Silver']['change']:+.2f}%")
+        fx_commodity.append(f"銀 {market_data['Silver'].get('change', 0):+.2f}%")
     if "Copper" in market_data:
-        fx_commodity.append(f"銅 {market_data['Copper']['change']:+.2f}%")
+        fx_commodity.append(f"銅 {market_data['Copper'].get('change', 0):+.2f}%")
     if fx_commodity:
         lines.append(f"■ {', '.join(fx_commodity)}")
 

@@ -33,7 +33,15 @@ class MeanReversionAnalyzer:
             評価結果の辞書
         """
         if df_daily is None or df_daily.empty or len(df_daily) < 50:
-            return {"error": "Insufficient data"}
+            return {
+                "ticker": self.ticker,
+                "current_price": 0.0,
+                "parabolic_state": {"is_parabolic": False, "description": "Insufficient data", "deviation_10ma": None, "deviation_20ma": None, "target_reversion_price": None},
+                "rebound_state": {"is_dip_buyable": False, "is_perfect_order": False, "description": "Insufficient data", "near_support": "None"},
+                "ma_10": None,
+                "ma_20": None,
+                "ma_50": None
+            }
 
         df = df_daily.copy()
 
@@ -80,7 +88,13 @@ class MeanReversionAnalyzer:
         sma20 = latest["SMA_20"]
 
         if pd.isna(sma10) or pd.isna(sma20):
-            return {"is_parabolic": False, "description": "MA計算不足"}
+            return {
+                "is_parabolic": False, 
+                "description": "MA計算不足",
+                "deviation_10ma": None,
+                "deviation_20ma": None,
+                "target_reversion_price": None
+            }
 
         # 10MA、20MAからの乖離率
         dev_10 = (price - sma10) / sma10
@@ -136,7 +150,12 @@ class MeanReversionAnalyzer:
         sma50 = latest["SMA_50"]
 
         if pd.isna(sma10) or pd.isna(sma20) or pd.isna(sma50):
-            return {"is_dip_buyable": False, "description": "MA計算不足"}
+            return {
+                "is_dip_buyable": False, 
+                "is_perfect_order": False, 
+                "description": "MA計算不足", 
+                "near_support": "None"
+            }
 
         # パーフェクトオーダーの確認 (短期 > 中期 > 長期 が全て上向き)
         # 上向きチェックは簡単のため現在値の大小関係のみで判定 (10 > 20 > 50)

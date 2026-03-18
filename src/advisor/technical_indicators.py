@@ -10,6 +10,8 @@ import pandas as pd
 
 def calculate_rsi(close_prices: pd.Series, period: int = 14) -> float:
     """RSIを計算する。"""
+    if close_prices is None or len(close_prices) < period + 1:
+        return 50.0
     delta = close_prices.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
@@ -20,6 +22,8 @@ def calculate_rsi(close_prices: pd.Series, period: int = 14) -> float:
 
 def calculate_ma_deviation(close_prices: pd.Series, period: int = 50) -> float:
     """移動平均乖離率(%)を計算する。"""
+    if close_prices is None or len(close_prices) < period:
+        return 0.0
     ma = close_prices.rolling(window=period).mean()
     if ma.iloc[-1] == 0 or pd.isna(ma.iloc[-1]):
         return 0.0
@@ -53,6 +57,9 @@ def calculate_macd_signal(close_prices: pd.Series) -> dict:
     Returns:
         {"signal": str, "hist_slope": str, "zero_filter": str}
     """
+    if close_prices is None or len(close_prices) < 26:
+        return {"signal": "中立", "hist_slope": "neutral", "zero_filter": "neutral"}
+    
     exp12 = close_prices.ewm(span=12, adjust=False).mean()
     exp26 = close_prices.ewm(span=26, adjust=False).mean()
     macd = exp12 - exp26
@@ -91,6 +98,15 @@ def calculate_bollinger_bands(
     close_prices: pd.Series, period: int = 20, std_dev: float = 2.0
 ) -> dict:
     """ボリンジャーバンドを計算する。"""
+    if close_prices is None or len(close_prices) < period:
+        return {
+            "upper": 0.0,
+            "lower": 0.0,
+            "middle": 0.0,
+            "width": 0.0,
+            "position": "不明",
+        }
+        
     ma = close_prices.rolling(window=period).mean()
     std = close_prices.rolling(window=period).std()
 
@@ -126,6 +142,9 @@ def calculate_atr(
     high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14
 ) -> dict:
     """ATR（Average True Range）を計算する。"""
+    if high is None or low is None or close is None or len(close) < period + 1:
+        return {"atr": 0.0, "atr_percent": 0.0}
+        
     prev_close = close.shift(1)
     tr = pd.concat(
         [high - low, abs(high - prev_close), abs(low - prev_close)], axis=1
@@ -141,6 +160,8 @@ def calculate_atr(
 
 def calculate_support_resistance(close_prices: pd.Series, window: int = 20) -> dict:
     """直近のサポート/レジスタンスを計算する。"""
+    if close_prices is None or len(close_prices) == 0:
+        return {"support": 0.0, "resistance": 0.0}
     recent = close_prices.tail(window)
     return {"support": float(recent.min()), "resistance": float(recent.max())}
 
