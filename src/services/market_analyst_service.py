@@ -91,8 +91,8 @@ def generate_market_analysis_report(market_type: str = "US") -> str | None:
         "US 10Y Yield": "^TNX",
         # Commodities
         "Gold": "GC=F",
-        "WTI Crude": "CL=F",
-        "Copper": "HG=F",
+        "WTI Oil": "CL=F",
+        "Silver": "SI=F",
         # Crypto
         "Bitcoin": "BTC-USD",
         "Ethereum": "ETH-USD",

@@ -124,6 +124,8 @@ def calculate_gex(
     """
     if calls is None or puts is None or current_price == 0.0:
         fetched = _fetch_option_data(ticker)
+        if fetched is None:
+            return None
         calls, puts, current_price, _ = fetched
 
     total_oi = calls["openInterest"].sum() + puts["openInterest"].sum()
@@ -137,6 +139,8 @@ def calculate_gex(
     for _, row in calls.iterrows():
         strike = row.get("strike", 0)
         oi = row.get("openInterest", 0)
+        if pd.isna(oi):
+            oi = 0
         gamma = row.get("gamma", 0)
 
         if pd.isna(gamma) or gamma == 0:
@@ -152,6 +156,8 @@ def calculate_gex(
     for _, row in puts.iterrows():
         strike = row.get("strike", 0)
         oi = row.get("openInterest", 0)
+        if pd.isna(oi):
+            oi = 0
         gamma = row.get("gamma", 0)
 
         if pd.isna(gamma) or gamma == 0:

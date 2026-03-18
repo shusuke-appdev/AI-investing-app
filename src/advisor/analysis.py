@@ -32,7 +32,7 @@ def get_macro_context() -> dict:
             context["rates"][key] = market_data[key]
 
     # Commodities
-    for key in ["WTI Oil", "Gold", "Copper"]:
+    for key in ["WTI Oil", "Gold", "Silver"]:
         if key in market_data:
             context["commodities"][key] = market_data[key]
 

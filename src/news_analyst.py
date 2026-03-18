@@ -98,16 +98,14 @@ def generate_flash_summary(
     fx_commodity = []
     if "USD/JPY" in market_data:
         fx_commodity.append(f"ドル円 {market_data['USD/JPY'].get('price', 0):.2f}")
-    if "WTI Crude" in market_data:
-        fx_commodity.append(f"WTI {market_data['WTI Crude'].get('change', 0):+.2f}%")
+    if "WTI Oil" in market_data:
+        fx_commodity.append(f"WTI {market_data['WTI Oil'].get('change', 0):+.2f}%")
     if "Bitcoin" in market_data:
         fx_commodity.append(f"₿ {market_data['Bitcoin'].get('change', 0):+.2f}%")
     if "Gold" in market_data:
         fx_commodity.append(f"金 {market_data['Gold'].get('change', 0):+.2f}%")
     if "Silver" in market_data:
         fx_commodity.append(f"銀 {market_data['Silver'].get('change', 0):+.2f}%")
-    if "Copper" in market_data:
-        fx_commodity.append(f"銅 {market_data['Copper'].get('change', 0):+.2f}%")
     if fx_commodity:
         lines.append(f"■ {', '.join(fx_commodity)}")
 

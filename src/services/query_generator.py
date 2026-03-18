@@ -8,6 +8,7 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
+from src.constants import GEMINI_MODEL_NAME
 from src.log_config import get_logger
 from src.news_analyst import GEMINI_AVAILABLE, configure_gemini
 
@@ -68,7 +69,7 @@ def generate_dynamic_search_queries(
 """
 
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
         response = model.generate_content(prompt)
 
         # 応答からJSON文字列の抽出（フォーマット崩れへの防御的処理）

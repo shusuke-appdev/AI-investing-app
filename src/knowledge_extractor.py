@@ -14,6 +14,11 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
 
+try:
+    from src.constants import GEMINI_MODEL_NAME
+except ImportError:
+    GEMINI_MODEL_NAME = "gemini-2.0-flash"
+
 
 def extract_from_text(text: str) -> str:
     """
@@ -226,7 +231,7 @@ def summarize_content(content: str, source_type: str = "text") -> str:
 要約（日本語で）:"""
 
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
         response = model.generate_content(prompt)
         return response.text.strip()
     except Exception:
@@ -272,7 +277,7 @@ def generate_title(content: str, source_type: str) -> str:
 タイトル（20文字以内、日本語で）:"""
 
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
         response = model.generate_content(prompt)
         title = response.text.strip()
         # 余計な装飾を削除

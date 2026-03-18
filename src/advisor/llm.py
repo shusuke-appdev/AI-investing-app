@@ -1,5 +1,7 @@
 import google.generativeai as genai
 
+from src.constants import GEMINI_MODEL_NAME
+
 from .analysis import (
     get_holdings_news,
     get_macro_context,
@@ -22,7 +24,7 @@ def generate_portfolio_advice(
     AIによる包括的なポートフォリオアドバイスを生成します。
     テクニカル分析に基づく具体的な売買判断（数量・タイミング）を含む。
     """
-    model = genai.GenerativeModel("gemini-3-flash-preview")
+    model = genai.GenerativeModel(GEMINI_MODEL_NAME)
 
     # ポートフォリオサマリー構築（テクニカル詳細を拡充）
     holdings_text = []
