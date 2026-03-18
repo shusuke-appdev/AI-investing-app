@@ -214,32 +214,52 @@ def calculate_max_pain(
         total_vol = calls["volume"].fillna(0).sum() + puts["volume"].fillna(0).sum()
         if total_vol > 0:
             logger.warning(f"[OptionAnalyst] {ticker}: OpenInterest is 0. Falling back to Volume for Max Pain.")
-            
+
     if total_oi == 0 and total_vol == 0:
-        logger.warning(f"[OptionAnalyst] {ticker}: No OI and Volume data. Cannot calculate Max Pain.")
+        logger.warning(f"[OptionAnalyst] {ticker}: No valid OI or Volume data. Cannot calculate Max Pain.")
         return None
 
     weight_col = "volume" if use_vol else "openInterest"
 
-    strikes = sorted(set(calls["strike"].tolist() + puts["strike"].tolist()))
+    # NaNを0で埋めて計算可能な状態にする
+    calls_clean = calls.copy()
+    puts_clean = puts.copy()
+    if weight_col in calls_clean.columns:
+        calls_clean[weight_col] = calls_clean[weight_col].fillna(0)
+    else:
+        calls_clean[weight_col] = 0
+
+    if weight_col in puts_clean.columns:
+        puts_clean[weight_col] = puts_clean[weight_col].fillna(0)
+    else:
+        puts_clean[weight_col] = 0
+
+    strikes = sorted(set(calls_clean["strike"].tolist() + puts_clean["strike"].tolist()))
     loss_data = []
 
     for k in strikes:
         call_loss = (
-            calls[calls["strike"] < k]
-            .apply(lambda r, current_k=k: (current_k - r["strike"]) * r.get(weight_col, 0), axis=1)
+            calls_clean[calls_clean["strike"] < k]
+            .apply(lambda r, current_k=k: (current_k - r["strike"]) * r[weight_col], axis=1)
             .sum()
         )
         put_loss = (
-            puts[puts["strike"] > k]
-            .apply(lambda r, current_k=k: (r["strike"] - current_k) * r.get(weight_col, 0), axis=1)
+            puts_clean[puts_clean["strike"] > k]
+            .apply(lambda r, current_k=k: (r["strike"] - current_k) * r[weight_col], axis=1)
             .sum()
         )
         loss_data.append({"strike": k, "loss": call_loss + put_loss})
 
     if not loss_data:
         return None
+
     df = pd.DataFrame(loss_data)
+
+    # 全ての loss が 0 または同一値（計算不能状態）の場合は None を返す
+    if df["loss"].nunique() <= 1 or df["loss"].sum() == 0:
+        logger.warning(f"[OptionAnalyst] {ticker}: All strike losses are identical or zero. Returning None.")
+        return None
+
     return float(df.loc[df["loss"].idxmin()]["strike"])
 
 

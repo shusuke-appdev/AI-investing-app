@@ -113,20 +113,28 @@ def render_flash_summary(market_data, market_type: str = "US"):
 
     with col3, st.container(border=True):
         st.markdown("**🌍 商品・FX・暗号資産**")
-        target_tickers = commodities_tickers | crypto_tickers | forex_tickers
-        for name, data in market_data.items():
-            if name in ("trend_1mo", "weekly_performance"):
-                continue
-            ticker = data.get("ticker", "")
-            if ticker in target_tickers:
-                price = data.get("price", 0)
-                change = data.get("change", 0)
-                if "JPY" in name:
-                    price_fmt = f"¥{price:.2f}"
-                elif "BTC" in ticker or "ETH" in ticker:
-                    price_fmt = f"${price / 1000:.1f}K"
-                elif "GC" in ticker or "Gold" in name:
-                    price_fmt = f"${price:,.0f}"
-                else:
-                    price_fmt = f"${price:.2f}"
-                render_market_item(name, price_fmt, change)
+
+        # 望ましい表示順: コモディティ (WTI, Gold, Silver) -> FX -> 暗号資産
+        categories_to_show = [
+            ("commodities", commodities_tickers),
+            ("forex", forex_tickers),
+            ("crypto", crypto_tickers)
+        ]
+
+        for _category_name, valid_tickers in categories_to_show:
+            for name, data in market_data.items():
+                if name in ("trend_1mo", "weekly_performance"):
+                    continue
+                ticker = data.get("ticker", "")
+                if ticker in valid_tickers:
+                    price = data.get("price", 0)
+                    change = data.get("change", 0)
+                    if "JPY" in name:
+                        price_fmt = f"¥{price:.2f}"
+                    elif "BTC" in ticker or "ETH" in ticker:
+                        price_fmt = f"${price / 1000:.1f}K"
+                    elif "GC" in ticker or "Gold" in name or "Silver" in name:
+                        price_fmt = f"${price:,.2f}" if "Silver" in name else f"${price:,.0f}"
+                    else:
+                        price_fmt = f"${price:.2f}"
+                    render_market_item(name, price_fmt, change)

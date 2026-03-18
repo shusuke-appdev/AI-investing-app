@@ -70,7 +70,7 @@ US_CONFIG: MarketSettings = {
     "commodities": {
         "WTI Oil": "CL=F",
         "Gold": "GC=F",
-        "Copper": "HG=F",
+        "Silver": "SI=F",
     },
     "crypto": {
         "Bitcoin": "BINANCE:BTCUSDT",
@@ -153,7 +153,7 @@ JP_CONFIG: MarketSettings = {
     "commodities": {
         "WTI Oil": "CL=F",
         "Gold": "GC=F",
-        "Copper": "HG=F",
+        "Silver": "SI=F",
     },
     "crypto": {
         "Bitcoin": "BTC-USD",
