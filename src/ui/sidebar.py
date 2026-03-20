@@ -29,7 +29,6 @@ PAGES = {
     "stock": {"icon": "🔍", "name": "個別銘柄分析"},
     "portfolio": {"icon": "💼", "name": "ポートフォリオ"},
     "knowledge": {"icon": "📚", "name": "参照知識"},
-    "alerts": {"icon": "🔔", "name": "アラート設定"},
 }
 
 # ポートフォリオのサブモード
@@ -86,8 +85,8 @@ def render_sidebar():
 
             if is_active:
                 st.markdown(
-                    f"""<div style="background-color: #2563eb; 
-                    color: white; padding: 0.75rem 1rem; border-radius: 8px; 
+                    f"""<div style="background-color: #2563eb;
+                    color: white; padding: 0.75rem 1rem; border-radius: 8px;
                     margin-bottom: 0.5rem; font-weight: 600;">
                     {page_info["icon"]} {page_info["name"]}</div>""",
                     unsafe_allow_html=True,
@@ -161,19 +160,16 @@ def _load_saved_settings():
     """保存済み設定を読み込み、セッション状態と同期させる"""
     # Gemini API Key
     saved_api_key = get_gemini_api_key()
-    if saved_api_key:
-        # セッションに未設定、または保存値と異なる場合に更新
-        if st.session_state.get("gemini_api_key") != saved_api_key:
-            if configure_gemini(saved_api_key):
-                st.session_state.gemini_configured = True
-                st.session_state.gemini_api_key = saved_api_key  # キー自体も保持
+    # セッションに未設定、または保存値と異なる場合に更新
+    if saved_api_key and st.session_state.get("gemini_api_key") != saved_api_key and configure_gemini(saved_api_key):
+        st.session_state.gemini_configured = True
+        st.session_state.gemini_api_key = saved_api_key  # キー自体も保持
 
     # GAS URL
     saved_gas_url = get_gas_url()
-    if saved_gas_url:
-        if st.session_state.get("gas_url") != saved_gas_url:
-            st.session_state.gas_url = saved_gas_url
-            configure_gas(saved_gas_url)  # クライアント設定も更新
+    if saved_gas_url and st.session_state.get("gas_url") != saved_gas_url:
+        st.session_state.gas_url = saved_gas_url
+        configure_gas(saved_gas_url)  # クライアント設定も更新
 
     # Storage Type
     saved_storage = get_storage_type()
@@ -185,9 +181,8 @@ def _load_saved_settings():
 
     # Finnhub API Key
     saved_finnhub_key = get_finnhub_api_key()
-    if saved_finnhub_key:
-        if st.session_state.get("finnhub_api_key") != saved_finnhub_key:
-            st.session_state.finnhub_api_key = saved_finnhub_key
+    if saved_finnhub_key and st.session_state.get("finnhub_api_key") != saved_finnhub_key:
+        st.session_state.finnhub_api_key = saved_finnhub_key
 
 
 def _render_ai_chat():

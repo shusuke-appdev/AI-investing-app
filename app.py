@@ -4,6 +4,7 @@ Streamlitを使用したダッシュボードUI
 サイドバーナビゲーション方式
 """
 
+import contextlib
 import os
 import sys
 
@@ -11,8 +12,6 @@ import streamlit as st
 
 # パス設定
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from src.ui.alerts_tab import render_alerts_tab
 from src.ui.knowledge_tab import render_knowledge_tab
 from src.ui.market_tab import render_market_tab
 from src.ui.portfolio_tab import render_portfolio_tab
@@ -116,8 +115,6 @@ def main():
             render_portfolio_tab()
         elif page == "knowledge":
             render_knowledge_tab()
-        elif page == "alerts":
-            render_alerts_tab()
 
     except Exception as e:
         render_error_screen(e)
@@ -130,7 +127,5 @@ if __name__ == "__main__":
         # main外（インポート時など）のエラーを補足
         # streamlitが初期化されていない可能性もあるためprintも併用
         print(f"Critical Startup Error: {e}")
-        try:
+        with contextlib.suppress(Exception):
             st.error(f"Critical Startup Error: {e}")
-        except Exception:
-            pass

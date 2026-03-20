@@ -12,7 +12,7 @@ def render_market_item(label: str, value: str, change: float):
     arrow = "↑" if change >= 0 else "↓"
     st.markdown(
         f"""
-    <div style="display: flex; justify-content: space-between; padding: 0.4rem 0; 
+    <div style="display: flex; justify-content: space-between; padding: 0.4rem 0;
                 border-bottom: 1px solid #e5e7eb; font-size: 1rem;">
         <span style="color: #374151; font-weight: 500;">{label}</span>
         <span style="font-weight: 700;">{value}</span>
@@ -23,31 +23,69 @@ def render_market_item(label: str, value: str, change: float):
     )
 
 
+def _render_market_monitor(market_type: str):
+    """総合市場監視ダッシュボードの描画"""
+    st.markdown("### 🚨 総合市場監視ダッシュボード")
+
+    benchmarks = {"US": "SPY", "JP": "^N225"}
+    target_bm = benchmarks.get(market_type, "SPY")
+
+    opt_state = st.session_state.get("option_analysis")
+
+    # 新しい総合評価モジュールの呼び出し
+    from src.advisor.market_environment import evaluate_market_environment
+
+    with st.spinner("市場環境を評価中..."):
+        evaluation = evaluate_market_environment(market_type, opt_state)
+
+    if "error" in evaluation and evaluation["error"]:
+        st.warning(f"市場データ取得エラー: {evaluation['error']}")
+        return
+    status = evaluation["status"]
+    score = evaluation["score"]
+    desc = evaluation["description"]
+    signals = evaluation["signals"]
+
+    # 総合判断の表示
+    st.markdown(f"**監視対象**: `{target_bm}` | **総合判断**: {status}")
+
+    # -1.0 〜 +1.0 を 0.0 〜 1.0 に正規化してプログレスバーに表示
+    norm_score = max(0.0, min(1.0, (score + 1.0) / 2.0))
+    st.progress(
+        norm_score, text=f"総合スコア: {score:+.2f} (範囲: -1.0 〜 +1.0) - {desc}"
+    )
+
+    # 詳細な内訳（根拠）の表示
+    with st.expander(
+        "詳細な評価コンポーネント内訳", expanded=("弱気" in status or "強気" in status)
+    ):
+        for sig in signals:
+            name = sig["name"]
+            s = sig["score"]
+            w = sig["weight"]
+            rat = sig["rationale"]
+
+            # アイコン選択
+            ico = "🟢" if s > 0.3 else "🔴" if s < -0.3 else "⚪"
+            if s > 0.7:
+                ico = "🚀"
+            if s < -0.7:
+                ico = "🚨"
+
+            st.markdown(f"**{ico} {name}** (Score: `{s:+.2f}`, Weight: `{w:.1f}`)")
+            st.caption(f"└ {rat}")
+
+
 def render_flash_summary(market_data, market_type: str = "US"):
     """Flash Summaryを資産クラス別にボックス化して表示"""
     from src.market_config import get_market_config
 
     config = get_market_config(market_type)
-    st.markdown("### 📌 Flash Summary")
 
-    # --- FTD (Follow-Through Day) アラート ---
-    from src.advisor.minervini_analyzer import detect_follow_through_day
-    from src.market_data import get_stock_data
+    # --- 総合市場監視ダッシュボード ---
+    _render_market_monitor(market_type)
 
-    benchmarks = {"US": "SPY", "JP": "^N225"}
-    target_bm = benchmarks.get(market_type, "SPY")
-    bm_data = get_stock_data(target_bm, "3mo")
-
-    if bm_data is not None and not bm_data.empty:
-        ftd_result = detect_follow_through_day(bm_data)
-        if ftd_result.get("is_ftd"):
-            st.success(
-                f"🚀 **Market Alert:** {target_bm} にて **{ftd_result.get('status')}** (上昇率 {ftd_result.get('pct_change', 0):.2f}%) - 強気相場入りのシグナル点灯"
-            )
-        elif "ラリー試行中" in ftd_result.get("status", ""):
-            st.info(
-                f"👀 **Market Alert:** {target_bm} は現在 **{ftd_result.get('status')}** - 出来高を伴う大幅高に要警戒"
-            )
+    st.markdown("### 📌 アセットクラス別サマリー")
 
     col1, col2, col3 = st.columns(3)
     indices_tickers = set(config["indices"].values())
@@ -118,7 +156,7 @@ def render_flash_summary(market_data, market_type: str = "US"):
         categories_to_show = [
             ("commodities", commodities_tickers),
             ("forex", forex_tickers),
-            ("crypto", crypto_tickers)
+            ("crypto", crypto_tickers),
         ]
 
         for _category_name, valid_tickers in categories_to_show:
@@ -134,7 +172,9 @@ def render_flash_summary(market_data, market_type: str = "US"):
                     elif "BTC" in ticker or "ETH" in ticker:
                         price_fmt = f"${price / 1000:.1f}K"
                     elif "GC" in ticker or "Gold" in name or "Silver" in name:
-                        price_fmt = f"${price:,.2f}" if "Silver" in name else f"${price:,.0f}"
+                        price_fmt = (
+                            f"${price:,.2f}" if "Silver" in name else f"${price:,.0f}"
+                        )
                     else:
                         price_fmt = f"${price:.2f}"
                     render_market_item(name, price_fmt, change)

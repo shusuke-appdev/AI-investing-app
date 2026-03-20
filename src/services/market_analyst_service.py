@@ -193,9 +193,42 @@ def generate_market_analysis_report(market_type: str = "US") -> str | None:
         except Exception:
             option_analysis = []
 
+    # 8.5 Advanced Technical Analysis (Breadth & Volatility)
+    advanced_tech_parts = ["【高度テクニカル＆ボラティリティ分析】"]
+    try:
+        from src.advisor.technical_breadth import (
+            calculate_mcclellan_oscillator,
+            calculate_sp_oscillator,
+            fetch_breadth_data,
+        )
+        from src.advisor.volatility import compute_volatility
+        from src.advisor.volatility import get_market_data as get_vol_data
+        from src.advisor.volatility_clustering import (
+            generate_signals as gen_vol_signals,
+        )
+
+        # Breadth
+        b_df = fetch_breadth_data("1mo")
+        sp_osc = calculate_sp_oscillator(b_df)
+        mc_osc = calculate_mcclellan_oscillator(b_df)
+        advanced_tech_parts.append(f"- S&Pオシレーター: {sp_osc['oscillator_percent']}% ({sp_osc['signal']})")
+        advanced_tech_parts.append(f"- McClellan Oscillator: {mc_osc['mcclellan_value']} ({mc_osc['signal']})")
+
+        # Volatility Clustering (日経平均で判断)
+        v_df = get_vol_data("^N225", "2y", "1d")
+        v_df = compute_volatility(v_df)
+        vol_sig = gen_vol_signals(v_df, current_position=False)
+        advanced_tech_parts.append(f"- ボラティリティクラスタリング状態: {'発生中' if vol_sig['clustering_state'] else '収束'}")
+        advanced_tech_parts.append(f"- ボラティリティAI判断: {vol_sig['signal']} - {vol_sig['explanation']}")
+    except Exception as e:
+        logger.error(f"Advanced Tech Analysis fetch error: {e}")
+        advanced_tech_parts.append("- 高度テクニカルデータ取得エラー")
+
+    advanced_tech_analysis_str = "\n".join(advanced_tech_parts)
+
     # 9. Generate Recap
     recap = generate_market_recap(
-        market_data, all_news, option_analysis, theme_analysis=theme_analysis_str
+        market_data, all_news, option_analysis, theme_analysis=theme_analysis_str, advanced_tech_analysis=advanced_tech_analysis_str
     )
 
     return recap

@@ -121,6 +121,7 @@ def generate_market_recap(
     news_data: list[dict],
     option_analysis: list[dict],
     theme_analysis: str | None = None,
+    advanced_tech_analysis: str | None = None,
 ) -> str:
     """
     Gemini APIを使用してMarket Recap（ナラティブ解説）を生成します。
@@ -129,6 +130,8 @@ def generate_market_recap(
         market_data: 市場指数データ
         news_data: ニュース記事データ
         option_analysis: オプション分析結果
+        theme_analysis: テーマ分析文字列
+        advanced_tech_analysis: 高度なテクニカル分析文字列
 
     Returns:
         ナラティブ形式の市況解説
@@ -195,6 +198,10 @@ def generate_market_recap(
     # テーマ別トレンド
     if theme_analysis:
         context_parts.append(f"\n{theme_analysis}")
+
+    # 高度なテクニカル・ボラティリティ分析
+    if advanced_tech_analysis:
+        context_parts.append(f"\n{advanced_tech_analysis}")
 
     # ユーザー参照知識
     try:
