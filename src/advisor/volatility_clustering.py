@@ -2,16 +2,22 @@ import logging
 
 import numpy as np
 import pandas as pd
-from arch import arch_model
-from statsmodels.tsa.stattools import acf
+try:
+    from arch import arch_model
+    from statsmodels.tsa.stattools import acf
+    HAS_ADVANCED_STATS = True
+except ImportError:
+    HAS_ADVANCED_STATS = False
 
 logger = logging.getLogger(__name__)
 
 def detect_clustering(df: pd.DataFrame) -> dict:
-    """
     Step 3: クラスタリング検知アルゴリズム
     ACF, vol_of_vol, GARCH(1,1) の3手法で評価し、状態を判定する。
     """
+    if not HAS_ADVANCED_STATS:
+        return {'state': False, 'duration': 0, 'confidence': 0.0, 'reason': '分析ライブラリ(arch/statsmodels)未インストールのため判定スキップ'}
+
     if df is None or df.empty or 'log_return' not in df.columns or len(df) < 252:
         return {'state': False, 'duration': 0, 'confidence': 0.0, 'reason': 'データ不足'}
 

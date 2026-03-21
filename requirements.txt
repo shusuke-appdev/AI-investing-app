@@ -19,3 +19,5 @@ requests-cache>=1.0.0
 supabase>=2.0.0
 ruff
 pytest
+arch>=6.3.0
+statsmodels>=0.14.0
