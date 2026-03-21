@@ -4,7 +4,6 @@ Option Data Provider
 """
 
 import pandas as pd
-import requests
 import yfinance as yf
 
 from src.log_config import get_logger
@@ -12,25 +11,10 @@ from src.log_config import get_logger
 logger = get_logger(__name__)
 
 
-def _get_yf_session() -> requests.Session:
-    """Returns a requests Session with a custom User-Agent to help bypass blocks."""
-    session = requests.Session()
-    session.headers.update(
-        {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-        }
-    )
-    return session
-
-
 def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """Get option chain data. Uses strictly yfinance to avoid Finnhub 403 API errors."""
     try:
-        session = _get_yf_session()
-        stock = yf.Ticker(ticker, session=session)
+        stock = yf.Ticker(ticker)
         try:
             expirations = stock.options
         except Exception as e:
