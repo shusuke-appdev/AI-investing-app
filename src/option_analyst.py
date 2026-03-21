@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 
 def _fetch_option_data(
     ticker: str,
-) -> tuple[pd.DataFrame, pd.DataFrame, float] | None:
+) -> tuple[pd.DataFrame, pd.DataFrame, float, str] | None:
     """
     オプションチェーンと現在価格を1回で取得する内部ヘルパー。
 

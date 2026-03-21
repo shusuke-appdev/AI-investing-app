@@ -74,9 +74,8 @@ def render_market_tab():
             cols = st.columns([4, 1])
             with cols[0]:
                 st.markdown("### 🤖 AI分析レポート")
-            with cols[1]:
-                with st.popover("💬 AIに質問", use_container_width=True):
-                    render_market_chat()
+            with cols[1], st.popover("💬 AIに質問", use_container_width=True):
+                render_market_chat()
 
             safe_recap = re.sub(r"(?<!\\)\$", r"\\$", st.session_state.ai_recap)
             st.markdown(safe_recap)

@@ -278,7 +278,7 @@ def generate_company_summary_ja(ticker: str, english_summary: str) -> str:
     from src.prompts.analysis_prompts import COMPANY_SUMMARY_JA_PROMPT_TEMPLATE
 
     prompt = COMPANY_SUMMARY_JA_PROMPT_TEMPLATE.format(
-        ticker=ticker, english_summary=english_summary
+        ticker=ticker, english_summary=english_summary[:8000]
     )
 
     try:

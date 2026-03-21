@@ -6,9 +6,9 @@ Finnhub APIクライアントモジュール
 import json
 import threading
 import time
-
-# import streamlit as st  # Removed UI dependency
+from collections.abc import Callable
 from datetime import datetime, timedelta
+from typing import Any
 
 import finnhub
 import pandas as pd
@@ -87,11 +87,13 @@ def is_configured() -> bool:
 # --- レート制限 & リトライ ---
 
 _last_call_time = 0.0
-_MIN_INTERVAL = 1.1  # 秒
+_MIN_INTERVAL = 1.5  # 秒 (Finnhub無料枠を考慮した余裕のある設定)
 _rate_lock = threading.Lock()
 
 
-def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
+def _rate_limited_call(
+    func: Callable[..., Any], *args: Any, max_retries: int = 3, **kwargs: Any
+) -> Any:
     """
     レート制限付きAPI呼び出し。
     UI依存(st.toast)を排除し、例外を送出する。
@@ -112,18 +114,22 @@ def _rate_limited_call(func, *args, max_retries: int = 3, **kwargs):
                 wait = 2**attempt
                 logger.warning(f"Rate Limit (429). Retrying in {wait}s...")
                 time.sleep(wait)
-            elif e.status_code == 401 or e.status_code == 403:
+                continue
+
+            if e.status_code in (401, 403):
                 logger.error(f"Permission Denied ({e.status_code})")
-                raise FinnhubConfigError(f"Invalid API Key or Permission Denied: {e}")
-            else:
-                logger.error(f"API Error: {e}")
-                raise FinnhubError(f"API Error: {e}")
+                raise FinnhubConfigError(f"Invalid API Key or Permission Denied: {e}") from e
+
+            logger.error(f"API Error: {e}")
+            raise FinnhubError(f"API Error: {e}") from e
+
         except finnhub.FinnhubRequestException as e:
             logger.warning(f"Network Exception: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(1)
-            else:
-                raise FinnhubNetworkError(f"Network Error: {e}")
+            if attempt >= max_retries - 1:
+                raise FinnhubNetworkError(f"Network Error: {e}") from e
+
+            wait = 2**attempt
+            time.sleep(wait)
 
     logger.error("Max retries exceeded.")
     raise FinnhubRateLimitError("Max retries exceeded")

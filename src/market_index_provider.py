@@ -71,8 +71,8 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
             q = _finnhub_get_quote(ticker)
             if isinstance(q, dict) and q.get("c") not in (0, None):
                 result[name] = {
-                    "price": q.get("c"),
-                    "change": q.get("dp", 0),
+                    "price": float(q.get("c", 0.0)),  # type: ignore
+                    "change": float(q.get("dp", 0.0)),  # type: ignore
                     "ticker": ticker,
                 }
             else:

@@ -7,6 +7,7 @@ from plotly.subplots import make_subplots
 from src.market_data import get_stock_data, get_stock_info
 
 
+@st.fragment
 def render_chart(ticker: str):
     """
     株価チャートを描画します（200日MA対応・3ヶ月表示・出来高付き）
@@ -147,7 +148,8 @@ def render_chart(ticker: str):
         # 厳密には (Close - Open) の方がローソク足の色と合うが、一般的には前日比も多い。
         # ここではローソク足に合わせて (Close >= Open) で色分け。
         colors = [
-            "#22c55e" if c >= o else "#ef4444" for c, o in zip(df["Close"], df["Open"])
+            "#22c55e" if c >= o else "#ef4444"
+            for c, o in zip(df["Close"], df["Open"], strict=False)
         ]
 
         fig.add_trace(

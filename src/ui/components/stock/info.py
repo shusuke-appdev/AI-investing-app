@@ -25,11 +25,11 @@ def render_company_overview(ticker: str, info: dict):
     st.markdown(
         f"""
     <div style="margin-bottom: 1rem;">
-        <span style="background-color: var(--color-accent); color: white; padding: 0.25rem 0.5rem; 
+        <span style="background-color: var(--color-accent); color: white; padding: 0.25rem 0.5rem;
                      border-radius: var(--radius-sm); font-size: 0.875rem; margin-right: 0.5rem;">
             {sector}
         </span>
-        <span style="background-color: var(--color-neutral); color: white; padding: 0.25rem 0.5rem; 
+        <span style="background-color: var(--color-neutral); color: white; padding: 0.25rem 0.5rem;
                      border-radius: var(--radius-sm); font-size: 0.875rem;">
             {industry}
         </span>
@@ -63,7 +63,7 @@ def render_company_overview(ticker: str, info: dict):
 
     st.markdown(
         f"""
-    <div style="font-size: 1rem; line-height: 1.6; color: var(--color-text-primary); 
+    <div style="font-size: 1rem; line-height: 1.6; color: var(--color-text-primary);
                 background-color: var(--color-bg-secondary); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--color-border);">
         <strong>事業内容:</strong><br>
         {summary[:500] + "..." if len(summary) > 500 else summary}
@@ -73,6 +73,7 @@ def render_company_overview(ticker: str, info: dict):
     )
 
 
+@st.fragment
 def render_ai_stock_analysis(ticker: str, info: dict = None):
     """AI銘柄分析ボタン（フル幅版）"""
 
@@ -105,6 +106,7 @@ def render_ai_stock_analysis(ticker: str, info: dict = None):
                 st.error(f"分析エラー: {e}")
 
 
+@st.fragment
 def render_news_full_width(ticker: str):
     """関連ニュースを横幅いっぱいで描画"""
     st.markdown("### 📰 関連ニュース")

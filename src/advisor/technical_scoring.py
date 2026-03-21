@@ -25,7 +25,8 @@ def analyze_options_data(ticker: str, current_price: float) -> dict:
             "price_range": Optional[tuple[float, float]]
         }
     """
-    res = {
+    from typing import Any
+    res: dict[str, Any] = {
         "gex_regime": "unknown",
         "gex_positive_wall": 0.0,
         "gex_negative_wall": 0.0,

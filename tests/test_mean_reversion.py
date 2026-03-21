@@ -8,7 +8,7 @@ def test_too_few_data():
     analyzer = MeanReversionAnalyzer("TEST")
     df = pd.DataFrame({"Close": [1] * 10})
     res = analyzer.analyze(df)
-    assert "error" in res
+    assert res["parabolic_state"]["description"] == "Insufficient data"
 
 
 def test_parabolic_extension():

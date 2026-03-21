@@ -99,10 +99,10 @@ def extract_from_youtube(video_url: str) -> str:
         return "[無効なYouTube URLです]"
 
     try:
-        from youtube_transcript_api import YouTubeTranscriptApi
+        from youtube_transcript_api import YouTubeTranscriptApi  # type: ignore
 
         # 日本語 → 英語 → 自動生成の順で試行
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)  # type: ignore
 
         transcript = None
         for lang in ["ja", "en"]:
@@ -154,7 +154,7 @@ def extract_from_url(url: str) -> str:
         抽出されたテキスト
     """
     try:
-        import requests
+        import requests  # type: ignore
         from bs4 import BeautifulSoup
 
         headers = {

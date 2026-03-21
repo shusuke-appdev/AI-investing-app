@@ -7,6 +7,7 @@ from src.log_config import get_logger
 logger = get_logger(__name__)
 
 
+@st.fragment
 def render_quarterly_financials_graph(ticker: str):
     """四半期財務グラフを描画（Finnhub版）"""
     try:
@@ -51,17 +52,14 @@ def render_quarterly_financials_graph(ticker: str):
                         "RevenueFromContractWithCustomerExcludingAssessedTax",
                         "SalesRevenueNet",
                         "SalesRevenueGoodsNet",
-                    ]:
-                        if revenue == 0:
-                            revenue = value
+                    ] and revenue == 0:
+                        revenue = value
 
-                    if concept in ["OperatingIncomeLoss", "OperatingIncome"]:
-                        if operating_income == 0:
-                            operating_income = value
+                    if concept in ["OperatingIncomeLoss", "OperatingIncome"] and operating_income == 0:
+                        operating_income = value
 
-                    if concept in ["NetIncomeLoss", "ProfitLoss"]:
-                        if net_income == 0:
-                            net_income = value
+                    if concept in ["NetIncomeLoss", "ProfitLoss"] and net_income == 0:
+                        net_income = value
 
                 # 日付ラベル作成
                 filed_date = item.get("filedDate", "")
@@ -96,6 +94,12 @@ def render_quarterly_financials_graph(ticker: str):
                     # 一般的なインデックス名を探す (yfinanceは変動することがある)
                     # Use .loc with flexible lookup or iterator
 
+                    def get_val(df_val, keys, col_date):
+                        for k in keys:
+                            if k in df_val.index:
+                                return df_val.loc[k, col_date]
+                        return 0
+
                     # カラム（日付）でループ（新しい順に来るので逆にするか、あとでソート）
                     for date_obj in qf.columns:
                         try:
@@ -104,19 +108,13 @@ def render_quarterly_financials_graph(ticker: str):
                             # ライブラリ内部的には英語キーが残っていることが多い。
                             # ここでは安全のため .get() ではなく loc検索、なければ0
 
-                            def get_val(df, keys):
-                                for k in keys:
-                                    if k in df.index:
-                                        return df.loc[k, date_obj]
-                                return 0
-
                             rev_keys = ["Total Revenue", "Operating Revenue", "Revenue"]
                             op_keys = ["Operating Income", "Operating Profit"]
                             net_keys = ["Net Income", "Net Income Common Stockholders"]
 
-                            revenue = get_val(qf, rev_keys)
-                            operating_income = get_val(qf, op_keys)
-                            net_income = get_val(qf, net_keys)
+                            revenue = get_val(qf, rev_keys, date_obj)
+                            operating_income = get_val(qf, op_keys, date_obj)
+                            net_income = get_val(qf, net_keys, date_obj)
 
                             if revenue != 0:
                                 # yfinanceの四半期はTimestampオブジェクトなので、strftimeで整形
@@ -154,7 +152,7 @@ def render_quarterly_financials_graph(ticker: str):
         net_income_m = [d["net_income"] / 1e6 for d in financials_data]
 
         net_margin = []
-        for r, n in zip(revenue_m, net_income_m):
+        for r, n in zip(revenue_m, net_income_m, strict=False):
             if r != 0:
                 net_margin.append((n / r) * 100)
             else:
@@ -239,6 +237,7 @@ def render_quarterly_financials_graph(ticker: str):
         st.info(f"詳細データの表示中にエラーが発生しました: {e}")
 
 
+@st.fragment
 def render_recent_earnings(ticker: str):
     """直近決算サプライズを描画（Finnhub版）"""
     try:

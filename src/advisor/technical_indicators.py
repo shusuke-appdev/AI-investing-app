@@ -59,7 +59,7 @@ def calculate_macd_signal(close_prices: pd.Series) -> dict:
     """
     if close_prices is None or len(close_prices) < 26:
         return {"signal": "中立", "hist_slope": "neutral", "zero_filter": "neutral"}
-    
+
     exp12 = close_prices.ewm(span=12, adjust=False).mean()
     exp26 = close_prices.ewm(span=26, adjust=False).mean()
     macd = exp12 - exp26
@@ -106,7 +106,7 @@ def calculate_bollinger_bands(
             "width": 0.0,
             "position": "不明",
         }
-        
+
     ma = close_prices.rolling(window=period).mean()
     std = close_prices.rolling(window=period).std()
 
@@ -144,7 +144,7 @@ def calculate_atr(
     """ATR（Average True Range）を計算する。"""
     if high is None or low is None or close is None or len(close) < period + 1:
         return {"atr": 0.0, "atr_percent": 0.0}
-        
+
     prev_close = close.shift(1)
     tr = pd.concat(
         [high - low, abs(high - prev_close), abs(low - prev_close)], axis=1

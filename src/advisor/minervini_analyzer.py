@@ -1,4 +1,5 @@
 from enum import Enum
+
 import pandas as pd
 
 from src.advisor.models import (
@@ -67,7 +68,7 @@ def detect_vcp(
     subset = df.iloc[latest_pivot_loc:]
 
     # 収縮を検出
-    contractions = []
+    contractions: list[dict[str, float | int | str]] = []
     current_low = subset["Low"].iloc[0]
 
     for i in range(1, len(subset)):
@@ -200,17 +201,17 @@ def detect_follow_through_day(data: pd.DataFrame) -> MinerviniFtdResult:
     for i in range(50, len(df)):
         current = df.iloc[i]
         prev = df.iloc[i-1]
-        
+
         # 直近高値からの下落率（ドローダウン）
         drawdown = (current["High50"] - current["Close"]) / current["High50"] * 100
-        
+
         # 調整局面の条件: 価格が50日線を下回り、かつ直近高値から5%以上下落していること（ノイズ排除）
         is_correction = current["Close"] < current["MA50"] and drawdown >= 5.0
-        
+
         if state in (MarketState.UPTREND, MarketState.CONFIRMED_UPTREND):
             if is_correction:
                 state = MarketState.CORRECTION
-                
+
         elif state == MarketState.CORRECTION:
             # ラリー試行の開始 (Day 1): 前日の安値を下回らず、高く引けた場合
             if current["Close"] > prev["Close"] and current["Low"] >= prev["Low"]:
@@ -231,7 +232,7 @@ def detect_follow_through_day(data: pd.DataFrame) -> MinerviniFtdResult:
             else:
                 rally_day += 1
                 days_since_bottom += 1
-                
+
                 # FTDの判定: Day 4以降、1.5%以上の価格上昇かつ出来高増
                 if rally_day >= 4 and current["Pct_Change"] >= 1.5 and current["Vol_Increase"]:
                     state = MarketState.CONFIRMED_UPTREND
@@ -241,7 +242,7 @@ def detect_follow_through_day(data: pd.DataFrame) -> MinerviniFtdResult:
 
     # 最終的な状態を元に出力結果を構築
     latest = df.iloc[-1]
-    
+
     if state == MarketState.CONFIRMED_UPTREND:
         return {
             "is_ftd": True,

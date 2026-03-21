@@ -217,17 +217,13 @@ def compare_portfolios(names: list[str], days: int = 30) -> dict:
     Returns:
         比較データ
     """
-    result = {
-        "portfolios": [],
-        "dates": set(),
-    }
+    portfolios_data = []
+    dates_set: set[str] = set()
 
     for name in names:
-        # history = load_history(name, days) (Unused)
         returns = calculate_returns(name, days)
-
         dates, values = get_value_series(name, days)
-        result["dates"].update(dates)
+        dates_set.update(dates)
 
         # 正規化（開始時点を100として）
         if values and values[0] > 0:
@@ -235,7 +231,7 @@ def compare_portfolios(names: list[str], days: int = 30) -> dict:
         else:
             normalized = values
 
-        result["portfolios"].append(
+        portfolios_data.append(
             {
                 "name": name,
                 "dates": dates,
@@ -246,6 +242,7 @@ def compare_portfolios(names: list[str], days: int = 30) -> dict:
             }
         )
 
-    result["dates"] = sorted(result["dates"])
-
-    return result
+    return {
+        "portfolios": portfolios_data,
+        "dates": sorted(dates_set),
+    }

@@ -4,6 +4,7 @@
 （Strategyパターンによるリファクタリング適用済）
 """
 
+import contextlib
 import json
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,10 +14,8 @@ from typing import Any, Literal
 from src.log_config import get_logger
 from src.storage.base import BaseStorage
 
-try:
+with contextlib.suppress(ImportError):
     from .gas_client import get_gas_client
-except ImportError:
-    pass
 
 from .supabase_client import get_supabase_client
 
@@ -174,12 +173,12 @@ class SupabasePortfolioStorage(BaseStorage):
             rows = response.data
             if not rows:
                 return None
-            row = rows[0]
+            row = dict(rows[0])  # type: ignore
             return {
-                "name": row["name"],
-                "holdings": row["holdings"],
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
+                "name": row.get("name"),
+                "holdings": row.get("holdings", []),
+                "created_at": row.get("created_at"),
+                "updated_at": row.get("updated_at"),
             }
         except Exception as e:
             logger.error(f"Supabase load error: {e}")
@@ -191,7 +190,7 @@ class SupabasePortfolioStorage(BaseStorage):
             return []
         try:
             response = client.table("portfolios").select("name").execute()
-            names = set(r["name"] for r in response.data)
+            names = set(str(r.get("name")) for r in response.data if isinstance(r, dict) and r.get("name"))
             return sorted(list(names))
         except Exception as e:
             logger.error(f"Supabase list error: {e}")

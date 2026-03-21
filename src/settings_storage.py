@@ -136,7 +136,7 @@ def set_setting(key: str, value) -> bool:
 
 
 def get_gemini_api_key() -> str:
-    """Gemini APIキーを取得（Streamlit secrets対応）"""
+    """Gemini APIキーを取得（Streamlit secrets/Env対応）"""
     # 1. Streamlit secretsから取得
     try:
         import streamlit as st
@@ -145,13 +145,14 @@ def get_gemini_api_key() -> str:
             return st.secrets["GEMINI_API_KEY"]
     except Exception:
         pass
-    # 2. ローカル設定から取得
-    return get_setting("gemini_api_key", "")
+    # 2. 環境変数から取得
+    import os
+    return os.environ.get("GEMINI_API_KEY", "")
 
 
 def set_gemini_api_key(api_key: str) -> bool:
-    """Gemini APIキーを保存"""
-    return set_setting("gemini_api_key", api_key)
+    """Gemini APIキー情報のUI経由保存はセキュリティ強化のため廃止されました"""
+    return False
 
 
 def get_gas_url() -> str:
@@ -184,7 +185,7 @@ def set_storage_type_setting(storage_type: str) -> bool:
 
 
 def get_finnhub_api_key() -> str:
-    """Finnhub APIキーを取得（Streamlit secrets対応）"""
+    """Finnhub APIキーを取得（Streamlit secrets/Env対応）"""
     # 1. Streamlit secretsから取得
     try:
         import streamlit as st
@@ -193,10 +194,11 @@ def get_finnhub_api_key() -> str:
             return st.secrets["FINNHUB_API_KEY"]
     except Exception:
         pass
-    # 2. ローカル設定から取得
-    return get_setting("finnhub_api_key", "")
+    # 2. 環境変数から取得
+    import os
+    return os.environ.get("FINNHUB_API_KEY", "")
 
 
 def set_finnhub_api_key(api_key: str) -> bool:
-    """Finnhub APIキーを保存"""
-    return set_setting("finnhub_api_key", api_key)
+    """Finnhub APIキー情報のUI経由保存はセキュリティ強化のため廃止されました"""
+    return False

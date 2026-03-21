@@ -136,11 +136,11 @@ def _extract_finnhub_profile(ticker: str, info: StockInfo) -> None:
 
 
 def _extract_yfinance_profile(ticker: str, info: StockInfo) -> None:
+    # yfinanceへの過剰なアクセスを防ぐため、主要な情報が存在する場合はフォールバックをスキップ
     needs_fallback = (
-        info["summary"] == "情報なし"
-        or info["sector"] == "N/A"
-        or info["revenueGrowth"] is None
-        or info["current_price"] is None
+        info.get("summary") == "情報なし"
+        or info.get("sector") == "N/A"
+        or info.get("current_price") is None
     )
     if not needs_fallback:
         return

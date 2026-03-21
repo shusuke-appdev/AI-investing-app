@@ -73,17 +73,16 @@ def _render_input_section():
             st.rerun()
 
     with header_col3:
-        if current_name != "新規ポートフォリオ":
-            if st.button(
-                "🗑️ 削除",
-                help="ポートフォリオ全体を完全に削除します",
-                type="tertiary",
-                use_container_width=True,
-            ):
-                delete_portfolio(current_name)
-                st.session_state.managed_holdings = []
-                st.session_state.current_portfolio_name = "新規ポートフォリオ"
-                st.rerun()
+        if current_name != "新規ポートフォリオ" and st.button(
+            "🗑️ 削除",
+            help="ポートフォリオ全体を完全に削除します",
+            type="tertiary",
+            use_container_width=True,
+        ):
+            delete_portfolio(current_name)
+            st.session_state.managed_holdings = []
+            st.session_state.current_portfolio_name = "新規ポートフォリオ"
+            st.rerun()
 
     st.divider()
 

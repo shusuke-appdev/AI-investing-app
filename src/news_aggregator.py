@@ -3,6 +3,7 @@
 複数ソースからニュースを収集・統合します。
 """
 
+import concurrent.futures
 import hashlib
 from datetime import datetime, timedelta
 
@@ -135,9 +136,9 @@ def _get_news_cutoff_time(hours: int = 48) -> datetime:
 
 
 def get_aggregated_news(
-    categories: list[str] = None,
-    keywords: list[str] = None,
-    dynamic_keywords: list[str] = None,
+    categories: list[str] | None = None,
+    keywords: list[str] | None = None,
+    dynamic_keywords: list[str] | None = None,
     max_per_source: int = 10,
     max_total: int = 80,
     market_type: str = "US",
@@ -216,47 +217,53 @@ def get_aggregated_news(
     seen_ids = set()
     cutoff_time = _get_news_cutoff_time(filter_hours)
 
-    # 1. カテゴリ別取得
+    # 並行処理用タスクリストの構築
+    tasks = []
+
+    # 1. カテゴリ別取得タスク
     for category in categories:
-        articles = get_gnews_articles(
-            topic=category,
-            max_results=max_per_source,
-            language=language,
-            country=country,
-            period="2d",  # API レベルで直近2日に限定
-        )
-        for article in articles:
-            # 事後フィルタリング: 発行日時がカットオフより新しいもののみ
-            pub_dt = article.get("published_dt")
-            if pub_dt and pub_dt < cutoff_time:
-                continue  # 古い記事はスキップ
+        tasks.append({
+            "topic": category,
+            "max_results": max_per_source,
+            "language": language,
+            "country": country,
+            "period": "2d",
+        })
 
-            news_id = _generate_news_id(article["title"], article["link"])
-            if news_id not in seen_ids:
-                article["news_id"] = news_id
-                all_news.append(article)
-                seen_ids.add(news_id)
-
-    # 2. キーワード別取得
+    # 2. キーワード別取得タスク
     for keyword in keywords:
-        articles = get_gnews_articles(
-            query=keyword,
-            max_results=max(3, max_per_source // 3),  # キーワードは少なめ
-            language=language,
-            country=country,
-            period="2d",  # API レベルで直近2日に限定
-        )
-        for article in articles:
-            # 事後フィルタリング
-            pub_dt = article.get("published_dt")
-            if pub_dt and pub_dt < cutoff_time:
-                continue
+        tasks.append({
+            "query": keyword,
+            "max_results": max(3, max_per_source // 3),
+            "language": language,
+            "country": country,
+            "period": "2d",
+        })
 
-            news_id = _generate_news_id(article["title"], article["link"])
-            if news_id not in seen_ids:
-                article["news_id"] = news_id
-                all_news.append(article)
-                seen_ids.add(news_id)
+    # ワーカースレッド用のフェッチ関数
+    def _fetch_news(kwargs_dict: dict) -> list[dict]:
+        return get_gnews_articles(**kwargs_dict)
+
+    # ThreadPoolExecutorを用いた並行取得（GNewsへのリクエストを並列化して待機時間を短縮）
+    max_workers = min(10, len(tasks)) if tasks else 1
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_task = {executor.submit(_fetch_news, t): t for t in tasks}
+        for future in concurrent.futures.as_completed(future_to_task):
+            try:
+                articles = future.result()
+                for article in articles:
+                    # 事後フィルタリング: 発行日時がカットオフより新しいもののみ
+                    pub_dt = article.get("published_dt")
+                    if pub_dt and pub_dt < cutoff_time:
+                        continue
+
+                    news_id = _generate_news_id(article["title"], article["link"])
+                    if news_id not in seen_ids:
+                        article["news_id"] = news_id
+                        all_news.append(article)
+                        seen_ids.add(news_id)
+            except Exception as e:
+                logger.error(f"News fetch error in executor: {e}")
 
     # 3. 日付順ソート（新しい順）
     all_news.sort(key=lambda x: x.get("published", ""), reverse=True)

@@ -49,7 +49,7 @@ def translate_to_japanese(text: str) -> str:
         return text
 
     try:
-        prompt = f"以下の英文を、投資家向けの自然な日本語に翻訳してください。要約はせず、完全な翻訳をお願いします。\n\nOrigin: {text}\n\nTranslated:"
+        prompt = f"以下の英文を、投資家向けの自然な日本語に翻訳してください。要約はせず、完全な翻訳をお願いします。\n\nOrigin: {text[:8000]}\n\nTranslated:"
         response = model.generate_content(prompt)
         if response and response.text:
             return response.text.strip()

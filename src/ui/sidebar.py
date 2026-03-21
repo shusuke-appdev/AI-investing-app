@@ -13,12 +13,11 @@ from src.news_analyst import configure_gemini, generate_market_recap
 from src.option_analyst import get_major_indices_options
 from src.portfolio_storage import set_storage_type
 from src.settings_storage import (
-    get_finnhub_api_key,  # Added
+    get_finnhub_api_key,
     get_gas_url,
     get_gemini_api_key,
     get_storage_type,
     set_gas_url,
-    set_gemini_api_key,
     set_storage_type_setting,
 )
 
@@ -158,18 +157,18 @@ def _render_portfolio_submenu():
 
 def _load_saved_settings():
     """保存済み設定を読み込み、セッション状態と同期させる"""
-    # Gemini API Key
+    # Gemini API Key (Secrets / Env only)
     saved_api_key = get_gemini_api_key()
-    # セッションに未設定、または保存値と異なる場合に更新
-    if saved_api_key and st.session_state.get("gemini_api_key") != saved_api_key and configure_gemini(saved_api_key):
+    if saved_api_key and st.session_state.get("gemini_api_key") != saved_api_key:
         st.session_state.gemini_configured = True
-        st.session_state.gemini_api_key = saved_api_key  # キー自体も保持
+        st.session_state.gemini_api_key = saved_api_key
+        configure_gemini(saved_api_key)
 
     # GAS URL
     saved_gas_url = get_gas_url()
     if saved_gas_url and st.session_state.get("gas_url") != saved_gas_url:
         st.session_state.gas_url = saved_gas_url
-        configure_gas(saved_gas_url)  # クライアント設定も更新
+        configure_gas(saved_gas_url)
 
     # Storage Type
     saved_storage = get_storage_type()
@@ -179,7 +178,7 @@ def _load_saved_settings():
             st.session_state.storage_type = saved_storage
             set_storage_type(saved_storage)
 
-    # Finnhub API Key
+    # Finnhub API Key (Secrets / Env only)
     saved_finnhub_key = get_finnhub_api_key()
     if saved_finnhub_key and st.session_state.get("finnhub_api_key") != saved_finnhub_key:
         st.session_state.finnhub_api_key = saved_finnhub_key
@@ -252,71 +251,22 @@ def _render_settings():
     with st.expander("⚙️ 設定", expanded=True):  # 展開しておく
         # === API設定 ===
         st.markdown("**🔑 API設定**")
+        st.caption("※ APIキーのUIからの保存機能はセキュリティ向上のため廃止されました。`.env` または `st.secrets` で環境変数を設定してください。")
 
-        # 1. Gemini API Key
-        gemini_in_secrets = False
-        try:
-            if "GEMINI_API_KEY" in st.secrets:
-                gemini_in_secrets = True
-        except Exception:
-            pass
+        from src.settings_storage import get_finnhub_api_key, get_gemini_api_key
 
-        if gemini_in_secrets:
-            st.text_input(
-                "Gemini API Key",
-                value="",
-                placeholder="✅ Secretsで設定済み (システム管理)",
-                disabled=True,
-            )
-            st.caption("※ Streamlit Secretsによって安全に管理されています")
+        gemini_configured = bool(get_gemini_api_key())
+        finnhub_configured = bool(get_finnhub_api_key())
+
+        if gemini_configured:
+            st.success("✅ Gemini API: 設定済み (st.secrets または .env)")
         else:
-            saved_gemini_key = get_gemini_api_key()
-            gemini_key = st.text_input(
-                "Gemini API Key",
-                type="password",
-                value=saved_gemini_key if saved_gemini_key else "",
-                help="AIレポート生成に必要です",
-            )
+            st.error("❌ Gemini API: 未設定 (AI分析機能が利用できません)")
 
-            if gemini_key and gemini_key != saved_gemini_key:
-                if configure_gemini(gemini_key):
-                    st.session_state.gemini_configured = True
-                    set_gemini_api_key(gemini_key)
-                    st.success("✅ Gemini設定保存")
-                else:
-                    st.error("❌ Gemini設定失敗")
-
-        # 2. Finnhub API Key
-        from src.settings_storage import get_finnhub_api_key, set_finnhub_api_key
-
-        finnhub_in_secrets = False
-        try:
-            if "FINNHUB_API_KEY" in st.secrets:
-                finnhub_in_secrets = True
-        except Exception:
-            pass
-
-        if finnhub_in_secrets:
-            st.text_input(
-                "Finnhub API Key",
-                value="",
-                placeholder="✅ Secretsで設定済み (システム管理)",
-                disabled=True,
-            )
-            st.caption("※ Streamlit Secretsによって安全に管理されています")
+        if finnhub_configured:
+            st.success("✅ Finnhub API: 設定済み (st.secrets または .env)")
         else:
-            saved_finnhub_key = get_finnhub_api_key()
-            finnhub_key = st.text_input(
-                "Finnhub API Key",
-                type="password",
-                value=saved_finnhub_key if saved_finnhub_key else "",
-                help="株価・ニュース取得に必要です（無料枠あり）",
-            )
-
-            if finnhub_key and finnhub_key != saved_finnhub_key:
-                set_finnhub_api_key(finnhub_key)
-                st.session_state.finnhub_api_key = finnhub_key
-                st.success("✅ Finnhub設定保存")
+            st.warning("⚠️ Finnhub API: 未設定 (一部データ取得が制限されます)")
 
         st.markdown("---")
 

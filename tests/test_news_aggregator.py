@@ -126,3 +126,27 @@ class TestGetAggregatedNews:
         # get_gnews_articlesが2回呼ばれる（カテゴリ1回 + キーワード1回）
         assert mock_get_gnews.call_count >= 2
         assert len(news) > 0
+
+    @patch("src.news_aggregator.get_gnews_articles")
+    def test_executor_handles_exceptions(self, mock_get_gnews):
+        """並列フェッチ中に一部が例外を出しても、他の結果が正常に返ることを確認"""
+        from src.news_aggregator import get_aggregated_news
+
+        # 3回の呼び出しを想定: 成功、失敗、成功
+        mock_get_gnews.side_effect = [
+            [{"title": "News 1", "link": "https://1.com", "published": "2024-01-01"}],
+            Exception("Simulated API Error"),
+            [{"title": "News 2", "link": "https://2.com", "published": "2024-01-02"}],
+        ]
+
+        # 3つのタスクが発生するように設定
+        news = get_aggregated_news(
+            categories=["BUSINESS", "TECHNOLOGY", "WORLD"], keywords=[], max_total=20
+        )
+
+        assert mock_get_gnews.call_count == 3
+        # 成功した2タスク分の記事が取得できているはず
+        assert len(news) == 2
+        titles = [n["title"] for n in news]
+        assert "News 1" in titles
+        assert "News 2" in titles

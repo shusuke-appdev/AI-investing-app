@@ -205,12 +205,11 @@ def render_alerts_view():
                 if st.button(
                     "🗑️ 削除",
                     key=f"del_alert_{alert['portfolio_name']}_{alert['alert_type']}",
+                ) and gas_client.delete_alert(
+                    alert["portfolio_name"], alert["alert_type"]
                 ):
-                    if gas_client.delete_alert(
-                        alert["portfolio_name"], alert["alert_type"]
-                    ):
-                        st.success("削除しました")
-                        st.rerun()
+                    st.success("削除しました")
+                    st.rerun()
     else:
         st.info("設定済みアラートはありません")
 

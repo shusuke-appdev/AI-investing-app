@@ -240,7 +240,7 @@ def _render_holdings_table(holdings_data: list):
         else:
             st.caption("")
 
-    for i, h in enumerate(holdings_data):
+    for _i, h in enumerate(holdings_data):
         info = get_stock_info(h["ticker"])
         quote = DataProvider.get_quote(h["ticker"]) or {}
 
@@ -386,8 +386,7 @@ def _render_add_button(holdings_data: list, current_name: str):
                         "取得単価", min_value=0.0, value=0.0, step=1.0
                     )
 
-                    if st.button("追加する", key="btn_manual_add"):
-                        if new_ticker and new_shares > 0:
+                    if st.button("追加する", key="btn_manual_add") and new_ticker and new_shares > 0:
                             existing = next(
                                 (h for h in holdings_data if h["ticker"] == new_ticker),
                                 None,

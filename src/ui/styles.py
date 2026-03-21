@@ -42,7 +42,7 @@ def get_custom_css() -> str:
         height: 100%;
         box-shadow: var(--shadow-sm);
     }
-    
+
     .metric-title {
         font-size: 0.85rem;
         font-weight: 700;
@@ -51,7 +51,7 @@ def get_custom_css() -> str:
         border-bottom: 2px solid var(--color-border);
         padding-bottom: 0.25rem;
     }
-    
+
     .metric-row {
         display: flex;
         justify-content: space-between;
@@ -59,18 +59,18 @@ def get_custom_css() -> str:
         margin-bottom: 0.4rem;
         font-size: 0.9rem;
     }
-    
+
     .metric-label {
         color: var(--color-text-muted);
         font-size: 0.8rem;
     }
-    
+
     .metric-value {
         font-weight: 600;
         color: var(--color-text-primary);
         font-variant-numeric: tabular-nums;
     }
-    
+
     .text-positive { color: var(--color-positive) !important; }
     .text-negative { color: var(--color-negative) !important; }
     .text-neutral { color: var(--color-neutral) !important; }
@@ -124,13 +124,13 @@ def get_custom_css() -> str:
         border-radius: var(--radius-sm);
         border-left: 3px solid transparent;
     }
-    
+
     .positive {
         background-color: #d1fae5; /* green-100 */
         color: #065f46; /* green-800 */
         border-left-color: var(--color-positive);
     }
-    
+
     .negative {
         background-color: #fee2e2; /* red-100 */
         color: #991b1b; /* red-800 */
@@ -144,12 +144,12 @@ def get_custom_css() -> str:
         color: var(--color-positive);
         font-weight: 600;
     }
-    
+
     .sentiment-bearish {
         color: var(--color-negative);
         font-weight: 600;
     }
-    
+
     .sentiment-neutral {
         color: var(--color-neutral);
         font-weight: 600;
@@ -163,25 +163,25 @@ def get_custom_css() -> str:
         font-weight: 500;
         transition: background-color 0.15s ease;
     }
-    
+
     /* Primary button - 青系に統一 */
     .stButton button[kind="primary"],
     .stButton button[data-baseweb="button"][kind="primary"] {
         background-color: #2563eb !important;
         color: white !important;
     }
-    
+
     .stButton button[kind="primary"]:hover,
     .stButton button[data-baseweb="button"][kind="primary"]:hover {
         background-color: #1d4ed8 !important;
     }
-    
+
     /* Streamlit 1.35+ のprimary button対応 */
     [data-testid="stBaseButton-primary"] {
         background-color: #2563eb !important;
         color: white !important;
     }
-    
+
     [data-testid="stBaseButton-primary"]:hover {
         background-color: #1d4ed8 !important;
     }

@@ -114,7 +114,7 @@ def _evaluate_volatility(bm_data: pd.DataFrame) -> MarketSignal:
 
 def _evaluate_breadth(market_type: str) -> list[MarketSignal]:
     """S&PオシレーターとMcClellanオシレーターの判定 (各Weight: 0.5)"""
-    signals = []
+    signals: list[MarketSignal] = []
     if market_type != "US":
         return signals
 
@@ -224,7 +224,7 @@ def evaluate_market_environment(
 
     from src.market_data import get_stock_data
 
-    bm_data = get_stock_data(target_bm, "1y", "1d")
+    bm_data = get_stock_data(target_bm, "1y")
 
     signals: list[MarketSignal] = []
 

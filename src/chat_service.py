@@ -42,7 +42,7 @@ def get_chat_session(context: str = ""):
                     "role": "model",
                     "parts": ["了解しました。金融市場に関するご質問にお答えします。"],
                 },
-            ]
+            ]  # type: ignore
         )
 
     return st.session_state["_chat_session"]
@@ -102,7 +102,7 @@ def get_market_chat_response(
             content = msg["content"]
             gemini_history.append({"role": role, "parts": [content]})
 
-        session = model.start_chat(history=gemini_history)
+        session = model.start_chat(history=gemini_history)  # type: ignore
         response = session.send_message(prompt)
         return response.text
     except Exception as e:

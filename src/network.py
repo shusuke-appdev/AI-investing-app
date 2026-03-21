@@ -5,6 +5,8 @@ Provides a shared session with User-Agent, timeouts, and optional caching.
 
 import requests
 import streamlit as st
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from src.log_config import get_logger
 
@@ -15,13 +17,18 @@ DEFAULT_TIMEOUT = 10  # seconds
 CACHE_EXPIRE_SECONDS = 3600  # 1 hour
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+# Retry Configuration
+RETRY_TOTAL = 3
+RETRY_BACKOFF_FACTOR = 0.5
+RETRY_STATUS_FORCELIST = [429, 500, 502, 503, 504]
+
 
 @st.cache_resource
 def get_session(
     cache_name: str = "app_cache", expire_after: int = CACHE_EXPIRE_SECONDS
 ) -> requests.Session:
     """
-    Returns a configured requests session.
+    Returns a configured requests session with automatic retries and exponential backoff.
     Uses requests-cache if available, otherwise falls back to standard requests.Session.
     """
     session = None
@@ -40,6 +47,18 @@ def get_session(
         session = requests.Session()
 
     session.headers.update({"User-Agent": USER_AGENT})
+
+    # Configure Retries
+    retry_strategy = Retry(
+        total=RETRY_TOTAL,
+        backoff_factor=RETRY_BACKOFF_FACTOR,
+        status_forcelist=RETRY_STATUS_FORCELIST,
+        allowed_methods=["HEAD", "GET", "OPTIONS"],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
     return session
 
 

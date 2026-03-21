@@ -8,6 +8,7 @@ import streamlit as st
 from src.advisor.technical import analyze_technical
 
 
+@st.fragment
 def render_technical_analysis(ticker: str) -> None:
     """テクニカル分析セクションをレンダリング"""
 

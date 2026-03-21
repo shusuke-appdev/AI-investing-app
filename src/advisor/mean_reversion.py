@@ -89,7 +89,7 @@ class MeanReversionAnalyzer:
 
         if pd.isna(sma10) or pd.isna(sma20):
             return {
-                "is_parabolic": False, 
+                "is_parabolic": False,
                 "description": "MA計算不足",
                 "deviation_10ma": None,
                 "deviation_20ma": None,
@@ -122,13 +122,12 @@ class MeanReversionAnalyzer:
         # Open列が存在しない場合はCloseの差分等で代用できるが、通常はOHLCVがある
         if "Open" in recent_5.columns:
             green_candles = len(recent_5[recent_5["Close"] > recent_5["Open"]])
-            if green_candles >= 4 and dev_10 > 0.05:
-                if not is_parabolic:
-                    is_parabolic = True
-                    description = (
-                        f"短期的な上昇トレンド過熱 (直近5日で{green_candles}本の陽線)。"
-                    )
-                    target_reversion = float(sma10)
+            if green_candles >= 4 and dev_10 > 0.05 and not is_parabolic:
+                is_parabolic = True
+                description = (
+                    f"短期的な上昇トレンド過熱 (直近5日で{green_candles}本の陽線)。"
+                )
+                target_reversion = float(sma10)
 
         return {
             "is_parabolic": bool(is_parabolic),
@@ -151,9 +150,9 @@ class MeanReversionAnalyzer:
 
         if pd.isna(sma10) or pd.isna(sma20) or pd.isna(sma50):
             return {
-                "is_dip_buyable": False, 
-                "is_perfect_order": False, 
-                "description": "MA計算不足", 
+                "is_dip_buyable": False,
+                "is_perfect_order": False,
+                "description": "MA計算不足",
                 "near_support": "None"
             }
 

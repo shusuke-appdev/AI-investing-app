@@ -10,6 +10,7 @@ import streamlit as st
 from src.option_analyst import analyze_option_sentiment
 
 
+@st.fragment
 def render_option_analysis(ticker: str) -> None:
     """
     指定銘柄のオプション市場分析セクションを描画します。

@@ -91,7 +91,7 @@ def render_portfolio_charts(analysis: dict):
         st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        sector_data = {}
+        sector_data: dict[str, float] = {}
         for h in holdings:
             sector = h.get("sector", "不明")
             sector_data[sector] = sector_data.get(sector, 0) + h["value"]

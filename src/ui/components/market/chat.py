@@ -27,8 +27,7 @@ def render_market_chat():
         with chat_container, st.chat_message("user"):
             st.markdown(prompt)
 
-        with chat_container, st.chat_message("assistant"):
-            with st.spinner("思考中..."):
+        with chat_container, st.chat_message("assistant"), st.spinner("思考中..."):
                 context = st.session_state.get("ai_recap", "")
                 response = get_market_chat_response(
                     prompt=prompt,
