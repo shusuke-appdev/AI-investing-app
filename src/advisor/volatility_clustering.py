@@ -12,6 +12,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 def detect_clustering(df: pd.DataFrame) -> dict:
+    """
     Step 3: クラスタリング検知アルゴリズム
     ACF, vol_of_vol, GARCH(1,1) の3手法で評価し、状態を判定する。
     """
