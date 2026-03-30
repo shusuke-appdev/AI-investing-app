@@ -105,13 +105,6 @@ def render_sidebar():
 
         st.divider()
 
-        st.divider()
-
-        # === AIチャット（全モード共通）===
-        _render_ai_chat()
-
-        st.divider()
-
         # === 設定（AIチャットの下）===
         _render_settings()
 
@@ -180,70 +173,11 @@ def _load_saved_settings():
 
     # Finnhub API Key (Secrets / Env only)
     saved_finnhub_key = get_finnhub_api_key()
-    if saved_finnhub_key and st.session_state.get("finnhub_api_key") != saved_finnhub_key:
+    if (
+        saved_finnhub_key
+        and st.session_state.get("finnhub_api_key") != saved_finnhub_key
+    ):
         st.session_state.finnhub_api_key = saved_finnhub_key
-
-
-def _render_ai_chat():
-    """AIチャット機能（サイドバー埋め込み・拡大版）"""
-    st.markdown("### 💬 AIチャット")
-
-    # チャット履歴の初期化
-    if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = []
-
-    # チャット履歴表示エリア（拡大）
-    chat_container = st.container(height=280, border=True)
-    with chat_container:
-        if not st.session_state.chat_messages:
-            st.caption("📝 質問を入力してください")
-        else:
-            for msg in st.session_state.chat_messages:
-                if msg["role"] == "user":
-                    st.markdown(f"**🧑 You:** {msg['content']}")
-                else:
-                    st.markdown(f"**🤖 AI:** {msg['content']}")
-
-    # 入力エリア
-    user_input = st.text_area(
-        "質問を入力",
-        height=80,
-        placeholder="市場について質問してください...",
-        label_visibility="collapsed",
-        key="chat_input_area",
-    )
-
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        send_btn = st.button("📤 送信", use_container_width=True, type="primary")
-    with col2:
-        if st.button("🗑️", use_container_width=True):
-            st.session_state.chat_messages = []
-            st.rerun()
-
-    if send_btn and user_input.strip():
-        if not st.session_state.get("gemini_configured"):
-            st.warning("⚠️ APIキーを設定してください")
-            return
-
-        st.session_state.chat_messages.append({"role": "user", "content": user_input})
-
-        with st.spinner("考え中..."):
-            from src.chat_service import send_message
-            from src.knowledge_storage import get_knowledge_for_ai_context
-
-            # コンテキスト生成: 市場ニュース + ユーザー知識
-            market_context = st.session_state.get("ai_recap", "")
-            knowledge_context = get_knowledge_for_ai_context(max_items=5)
-
-            full_context = f"{market_context}\n\n{knowledge_context}"
-
-            response = send_message(user_input, full_context)
-
-        st.session_state.chat_messages.append(
-            {"role": "assistant", "content": response}
-        )
-        st.rerun()
 
 
 def _render_settings():
@@ -251,7 +185,9 @@ def _render_settings():
     with st.expander("⚙️ 設定", expanded=True):  # 展開しておく
         # === API設定 ===
         st.markdown("**🔑 API設定**")
-        st.caption("※ APIキーのUIからの保存機能はセキュリティ向上のため廃止されました。`.env` または `st.secrets` で環境変数を設定してください。")
+        st.caption(
+            "※ APIキーのUIからの保存機能はセキュリティ向上のため廃止されました。`.env` または `st.secrets` で環境変数を設定してください。"
+        )
 
         from src.settings_storage import get_finnhub_api_key, get_gemini_api_key
 

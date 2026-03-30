@@ -9,7 +9,7 @@ import re
 import streamlit as st
 
 from src.log_config import get_logger
-from src.ui.components.market.chat import render_market_chat
+from src.ui.components.chat_ui import render_chat_component
 from src.ui.components.market.flash_summary import render_flash_summary
 from src.ui.components.market.option_analysis import render_option_analysis
 
@@ -74,8 +74,11 @@ def render_market_tab():
             cols = st.columns([4, 1])
             with cols[0]:
                 st.markdown("### 🤖 AI分析レポート")
-            with cols[1], st.popover("💬 AIに質問", use_container_width=True):
-                render_market_chat()
+            with cols[1]:
+                render_chat_component(
+                    key_prefix="market",
+                    default_context="上記の市場AI分析レポートについて質問してください。",
+                )
 
             safe_recap = re.sub(r"(?<!\\)\$", r"\\$", st.session_state.ai_recap)
             st.markdown(safe_recap)

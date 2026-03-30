@@ -8,22 +8,24 @@ import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
-@st.cache_data(ttl=24*3600)
+
+@st.cache_data(ttl=24 * 3600)
 def get_sp500_components() -> list[str]:
     """S&P 500の構成銘柄リストを取得する。"""
     try:
-        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+        headers = {"User-Agent": "Mozilla/5.0"}
         html = requests.get(url, headers=headers).text
         tables = pd.read_html(StringIO(html))
         sp500_table = tables[0]
-        tickers = sp500_table['Symbol'].str.replace('.', '-', regex=False).tolist()
+        tickers = sp500_table["Symbol"].str.replace(".", "-", regex=False).tolist()
         return tickers
     except Exception as e:
         logger.error(f"S&P 500銘柄のパースに失敗しました: {e}")
         return []
 
-@st.cache_data(ttl=3600*4)
+
+@st.cache_data(ttl=3600 * 4)
 def fetch_breadth_data(period: str = "6mo") -> pd.DataFrame:
     """
     S&P 500構成銘柄の日次データを取得し、毎日の値上がり銘柄数・値下がり銘柄数を集計する。
@@ -35,7 +37,7 @@ def fetch_breadth_data(period: str = "6mo") -> pd.DataFrame:
         return pd.DataFrame()
 
     try:
-        data = yf.download(tickers, period=period, progress=False)['Close']
+        data = yf.download(tickers, period=period, progress=False)["Close"]
         if data.empty:
             return pd.DataFrame()
 
@@ -47,21 +49,24 @@ def fetch_breadth_data(period: str = "6mo") -> pd.DataFrame:
 
         net_advances = advances - declines
 
-        df = pd.DataFrame({
-            'Advances': advances,
-            'Declines': declines,
-            'Net_Advances': net_advances,
-            'Total_Issues': total_issues
-        }).dropna()
+        df = pd.DataFrame(
+            {
+                "Advances": advances,
+                "Declines": declines,
+                "Net_Advances": net_advances,
+                "Total_Issues": total_issues,
+            }
+        ).dropna()
 
         # 不要な最初の行(差分がないため)を除外
-        if (df['Advances'] == 0).all() and (df['Declines'] == 0).all():
-           df = df.iloc[1:]
+        if (df["Advances"] == 0).all() and (df["Declines"] == 0).all():
+            df = df.iloc[1:]
 
         return df
     except Exception as e:
         logger.error(f"騰落データの取得に失敗しました: {e}")
         return pd.DataFrame()
+
 
 def calculate_sp_oscillator(breadth_df: pd.DataFrame) -> dict:
     """
@@ -71,8 +76,8 @@ def calculate_sp_oscillator(breadth_df: pd.DataFrame) -> dict:
     if breadth_df is None or breadth_df.empty or len(breadth_df) < 10:
         return {"oscillator_value": 0.0, "oscillator_percent": 0.0, "signal": "中立"}
 
-    sma_10 = breadth_df['Net_Advances'].rolling(10).mean()
-    avg_total = breadth_df['Total_Issues'].rolling(10).mean()
+    sma_10 = breadth_df["Net_Advances"].rolling(10).mean()
+    avg_total = breadth_df["Total_Issues"].rolling(10).mean()
 
     current_osc = float(sma_10.iloc[-1])
     current_avg_total = float(avg_total.iloc[-1])
@@ -89,8 +94,9 @@ def calculate_sp_oscillator(breadth_df: pd.DataFrame) -> dict:
     return {
         "oscillator_value": round(current_osc, 2),
         "oscillator_percent": round(percent, 2),
-        "signal": signal
+        "signal": signal,
     }
+
 
 def calculate_mcclellan_oscillator(breadth_df: pd.DataFrame) -> dict:
     """
@@ -100,7 +106,7 @@ def calculate_mcclellan_oscillator(breadth_df: pd.DataFrame) -> dict:
     if breadth_df is None or breadth_df.empty or len(breadth_df) < 39:
         return {"mcclellan_value": 0.0, "signal": "中立"}
 
-    net_advances = breadth_df['Net_Advances']
+    net_advances = breadth_df["Net_Advances"]
     ema_19 = net_advances.ewm(span=19, adjust=False).mean()
     ema_39 = net_advances.ewm(span=39, adjust=False).mean()
 
@@ -119,7 +125,4 @@ def calculate_mcclellan_oscillator(breadth_df: pd.DataFrame) -> dict:
     else:
         signal = "弱気"
 
-    return {
-        "mcclellan_value": round(current_val, 2),
-        "signal": signal
-    }
+    return {"mcclellan_value": round(current_val, 2), "signal": signal}

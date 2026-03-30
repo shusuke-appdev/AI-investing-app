@@ -2,14 +2,17 @@ import logging
 
 import numpy as np
 import pandas as pd
+
 try:
     from arch import arch_model
     from statsmodels.tsa.stattools import acf
+
     HAS_ADVANCED_STATS = True
 except ImportError:
     HAS_ADVANCED_STATS = False
 
 logger = logging.getLogger(__name__)
+
 
 def detect_clustering(df: pd.DataFrame) -> dict:
     """
@@ -17,16 +20,26 @@ def detect_clustering(df: pd.DataFrame) -> dict:
     ACF, vol_of_vol, GARCH(1,1) の3手法で評価し、状態を判定する。
     """
     if not HAS_ADVANCED_STATS:
-        return {'state': False, 'duration': 0, 'confidence': 0.0, 'reason': '分析ライブラリ(arch/statsmodels)未インストールのため判定スキップ'}
+        return {
+            "state": False,
+            "duration": 0,
+            "confidence": 0.0,
+            "reason": "分析ライブラリ(arch/statsmodels)未インストールのため判定スキップ",
+        }
 
-    if df is None or df.empty or 'log_return' not in df.columns or len(df) < 252:
-        return {'state': False, 'duration': 0, 'confidence': 0.0, 'reason': 'データ不足'}
+    if df is None or df.empty or "log_return" not in df.columns or len(df) < 252:
+        return {
+            "state": False,
+            "duration": 0,
+            "confidence": 0.0,
+            "reason": "データ不足",
+        }
 
     recent_df = df.tail(252).copy()
-    recent_df['log_return'] = recent_df['log_return'].fillna(0)
+    recent_df["log_return"] = recent_df["log_return"].fillna(0)
 
     # 1. ACFベース
-    sq_returns = recent_df['log_return'] ** 2
+    sq_returns = recent_df["log_return"] ** 2
     acf_vals = acf(sq_returns, nlags=120)
 
     # lag-1〜5の自己相関が0.3以上か
@@ -39,18 +52,20 @@ def detect_clustering(df: pd.DataFrame) -> dict:
             half_life = i
             break
     if half_life == 0:
-        half_life = 120 # 上限
+        half_life = 120  # 上限
 
     # 2. ボラ不安定度 (vol_of_vol) ベース
-    if 'vol_of_vol' in recent_df.columns:
-        vov = recent_df['vol_of_vol'].dropna()
+    if "vol_of_vol" in recent_df.columns:
+        vov = recent_df["vol_of_vol"].dropna()
         if len(vov) > 50:
             hist_mean = vov.mean()
             hist_std = vov.std()
             vov_threshold = hist_mean + 1.5 * hist_std
             # 直近5日間すべて閾値超えか
             recent_5_vov = vov.tail(5)
-            vov_high = all(v >= vov_threshold for v in recent_5_vov) and len(recent_5_vov) == 5
+            vov_high = (
+                all(v >= vov_threshold for v in recent_5_vov) and len(recent_5_vov) == 5
+            )
         else:
             vov_high = False
     else:
@@ -61,18 +76,17 @@ def detect_clustering(df: pd.DataFrame) -> dict:
     persistence = 0.0
     try:
         # スケール調整（archライブラリの収束安定化のため）
-        y = recent_df['log_return'] * 100
-        am = arch_model(y, vol='Garch', p=1, q=1, rescale=False)
-        res = am.fit(disp='off')
+        y = recent_df["log_return"] * 100
+        am = arch_model(y, vol="Garch", p=1, q=1, rescale=False)
+        res = am.fit(disp="off")
 
         # persistence = alpha + beta
-        alpha = res.params.get('alpha[1]', 0)
-        beta = res.params.get('beta[1]', 0)
+        alpha = res.params.get("alpha[1]", 0)
+        beta = res.params.get("beta[1]", 0)
         persistence = alpha + beta
 
-
         # ショック検知（直近20日で3σ超えのリターンがあったか）
-        std_ret = recent_df['log_return'].std() * 100
+        std_ret = recent_df["log_return"].std() * 100
         recent_shocks = y.tail(20).apply(lambda x: abs(x) > 3 * std_ret)
         has_shock = recent_shocks.any()
 
@@ -87,7 +101,7 @@ def detect_clustering(df: pd.DataFrame) -> dict:
         logger.warning(f"GARCHフィットに失敗しました: {e}")
         # ACFをフォールバックとして強める
         if acf_significant and vov_high:
-            garch_high = True # 疑似的にTrueとする
+            garch_high = True  # 疑似的にTrueとする
 
     # 状態判定（合議制）
     score = 0
@@ -121,30 +135,31 @@ def detect_clustering(df: pd.DataFrame) -> dict:
     reason = "、".join(reason_parts) if state else "クラスタリング未検知（安定期）"
 
     return {
-        'state': state,
-        'duration': duration,
-        'confidence': confidence,
-        'reason': reason
+        "state": state,
+        "duration": duration,
+        "confidence": confidence,
+        "reason": reason,
     }
+
 
 def generate_signals(vol_df: pd.DataFrame, current_position: bool = False) -> dict:
     """
     Step 4: エントリー/エグジット判断ロジック
     """
     cluster_info = detect_clustering(vol_df)
-    state = cluster_info['state']
-    confidence = cluster_info['confidence']
-    dur = cluster_info['duration']
-    reason = cluster_info['reason']
+    state = cluster_info["state"]
+    confidence = cluster_info["confidence"]
+    dur = cluster_info["duration"]
+    reason = cluster_info["reason"]
 
     signal = "HOLD"
     explanation = ""
 
     # 直近5日のボラティリティ状態
-    if vol_df is not None and len(vol_df) >= 20 and 'vol' in vol_df.columns:
-        hist_vol_mean = vol_df['vol'].mean()
-        hist_vol_std = vol_df['vol'].std()
-        current_vol = vol_df['vol'].iloc[-1]
+    if vol_df is not None and len(vol_df) >= 20 and "vol" in vol_df.columns:
+        hist_vol_mean = vol_df["vol"].mean()
+        hist_vol_std = vol_df["vol"].std()
+        current_vol = vol_df["vol"].iloc[-1]
 
         # エグジット条件（position保有中）
         if current_position:
@@ -171,9 +186,9 @@ def generate_signals(vol_df: pd.DataFrame, current_position: bool = False) -> di
         explanation = "データ不足のためシグナル判定を保留します。"
 
     return {
-        'signal': signal,
-        'confidence': confidence,
-        'duration_estimate': dur,
-        'explanation': explanation,
-        'clustering_state': state
+        "signal": signal,
+        "confidence": confidence,
+        "duration_estimate": dur,
+        "explanation": explanation,
+        "clustering_state": state,
     }

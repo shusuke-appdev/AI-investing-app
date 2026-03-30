@@ -118,7 +118,9 @@ def _rate_limited_call(
 
             if e.status_code in (401, 403):
                 logger.error(f"Permission Denied ({e.status_code})")
-                raise FinnhubConfigError(f"Invalid API Key or Permission Denied: {e}") from e
+                raise FinnhubConfigError(
+                    f"Invalid API Key or Permission Denied: {e}"
+                ) from e
 
             logger.error(f"API Error: {e}")
             raise FinnhubError(f"API Error: {e}") from e

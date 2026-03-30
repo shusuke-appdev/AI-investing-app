@@ -222,23 +222,27 @@ def get_aggregated_news(
 
     # 1. カテゴリ別取得タスク
     for category in categories:
-        tasks.append({
-            "topic": category,
-            "max_results": max_per_source,
-            "language": language,
-            "country": country,
-            "period": "2d",
-        })
+        tasks.append(
+            {
+                "topic": category,
+                "max_results": max_per_source,
+                "language": language,
+                "country": country,
+                "period": "2d",
+            }
+        )
 
     # 2. キーワード別取得タスク
     for keyword in keywords:
-        tasks.append({
-            "query": keyword,
-            "max_results": max(3, max_per_source // 3),
-            "language": language,
-            "country": country,
-            "period": "2d",
-        })
+        tasks.append(
+            {
+                "query": keyword,
+                "max_results": max(3, max_per_source // 3),
+                "language": language,
+                "country": country,
+                "period": "2d",
+            }
+        )
 
     # ワーカースレッド用のフェッチ関数
     def _fetch_news(kwargs_dict: dict) -> list[dict]:

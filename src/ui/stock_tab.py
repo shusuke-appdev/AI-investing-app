@@ -20,6 +20,7 @@ def render_stock_tab():
     # Lazy imports to prevent circular dependencies
     from src.market_config import get_market_config
     from src.market_data import get_stock_info
+    from src.ui.components.chat_ui import render_chat_component
 
     # Import separated components locally
     from src.ui.components.stock import (
@@ -57,6 +58,14 @@ def render_stock_tab():
     # 企業情報を取得
     with st.spinner("企業情報を取得中..."):
         info = get_stock_info(ticker)
+
+    # チャットUIの配置
+    chat_col1, chat_col2 = st.columns([4, 1])
+    with chat_col2:
+        render_chat_component(
+            key_prefix=f"stock_{ticker}",
+            default_context=f"銘柄 {ticker} ({info.get('name', '')}) の現在の分析やチャート情報について質問してください。",
+        )
 
     # === 上段: チャート + 企業概要 ===
     col1, col2 = st.columns([2, 1])

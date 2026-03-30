@@ -386,27 +386,31 @@ def _render_add_button(holdings_data: list, current_name: str):
                         "取得単価", min_value=0.0, value=0.0, step=1.0
                     )
 
-                    if st.button("追加する", key="btn_manual_add") and new_ticker and new_shares > 0:
-                            existing = next(
-                                (h for h in holdings_data if h["ticker"] == new_ticker),
-                                None,
+                    if (
+                        st.button("追加する", key="btn_manual_add")
+                        and new_ticker
+                        and new_shares > 0
+                    ):
+                        existing = next(
+                            (h for h in holdings_data if h["ticker"] == new_ticker),
+                            None,
+                        )
+                        if existing:
+                            existing["shares"] += new_shares
+                            # 取得単価の加重平均などは今後の課題として省略
+                        else:
+                            holdings_data.append(
+                                {
+                                    "ticker": new_ticker,
+                                    "shares": new_shares,
+                                    "avg_cost": new_cost if new_cost > 0 else None,
+                                }
                             )
-                            if existing:
-                                existing["shares"] += new_shares
-                                # 取得単価の加重平均などは今後の課題として省略
-                            else:
-                                holdings_data.append(
-                                    {
-                                        "ticker": new_ticker,
-                                        "shares": new_shares,
-                                        "avg_cost": new_cost if new_cost > 0 else None,
-                                    }
-                                )
-                            st.session_state.managed_holdings = holdings_data
-                            if current_name != "新規ポートフォリオ":
-                                save_portfolio(current_name, holdings_data)
-                            st.session_state.show_add_panel = False
-                            st.rerun()
+                        st.session_state.managed_holdings = holdings_data
+                        if current_name != "新規ポートフォリオ":
+                            save_portfolio(current_name, holdings_data)
+                        st.session_state.show_add_panel = False
+                        st.rerun()
 
                 with tab_file:
                     uploaded = st.file_uploader(

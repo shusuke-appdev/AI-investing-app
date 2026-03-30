@@ -28,13 +28,13 @@ def render_market_chat():
             st.markdown(prompt)
 
         with chat_container, st.chat_message("assistant"), st.spinner("思考中..."):
-                context = st.session_state.get("ai_recap", "")
-                response = get_market_chat_response(
-                    prompt=prompt,
-                    history=st.session_state.market_chat_history,
-                    system_context=context,
-                )
-                st.markdown(response)
+            context = st.session_state.get("ai_recap", "")
+            response = get_market_chat_response(
+                prompt=prompt,
+                history=st.session_state.market_chat_history,
+                system_context=context,
+            )
+            st.markdown(response)
 
         st.session_state.market_chat_history.append(
             {"role": "assistant", "content": response}

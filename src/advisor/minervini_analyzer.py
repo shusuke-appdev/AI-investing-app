@@ -166,12 +166,16 @@ def analyze_stage(data: pd.DataFrame) -> MinerviniStageResult:
         return {"stage": 3, "description": "ステージ3 (天井圏・分布局面)"}
 
     return {"stage": 0, "description": "ステージ判定不能（移行期）"}
+
+
 class MarketState(str, Enum):
     """市場の位相（ステート）"""
+
     UPTREND = "UPTREND"
     CORRECTION = "CORRECTION"
     RALLY_ATTEMPT = "RALLY_ATTEMPT"
     CONFIRMED_UPTREND = "CONFIRMED_UPTREND"
+
 
 def detect_follow_through_day(data: pd.DataFrame) -> MinerviniFtdResult:
     """
@@ -200,7 +204,7 @@ def detect_follow_through_day(data: pd.DataFrame) -> MinerviniFtdResult:
     # 少なくともMA50が計算できる50日目以降から開始
     for i in range(50, len(df)):
         current = df.iloc[i]
-        prev = df.iloc[i-1]
+        prev = df.iloc[i - 1]
 
         # 直近高値からの下落率（ドローダウン）
         drawdown = (current["High50"] - current["Close"]) / current["High50"] * 100
@@ -234,7 +238,11 @@ def detect_follow_through_day(data: pd.DataFrame) -> MinerviniFtdResult:
                 days_since_bottom += 1
 
                 # FTDの判定: Day 4以降、1.5%以上の価格上昇かつ出来高増
-                if rally_day >= 4 and current["Pct_Change"] >= 1.5 and current["Vol_Increase"]:
+                if (
+                    rally_day >= 4
+                    and current["Pct_Change"] >= 1.5
+                    and current["Vol_Increase"]
+                ):
                     state = MarketState.CONFIRMED_UPTREND
                 # ラリーが長期間（20日以上）続き、MA50を上回っている場合は自然にアップトレンド復帰とみなす
                 elif rally_day > 20 and current["Close"] > current["MA50"]:

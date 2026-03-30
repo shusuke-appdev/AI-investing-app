@@ -26,6 +26,7 @@ def analyze_options_data(ticker: str, current_price: float) -> dict:
         }
     """
     from typing import Any
+
     res: dict[str, Any] = {
         "gex_regime": "unknown",
         "gex_positive_wall": 0.0,

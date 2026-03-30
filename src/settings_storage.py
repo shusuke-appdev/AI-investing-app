@@ -147,6 +147,7 @@ def get_gemini_api_key() -> str:
         pass
     # 2. 環境変数から取得
     import os
+
     return os.environ.get("GEMINI_API_KEY", "")
 
 
@@ -196,6 +197,7 @@ def get_finnhub_api_key() -> str:
         pass
     # 2. 環境変数から取得
     import os
+
     return os.environ.get("FINNHUB_API_KEY", "")
 
 
@@ -216,4 +218,5 @@ def get_edinet_api_key() -> str:
         pass
     # 2. 環境変数から取得
     import os
+
     return os.environ.get("EDINET_API_KEY", "")

@@ -80,7 +80,6 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
         except Exception:
             yf_targets[name] = ticker
 
-
     if yf_targets:
         try:
             tickers_list = list(yf_targets.values())
@@ -98,7 +97,11 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                         if not hist.empty and len(hist) >= 1:
                             if "Close" in hist.columns:
                                 current = hist["Close"].iloc[-1]
-                                prev = hist["Close"].iloc[-2] if len(hist) >= 2 else current
+                                prev = (
+                                    hist["Close"].iloc[-2]
+                                    if len(hist) >= 2
+                                    else current
+                                )
                             else:
                                 current = hist.iloc[-1, 0]
                                 prev = hist.iloc[-2, 0] if len(hist) >= 2 else current
@@ -116,14 +119,17 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                                 "ticker": ticker,
                             }
                     except Exception as e:
-                        logger.warning(f"[MarketIndexProvider] Failed to fetch {ticker}: {e}")
+                        logger.warning(
+                            f"[MarketIndexProvider] Failed to fetch {ticker}: {e}"
+                        )
                         result[name] = {
                             "price": 0.0,
                             "change": 0.0,
                             "ticker": ticker,
                         }
         except Exception as e:
-            logger.error(f"[MarketIndexProvider] Batch download preparation failed: {e}")
-
+            logger.error(
+                f"[MarketIndexProvider] Batch download preparation failed: {e}"
+            )
 
     return result

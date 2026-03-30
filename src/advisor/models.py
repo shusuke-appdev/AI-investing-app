@@ -184,8 +184,12 @@ class TechnicalScore:
     dte: float | None = None
     price_range: tuple[float, float] | None = None
 
-    mr_parabolic_state: MeanReversionParabolicState = field(default_factory=lambda: MeanReversionParabolicState())
-    mr_rebound_state: MeanReversionReboundState = field(default_factory=lambda: MeanReversionReboundState())
+    mr_parabolic_state: MeanReversionParabolicState = field(
+        default_factory=lambda: MeanReversionParabolicState()
+    )
+    mr_rebound_state: MeanReversionReboundState = field(
+        default_factory=lambda: MeanReversionReboundState()
+    )
 
 
 @dataclass

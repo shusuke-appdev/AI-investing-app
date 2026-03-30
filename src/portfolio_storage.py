@@ -190,7 +190,11 @@ class SupabasePortfolioStorage(BaseStorage):
             return []
         try:
             response = client.table("portfolios").select("name").execute()
-            names = set(str(r.get("name")) for r in response.data if isinstance(r, dict) and r.get("name"))
+            names = set(
+                str(r.get("name"))
+                for r in response.data
+                if isinstance(r, dict) and r.get("name")
+            )
             return sorted(list(names))
         except Exception as e:
             logger.error(f"Supabase list error: {e}")

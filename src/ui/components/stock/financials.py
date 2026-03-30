@@ -47,15 +47,22 @@ def render_quarterly_financials_graph(ticker: str):
                     concept = entry.get("concept", "")
                     value = entry.get("value", 0)
 
-                    if concept in [
-                        "Revenues",
-                        "RevenueFromContractWithCustomerExcludingAssessedTax",
-                        "SalesRevenueNet",
-                        "SalesRevenueGoodsNet",
-                    ] and revenue == 0:
+                    if (
+                        concept
+                        in [
+                            "Revenues",
+                            "RevenueFromContractWithCustomerExcludingAssessedTax",
+                            "SalesRevenueNet",
+                            "SalesRevenueGoodsNet",
+                        ]
+                        and revenue == 0
+                    ):
                         revenue = value
 
-                    if concept in ["OperatingIncomeLoss", "OperatingIncome"] and operating_income == 0:
+                    if (
+                        concept in ["OperatingIncomeLoss", "OperatingIncome"]
+                        and operating_income == 0
+                    ):
                         operating_income = value
 
                     if concept in ["NetIncomeLoss", "ProfitLoss"] and net_income == 0:

@@ -12,6 +12,7 @@ from src.portfolio_advisor import (
     analyze_portfolio,
     generate_portfolio_advice,
 )
+from src.ui.components.chat_ui import render_chat_component
 
 
 def run_analysis(holdings: list[PortfolioHolding]):
@@ -27,7 +28,14 @@ def run_analysis(holdings: list[PortfolioHolding]):
     st.session_state.portfolio_analysis = analysis
 
     # === サマリー ===
-    st.markdown("### 📈 ポートフォリオ概要")
+    summary_col, chat_col = st.columns([4, 1])
+    with summary_col:
+        st.markdown("### 📈 ポートフォリオ概要")
+    with chat_col:
+        render_chat_component(
+            key_prefix="portfolio",
+            default_context="現在のポートフォリオ分析について質問してください。",
+        )
 
     cols = st.columns(3)
     with cols[0]:

@@ -36,11 +36,22 @@ class MeanReversionAnalyzer:
             return {
                 "ticker": self.ticker,
                 "current_price": 0.0,
-                "parabolic_state": {"is_parabolic": False, "description": "Insufficient data", "deviation_10ma": None, "deviation_20ma": None, "target_reversion_price": None},
-                "rebound_state": {"is_dip_buyable": False, "is_perfect_order": False, "description": "Insufficient data", "near_support": "None"},
+                "parabolic_state": {
+                    "is_parabolic": False,
+                    "description": "Insufficient data",
+                    "deviation_10ma": None,
+                    "deviation_20ma": None,
+                    "target_reversion_price": None,
+                },
+                "rebound_state": {
+                    "is_dip_buyable": False,
+                    "is_perfect_order": False,
+                    "description": "Insufficient data",
+                    "near_support": "None",
+                },
                 "ma_10": None,
                 "ma_20": None,
-                "ma_50": None
+                "ma_50": None,
             }
 
         df = df_daily.copy()
@@ -93,7 +104,7 @@ class MeanReversionAnalyzer:
                 "description": "MA計算不足",
                 "deviation_10ma": None,
                 "deviation_20ma": None,
-                "target_reversion_price": None
+                "target_reversion_price": None,
             }
 
         # 10MA、20MAからの乖離率
@@ -153,7 +164,7 @@ class MeanReversionAnalyzer:
                 "is_dip_buyable": False,
                 "is_perfect_order": False,
                 "description": "MA計算不足",
-                "near_support": "None"
+                "near_support": "None",
             }
 
         # パーフェクトオーダーの確認 (短期 > 中期 > 長期 が全て上向き)

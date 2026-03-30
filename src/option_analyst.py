@@ -130,7 +130,9 @@ def calculate_gex(
 
     total_oi = calls["openInterest"].sum() + puts["openInterest"].sum()
     if total_oi == 0:
-        logger.warning(f"[OptionAnalyst] {ticker}: OpenInterest is 0. Cannot calculate GEX.")
+        logger.warning(
+            f"[OptionAnalyst] {ticker}: OpenInterest is 0. Cannot calculate GEX."
+        )
         return None
 
     gex_data = []
@@ -219,10 +221,14 @@ def calculate_max_pain(
     if use_vol and "volume" in calls.columns and "volume" in puts.columns:
         total_vol = calls["volume"].fillna(0).sum() + puts["volume"].fillna(0).sum()
         if total_vol > 0:
-            logger.warning(f"[OptionAnalyst] {ticker}: OpenInterest is 0. Falling back to Volume for Max Pain.")
+            logger.warning(
+                f"[OptionAnalyst] {ticker}: OpenInterest is 0. Falling back to Volume for Max Pain."
+            )
 
     if total_oi == 0 and total_vol == 0:
-        logger.warning(f"[OptionAnalyst] {ticker}: No valid OI or Volume data. Cannot calculate Max Pain.")
+        logger.warning(
+            f"[OptionAnalyst] {ticker}: No valid OI or Volume data. Cannot calculate Max Pain."
+        )
         return None
 
     weight_col = "volume" if use_vol else "openInterest"
@@ -240,18 +246,24 @@ def calculate_max_pain(
     else:
         puts_clean[weight_col] = 0
 
-    strikes = sorted(set(calls_clean["strike"].tolist() + puts_clean["strike"].tolist()))
+    strikes = sorted(
+        set(calls_clean["strike"].tolist() + puts_clean["strike"].tolist())
+    )
     loss_data = []
 
     for k in strikes:
         call_loss = (
             calls_clean[calls_clean["strike"] < k]
-            .apply(lambda r, current_k=k: (current_k - r["strike"]) * r[weight_col], axis=1)
+            .apply(
+                lambda r, current_k=k: (current_k - r["strike"]) * r[weight_col], axis=1
+            )
             .sum()
         )
         put_loss = (
             puts_clean[puts_clean["strike"] > k]
-            .apply(lambda r, current_k=k: (r["strike"] - current_k) * r[weight_col], axis=1)
+            .apply(
+                lambda r, current_k=k: (r["strike"] - current_k) * r[weight_col], axis=1
+            )
             .sum()
         )
         loss_data.append({"strike": k, "loss": call_loss + put_loss})
@@ -263,7 +275,9 @@ def calculate_max_pain(
 
     # 全ての loss が 0 または同一値（計算不能状態）の場合は None を返す
     if df["loss"].nunique() <= 1 or df["loss"].sum() == 0:
-        logger.warning(f"[OptionAnalyst] {ticker}: All strike losses are identical or zero. Returning None.")
+        logger.warning(
+            f"[OptionAnalyst] {ticker}: All strike losses are identical or zero. Returning None."
+        )
         return None
 
     return float(df.loc[df["loss"].idxmin()]["strike"])

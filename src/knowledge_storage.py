@@ -173,7 +173,9 @@ class SupabaseKnowledgeStorage(BaseStorage):
         if client:
             try:
                 res = client.table("knowledge_items").select("*").execute()
-                items: list[dict[str, Any]] = [i for i in res.data if isinstance(i, dict)]
+                items: list[dict[str, Any]] = [
+                    i for i in res.data if isinstance(i, dict)
+                ]
                 items.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
                 return items
             except Exception as e:

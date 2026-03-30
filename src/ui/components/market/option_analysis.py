@@ -21,7 +21,6 @@ def render_ticker_compact(opt: dict):
     stock_info = get_stock_info(ticker)
     current_price = stock_info.get("current_price", 0)
 
-
     with st.container(border=True):
         if current_price:
             st.markdown(
