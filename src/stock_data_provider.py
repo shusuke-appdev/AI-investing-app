@@ -3,6 +3,10 @@ Stock Data Provider
 個別株関連のデータ取得（株価、ヒストリカルデータ、企業情報、決算等）を担当。
 OpenBB (v4) および EDINET API を活用する。
 """
+import os
+# Streamlit CloudなどのRead-Only環境でのPermissionErrorを防ぐ
+os.environ["OPENBB_AUTO_BUILD"] = "False"
+
 from datetime import datetime, timedelta
 
 import pandas as pd
