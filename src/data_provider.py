@@ -14,8 +14,6 @@ from src.models import MarketIndex, NewsItem, StockInfo
 from src.news_provider import get_company_news_raw, get_stock_news
 from src.option_data_provider import get_option_chain
 from src.stock_data_provider import (
-    _extract_finnhub_profile,
-    _extract_yfinance_profile,
     get_current_price,
     get_earnings_calendar,
     get_earnings_surprises,
@@ -35,8 +33,6 @@ class DataProviderProtocol(Protocol):
     def get_market_indices(self, market_type: str = "US") -> dict[str, MarketIndex]: ...
     def get_stock_news(self, ticker: str, max_items: int = 10) -> list[NewsItem]: ...
     def get_company_news_raw(self, ticker: str) -> list[dict]: ...
-    def _extract_finnhub_profile(self, ticker: str, info: StockInfo) -> None: ...
-    def _extract_yfinance_profile(self, ticker: str, info: StockInfo) -> None: ...
     def get_stock_info(self, ticker: str) -> StockInfo: ...
     def get_quote(self, ticker: str) -> dict | None: ...
     def get_earnings_calendar(self, from_date: str | None = None, to_date: str | None = None) -> list[dict]: ...
@@ -62,12 +58,6 @@ class DefaultDataProvider:
 
     def get_company_news_raw(self, ticker: str) -> list[dict]:
         return get_company_news_raw(ticker)
-
-    def _extract_finnhub_profile(self, ticker: str, info: StockInfo) -> None:
-        return _extract_finnhub_profile(ticker, info)
-
-    def _extract_yfinance_profile(self, ticker: str, info: StockInfo) -> None:
-        return _extract_yfinance_profile(ticker, info)
 
     def get_stock_info(self, ticker: str) -> StockInfo:
         return get_stock_info(ticker)
@@ -125,14 +115,6 @@ class DataProvider:
     @staticmethod
     def get_company_news_raw(ticker: str) -> list[dict]:
         return _global_provider.get_company_news_raw(ticker)
-
-    @staticmethod
-    def _extract_finnhub_profile(ticker: str, info: StockInfo) -> None:
-        return _global_provider._extract_finnhub_profile(ticker, info)
-
-    @staticmethod
-    def _extract_yfinance_profile(ticker: str, info: StockInfo) -> None:
-        return _global_provider._extract_yfinance_profile(ticker, info)
 
     @staticmethod
     def get_stock_info(ticker: str) -> StockInfo:

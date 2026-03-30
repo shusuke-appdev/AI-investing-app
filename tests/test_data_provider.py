@@ -4,25 +4,23 @@ from src.data_provider import DataProvider
 
 
 class TestDataProvider:
-    @patch("src.stock_data_provider.get_company_profile")
-    @patch("src.stock_data_provider.get_basic_financials")
-    @patch("src.stock_data_provider._finnhub_get_quote")
-    @patch("src.stock_data_provider.is_configured", return_value=True)
+    @patch("src.stock_data_provider.is_japanese_stock", return_value=False)
+    @patch("src.stock_data_provider._extract_openbb_profile")
     def test_get_stock_info_structure(
-        self, mock_is_conf, mock_quote, mock_basic, mock_profile
+        self, mock_extract, mock_is_jp
     ):
         """Test if get_stock_info returns correct StockInfo TypedDict structure."""
 
         # Mock responses
-        mock_profile.return_value = {
-            "name": "Test Inc.",
-            "ticker": "TEST",
-            "finnhubIndustry": "Tech",
-            "marketCapitalization": 1000,
-            "shareOutstanding": 50,
-        }
-        mock_basic.return_value = {"metric": {"peTTM": 20.5, "52WeekHigh": 150}}
-        mock_quote.return_value = {"c": 145.0}
+        def side_effect_extract(ticker, info):
+             info["name"] = "Test Inc."
+             info["ticker"] = "TEST"
+             info["market_cap"] = 1000 * 1e6
+             info["pe_ratio"] = 20.5
+             info["current_price"] = 145.0
+             info["beta"] = 1.1
+
+        mock_extract.side_effect = side_effect_extract
 
         info = DataProvider.get_stock_info("TEST")
 

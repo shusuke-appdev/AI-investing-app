@@ -1,209 +1,122 @@
 """
 Stock Data Provider
 個別株関連のデータ取得（株価、ヒストリカルデータ、企業情報、決算等）を担当。
+OpenBB (v4) および EDINET API を活用する。
 """
-
 from datetime import datetime, timedelta
 
 import pandas as pd
 import streamlit as st
-import yfinance as yf
+from openbb import obb
 
 from src.constants import CACHE_TTL_DAILY, CACHE_TTL_MEDIUM, CACHE_TTL_SHORT
-from src.finnhub_client import (
-    get_basic_financials,
-    get_candles,
-    get_company_profile,
-    is_configured,
-)
-from src.finnhub_client import (
-    get_earnings_calendar as _finnhub_get_earnings_calendar,
-)
-from src.finnhub_client import (
-    get_earnings_surprises as _finnhub_get_earnings_surprises,
-)
-from src.finnhub_client import (
-    get_financials_reported as _finnhub_get_financials_reported,
-)
-from src.finnhub_client import (
-    get_quote as _finnhub_get_quote,
-)
 from src.log_config import get_logger
 from src.models import StockInfo
 from src.utils.translator import translate_to_japanese
+from src.edinet_client import get_company_finance
 
 logger = get_logger(__name__)
 
+def is_japanese_stock(ticker: str) -> bool:
+    """日本株（証券コード4桁等）か判定する"""
+    code = "".join(filter(str.isdigit, str(ticker)))
+    return (len(code) == 4 and str(ticker).startswith(code)) or str(ticker).endswith(".T")
 
 @st.cache_data(ttl=CACHE_TTL_SHORT)
 def get_current_price(ticker: str) -> float:
-    if is_configured():
-        try:
-            q = _finnhub_get_quote(ticker)
-            if q and q.get("c"):
-                return float(q["c"])
-        except Exception:
-            pass
     try:
-        ticker_obj = yf.Ticker(ticker)
-        if hasattr(ticker_obj, "fast_info") and "last_price" in ticker_obj.fast_info:
-            price = ticker_obj.fast_info["last_price"]
-            if price:
+        q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
+        if q and "last_price" in q and q["last_price"]:
+            price = q["last_price"][0]
+            if price is not None:
                 return float(price)
-        hist = ticker_obj.history(period="1d")
-        if not hist.empty:
-            return float(hist["Close"].iloc[-1])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to get current price for {ticker}: {e}")
     return 0.0
-
 
 @st.cache_data(ttl=CACHE_TTL_MEDIUM)
 def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
     try:
-        df = yf.Ticker(ticker).history(period=period)
-        if not df.empty:
-            return df
-    except Exception:
-        pass
-    if is_configured():
-        try:
-            period_map = {
-                "1d": 7,
-                "5d": 7,
-                "1mo": 30,
-                "3mo": 90,
-                "6mo": 180,
-                "1y": 365,
-                "max": 1825,
-            }
-            days = period_map.get(period, 30)
-            now = datetime.now()
-            _from = now - timedelta(days=days)
-            _to = now
-            df = get_candles(ticker, "D", _from, _to)
-            if df is not None and not df.empty:
-                return df
-        except Exception:
-            pass
+        period_map = {
+            "1d": timedelta(days=2),
+            "5d": timedelta(days=7),
+            "1mo": timedelta(days=30),
+            "3mo": timedelta(days=90),
+            "6mo": timedelta(days=180),
+            "1y": timedelta(days=365),
+            "max": timedelta(days=1825),
+        }
+        days = period_map.get(period, timedelta(days=30))
+        start_date = (datetime.now() - days).strftime("%Y-%m-%d")
+        
+        hist = obb.equity.price.historical(symbol=ticker, start_date=start_date, provider="yfinance").to_df()
+        
+        if not hist.empty:
+            hist.rename(columns={
+                'open': 'Open',
+                'high': 'High',
+                'low': 'Low',
+                'close': 'Close',
+                'volume': 'Volume'
+            }, inplace=True)
+            return hist
+    except Exception as e:
+        logger.warning(f"Failed to get historical data for {ticker}: {e}")
     return pd.DataFrame()
 
-
-def _extract_finnhub_profile(ticker: str, info: StockInfo) -> None:
+def _extract_openbb_profile(ticker: str, info: StockInfo) -> None:
     try:
-        profile = get_company_profile(ticker)
-        if profile:
-            info.update(
-                {
-                    "name": profile.get("name", ticker),
-                    "ticker": profile.get("ticker", ticker),
-                    "sector": profile.get("finnhubIndustry", "N/A"),
-                    "industry": profile.get("finnhubIndustry", "N/A"),
-                    "summary": profile.get("description", "情報なし"),
-                    "website": profile.get("weburl", ""),
-                    "logo": profile.get("logo", ""),
-                    "exchange": profile.get("exchange", ""),
-                    "country": profile.get("country", ""),
-                    "market_cap": profile.get("marketCapitalization", 0) * 1e6,
-                    "share_outstanding": profile.get("shareOutstanding", 0),
-                }
-            )
-        basics = get_basic_financials(ticker)
-        if basics and "metric" in basics:
-            m = basics["metric"]
-            info.update(
-                {
-                    "revenueGrowth": m.get("revenueGrowthQuarterlyYoy"),
-                    "earningsGrowth": m.get("epsGrowthQuarterlyYoy"),
-                    "grossMargins": m.get("grossMarginTTM"),
-                    "operatingMargins": m.get("operatingMarginTTM"),
-                    "currentRatio": m.get("currentRatioQuarterly"),
-                    "debtToEquity": m.get("totalDebt/totalEquityQuarterly"),
-                    "returnOnAssets": m.get("roaTTM"),
-                    "pegRatio": m.get("pegRatioTTM"),
-                    "priceToBook": m.get("pbAnnual"),
-                    "beta": m.get("beta"),
-                    "fifty_two_week_high": m.get("52WeekHigh"),
-                    "fifty_two_week_low": m.get("52WeekLow"),
-                    "pe_ratio": m.get("peTTM"),
-                }
-            )
-        quote = _finnhub_get_quote(ticker)
-        if quote:
-            info["current_price"] = quote.get("c")
+        profile_obj = obb.equity.profile(symbol=ticker, provider="yfinance")
+        if profile_obj:
+            p = profile_obj.to_dict()
+            info["name"] = p.get("name", [ticker])[0] if p.get("name") else ticker
+            info["sector"] = p.get("sector", ["N/A"])[0] if p.get("sector") else "N/A"
+            info["industry"] = p.get("industry_category", ["N/A"])[0] if p.get("industry_category") else "N/A"
+            desc = p.get("long_description", [])
+            info["summary"] = desc[0] if desc else "情報なし"
+            info["website"] = p.get("company_url", [""])[0] if p.get("company_url") else ""
+            info["country"] = p.get("hq_country", [""])[0] if p.get("hq_country") else ""
+            info["employees"] = p.get("employees", [0])[0] if p.get("employees") else 0
+            
+            try:
+                metrics_obj = obb.equity.fundamental.metrics(symbol=ticker, provider="yfinance")
+                if metrics_obj:
+                    m = metrics_obj.to_dict()
+                    info["market_cap"] = m.get("market_cap", [None])[0]
+                    
+                    rg = m.get("revenue_growth", [None])[0]
+                    if rg is not None: info["revenueGrowth"] = rg * 100
+                    
+                    eg = m.get("earnings_growth", [None])[0]
+                    if eg is not None: info["earningsGrowth"] = eg * 100
+                    
+                    gm = m.get("gross_margin", [None])[0]
+                    if gm is not None: info["grossMargins"] = gm * 100
+                    
+                    om = m.get("operating_margin", [None])[0]
+                    if om is not None: info["operatingMargins"] = om * 100
+                    
+                    info["currentRatio"] = m.get("current_ratio", [None])[0]
+                    info["debtToEquity"] = m.get("debt_to_equity", [None])[0]
+                    
+                    ra = m.get("return_on_assets", [None])[0]
+                    if ra is not None: info["returnOnAssets"] = ra * 100
+                    
+                    info["pe_ratio"] = m.get("pe_ratio", [None])[0]
+                    info["priceToBook"] = m.get("price_to_book", [None])[0]
+                    info["beta"] = m.get("beta", [None])[0]
+                    info["forward_pe"] = m.get("forward_pe", [None])[0]
+            except Exception as e:
+                logger.debug(f"Metrics fetch failed for {ticker}: {e}")
+
+        q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
+        if q:
+            info["current_price"] = q.get("last_price", [None])[0]
+            info["fifty_two_week_high"] = q.get("year_high", [None])[0]
+            info["fifty_two_week_low"] = q.get("year_low", [None])[0]
+            
     except Exception as e:
-        logger.warning(f"Finnhub profile fetch failed for {ticker}: {e}")
-
-
-def _extract_yfinance_profile(ticker: str, info: StockInfo) -> None:
-    # yfinanceへの過剰なアクセスを防ぐため、主要な情報が存在する場合はフォールバックをスキップ
-    needs_fallback = (
-        info.get("summary") == "情報なし"
-        or info.get("sector") == "N/A"
-        or info.get("current_price") is None
-    )
-    if not needs_fallback:
-        return
-    try:
-        yf_ticker = yf.Ticker(ticker)
-        yf_info = yf_ticker.info
-        if yf_info:
-            if info["name"] == ticker:
-                info["name"] = yf_info.get("longName", yf_info.get("shortName", ticker))
-            if info["sector"] == "N/A":
-                info["sector"] = yf_info.get("sector", "N/A")
-            if info["industry"] == "N/A":
-                info["industry"] = yf_info.get("industry", "N/A")
-            if info["summary"] == "情報なし":
-                info["summary"] = yf_info.get("longBusinessSummary", "")
-            if not info["website"]:
-                info["website"] = yf_info.get("website", "")
-            if not info["logo"]:
-                info["logo"] = yf_info.get("logo_url", "")
-            if info["employees"] == 0:
-                info["employees"] = yf_info.get("fullTimeEmployees", 0)
-            if info["market_cap"] is None:
-                info["market_cap"] = yf_info.get("marketCap")
-            if info["current_price"] is None:
-                info["current_price"] = yf_info.get(
-                    "currentPrice", yf_info.get("regularMarketPrice")
-                )
-            rg = yf_info.get("revenueGrowth")
-            if info["revenueGrowth"] is None and rg is not None:
-                info["revenueGrowth"] = rg * 100
-            eg = yf_info.get("earningsGrowth")
-            if info["earningsGrowth"] is None and eg is not None:
-                info["earningsGrowth"] = eg * 100
-            gm = yf_info.get("grossMargins")
-            if info["grossMargins"] is None and gm is not None:
-                info["grossMargins"] = gm * 100
-            om = yf_info.get("operatingMargins")
-            if info["operatingMargins"] is None and om is not None:
-                info["operatingMargins"] = om * 100
-            if info["currentRatio"] is None:
-                info["currentRatio"] = yf_info.get("currentRatio")
-            if info["debtToEquity"] is None:
-                info["debtToEquity"] = yf_info.get("debtToEquity")
-            ra = yf_info.get("returnOnAssets")
-            if info["returnOnAssets"] is None and ra is not None:
-                info["returnOnAssets"] = ra * 100
-            if info["pegRatio"] is None:
-                info["pegRatio"] = yf_info.get("pegRatio")
-            if info["priceToBook"] is None:
-                info["priceToBook"] = yf_info.get("priceToBook")
-            if info["beta"] is None:
-                info["beta"] = yf_info.get("beta")
-            if info["fifty_two_week_high"] is None:
-                info["fifty_two_week_high"] = yf_info.get("fiftyTwoWeekHigh")
-            if info["forward_pe"] is None:
-                info["forward_pe"] = yf_info.get("forwardPE")
-            if info["target_price"] is None:
-                info["target_price"] = yf_info.get("targetMeanPrice")
-            if info["pe_ratio"] is None:
-                info["pe_ratio"] = yf_info.get("trailingPE")
-    except Exception as e:
-        logger.warning(f"yfinance profile fallback failed for {ticker}: {e}")
-
+        logger.warning(f"OpenBB profile fetch failed for {ticker}: {e}")
 
 @st.cache_data(ttl=CACHE_TTL_DAILY)
 def get_stock_info(ticker: str) -> StockInfo:
@@ -239,51 +152,52 @@ def get_stock_info(ticker: str) -> StockInfo:
         "pe_ratio": None,
         "share_outstanding": None,
     }
-    if is_configured():
-        _extract_finnhub_profile(ticker, info)
-    _extract_yfinance_profile(ticker, info)
+    
+    _extract_openbb_profile(ticker, info)
+    
+    if is_japanese_stock(ticker):
+        edinet_data = get_company_finance(ticker)
+        if edinet_data and edinet_data["financials"]:
+            latest_finance = edinet_data["financials"][0]
+            if edinet_data.get("company_name"):
+                info["name"] = edinet_data["company_name"]
+            
+            if latest_finance.get("net_sales") and latest_finance.get("operating_income"):
+                 info["operatingMargins"] = (latest_finance["operating_income"] / latest_finance["net_sales"]) * 100
+    
     if info["summary"] and info["summary"] != "情報なし":
-        info["summary"] = translate_to_japanese(info["summary"])
+        if not is_japanese_stock(ticker):
+             info["summary"] = translate_to_japanese(info["summary"])
+        
     return info
-
 
 @st.cache_data(ttl=CACHE_TTL_SHORT)
 def get_quote(ticker: str) -> dict | None:
-    if not is_configured():
-        return None
     try:
-        return _finnhub_get_quote(ticker)
-    except Exception:
-        return None
-
+        q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
+        if q:
+            return {
+                "c": q.get("last_price", [0])[0],
+                "h": q.get("high", [0])[0],
+                "l": q.get("low", [0])[0],
+                "o": q.get("open", [0])[0],
+                "pc": q.get("prev_close", [0])[0]
+            }
+    except Exception as e:
+        logger.warning(f"Quote fetch error for {ticker}: {e}")
+    return None
 
 @st.cache_data(ttl=CACHE_TTL_DAILY)
-def get_earnings_calendar(
-    from_date: str | None = None, to_date: str | None = None
-) -> list[dict]:
-    if not is_configured():
-        return []
-    try:
-        return _finnhub_get_earnings_calendar(from_date, to_date)
-    except Exception:
-        return []
-
+def get_earnings_calendar(from_date: str | None = None, to_date: str | None = None) -> list[dict]:
+    # Placeholder: OpenBB implementation or other data source needed
+    return []
 
 @st.cache_data(ttl=CACHE_TTL_DAILY)
 def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
-    if not is_configured():
-        return []
-    try:
-        return _finnhub_get_earnings_surprises(symbol, limit)
-    except Exception:
-        return []
-
+    # Placeholder: OpenBB implementation or other data source needed
+    return []
 
 @st.cache_data(ttl=CACHE_TTL_DAILY)
 def get_financials_reported(symbol: str, freq: str = "quarterly") -> list[dict]:
-    if not is_configured():
-        return []
-    try:
-        return _finnhub_get_financials_reported(symbol, freq)
-    except Exception:
-        return []
+    # Placeholder: OpenBB implementation or other data source needed
+    return []

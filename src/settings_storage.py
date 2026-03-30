@@ -202,3 +202,18 @@ def get_finnhub_api_key() -> str:
 def set_finnhub_api_key(api_key: str) -> bool:
     """Finnhub APIキー情報のUI経由保存はセキュリティ強化のため廃止されました"""
     return False
+
+
+def get_edinet_api_key() -> str:
+    """EDINET APIキーを取得（Streamlit secrets/Env対応）"""
+    # 1. Streamlit secretsから取得
+    try:
+        import streamlit as st
+
+        if "EDINET_API_KEY" in st.secrets:
+            return st.secrets["EDINET_API_KEY"]
+    except Exception:
+        pass
+    # 2. 環境変数から取得
+    import os
+    return os.environ.get("EDINET_API_KEY", "")

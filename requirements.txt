@@ -22,3 +22,5 @@ ruff
 pytest
 arch>=6.3.0
 statsmodels>=0.14.0
+openbb>=4.0.0
+edinet-tools>=0.1.0
