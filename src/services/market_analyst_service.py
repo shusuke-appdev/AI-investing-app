@@ -207,6 +207,15 @@ def generate_market_analysis_report(market_type: str = "US") -> str | None:
             generate_signals as gen_vol_signals,
         )
 
+        # Market Microstructure (SPY Only as base context)
+        try:
+            from src.market_microstructure import analyze_market_structure
+            micro_data = analyze_market_structure("SPY")
+            if micro_data and micro_data.get("narrative_text"):
+                advanced_tech_parts.append("\n" + micro_data["narrative_text"])
+        except Exception as e:
+            logger.error(f"Market Microstructure fetch error: {e}")
+
         # Breadth
         b_df = fetch_breadth_data("1mo")
         sp_osc = calculate_sp_oscillator(b_df)
