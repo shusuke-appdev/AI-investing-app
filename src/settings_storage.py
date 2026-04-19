@@ -220,3 +220,24 @@ def get_edinet_api_key() -> str:
     import os
 
     return os.environ.get("EDINET_API_KEY", "")
+
+
+def get_jquants_api_key() -> str:
+    """J-Quants API Key を取得（Streamlit secrets/Env対応）"""
+    # 1. Streamlit secretsから取得
+    try:
+        import streamlit as st
+
+        if "JQUANTS_API_KEY" in st.secrets:
+            return st.secrets["JQUANTS_API_KEY"]
+    except Exception:
+        pass
+    # 2. 環境変数から取得
+    import os
+
+    return os.environ.get("JQUANTS_API_KEY", "")
+
+
+def set_jquants_api_key(token: str) -> bool:
+    """J-Quants APIキー情報のUI経由保存はセキュリティ強化のため廃止されました"""
+    return False

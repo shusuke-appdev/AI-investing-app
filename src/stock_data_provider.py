@@ -17,6 +17,7 @@ from openbb import obb
 
 from src.constants import CACHE_TTL_DAILY, CACHE_TTL_MEDIUM, CACHE_TTL_SHORT
 from src.edinet_client import get_company_finance
+from src import jquants_client
 from src.log_config import get_logger
 from src.models import StockInfo
 from src.utils.translator import translate_to_japanese
@@ -34,6 +35,11 @@ def is_japanese_stock(ticker: str) -> bool:
 
 @st.cache_data(ttl=CACHE_TTL_SHORT)
 def get_current_price(ticker: str) -> float:
+    if is_japanese_stock(ticker) and jquants_client.is_configured():
+        price = jquants_client.get_current_price(ticker)
+        if price > 0:
+            return price
+            
     try:
         q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
         if q:
@@ -50,6 +56,11 @@ def get_current_price(ticker: str) -> float:
 
 @st.cache_data(ttl=CACHE_TTL_MEDIUM)
 def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
+    if is_japanese_stock(ticker) and jquants_client.is_configured():
+        df = jquants_client.get_daily_quotes(ticker, period)
+        if not df.empty:
+            return df
+            
     try:
         period_map = {
             "1d": timedelta(days=2),
@@ -191,11 +202,28 @@ def get_stock_info(ticker: str) -> StockInfo:
 
     _extract_openbb_profile(ticker, info)
 
-    if is_japanese_stock(ticker):
+    is_jp = is_japanese_stock(ticker)
+
+    if is_jp and jquants_client.is_configured():
+        jq_info = jquants_client.get_company_info(ticker)
+        if jq_info:
+            if jq_info.get("company_name"):
+                info["name"] = jq_info["company_name"]
+            if jq_info.get("sector_name"):
+                info["sector"] = jq_info["sector_name"]
+            if jq_info.get("industry_name") and info["industry"] == "N/A":
+                info["industry"] = jq_info["industry_name"]
+
+        jq_fins = jquants_client.get_fins_statements(ticker)
+        if jq_fins:
+            if jq_fins.get("net_sales") and jq_fins.get("operating_income"):
+                info["operatingMargins"] = (jq_fins["operating_income"] / jq_fins["net_sales"]) * 100
+
+    if is_jp and (not jquants_client.is_configured() or info["operatingMargins"] is None):
         edinet_data = get_company_finance(ticker)
         if edinet_data and edinet_data["financials"]:
             latest_finance = edinet_data["financials"][0]
-            if edinet_data.get("company_name"):
+            if edinet_data.get("company_name") and info["name"] == ticker:
                 info["name"] = edinet_data["company_name"]
 
             if latest_finance.get("net_sales") and latest_finance.get(
