@@ -25,7 +25,7 @@ def render_market_item(label: str, value: str, change: float):
 
 def _render_market_monitor(market_type: str):
     """総合市場監視ダッシュボードの描画"""
-    st.markdown("### 🚨 総合市場監視ダッシュボード")
+    st.markdown("### 総合市場監視")
 
     benchmarks = {"US": "SPY", "JP": "^N225"}
     target_bm = benchmarks.get(market_type, "SPY")
@@ -41,39 +41,58 @@ def _render_market_monitor(market_type: str):
     if "error" in evaluation and evaluation["error"]:
         st.warning(f"市場データ取得エラー: {evaluation['error']}")
         return
-    status = evaluation["status"]
+        
+    # 余分な装飾（絵文字）をテキストから削除
+    status_raw = evaluation["status"]
+    status_clean = status_raw.replace("🟢 ", "").replace("🔴 ", "").replace("⚪ ", "")
+    
     score = evaluation["score"]
     desc = evaluation["description"]
     signals = evaluation["signals"]
 
     # 総合判断の表示
-    st.markdown(f"**監視対象**: `{target_bm}` | **総合判断**: {status}")
+    st.markdown(f"**対象**: {target_bm} ｜ **総合評価**: {status_clean}")
 
     # -1.0 〜 +1.0 を 0.0 〜 1.0 に正規化してプログレスバーに表示
     norm_score = max(0.0, min(1.0, (score + 1.0) / 2.0))
     st.progress(
-        norm_score, text=f"総合スコア: {score:+.2f} (範囲: -1.0 〜 +1.0) - {desc}"
+        norm_score, text=f"総合スコア: {score:+.2f} ({desc})"
     )
 
-    # 詳細な内訳（根拠）の表示
-    with st.expander(
-        "詳細な評価コンポーネント内訳", expanded=("弱気" in status or "強気" in status)
-    ):
+    clean_status_flag = "弱気" in status_clean or "強気" in status_clean
+    with st.expander("評価コンポーネント内訳", expanded=clean_status_flag):
+        bullish_signals = []
+        neutral_signals = []
+        bearish_signals = []
+
         for sig in signals:
-            name = sig["name"]
-            s = sig["score"]
-            w = sig["weight"]
-            rat = sig["rationale"]
+            if sig["score"] >= 0.3:
+                bullish_signals.append(sig)
+            elif sig["score"] <= -0.3:
+                bearish_signals.append(sig)
+            else:
+                neutral_signals.append(sig)
 
-            # アイコン選択
-            ico = "🟢" if s > 0.3 else "🔴" if s < -0.3 else "⚪"
-            if s > 0.7:
-                ico = "🚀"
-            if s < -0.7:
-                ico = "🚨"
+        def _render_group(title: str, group_signals: list):
+            if not group_signals:
+                return
+            st.markdown(f"#### {title}")
+            for s in group_signals:
+                name = s["name"]
+                sc = s["score"]
+                wt = s["weight"]
+                rat = s["rationale"]
+                st.markdown(
+                    f"- **{name}** (スコア: {sc:+.2f}, ウェイト: {wt:.1f})  \n"
+                    f"  <span style='color: #555555; font-size: 0.9em; margin-left:1rem;'>└ {rat}</span>",
+                    unsafe_allow_html=True
+                )
+            st.write("")  # 適切な余白
 
-            st.markdown(f"**{ico} {name}** (Score: `{s:+.2f}`, Weight: `{w:.1f}`)")
-            st.caption(f"└ {rat}")
+        # デジタル庁ガイドライン: 全体から詳細へ、意味のある順序(強気->中立->弱気)
+        _render_group("強気シグナル", bullish_signals)
+        _render_group("中立シグナル", neutral_signals)
+        _render_group("弱気シグナル", bearish_signals)
 
 
 def render_flash_summary(market_data, market_type: str = "US"):
@@ -82,10 +101,10 @@ def render_flash_summary(market_data, market_type: str = "US"):
 
     config = get_market_config(market_type)
 
-    # --- 総合市場監視ダッシュボード ---
+    # --- 総合市場監視 ---
     _render_market_monitor(market_type)
 
-    st.markdown("### 📌 アセットクラス別サマリー")
+    st.markdown("### アセットクラス別概要")
 
     col1, col2, col3 = st.columns(3)
     indices_tickers = set(config["indices"].values())
@@ -96,7 +115,7 @@ def render_flash_summary(market_data, market_type: str = "US"):
     forex_tickers = set(config["forex"].values())
 
     with col1, st.container(border=True):
-        st.markdown("**📊 株式指数・金利**")
+        st.markdown("**株式指数・金利**")
         st.caption("主要指数")
         if market_type == "JP":
             jp_indices = ["日経平均", "TOPIX"]
@@ -132,7 +151,7 @@ def render_flash_summary(market_data, market_type: str = "US"):
                     render_market_item(name, f"{price:.2f}%", change)
 
     with col2, st.container(border=True):
-        st.markdown("**🏭 セクター別指数**")
+        st.markdown("**セクター別指数**")
         if not sectors_tickers:
             st.info("データなし")
         else:
@@ -150,7 +169,7 @@ def render_flash_summary(market_data, market_type: str = "US"):
                 st.caption("データ取得中または利用不可")
 
     with col3, st.container(border=True):
-        st.markdown("**🌍 商品・FX・暗号資産**")
+        st.markdown("**商品・FX・暗号資産**")
 
         # 望ましい表示順: コモディティ (WTI, Gold, Silver) -> FX -> 暗号資産
         categories_to_show = [
