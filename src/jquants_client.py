@@ -60,8 +60,10 @@ def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
             "max": timedelta(days=1825), # 約5年
         }
         days = period_map.get(period, timedelta(days=35))
-        from_date = (datetime.now() - days).strftime("%Y%m%d")
-        to_date = datetime.now().strftime("%Y%m%d")
+        # Freeプラン制限を考慮し、13週間（約92日）前からのデータにするテスト
+        to_dt = datetime.now() - timedelta(days=92)
+        from_date = (to_dt - days).strftime("%Y%m%d")
+        to_date = to_dt.strftime("%Y%m%d")
 
         url = f"{BASE_URL}/prices/daily_quotes"
         params = {

@@ -4,7 +4,12 @@ API設定やGAS URLなどをローカルに永続化します。
 """
 
 import json
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# dotenv を用いて .env を環境変数にロードする。これはすべての関数を通して有効になる。
+load_dotenv()
 
 from src.log_config import get_logger
 

@@ -184,25 +184,28 @@ def _render_settings():
     """設定セクション（API設定 + ストレージ設定統合）"""
     with st.expander("⚙️ 設定", expanded=True):  # 展開しておく
         # === API設定 ===
-        st.markdown("**🔑 API設定**")
-        st.caption(
-            "※ APIキーのUIからの保存機能はセキュリティ向上のため廃止されました。`.env` または `st.secrets` で環境変数を設定してください。"
-        )
+        st.markdown("**🔑 API設定状況**")
 
-        from src.settings_storage import get_finnhub_api_key, get_gemini_api_key
+        from src.settings_storage import get_finnhub_api_key, get_gemini_api_key, get_jquants_api_key
 
         gemini_configured = bool(get_gemini_api_key())
         finnhub_configured = bool(get_finnhub_api_key())
+        jquants_configured = bool(get_jquants_api_key())
 
         if gemini_configured:
-            st.success("✅ Gemini API: 設定済み (st.secrets または .env)")
+            st.success("✅ Gemini API: 接続済み")
         else:
             st.error("❌ Gemini API: 未設定 (AI分析機能が利用できません)")
 
         if finnhub_configured:
-            st.success("✅ Finnhub API: 設定済み (st.secrets または .env)")
+            st.success("✅ Finnhub API: 接続済み")
         else:
-            st.warning("⚠️ Finnhub API: 未設定 (一部データ取得が制限されます)")
+            st.warning("⚠️ Finnhub API: 未設定 (米国株データ等一部機能が制限されます)")
+
+        if jquants_configured:
+            st.success("✅ J-Quants API: 接続済み")
+        else:
+            st.warning("⚠️ J-Quants API: 未設定 (日本株データが古いソースから取得されます)")
 
         st.markdown("---")
 
