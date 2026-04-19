@@ -64,42 +64,10 @@ def main():
     try:
         init_session_state()
 
-        # --- 設定の即時読み込み（UI描画前）---
-        # ... (unchanged)
-        from src.settings_storage import (
-            get_finnhub_api_key,
-            get_gas_url,
-            get_gemini_api_key,
-            get_storage_type,
-        )
-
-        # settings_storageの関数を使ってセッションに同期
-        # 1. Gemini
-        saved_gen_key = get_gemini_api_key()
-        if saved_gen_key and st.session_state.get("gemini_api_key") != saved_gen_key:
-            st.session_state.gemini_api_key = saved_gen_key
-            st.session_state.gemini_configured = True
-
-        # 2. Finnhub
-        saved_finn_key = get_finnhub_api_key()
-        if saved_finn_key and st.session_state.get("finnhub_api_key") != saved_finn_key:
-            st.session_state.finnhub_api_key = saved_finn_key
-
-        # 3. GAS / Storage
-        saved_gas = get_gas_url()
-        if saved_gas and st.session_state.get("gas_url") != saved_gas:
-            st.session_state.gas_url = saved_gas
-
-        saved_storage = get_storage_type()
-        if st.session_state.get("storage_type") != saved_storage:
-            st.session_state.storage_type = saved_storage
-
-        # -----------------------------------
-
         # スタイルの適用
         st.markdown(get_custom_css(), unsafe_allow_html=True)
 
-        # サイドバー描画
+        # サイドバー描画（設定の読み込みも render_sidebar 内で実行される）
         render_sidebar()
 
         # ページルーティング

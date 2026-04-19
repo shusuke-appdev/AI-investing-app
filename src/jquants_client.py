@@ -3,15 +3,15 @@ J-Quants API Client
 日本取引所グループ提供のJ-Quants API (v2) を使用して、高信頼な株価・財務データを取得します。
 """
 
-import os
 from datetime import datetime, timedelta
-import requests
+
 import pandas as pd
+import requests
 import streamlit as st
 
+from src.constants import CACHE_TTL_DAILY, CACHE_TTL_SHORT
 from src.log_config import get_logger
 from src.settings_storage import get_jquants_api_key
-from src.constants import CACHE_TTL_SHORT, CACHE_TTL_DAILY, CACHE_TTL_MEDIUM
 
 logger = get_logger(__name__)
 
@@ -60,7 +60,7 @@ def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
             "max": timedelta(days=1825), # 約5年
         }
         days = period_map.get(period, timedelta(days=35))
-        # Freeプラン制限を考慮し、13週間（約92日）前からのデータにするテスト
+        # J-Quants Freeプラン制限: データは約12週間遅延で提供される
         to_dt = datetime.now() - timedelta(days=92)
         from_date = (to_dt - days).strftime("%Y%m%d")
         to_date = to_dt.strftime("%Y%m%d")
@@ -71,11 +71,11 @@ def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
             "from": from_date,
             "to": to_date
         }
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json().get("daily_quotes", [])
-        
+
         if not data:
             return pd.DataFrame()
 
@@ -108,7 +108,7 @@ def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
         if "Date" in df.columns:
             df["Date"] = pd.to_datetime(df["Date"])
             df.set_index("Date", inplace=True)
-            
+
         return df
 
     except Exception as e:
@@ -141,27 +141,30 @@ def get_fins_statements(ticker: str) -> dict | None:
         params = {
             "code": f"{code}0",
         }
-        
+
         days = timedelta(days=400)
         from_date = (datetime.now() - days).strftime("%Y%m%d")
         params["date"] = from_date
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         statements = response.json().get("statements", [])
-        
+
         if not statements:
             return None
-            
+
         # 最新のものを取得(文字列の日付でソート)
         statements.sort(key=lambda x: x.get("DiscloseDate", ""), reverse=True)
         latest = statements[0]
-        
+
         def _parse_num(val):
-            if val is None or val == "": return None
-            try: return float(val)
-            except: return None
-            
+            if val is None or val == "":
+                return None
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return None
+
         return {
             "net_sales": _parse_num(latest.get("NetSales")),
             "operating_income": _parse_num(latest.get("OperatingProfit")),
@@ -195,14 +198,14 @@ def get_company_info(ticker: str) -> dict | None:
     try:
         url = f"{BASE_URL}/listed/info"
         params = {"code": f"{code}0"}
-        
+
         response = requests.get(url, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         info_list = response.json().get("info", [])
-        
+
         if not info_list:
             return None
-            
+
         info = info_list[0]
         return {
             "company_name": info.get("CompanyName"),

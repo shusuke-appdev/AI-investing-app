@@ -15,12 +15,12 @@ import pandas as pd
 import streamlit as st
 from openbb import obb
 
+from src import jquants_client
 from src.constants import CACHE_TTL_DAILY, CACHE_TTL_MEDIUM, CACHE_TTL_SHORT
 from src.edinet_client import get_company_finance
-from src import jquants_client
 from src.log_config import get_logger
 from src.models import StockInfo
-from src.utils.translator import translate_to_japanese
+from src.translator import translate_to_japanese
 
 logger = get_logger(__name__)
 
@@ -39,7 +39,7 @@ def get_current_price(ticker: str) -> float:
         price = jquants_client.get_current_price(ticker)
         if price > 0:
             return price
-            
+
     try:
         q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
         if q:
@@ -60,7 +60,7 @@ def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
         df = jquants_client.get_daily_quotes(ticker, period)
         if not df.empty:
             return df
-            
+
     try:
         period_map = {
             "1d": timedelta(days=2),
@@ -215,9 +215,8 @@ def get_stock_info(ticker: str) -> StockInfo:
                 info["industry"] = jq_info["industry_name"]
 
         jq_fins = jquants_client.get_fins_statements(ticker)
-        if jq_fins:
-            if jq_fins.get("net_sales") and jq_fins.get("operating_income"):
-                info["operatingMargins"] = (jq_fins["operating_income"] / jq_fins["net_sales"]) * 100
+        if jq_fins and jq_fins.get("net_sales") and jq_fins.get("operating_income"):
+            info["operatingMargins"] = (jq_fins["operating_income"] / jq_fins["net_sales"]) * 100
 
     if is_jp and (not jquants_client.is_configured() or info["operatingMargins"] is None):
         edinet_data = get_company_finance(ticker)
@@ -233,9 +232,8 @@ def get_stock_info(ticker: str) -> StockInfo:
                     latest_finance["operating_income"] / latest_finance["net_sales"]
                 ) * 100
 
-    if info["summary"] and info["summary"] != "情報なし":
-        if not is_japanese_stock(ticker):
-            info["summary"] = translate_to_japanese(info["summary"])
+    if info["summary"] and info["summary"] != "情報なし" and not is_japanese_stock(ticker):
+        info["summary"] = translate_to_japanese(info["summary"])
 
     return info
 

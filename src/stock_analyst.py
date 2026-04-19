@@ -3,20 +3,8 @@
 テクニカル分析を統合した詳細な銘柄分析を提供します。
 """
 
-import google.generativeai as genai
-import streamlit as st
-
 from src.advisor.technical import get_technical_summary_for_ai
-from src.constants import GEMINI_MODEL_NAME
-
-
-def _get_model():
-    """モデルインスタンスを取得（session_stateで管理）"""
-    if "_stock_analyst_model" not in st.session_state:
-        st.session_state["_stock_analyst_model"] = genai.GenerativeModel(
-            GEMINI_MODEL_NAME
-        )
-    return st.session_state["_stock_analyst_model"]
+from src.gemini_client import generate_content
 
 
 def analyze_stock(
@@ -37,8 +25,6 @@ def analyze_stock(
     Returns:
         分析レポート（マークダウン形式）
     """
-    model = _get_model()
-
     # 基本情報の抽出
     company_name = stock_info.get("name", ticker)
     sector = stock_info.get("sector", "不明")
@@ -79,19 +65,16 @@ def analyze_stock(
         knowledge_context=knowledge_context if knowledge_context else "特になし",
     )
 
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"分析エラー: {str(e)}"
+    result = generate_content(prompt)
+    if result:
+        return result
+    return "分析エラー: Gemini APIが利用できません"
 
 
 def get_quick_summary(ticker: str, stock_info: dict) -> str:
     """
     銘柄のクイックサマリーを生成します。
     """
-    model = _get_model()
-
     company_name = stock_info.get("name", ticker)
     sector = stock_info.get("sector", "不明")
     market_cap = stock_info.get("market_cap", 0)
@@ -109,8 +92,7 @@ def get_quick_summary(ticker: str, stock_info: dict) -> str:
         pe_ratio=pe_ratio,
     )
 
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception:
-        return f"{company_name} ({ticker}) - {sector}"
+    result = generate_content(prompt)
+    if result:
+        return result.strip()
+    return f"{company_name} ({ticker}) - {sector}"

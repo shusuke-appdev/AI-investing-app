@@ -1,6 +1,4 @@
-import google.generativeai as genai
-
-from src.constants import GEMINI_MODEL_NAME
+from src.gemini_client import generate_content
 
 from .analysis import (
     get_holdings_news,
@@ -24,7 +22,6 @@ def generate_portfolio_advice(
     AIによる包括的なポートフォリオアドバイスを生成します。
     テクニカル分析に基づく具体的な売買判断（数量・タイミング）を含む。
     """
-    model = genai.GenerativeModel(GEMINI_MODEL_NAME)
 
     # ポートフォリオサマリー構築（テクニカル詳細を拡充）
     holdings_text = []
@@ -202,8 +199,7 @@ def generate_portfolio_advice(
 - 投資判断は自己責任である旨を最後に注記
 """
 
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"アドバイス生成エラー: {str(e)}"
+    result = generate_content(prompt)
+    if result:
+        return result
+    return "アドバイス生成エラー: Gemini APIが利用できません"

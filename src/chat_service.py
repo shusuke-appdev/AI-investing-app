@@ -1,56 +1,46 @@
 """
 チャットサービスモジュール
-Gemini APIを使用した対話型チャット機能を提供します。
+google.genai SDK を使用した対話型チャット機能を提供します。
 セッション状態は st.session_state で管理（マルチユーザー安全）。
 """
 
-import google.generativeai as genai
 import streamlit as st
 
-from src.constants import GEMINI_MODEL_NAME
+from src.gemini_client import generate_content
 
 
-def get_chat_session(context: str = ""):
+def get_chat_session(context: str = "") -> list[dict]:
     """
-    チャットセッションを取得または作成します。
+    チャットセッション（履歴リスト）を取得または作成します。
 
     Args:
         context: チャットのコンテキスト（AIレポートなど）
 
     Returns:
-        Geminiチャットセッション
+        チャット履歴のリスト
     """
-    if "_chat_model" not in st.session_state:
-        st.session_state["_chat_model"] = genai.GenerativeModel(GEMINI_MODEL_NAME)
-
-    if "_chat_session" not in st.session_state:
-        system_prompt = f"""あなたは金融市場のニュースと分析に精通したAIアナリストです。
-以下のコンテキスト情報を参考に、ユーザーの質問に日本語で簡潔に回答してください。
-
-【コンテキスト】
-{context if context else "コンテキストなし"}
-
-回答ルール:
-- 簡潔かつ具体的に回答
-- 不確実な情報は「推測です」と明記
-- 投資アドバイスは控え、情報提供に徹する
-"""
-        st.session_state["_chat_session"] = st.session_state["_chat_model"].start_chat(
-            history=[
-                {"role": "user", "parts": [system_prompt]},
-                {
-                    "role": "model",
-                    "parts": ["了解しました。金融市場に関するご質問にお答えします。"],
-                },
-            ]  # type: ignore
+    if "_chat_history" not in st.session_state:
+        system_prompt = (
+            "あなたは金融市場のニュースと分析に精通したAIアナリストです。\n"
+            "以下のコンテキスト情報を参考に、ユーザーの質問に日本語で簡潔に回答してください。\n\n"
+            f"【コンテキスト】\n{context if context else 'コンテキストなし'}\n\n"
+            "回答ルール:\n"
+            "- 簡潔かつ具体的に回答\n"
+            "- 不確実な情報は「推測です」と明記\n"
+            "- 投資アドバイスは控え、情報提供に徹する"
         )
+        st.session_state["_chat_history"] = [
+            {"role": "user", "content": system_prompt},
+            {"role": "model", "content": "了解しました。金融市場に関するご質問にお答えします。"},
+        ]
 
-    return st.session_state["_chat_session"]
+    return st.session_state["_chat_history"]
 
 
 def reset_chat_session():
     """チャットセッションをリセットします。"""
     st.session_state.pop("_chat_session", None)
+    st.session_state.pop("_chat_history", None)
 
 
 def send_message(message: str, context: str = "") -> str:
@@ -64,46 +54,51 @@ def send_message(message: str, context: str = "") -> str:
     Returns:
         AIの応答テキスト
     """
-    try:
-        session = get_chat_session(context)
-        response = session.send_message(message)
-        return response.text
-    except Exception as e:
-        return f"エラーが発生しました: {str(e)}"
+    history = get_chat_session(context)
+
+    # 履歴をプロンプトに組み込む（最新3往復分）
+    history_text = "\n".join(
+        f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
+        for m in history[-6:]
+    )
+
+    prompt = (
+        "以下は会話の履歴です。最後のUserメッセージに回答してください。\n\n"
+        f"{history_text}\n\n"
+        f"User: {message}"
+    )
+
+    result = generate_content(prompt)
+    if result:
+        history.append({"role": "user", "content": message})
+        history.append({"role": "model", "content": result})
+        return result
+    return "エラーが発生しました: Gemini APIが利用できません"
 
 
 def get_market_chat_response(
     prompt: str, history: list[dict], system_context: str
 ) -> str:
     """市場分析チャット専用の応答生成"""
-    try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+    system_prompt = (
+        "あなたはウォール街の凄腕マクロクオンツアナリストです。\n"
+        "プロフェッショナルで、無駄のないトーン（だ・である調）で回答してください。\n"
+        "以下の市場分析レポート（コンテキスト）を前提知識として、ユーザーの質問に答えてください。\n\n"
+        f"【コンテキスト】\n{system_context}\n\n"
+        "回答ルール:\n"
+        "- コンテキストの内容に関連する質問には、レポートの具体例や数値を引用して回答\n"
+        "- 意見を聞かれた場合は、アナリストとしての客観的視点を述べる\n"
+        "- 簡潔でデータドリブンな回答を心がける"
+    )
 
-        system_prompt = f"""あなたはウォール街の凄腕マクロクオンツアナリストです。
-プロフェッショナルで、無駄のないトーン（だ・である調）で回答してください。
-以下の市場分析レポート（コンテキスト）を前提知識として、ユーザーの質問に答えてください。
+    # 履歴をテキスト形式で構築
+    history_text = f"System: {system_prompt}\n"
+    for msg in history:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        history_text += f"{role}: {msg['content']}\n"
+    history_text += f"User: {prompt}"
 
-【コンテキスト】
-{system_context}
-
-回答ルール:
-- コンテキストの内容に関連する質問には、レポートの具体例や数値を引用して回答
-- 意見を聞かれた場合は、アナリストとしての客観的視点を述べる
-- 簡潔でデータドリブンな回答を心がける
-"""
-
-        # historyをGeminiのフォーマットに変換
-        gemini_history = []
-        gemini_history.append({"role": "user", "parts": [system_prompt]})
-        gemini_history.append({"role": "model", "parts": ["承知した。"]})
-
-        for msg in history:
-            role = "user" if msg["role"] == "user" else "model"
-            content = msg["content"]
-            gemini_history.append({"role": role, "parts": [content]})
-
-        session = model.start_chat(history=gemini_history)  # type: ignore
-        response = session.send_message(prompt)
-        return response.text
-    except Exception as e:
-        return f"考えをまとめるのに失敗したようだ: {str(e)}"
+    result = generate_content(history_text)
+    if result:
+        return result
+    return "考えをまとめるのに失敗したようだ: Gemini APIエラー"

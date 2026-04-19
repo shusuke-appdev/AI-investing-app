@@ -6,18 +6,10 @@
 import re
 from pathlib import Path
 
-# Gemini API
-try:
-    import google.generativeai as genai
+from src.gemini_client import generate_content
+from src.log_config import get_logger
 
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-
-try:
-    from src.constants import GEMINI_MODEL_NAME
-except ImportError:
-    GEMINI_MODEL_NAME = "gemini-2.0-flash"
+logger = get_logger(__name__)
 
 
 def extract_from_text(text: str) -> str:
@@ -198,22 +190,6 @@ def summarize_content(content: str, source_type: str = "text") -> str:
     Returns:
         要約テキスト
     """
-    if not GEMINI_AVAILABLE:
-        # フォールバック: 冒頭を返す
-        return content[:500] + "..." if len(content) > 500 else content
-
-    # APIキーを取得
-    try:
-        from src.settings_storage import get_gemini_api_key
-
-        api_key = get_gemini_api_key()
-        if not api_key:
-            return content[:500] + "..." if len(content) > 500 else content
-
-        genai.configure(api_key=api_key)
-    except Exception:
-        return content[:500] + "..." if len(content) > 500 else content
-
     source_label = {
         "text": "テキスト",
         "file": "ファイル",
@@ -221,22 +197,20 @@ def summarize_content(content: str, source_type: str = "text") -> str:
         "url": "Webページ",
     }.get(source_type, source_type)
 
-    prompt = f"""以下は{source_label}から抽出されたコンテンツです。
-投資・経済分析に関連する重要なポイントを抽出し、3-5文で要約してください。
-特に、市場動向、企業業績、マクロ経済、投資テーマに関する情報を重視してください。
+    prompt = (
+        f"以下は{source_label}から抽出されたコンテンツです。\n"
+        "投資・経済分析に関連する重要なポイントを抽出し、3-5文で要約してください。\n"
+        "特に、市場動向、企業業績、マクロ経済、投資テーマに関する情報を重視してください。\n\n"
+        f"コンテンツ:\n{content[:8000]}\n\n"
+        "要約（日本語で）:"
+    )
 
-コンテンツ:
-{content[:8000]}
+    result = generate_content(prompt)
+    if result:
+        return result.strip()
 
-要約（日本語で）:"""
-
-    try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception:
-        # エラー時はフォールバック
-        return content[:500] + "..." if len(content) > 500 else content
+    # フォールバック: 冒頭を返す
+    return content[:500] + "..." if len(content) > 500 else content
 
 
 def generate_title(content: str, source_type: str) -> str:
@@ -250,39 +224,20 @@ def generate_title(content: str, source_type: str) -> str:
     Returns:
         生成されたタイトル
     """
-    if not GEMINI_AVAILABLE:
-        # フォールバック: 冒頭を使用
-        title = content[:50].replace("\n", " ").strip()
-        return title + "..." if len(content) > 50 else title
+    prompt = (
+        "以下のコンテンツに適切な短いタイトル（20文字以内）を付けてください。\n"
+        "投資・経済に関連する内容の場合、その観点を反映させてください。\n\n"
+        f"コンテンツ:\n{content[:2000]}\n\n"
+        "タイトル（20文字以内、日本語で）:"
+    )
 
-    try:
-        from src.settings_storage import get_gemini_api_key
-
-        api_key = get_gemini_api_key()
-        if not api_key:
-            title = content[:50].replace("\n", " ").strip()
-            return title + "..." if len(content) > 50 else title
-
-        genai.configure(api_key=api_key)
-    except Exception:
-        title = content[:50].replace("\n", " ").strip()
-        return title + "..." if len(content) > 50 else title
-
-    prompt = f"""以下のコンテンツに適切な短いタイトル（20文字以内）を付けてください。
-投資・経済に関連する内容の場合、その観点を反映させてください。
-
-コンテンツ:
-{content[:2000]}
-
-タイトル（20文字以内、日本語で）:"""
-
-    try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        response = model.generate_content(prompt)
-        title = response.text.strip()
+    result = generate_content(prompt)
+    if result:
+        title = result.strip()
         # 余計な装飾を削除
         title = re.sub(r"^[「『]|[」』]$", "", title)
         return title[:30]
-    except Exception:
-        title = content[:50].replace("\n", " ").strip()
-        return title + "..." if len(content) > 50 else title
+
+    # フォールバック: 冒頭を使用
+    title = content[:50].replace("\n", " ").strip()
+    return title + "..." if len(content) > 50 else title

@@ -6,14 +6,16 @@ API設定やGAS URLなどをローカルに永続化します。
 import json
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
-# dotenv を用いて .env を環境変数にロードする。これはすべての関数を通して有効になる。
-load_dotenv()
+from dotenv import load_dotenv
 
 from src.log_config import get_logger
 
 from .supabase_client import get_supabase_client
+
+# dotenv を用いて .env を環境変数にロードする。これはすべての関数を通して有効になる。
+# インポート後に実行することで E402 を回避。
+load_dotenv()
 
 logger = get_logger(__name__)
 
@@ -151,7 +153,6 @@ def get_gemini_api_key() -> str:
     except Exception:
         pass
     # 2. 環境変数から取得
-    import os
 
     return os.environ.get("GEMINI_API_KEY", "")
 
@@ -201,7 +202,6 @@ def get_finnhub_api_key() -> str:
     except Exception:
         pass
     # 2. 環境変数から取得
-    import os
 
     return os.environ.get("FINNHUB_API_KEY", "")
 
@@ -222,7 +222,6 @@ def get_edinet_api_key() -> str:
     except Exception:
         pass
     # 2. 環境変数から取得
-    import os
 
     return os.environ.get("EDINET_API_KEY", "")
 
@@ -238,7 +237,6 @@ def get_jquants_api_key() -> str:
     except Exception:
         pass
     # 2. 環境変数から取得
-    import os
 
     return os.environ.get("JQUANTS_API_KEY", "")
 

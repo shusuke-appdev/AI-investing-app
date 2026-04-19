@@ -6,15 +6,10 @@
 import json
 from datetime import datetime
 
-from dotenv import load_dotenv
-
-from src.constants import GEMINI_MODEL_NAME
+from src.gemini_client import generate_content, get_gemini_client
 from src.log_config import get_logger
-from src.news_analyst import GEMINI_AVAILABLE, configure_gemini
 
 logger = get_logger(__name__)
-
-load_dotenv()
 
 
 def generate_dynamic_search_queries(
@@ -30,15 +25,9 @@ def generate_dynamic_search_queries(
     Returns:
         ニュース検索用キーワードのリスト (例: ["金利動向", "半導体 セクター", "円安 影響"])
     """
-    if not GEMINI_AVAILABLE:
+    if get_gemini_client() is None:
         logger.warning("Gemini API is not available. Using default static queries.")
         return []
-
-    if not configure_gemini():
-        logger.error("Failed to configure Gemini API.")
-        return []
-
-    import google.generativeai as genai
 
     today_str = datetime.now().strftime("%Y-%m-%d")
 
@@ -68,12 +57,13 @@ def generate_dynamic_search_queries(
 ["キーワード1", "キーワード2", "キーワード3"]
 """
 
-    try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        response = model.generate_content(prompt)
+    result = generate_content(prompt)
+    if not result:
+        return []
 
+    try:
         # 応答からJSON文字列の抽出（フォーマット崩れへの防御的処理）
-        text = response.text.strip()
+        text = result.strip()
         if text.startswith("```json"):
             text = text[7:]
         if text.endswith("```"):
@@ -89,9 +79,7 @@ def generate_dynamic_search_queries(
             return []
 
     except json.JSONDecodeError as e:
-        logger.error(
-            f"Failed to parse JSON from Gemini response: {e}\nResponse: {response.text}"
-        )
+        logger.error(f"Failed to parse JSON from Gemini response: {e}\nResponse: {result}")
         return []
     except Exception as e:
         logger.error(f"Error generating dynamic queries with Gemini: {e}")

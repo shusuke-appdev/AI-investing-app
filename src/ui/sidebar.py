@@ -186,7 +186,11 @@ def _render_settings():
         # === API設定 ===
         st.markdown("**🔑 API設定状況**")
 
-        from src.settings_storage import get_finnhub_api_key, get_gemini_api_key, get_jquants_api_key
+        from src.settings_storage import (
+            get_finnhub_api_key,
+            get_gemini_api_key,
+            get_jquants_api_key,
+        )
 
         gemini_configured = bool(get_gemini_api_key())
         finnhub_configured = bool(get_finnhub_api_key())

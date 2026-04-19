@@ -53,19 +53,20 @@ class TestDataProvider:
 
     def test_dependency_injection(self):
         """Test if a custom provider can be injected via set_data_provider."""
-        from src.data_provider import set_data_provider, DefaultDataProvider
         from unittest.mock import MagicMock
+
+        from src.data_provider import DefaultDataProvider, set_data_provider
 
         try:
             # 1. Provide Mock
             mock_provider = MagicMock()
             mock_provider.get_current_price.return_value = 999.0
-            
+
             set_data_provider(mock_provider)
-            
+
             # 2. Call Facade
             price = DataProvider.get_current_price("MOCK")
-            
+
             # 3. Assert
             assert price == 999.0
             mock_provider.get_current_price.assert_called_once_with("MOCK")

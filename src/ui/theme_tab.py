@@ -7,7 +7,7 @@ Displays thematic performance rankings.
 import pandas as pd
 import streamlit as st
 
-from themes_config import PERIODS
+from src.themes_config import PERIODS
 
 
 def render_theme_tab():
@@ -60,7 +60,7 @@ def render_theme_tab():
 
 def _render_theme_item(rank: int, theme_data: dict):
     """テーマ項目のレンダリングヘルパー"""
-    from themes_config import get_ticker_name
+    from src.themes_config import get_ticker_name
 
     market_type = st.session_state.get("market_type", "US")
     theme_name = theme_data["theme"]

@@ -3,60 +3,21 @@
 Gemini APIを使用して市場ニュースの要約・分析レポートを生成します。
 """
 
-import os
 from datetime import datetime
 
-from dotenv import load_dotenv
-
+from src.gemini_client import configure_gemini as _configure_gemini
+from src.gemini_client import generate_content, get_gemini_client
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
-load_dotenv()
-
-# Gemini APIの初期化
-try:
-    import google.generativeai as genai
-
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
+# 後方互換: 他モジュールが GEMINI_AVAILABLE と configure_gemini を参照している
+GEMINI_AVAILABLE = True
 
 
 def configure_gemini(api_key: str | None = None) -> bool:
-    """
-    Gemini APIを設定します。
-
-    Args:
-        api_key: APIキー（省略時はStreamlit secrets/環境変数から取得）
-
-    Returns:
-        設定成功時True
-    """
-    if not GEMINI_AVAILABLE:
-        return False
-
-    # 1. 引数で渡された場合
-    key = api_key
-
-    # 2. Streamlit Cloud secrets から取得
-    if not key:
-        try:
-            import streamlit as st
-
-            key = st.secrets.get("GEMINI_API_KEY")
-        except Exception:
-            pass
-
-    # 3. 環境変数から取得
-    if not key:
-        key = os.getenv("GEMINI_API_KEY")
-
-    if not key:
-        return False
-
-    genai.configure(api_key=key)
-    return True
+    """後方互換ラッパー: gemini_client.configure_gemini に委譲"""
+    return _configure_gemini(api_key)
 
 
 def generate_flash_summary(
@@ -136,7 +97,7 @@ def generate_market_recap(
     Returns:
         ナラティブ形式の市況解説
     """
-    if not GEMINI_AVAILABLE:
+    if get_gemini_client() is None:
         return "Gemini APIが利用できません。APIキーを設定してください。"
 
     # コンテキストの構築
@@ -242,38 +203,18 @@ Context: 直近発表された主要企業の決算結果。
         context=context, today_str=today_str, earnings_section=earnings_section
     )
 
-    try:
-        from src.constants import GEMINI_MODEL_NAME
-
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"レポート生成エラー: {str(e)}"
+    result = generate_content(prompt)
+    if result:
+        return result
+    return "レポート生成エラー: Gemini APIが利用できません"
 
 
 def generate_company_summary_ja(ticker: str, english_summary: str) -> str:
     """
     英語の企業概要を日本語に翻訳・要約します。
-
-    Args:
-        ticker: 銘柄コード
-        english_summary: 英語の企業概要
-
-    Returns:
-        日本語の企業概要
     """
-    if not GEMINI_AVAILABLE or not english_summary:
+    if not english_summary:
         return english_summary
-
-    # APIキーを設定
-    from src.settings_storage import get_gemini_api_key
-
-    api_key = get_gemini_api_key()
-    if not api_key:
-        return english_summary
-
-    genai.configure(api_key=api_key)
 
     from src.prompts.analysis_prompts import COMPANY_SUMMARY_JA_PROMPT_TEMPLATE
 
@@ -281,11 +222,7 @@ def generate_company_summary_ja(ticker: str, english_summary: str) -> str:
         ticker=ticker, english_summary=english_summary[:8000]
     )
 
-    try:
-        from src.constants import GEMINI_MODEL_NAME
-
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception:
-        return english_summary
+    result = generate_content(prompt)
+    if result:
+        return result
+    return english_summary

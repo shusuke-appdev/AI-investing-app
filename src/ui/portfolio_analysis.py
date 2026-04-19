@@ -126,7 +126,7 @@ def render_portfolio_charts(analysis: dict):
 def render_theme_exposure(holdings: list[dict]):
     """テーマ別エクスポージャー表示"""
     try:
-        from themes_config import THEMES
+        from src.themes_config import THEMES
     except ImportError:
         st.info("テーマ設定が見つかりません")
         return

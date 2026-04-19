@@ -1,13 +1,18 @@
-import pytest
-from unittest.mock import patch, MagicMock
-import pandas as pd
-from src.jquants_client import is_configured, get_daily_quotes, get_fins_statements, get_company_info, _get_headers
+from unittest.mock import MagicMock, patch
+
+from src.jquants_client import (
+    _get_headers,
+    get_daily_quotes,
+    get_fins_statements,
+    is_configured,
+)
+
 
 @patch("src.jquants_client.get_jquants_api_key")
 def test_is_configured(mock_get_key):
     mock_get_key.return_value = "dummy_key"
     assert is_configured() is True
-    
+
     mock_get_key.return_value = ""
     assert is_configured() is False
 
@@ -33,7 +38,7 @@ def test_get_daily_quotes(mock_get, mock_get_headers):
     }
     mock_response.status_code = 200
     mock_get.return_value = mock_response
-    
+
     df = get_daily_quotes("7203.T", period="1d")
     assert not df.empty
     assert "Open" in df.columns
@@ -54,7 +59,7 @@ def test_get_fins_statements(mock_get, mock_get_headers):
         ]
     }
     mock_get.return_value = mock_response
-    
+
     fins = get_fins_statements("7203.T")
     assert fins is not None
     assert fins["net_sales"] == 1000.5

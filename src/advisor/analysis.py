@@ -85,7 +85,7 @@ def get_sector_performance() -> dict:
 def get_theme_exposure_analysis(holdings: list[dict]) -> dict:
     """ポートフォリオのテーマ別エクスポージャーを分析"""
     try:
-        from themes_config import THEMES
+        from src.themes_config import THEMES
     except ImportError:
         return {}
 

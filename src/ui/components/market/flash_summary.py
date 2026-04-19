@@ -41,11 +41,11 @@ def _render_market_monitor(market_type: str):
     if "error" in evaluation and evaluation["error"]:
         st.warning(f"市場データ取得エラー: {evaluation['error']}")
         return
-        
+
     # 余分な装飾（絵文字）をテキストから削除
     status_raw = evaluation["status"]
     status_clean = status_raw.replace("🟢 ", "").replace("🔴 ", "").replace("⚪ ", "")
-    
+
     score = evaluation["score"]
     desc = evaluation["description"]
     signals = evaluation["signals"]

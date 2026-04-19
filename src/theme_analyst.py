@@ -10,7 +10,7 @@ import streamlit as st
 import yfinance as yf
 
 from src.log_config import get_logger
-from themes_config import PERIODS, THEMES, get_themes
+from src.themes_config import PERIODS, THEMES, get_themes
 
 logger = get_logger(__name__)
 
