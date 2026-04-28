@@ -1,3 +1,12 @@
+---
+title: AI Investing Dashboard
+emoji: 📈
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 # AI投資アプリ
 
 金融市場分析と投資戦略検証のためのPythonアプリケーション。
