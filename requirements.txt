@@ -1,4 +1,5 @@
 streamlit>=1.40.0
+reflex>=0.6.0
 yfinance>=0.2.54
 curl-cffi>=0.7.4
 finnhub-python>=2.4.0

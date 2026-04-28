@@ -1,0 +1,26 @@
+name: Sync to Hugging Face hub
+
+on:
+  push:
+    branches: [main, master]
+  # GitHub Actionsのタブから手動で実行できるようにする設定
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+          
+      - name: Push to Hugging Face Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          # -------------------------------------------------------------
+          # 【重要】以下のユーザー名とSpace名を実際のものに変更してください
+          # 例: https://USERNAME:$HF_TOKEN@huggingface.co/spaces/USERNAME/SPACE_NAME
+          # -------------------------------------------------------------
+        run: |
+          git push --force https://shusuke12345:$HF_TOKEN@huggingface.co/spaces/shusuke12345/AI-investing-app main
