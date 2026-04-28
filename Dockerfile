@@ -8,6 +8,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     curl \
     unzip \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
