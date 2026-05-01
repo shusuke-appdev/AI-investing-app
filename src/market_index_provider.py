@@ -62,9 +62,15 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
 
     yf_targets = {**config.get("treasuries", {}), **config.get("forex", {})}
 
+    # 生指数ティッカー（^始まり）はFinnhubで取得不可 → yfinanceに回す
+    raw_index_tickers = {k: v for k, v in finnhub_targets.items() if v.startswith("^")}
+    yf_targets.update(raw_index_tickers)
+    finnhub_targets = {k: v for k, v in finnhub_targets.items() if not v.startswith("^")}
+
     if not is_configured():
         yf_targets.update(finnhub_targets)
         finnhub_targets = {}
+
 
     for name, ticker in finnhub_targets.items():
         try:

@@ -98,11 +98,15 @@ class MarketState(rx.State):
             # データをカテゴライズしてリスト化
             indices_list = []
             sectors_list = []
-            others_list = []
+            commodities_list = []
+            forex_list = []
+            crypto_list = []
             
             idx_tickers = set(config["indices"].values())
             sec_tickers = set(config.get("sectors", {}).values())
-            other_tickers = set(config.get("commodities", {}).values()) | set(config.get("crypto", {}).values()) | set(config.get("forex", {}).values()) | set(config.get("treasuries", {}).values())
+            commodity_tickers = set(config.get("commodities", {}).values())
+            crypto_tickers = set(config.get("crypto", {}).values())
+            forex_tickers = set(config.get("forex", {}).values())
             
             # 日本市場の特別対応
             if self.market_type == "JP":
@@ -124,27 +128,39 @@ class MarketState(rx.State):
                 item = {"name": name, "change": change_rounded}
                 
                 if ticker in idx_tickers and self.market_type != "JP":
-                    item["price"] = f"{price:,.0f}"
+                    # VIXはポイント表示、利回りは%表示、その他は価格表示
+                    if "VIX" in name:
+                        item["price"] = f"{price:.2f}"
+                    elif "Yield" in name:
+                        item["price"] = f"{price:.2f}%"
+                    else:
+                        item["price"] = f"{price:,.0f}"
                     indices_list.append(item)
                 elif ticker in sec_tickers:
                     item["price"] = f"${price:.2f}"
                     sectors_list.append(item)
-                elif ticker in other_tickers:
-                    if "JPY" in name:
-                        item["price"] = f"¥{price:.2f}"
-                    elif "BTC" in ticker or "ETH" in ticker:
-                        item["price"] = f"${price / 1000:.1f}K"
-                    elif "GC" in ticker or "Gold" in name or "Silver" in name:
-                        item["price"] = f"${price:,.2f}" if "Silver" in name else f"${price:,.0f}"
+                elif ticker in commodity_tickers:
+                    if "Gold" in name:
+                        item["price"] = f"${price:,.0f}"
+                    elif "Silver" in name:
+                        item["price"] = f"${price:,.2f}"
                     else:
                         item["price"] = f"${price:.2f}"
-                    if ticker in set(config.get("treasuries", {}).values()):
-                        item["price"] = f"{price:.2f}%"
-                    others_list.append(item)
+                    commodities_list.append(item)
+                elif ticker in forex_tickers:
+                    if "JPY" in name:
+                        item["price"] = f"¥{price:.2f}"
+                    else:
+                        item["price"] = f"${price:.4f}"
+                    forex_list.append(item)
+                elif ticker in crypto_tickers:
+                    item["price"] = f"${price / 1000:.1f}K"
+                    crypto_list.append(item)
             
+            # others_data: Commodity → FX → Crypto の順序
             self.indices_data = indices_list
             self.sectors_data = sectors_list
-            self.others_data = others_list
+            self.others_data = commodities_list + forex_list + crypto_list
             self.evaluation = eval_data
             
             # 型推論可能なリストとしてシグナルを抽出

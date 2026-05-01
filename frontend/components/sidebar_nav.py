@@ -1,4 +1,5 @@
 import reflex as rx
+from frontend.state.market_state import MarketState
 
 def nav_item(text: str, icon: str, url: str) -> rx.Component:
     """ナビゲーションアイテム"""
@@ -36,6 +37,35 @@ def nav_item(text: str, icon: str, url: str) -> rx.Component:
         width="100%",
     )
 
+def _market_button(label: str, market_value: str, emoji: str) -> rx.Component:
+    """市場切り替え用の個別ボタン"""
+    is_active = MarketState.market_type == market_value
+    return rx.button(
+        rx.text(f"{emoji} {label}", size="2", weight="medium"),
+        on_click=MarketState.set_market_type(market_value),
+        variant=rx.cond(is_active, "solid", "ghost"),
+        color_scheme=rx.cond(is_active, "blue", "gray"),
+        size="2",
+        flex="1",
+        cursor="pointer",
+    )
+
+def market_switcher() -> rx.Component:
+    """市場切り替えセグメントコントロール"""
+    return rx.box(
+        rx.hstack(
+            _market_button("US", "US", "🇺🇸"),
+            _market_button("JP", "JP", "🇯🇵"),
+            width="100%",
+            spacing="2",
+        ),
+        width="100%",
+        padding="0.5rem",
+        bg=rx.color("gray", 2),
+        border_radius="0.5rem",
+        margin_bottom="1.5rem",
+    )
+
 def sidebar_nav() -> rx.Component:
     """左側に固定されるメインナビゲーションサイドバー"""
     return rx.vstack(
@@ -45,9 +75,12 @@ def sidebar_nav() -> rx.Component:
             rx.heading("AI Investing", size="5", weight="bold"),
             align_items="center",
             spacing="2",
-            margin_bottom="2rem",
+            margin_bottom="1rem",
             padding_x="1rem",
         ),
+        
+        # 市場切り替え
+        market_switcher(),
         
         # ナビゲーションリンク
         rx.vstack(
@@ -78,3 +111,4 @@ def sidebar_nav() -> rx.Component:
         position="sticky",
         top="0",
     )
+

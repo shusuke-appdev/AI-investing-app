@@ -45,10 +45,23 @@ US_CONFIG: MarketSettings = {
     "default_ticker": "AAPL",
     "options_available": True,
     "indices": {
-        "S&P 500 (ETF)": "SPY",
-        "Nasdaq 100 (ETF)": "QQQ",
-        "Dow 30 (ETF)": "DIA",
-        "Russell 2000 (ETF)": "IWM",
+        # 米国主要指数（生データ）
+        "S&P 500": "^GSPC",
+        "Nasdaq 100": "^NDX",
+        "Dow 30": "^DJI",
+        "Russell 2000": "^RUT",
+        # ボラティリティ
+        "VIX": "^VIX",
+        # 米国債利回り
+        "US 10Y Yield": "^TNX",
+        "US 30Y Yield": "^TYX",
+        # 欧州指数
+        "FTSE 100": "^FTSE",
+        "DAX": "^GDAXI",
+        "CAC 40": "^FCHI",
+        # アジア指数
+        "Hang Seng": "^HSI",
+        "STI": "^STI",
     },
     "sectors": {
         "情報技術": "XLK",
@@ -64,8 +77,7 @@ US_CONFIG: MarketSettings = {
         "素材": "XLB",
     },
     "treasuries": {
-        "US 10Y Yield": "^TNX",
-        "US 30Y Yield": "^TYX",
+        # indices に統合済み
     },
     "commodities": {
         "WTI Oil": "CL=F",
@@ -141,14 +153,14 @@ JP_CONFIG: MarketSettings = {
     "options_available": False,  # yfinanceでは日本株オプション取得不可
     "indices": {
         "日経平均": "^N225",
-        "TOPIX": "1306.T",  # TOPIX連動ETF（^TPXは不安定）
+        "TOPIX": "^TPX",
         "東証グロース250": "2516.T",  # ETF
         "JPX400": "1364.T",  # ETF
     },
     "sectors": {},
     "treasuries": {
         # 日本国債はyfinanceで直接取得困難
-        # 参考として表示するメッセージ用
+        # Stooq経由で取得
     },
     "commodities": {
         "WTI Oil": "CL=F",

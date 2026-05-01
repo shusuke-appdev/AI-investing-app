@@ -35,11 +35,12 @@ def _fetch_option_data(
 
     calls, puts = option_data
 
+    # DataFrameが空の場合は早期リターン
+    if calls.empty or puts.empty:
+        logger.warning(f"[OptionAnalyst] {ticker}: Empty option chain data")
+        return None
+
     # 現在価格取得（DataProvider経由: Finnhub→yfinanceフォールバック内蔵）
-    # Note: timestamp is not directly returned by get_current_price, so we use current time
-    # Strictly speaking we should get time from quote, but for now system time is enough for "freshness" check
-    # to show user when THIS analysis was run.
-    # Cloud environment often uses UTC, so we convert to JST explicitly.
     current_price = DataProvider.get_current_price(ticker)
 
     JST = timezone(timedelta(hours=9), "JST")

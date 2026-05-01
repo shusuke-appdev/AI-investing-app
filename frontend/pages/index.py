@@ -12,14 +12,17 @@ def index() -> rx.Component:
         rx.hstack(
             rx.heading("Market Intelligence", size="7"),
             rx.spacer(),
-            # 市場切り替えセレクトボックス
-            rx.select(
-                ["US", "JP"],
-                value=MarketState.market_type,
-                on_change=MarketState.set_market_type,
-                size="2",
-                width="120px",
+            # AI Recap ボタン（大きめ）
+            rx.button(
+                rx.icon("sparkles", size=18),
+                "AI Market Recap",
+                on_click=MarketState.generate_ai_recap,
+                loading=MarketState.is_generating_recap,
+                color_scheme="indigo",
+                size="3",
+                variant="solid",
             ),
+            # 更新ボタン
             rx.button(
                 rx.icon("refresh-cw", size=16),
                 "更新",
@@ -58,32 +61,21 @@ def index() -> rx.Component:
                 # 総合市場監視
                 market_monitor(),
                 
-                # オプション分析
-                option_analysis_component(),
-                
                 # アセットクラス別概要
                 flash_summary(),
                 
+                # オプション分析
+                option_analysis_component(),
+                
                 # AI Recap (Gemini)
                 rx.box(
-                    rx.hstack(
-                        rx.heading("AI Market Recap", size="5", margin_bottom="1rem"),
-                        rx.spacer(),
-                        rx.button(
-                            "✨ AI分析生成",
-                            on_click=MarketState.generate_ai_recap,
-                            loading=MarketState.is_generating_recap,
-                            color_scheme="indigo",
-                        ),
-                        width="100%",
-                        align_items="center",
-                    ),
+                    rx.heading("AI Market Recap", size="5", margin_bottom="1rem"),
                     rx.card(
                         rx.cond(
                             MarketState.ai_recap != "",
                             rx.markdown(MarketState.ai_recap),
                             rx.center(
-                                rx.text("AI分析レポートを生成して最新の市況を要約します。", color="gray"),
+                                rx.text("上部の「AI Market Recap」ボタンを押して、最新の市況レポートを生成します。", color="gray"),
                                 height="150px"
                             )
                         ),
@@ -99,7 +91,7 @@ def index() -> rx.Component:
             )
         ),
         width="100%",
-        max_width="1200px",
+        max_width="1400px",
         margin="0 auto",
     )
 

@@ -115,13 +115,16 @@ def market_monitor() -> rx.Component:
     return rx.box(
         rx.heading("総合市場監視", size="5", margin_bottom="1rem"),
         rx.card(
-            rx.vstack(
-                rx.cond(
-                    eval_data.contains("status"),
+            rx.cond(
+                eval_data.contains("status"),
+                rx.grid(
+                    # 左カラム: 総合評価
                     rx.vstack(
                         rx.hstack(
-                            rx.text("総合評価:", weight="bold"),
-                            rx.badge(eval_data["status"].to_string(), size="2"),
+                            rx.text("総合評価:", weight="bold", size="4"),
+                            rx.badge(eval_data["status"].to_string(), size="3"),
+                            align_items="center",
+                            spacing="3",
                         ),
                         rx.text(eval_data["description"].to_string(), size="2", color=rx.color("gray", 11)),
                         rx.progress(
@@ -134,7 +137,12 @@ def market_monitor() -> rx.Component:
                             width="100%",
                             margin_top="1rem"
                         ),
-                        rx.divider(margin_y="1rem"),
+                        width="100%",
+                        align_items="start",
+                        justify_content="center",
+                    ),
+                    # 右カラム: 詳細指標
+                    rx.vstack(
                         rx.text("詳細指標:", weight="bold", size="2"),
                         rx.cond(
                             MarketState.market_signals.length() > 0,
@@ -148,10 +156,14 @@ def market_monitor() -> rx.Component:
                         width="100%",
                         align_items="start"
                     ),
-                    rx.text("市場環境を評価中...", color="gray")
-                )
+                    columns="2",
+                    spacing="6",
+                    width="100%",
+                ),
+                rx.text("市場環境を評価中...", color="gray")
             ),
             width="100%",
             margin_bottom="2rem"
         )
     )
+
