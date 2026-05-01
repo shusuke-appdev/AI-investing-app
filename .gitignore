@@ -45,6 +45,8 @@ ENV/
 *.pem
 secrets/
 .streamlit/secrets.toml
+**/.streamlit/secrets.toml
+legacy_streamlit/.streamlit/secrets.toml
 
 # Data files
 data/*.json

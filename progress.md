@@ -1,5 +1,11 @@
 # AI投資アプリ - 進捗メモ
 
+## 最終セッション: 2026-05-01 (セキュリティ対応)
+- [x] GitHubから通知のあったAPIキー漏洩問題の対応
+  - 漏洩元: `legacy_streamlit/.streamlit/secrets.toml`
+  - 対応: 実キーのプレースホルダーへの置換、git追跡からの除外 (`git rm --cached`)、および `.gitignore` の更新。
+  - **残作業**: 各種サービス（Gemini, Finnhub, Supabase, JQuants, Edinet）のAPIキーの無効化・再発行（※必須）
+
 ## 最終セッション: 2026-04-29
 
 ### 完了したタスク（Reflex移行）
