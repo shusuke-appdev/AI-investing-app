@@ -6,6 +6,8 @@ from frontend.pages.theme import theme_page
 from frontend.state.theme_state import ThemeState
 from frontend.pages.portfolio import portfolio_page
 from frontend.state.portfolio_state import PortfolioState
+from frontend.pages.knowledge import knowledge as knowledge_page
+from frontend.state.knowledge_state import KnowledgeState
 
 app = rx.App(
     theme=rx.theme(
@@ -19,3 +21,4 @@ app.add_page(index, route="/", title="Market Intelligence | AI Investing", on_lo
 app.add_page(stock_page, route="/stock", title="Stock Analysis | AI Investing")
 app.add_page(theme_page, route="/theme", title="Thematic Trends | AI Investing", on_load=ThemeState.fetch_themes)
 app.add_page(portfolio_page, route="/portfolio", title="Portfolio Advisor | AI Investing", on_load=PortfolioState.load_portfolio_list)
+app.add_page(knowledge_page, route="/knowledge", title="Knowledge DB | AI Investing", on_load=KnowledgeState.load_items)

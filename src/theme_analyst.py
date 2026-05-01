@@ -6,8 +6,8 @@
 from datetime import timedelta
 
 import pandas as pd
-import streamlit as st
 import yfinance as yf
+import time
 
 from src.log_config import get_logger
 from src.themes_config import PERIODS, THEMES, get_themes
@@ -133,7 +133,9 @@ def fetch_and_calculate_all_performances(
     return performance_map
 
 
-@st.cache_data(ttl=43200)  # 12時間キャッシュ
+_THEME_CACHE = {}
+_THEME_CACHE_TTL = 43200  # 12時間
+
 def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:
     """
     指定期間での全テーマをパフォーマンス順（降順）で取得します。
@@ -145,6 +147,14 @@ def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:
     Returns:
         全テーマのリスト（パフォーマンス順）
     """
+    cache_key = f"{period_name}_{market_type}"
+    now = time.time()
+    
+    if cache_key in _THEME_CACHE:
+        cache_data, timestamp = _THEME_CACHE[cache_key]
+        if now - timestamp < _THEME_CACHE_TTL:
+            return cache_data
+            
     if period_name not in PERIODS:
         raise ValueError(f"Unknown period: {period_name}")
 
@@ -171,6 +181,7 @@ def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:
     # パフォーマンス順にソート (降順)
     theme_performances.sort(key=lambda x: x["performance"], reverse=True)
 
+    _THEME_CACHE[cache_key] = (theme_performances, now)
     return theme_performances
 
 

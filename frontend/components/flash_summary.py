@@ -26,6 +26,26 @@ def market_item(item: dict) -> rx.Component:
         align_items="center",
     )
 
+def render_signal(sig) -> rx.Component:
+    """内部指標シグナルの1行表示"""
+    return rx.hstack(
+        rx.badge(
+            sig.name,
+            color_scheme=rx.cond(
+                sig.score >= 0.3, "green",
+                rx.cond(sig.score <= -0.3, "red", "gray")
+            ),
+            variant="surface",
+            width="140px",
+            justify_content="center"
+        ),
+        rx.text(sig.rationale, size="2", color=rx.color("gray", 11)),
+        width="100%",
+        align_items="center",
+        spacing="2",
+        padding_y="0.25rem"
+    )
+
 def flash_summary() -> rx.Component:
     """アセットクラス別概要"""
     return rx.box(
@@ -113,6 +133,17 @@ def market_monitor() -> rx.Component:
                             ),
                             width="100%",
                             margin_top="1rem"
+                        ),
+                        rx.divider(margin_y="1rem"),
+                        rx.text("詳細指標:", weight="bold", size="2"),
+                        rx.cond(
+                            MarketState.market_signals.length() > 0,
+                            rx.vstack(
+                                rx.foreach(MarketState.market_signals, render_signal),
+                                width="100%",
+                                spacing="2"
+                            ),
+                            rx.text("詳細データがありません", size="2", color="gray")
                         ),
                         width="100%",
                         align_items="start"
