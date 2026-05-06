@@ -90,13 +90,13 @@ class ThemeState(rx.State):
                             ThemeStock(
                                 ticker=ticker,
                                 display_name=disp,
-                                performance=float(sd.get("performance", 0)),
+                                performance=round(float(sd.get("performance", 0)), 1),
                             )
                         )
                     items.append(
                         ThemeItem(
                             theme=td["theme"],
-                            performance=float(td["performance"]),
+                            performance=round(float(td["performance"]), 1),
                             stocks=stocks_out,
                         )
                     )

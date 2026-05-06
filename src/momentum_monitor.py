@@ -19,7 +19,7 @@ MOMENTUM_CATEGORIES: dict[str, str] = {
 
 
 @ttl_cache(ttl=43200)  # 12時間キャッシュ
-def get_momentum_themes(market_type: str = "US", top_n: int = 3) -> dict[str, list[dict]]:
+def get_momentum_themes(market_type: str = "US", top_n: int = 5) -> dict[str, list[dict]]:
     """
     4カテゴリ×上位Nテーマのモメンタムランキングを取得する。
 
