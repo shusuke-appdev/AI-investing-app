@@ -3,8 +3,9 @@ Centralized Networking Module
 Provides a shared session with User-Agent, timeouts, and optional caching.
 """
 
+import functools
+
 import requests
-import streamlit as st
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -22,8 +23,10 @@ RETRY_TOTAL = 3
 RETRY_BACKOFF_FACTOR = 0.5
 RETRY_STATUS_FORCELIST = [429, 500, 502, 503, 504]
 
+# シングルトンのセッションを保持
+_session: requests.Session | None = None
 
-@st.cache_resource
+
 def get_session(
     cache_name: str = "app_cache", expire_after: int = CACHE_EXPIRE_SECONDS
 ) -> requests.Session:
@@ -31,6 +34,10 @@ def get_session(
     Returns a configured requests session with automatic retries and exponential backoff.
     Uses requests-cache if available, otherwise falls back to standard requests.Session.
     """
+    global _session
+    if _session is not None:
+        return _session
+
     session = None
 
     try:
@@ -59,7 +66,8 @@ def get_session(
     session.mount("http://", adapter)
     session.mount("https://", adapter)
 
-    return session
+    _session = session
+    return _session
 
 
 def get_retry_session() -> requests.Session:

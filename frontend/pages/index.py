@@ -2,6 +2,7 @@ import reflex as rx
 from frontend.state.market_state import MarketState
 from frontend.components.flash_summary import flash_summary, market_monitor
 from frontend.components.option_analysis import option_analysis_component
+from frontend.components.momentum_display import momentum_monitor_component
 from frontend.template import template
 
 @template
@@ -63,6 +64,9 @@ def index() -> rx.Component:
                 
                 # アセットクラス別概要
                 flash_summary(),
+                
+                # テーマモメンタム監視
+                momentum_monitor_component(),
                 
                 # オプション分析
                 option_analysis_component(),

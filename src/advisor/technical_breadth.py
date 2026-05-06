@@ -3,13 +3,13 @@ from io import StringIO
 
 import pandas as pd
 import requests
-import streamlit as st
+from src.cache import ttl_cache
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
 
-@st.cache_data(ttl=24 * 3600)
+@ttl_cache(ttl=24 * 3600)
 def get_sp500_components() -> list[str]:
     """S&P 500の構成銘柄リストを取得する。"""
     try:
@@ -25,7 +25,7 @@ def get_sp500_components() -> list[str]:
         return []
 
 
-@st.cache_data(ttl=3600 * 4)
+@ttl_cache(ttl=3600 * 4)
 def fetch_breadth_data(period: str = "6mo") -> pd.DataFrame:
     """
     S&P 500構成銘柄の日次データを取得し、毎日の値上がり銘柄数・値下がり銘柄数を集計する。

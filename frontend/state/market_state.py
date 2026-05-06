@@ -3,11 +3,14 @@ import asyncio
 from typing import Dict, Any, List
 from pydantic import BaseModel
 
+
 class MarketSignal(BaseModel):
     name: str = ""
     score: float = 0.0
     weight: float = 0.0
     rationale: str = ""
+    category: str = "neutral"  # "bullish" / "neutral" / "bearish"
+
 
 class OptionSummary(BaseModel):
     ticker: str = ""
@@ -21,12 +24,39 @@ class OptionSummary(BaseModel):
     max_pain: str = "-"
     analysis: List[str] = []
 
+
+class MicrostructureData(BaseModel):
+    """マイクロストラクチャー分析データ"""
+    unwind_score: int = 0
+    unwind_level: str = ""
+    vrp: str = "-"
+    cta_score: int = 0
+    cta_extremity: str = ""
+    liquidity_status: str = ""
+    narrative: str = ""
+
+
+class MomentumTheme(BaseModel):
+    """モメンタムテーマデータ"""
+    theme: str = ""
+    performance: float = 0.0
+    performance_str: str = ""
+
+
+class MomentumCategory(BaseModel):
+    """モメンタムカテゴリデータ"""
+    category: str = ""
+    period: str = ""
+    themes: List[MomentumTheme] = []
+
+
 class MarketState(rx.State):
     """マーケット（市況）ページ用の状態管理クラス"""
     
     market_type: str = "US"
     is_fetching: bool = False
     error_msg: str = ""
+    option_error_msg: str = ""  # オプション専用エラー
     
     # UI表示用の整形済みデータリスト
     indices_data: List[Dict[str, Any]] = []
@@ -37,8 +67,14 @@ class MarketState(rx.State):
     evaluation: Dict[str, Any] = {}
     market_signals: List[MarketSignal] = []
     
+    # マイクロストラクチャー分析
+    microstructure: MicrostructureData = MicrostructureData()
+    
     # オプション分析データ
     option_analysis: List[OptionSummary] = []
+    
+    # テーマモメンタム監視
+    momentum_data: List[MomentumCategory] = []
     
     # AIレポート関連
     ai_recap: str = ""
@@ -54,6 +90,7 @@ class MarketState(rx.State):
         """外部APIから市場データを取得する"""
         self.is_fetching = True
         self.error_msg = ""
+        self.option_error_msg = ""
         yield
             
         try:
@@ -64,10 +101,20 @@ class MarketState(rx.State):
             
             # 同期ブロッキング関数をバックグラウンドスレッドで実行
             raw_data_task = asyncio.to_thread(get_market_indices, self.market_type)
-            option_data_task = asyncio.to_thread(get_major_indices_options, self.market_type)
             config_task = asyncio.to_thread(get_market_config, self.market_type)
             
-            raw_data, option_data, config = await asyncio.gather(raw_data_task, option_data_task, config_task)
+            # オプションデータは分離して取得（失敗しても他に影響しない）
+            option_data_task = asyncio.to_thread(get_major_indices_options, self.market_type)
+            
+            # 指数・設定は必須、オプションは失敗許容
+            raw_data, config = await asyncio.gather(raw_data_task, config_task)
+            
+            # オプションデータは個別にエラーハンドリング
+            option_data = None
+            try:
+                option_data = await option_data_task
+            except Exception as opt_e:
+                self.option_error_msg = f"オプションデータの取得に失敗しました: {opt_e}"
             
             # Format option data for UI
             opt_list = []
@@ -91,9 +138,27 @@ class MarketState(rx.State):
                         max_pain=f"${mp_val:.0f}" if mp_val is not None else "-",
                         analysis=opt.get("analysis", [])
                     ))
+            elif not self.option_error_msg:
+                self.option_error_msg = "市場閉場中のため最新のオプションデータがありません"
             
             self.option_analysis = opt_list
             eval_data = await asyncio.to_thread(evaluate_market_environment, self.market_type, option_data)
+            
+            # マイクロストラクチャー分析
+            try:
+                micro_data = await asyncio.to_thread(self._fetch_microstructure)
+                if micro_data:
+                    self.microstructure = MicrostructureData(**micro_data)
+            except Exception as micro_e:
+                pass  # マイクロストラクチャーは失敗しても継続
+            
+            # テーマモメンタム取得
+            try:
+                momentum_raw = await asyncio.to_thread(self._fetch_momentum)
+                if momentum_raw:
+                    self.momentum_data = momentum_raw
+            except Exception:
+                pass  # モメンタムは失敗しても継続
             
             # データをカテゴライズしてリスト化
             indices_list = []
@@ -128,7 +193,6 @@ class MarketState(rx.State):
                 item = {"name": name, "change": change_rounded}
                 
                 if ticker in idx_tickers and self.market_type != "JP":
-                    # VIXはポイント表示、利回りは%表示、その他は価格表示
                     if "VIX" in name:
                         item["price"] = f"{price:.2f}"
                     elif "Yield" in name:
@@ -163,14 +227,17 @@ class MarketState(rx.State):
             self.others_data = commodities_list + forex_list + crypto_list
             self.evaluation = eval_data
             
-            # 型推論可能なリストとしてシグナルを抽出
+            # シグナルにカテゴリを付与して抽出
             if "signals" in eval_data:
                 self.market_signals = [
                     MarketSignal(
                         name=s.get("name", ""),
                         score=float(s.get("score", 0.0)),
                         weight=float(s.get("weight", 0.0)),
-                        rationale=s.get("rationale", "")
+                        rationale=s.get("rationale", ""),
+                        category="bullish" if float(s.get("score", 0.0)) >= 0.3
+                            else "bearish" if float(s.get("score", 0.0)) <= -0.3
+                            else "neutral"
                     ) for s in eval_data["signals"]
                 ]
             else:
@@ -187,6 +254,38 @@ class MarketState(rx.State):
             self.is_fetching = False
             yield
 
+    def _fetch_microstructure(self) -> dict | None:
+        """マイクロストラクチャー分析データを取得"""
+        try:
+            from src.market_microstructure import analyze_market_structure
+            return analyze_market_structure("SPY")
+        except Exception:
+            return None
+
+    def _fetch_momentum(self) -> list[MomentumCategory]:
+        """テーマモメンタムデータを取得"""
+        try:
+            from src.momentum_monitor import get_momentum_themes
+            raw = get_momentum_themes(self.market_type)
+            result = []
+            for cat_name, themes in raw.items():
+                theme_list = []
+                for t in themes:
+                    perf = float(t.get("performance", 0.0))
+                    theme_list.append(MomentumTheme(
+                        theme=t.get("theme", ""),
+                        performance=perf,
+                        performance_str=f"{perf:+.1f}%"
+                    ))
+                result.append(MomentumCategory(
+                    category=cat_name,
+                    period=t.get("period", "") if themes else "",
+                    themes=theme_list
+                ))
+            return result
+        except Exception:
+            return []
+
     async def generate_ai_recap(self):
         """GeminiによるAI市況レポート生成"""
         self.is_generating_recap = True
@@ -195,7 +294,6 @@ class MarketState(rx.State):
         try:
             from src.services.market_analyst_service import generate_market_analysis_report
             
-            # APIコールのブロッキングを回避
             recap = await asyncio.to_thread(generate_market_analysis_report, self.market_type)
             
             if recap:

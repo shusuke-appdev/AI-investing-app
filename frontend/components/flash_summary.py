@@ -111,54 +111,125 @@ def market_monitor() -> rx.Component:
 
     """総合市場監視"""
     eval_data = MarketState.evaluation
+    micro = MarketState.microstructure
     
     return rx.box(
         rx.heading("総合市場監視", size="5", margin_bottom="1rem"),
         rx.card(
             rx.cond(
                 eval_data.contains("status"),
-                rx.grid(
-                    # 左カラム: 総合評価
-                    rx.vstack(
-                        rx.hstack(
-                            rx.text("総合評価:", weight="bold", size="4"),
-                            rx.badge(eval_data["status"].to_string(), size="3"),
-                            align_items="center",
-                            spacing="3",
-                        ),
+                rx.vstack(
+                    # 総合評価ヘッダー
+                    rx.hstack(
+                        rx.text("総合評価:", weight="bold", size="4"),
+                        rx.badge(eval_data["status"].to_string(), size="3"),
+                        rx.spacer(),
                         rx.text(eval_data["description"].to_string(), size="2", color=rx.color("gray", 11)),
-                        rx.progress(
-                            value=((eval_data["score"].to(float) + 1.0) * 50).to(int), # -1.0~1.0 -> 0~100
-                            max=100,
-                            color_scheme=rx.cond(
-                                eval_data["score"].to(float) >= 0.3, "green",
-                                rx.cond(eval_data["score"].to(float) <= -0.3, "red", "gray")
+                        align_items="center",
+                        spacing="3",
+                        width="100%",
+                    ),
+                    rx.progress(
+                        value=((eval_data["score"].to(float) + 1.0) * 50).to(int),
+                        max=100,
+                        color_scheme=rx.cond(
+                            eval_data["score"].to(float) >= 0.3, "green",
+                            rx.cond(eval_data["score"].to(float) <= -0.3, "red", "gray")
+                        ),
+                        width="100%",
+                    ),
+                    
+                    # シグナル詳細（グループ分け）
+                    rx.grid(
+                        # 強気シグナル
+                        rx.vstack(
+                            rx.text("🟢 強気シグナル", weight="bold", size="2", color="#10b981"),
+                            rx.cond(
+                                MarketState.market_signals.length() > 0,  # type: ignore
+                                rx.foreach(
+                                    MarketState.market_signals,
+                                    lambda sig: rx.cond(
+                                        sig.category == "bullish",
+                                        render_signal(sig),
+                                        rx.fragment(),
+                                    )
+                                ),
+                                rx.text("-", size="2", color="gray"),
                             ),
                             width="100%",
-                            margin_top="1rem"
+                            spacing="1",
                         ),
-                        width="100%",
-                        align_items="start",
-                        justify_content="center",
-                    ),
-                    # 右カラム: 詳細指標
-                    rx.vstack(
-                        rx.text("詳細指標:", weight="bold", size="2"),
-                        rx.cond(
-                            MarketState.market_signals.length() > 0,
-                            rx.vstack(
-                                rx.foreach(MarketState.market_signals, render_signal),
-                                width="100%",
-                                spacing="2"
+                        # 弱気シグナル
+                        rx.vstack(
+                            rx.text("🔴 弱気シグナル", weight="bold", size="2", color="#ef4444"),
+                            rx.cond(
+                                MarketState.market_signals.length() > 0,  # type: ignore
+                                rx.foreach(
+                                    MarketState.market_signals,
+                                    lambda sig: rx.cond(
+                                        sig.category == "bearish",
+                                        render_signal(sig),
+                                        rx.fragment(),
+                                    )
+                                ),
+                                rx.text("-", size="2", color="gray"),
                             ),
-                            rx.text("詳細データがありません", size="2", color="gray")
+                            width="100%",
+                            spacing="1",
                         ),
+                        # 中立シグナル
+                        rx.vstack(
+                            rx.text("⚪ 中立シグナル", weight="bold", size="2", color="gray"),
+                            rx.cond(
+                                MarketState.market_signals.length() > 0,  # type: ignore
+                                rx.foreach(
+                                    MarketState.market_signals,
+                                    lambda sig: rx.cond(
+                                        sig.category == "neutral",
+                                        render_signal(sig),
+                                        rx.fragment(),
+                                    )
+                                ),
+                                rx.text("-", size="2", color="gray"),
+                            ),
+                            width="100%",
+                            spacing="1",
+                        ),
+                        columns=rx.breakpoints(initial="1", md="3"),
+                        spacing="4",
                         width="100%",
-                        align_items="start"
+                        margin_top="1rem",
                     ),
-                    columns="2",
-                    spacing="6",
+                    
+                    # マイクロストラクチャー指標
+                    rx.cond(
+                        micro.unwind_level != "",
+                        rx.box(
+                            rx.text("マイクロストラクチャー", weight="bold", size="2", margin_bottom="0.5rem"),
+                            rx.grid(
+                                _micro_card("VRP", micro.vrp, ""),
+                                _micro_card("CTA偏り", micro.cta_extremity, ""),
+                                _micro_card("流動性", micro.liquidity_status, ""),
+                                _micro_card(
+                                    "Unwindリスク",
+                                    micro.unwind_level,
+                                    "",
+                                ),
+                                columns=rx.breakpoints(initial="2", md="4"),
+                                spacing="2",
+                                width="100%",
+                            ),
+                            width="100%",
+                            margin_top="1rem",
+                            padding="0.75rem",
+                            border=f"1px solid {rx.color('gray', 4)}",
+                            border_radius="8px",
+                        ),
+                        rx.fragment(),
+                    ),
+                    
                     width="100%",
+                    spacing="3",
                 ),
                 rx.text("市場環境を評価中...", color="gray")
             ),
@@ -167,3 +238,15 @@ def market_monitor() -> rx.Component:
         )
     )
 
+
+def _micro_card(label: str, value, sub_text: str) -> rx.Component:
+    """マイクロストラクチャー指標の個別カード"""
+    return rx.card(
+        rx.vstack(
+            rx.text(label, size="1", color=rx.color("gray", 9), font_weight="600"),
+            rx.text(value, size="2", font_weight="700"),
+            spacing="1",
+            align_items="center",
+        ),
+        padding="0.5rem",
+    )

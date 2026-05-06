@@ -5,7 +5,6 @@ Provides a singleton instance of the Supabase client.
 
 import os
 
-import streamlit as st
 from supabase import Client, create_client
 
 from src.log_config import get_logger
@@ -18,7 +17,7 @@ _supabase_client: Client | None = None
 def get_supabase_client() -> Client | None:
     """
     Get or create the Supabase client singleton.
-    Reads credentials from Streamlit secrets or environment variables.
+    Reads credentials from environment variables.
     """
     global _supabase_client
 
@@ -26,8 +25,8 @@ def get_supabase_client() -> Client | None:
         return _supabase_client
 
     try:
-        url = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
-        key = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
 
         if not url or not key:
             return None

@@ -6,7 +6,7 @@ EDINET DB API Client
 import os
 
 import edinet_tools
-import streamlit as st
+from src.cache import ttl_cache
 
 from src.constants import CACHE_TTL_DAILY
 from src.log_config import get_logger
@@ -24,7 +24,7 @@ def is_configured() -> bool:
     return False
 
 
-@st.cache_data(ttl=CACHE_TTL_DAILY)
+@ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_company_finance(ticker: str, limit: int = 4) -> dict | None:
     """
     指定した企業の直近の財務情報（売上高、営業利益など）を取得する。

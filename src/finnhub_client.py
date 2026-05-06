@@ -48,26 +48,15 @@ class FinnhubNetworkError(FinnhubError):
 
 
 def _get_api_key() -> str:
-    """APIキーを取得（Streamlit依存を最小限に）"""
-    # 1. Session State (if available)
-    try:
-        import streamlit as st
-
-        if hasattr(st, "session_state"):
-            key = st.session_state.get("finnhub_api_key")
-            if key:
-                return key
-    except ImportError:
-        pass
-
-    # 2. Environment Variable
+    """APIキーを取得（環境変数 → settings_storage）"""
+    # 1. Environment Variable
     import os
 
     key = os.environ.get("FINNHUB_API_KEY")
     if key:
         return key
 
-    # 3. Settings Storage
+    # 2. Settings Storage
     return get_finnhub_api_key()
 
 

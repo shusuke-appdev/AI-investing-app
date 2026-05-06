@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 import requests
-import streamlit as st
+from src.cache import ttl_cache
 
 from src.constants import CACHE_TTL_DAILY, CACHE_TTL_SHORT
 from src.log_config import get_logger
@@ -34,7 +34,7 @@ def _get_headers() -> dict:
     }
 
 
-@st.cache_data(ttl=CACHE_TTL_SHORT)
+@ttl_cache(ttl=CACHE_TTL_SHORT)
 def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
     """
     指定したティッカーの過去データ(日足)を取得する。
@@ -116,7 +116,7 @@ def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=CACHE_TTL_SHORT)
+@ttl_cache(ttl=CACHE_TTL_SHORT)
 def get_current_price(ticker: str) -> float:
     """最新の終値を取得する"""
     df = get_daily_quotes(ticker, period="1d")
@@ -125,7 +125,7 @@ def get_current_price(ticker: str) -> float:
     return 0.0
 
 
-@st.cache_data(ttl=CACHE_TTL_DAILY)
+@ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_fins_statements(ticker: str) -> dict | None:
     """財務情報(直近の決算)を取得する"""
     headers = _get_headers()
@@ -184,7 +184,7 @@ def get_fins_statements(ticker: str) -> dict | None:
         return None
 
 
-@st.cache_data(ttl=CACHE_TTL_DAILY)
+@ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_company_info(ticker: str) -> dict | None:
     """基本銘柄情報(業種等)を取得する"""
     headers = _get_headers()

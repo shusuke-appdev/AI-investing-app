@@ -4,7 +4,7 @@ Handles the orchestration of AI market analysis, aggregating data from multiple 
 and generating a comprehensive market report.
 """
 
-import streamlit as st
+
 
 from src.data_provider import DataProvider
 from src.log_config import get_logger
@@ -19,28 +19,32 @@ from src.theme_analyst import get_ranked_themes
 logger = get_logger(__name__)
 
 
-def generate_market_analysis_report(market_type: str = "US") -> str | None:
+def generate_market_analysis_report(
+    market_type: str = "US",
+    market_data: dict | None = None,
+    option_analysis: list[dict] | None = None,
+    gemini_configured: bool = True,
+) -> str | None:
     """
     Generates a comprehensive AI market analysis report.
 
     Args:
         market_type: "US" or "JP"
+        market_data: Pre-fetched market data (optional)
+        option_analysis: Pre-fetched option analysis (optional)
+        gemini_configured: Whether Gemini API is available
 
     Returns:
         Markdown string of the analysis report, or None if generation failed.
     """
-    if not st.session_state.get("gemini_configured"):
+    if not gemini_configured:
         return None
 
     config = get_market_config(market_type)
 
-    # 0. Prepare Market Data (Needed for dynamic queries as well)
-    # We reuse st.session_state.market_data if available
-    market_data = (
-        st.session_state.market_data
-        if hasattr(st, "session_state") and "market_data" in st.session_state
-        else {}
-    )
+    # 0. Prepare Market Data
+    if market_data is None:
+        market_data = {}
 
     # 1. Fetch Company News from Finnhub (using configured targets)
     target_tickers = config.get("ai_analysis_targets", [])
@@ -181,13 +185,7 @@ def generate_market_analysis_report(market_type: str = "US") -> str | None:
     market_data["weekly_performance"] = weekly_performance
 
     # 8. Option Analysis
-    option_analysis = (
-        st.session_state.option_analysis
-        if hasattr(st, "session_state") and "option_analysis" in st.session_state
-        else []
-    )
-    if not option_analysis:
-        # Try fetching if not in session
+    if option_analysis is None:
         try:
             option_analysis = get_major_indices_options(market_type)
         except Exception:

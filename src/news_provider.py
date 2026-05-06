@@ -5,7 +5,7 @@ News Provider
 
 from datetime import datetime
 
-import streamlit as st
+from src.cache import ttl_cache
 
 from src.constants import CACHE_TTL_MEDIUM
 from src.finnhub_client import (
@@ -17,7 +17,7 @@ from src.finnhub_client import (
 from src.models import NewsItem
 
 
-@st.cache_data(ttl=CACHE_TTL_MEDIUM)
+@ttl_cache(ttl=CACHE_TTL_MEDIUM)
 def get_stock_news(ticker: str, max_items: int = 10) -> list[NewsItem]:
     """Get stock news."""
     if not is_configured():
@@ -42,7 +42,7 @@ def get_stock_news(ticker: str, max_items: int = 10) -> list[NewsItem]:
         return []
 
 
-@st.cache_data(ttl=CACHE_TTL_MEDIUM)
+@ttl_cache(ttl=CACHE_TTL_MEDIUM)
 def get_company_news_raw(ticker: str) -> list[dict]:
     """Finnhub Company Newsの生データを返す"""
     if not is_configured():

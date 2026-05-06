@@ -1,65 +1,59 @@
 """
 チャットサービスモジュール
 google.genai SDK を使用した対話型チャット機能を提供します。
-セッション状態は st.session_state で管理（マルチユーザー安全）。
+セッション状態はReflex State または引数渡しで管理。
 """
-
-import streamlit as st
 
 from src.gemini_client import generate_content
 
 
-def get_chat_session(context: str = "") -> list[dict]:
+def get_chat_session(history: list[dict] | None = None, context: str = "") -> list[dict]:
     """
     チャットセッション（履歴リスト）を取得または作成します。
 
     Args:
+        history: 既存のチャット履歴（Noneの場合は新規作成）
         context: チャットのコンテキスト（AIレポートなど）
 
     Returns:
         チャット履歴のリスト
     """
-    if "_chat_history" not in st.session_state:
-        system_prompt = (
-            "あなたは金融市場のニュースと分析に精通したAIアナリストです。\n"
-            "以下のコンテキスト情報を参考に、ユーザーの質問に日本語で簡潔に回答してください。\n\n"
-            f"【コンテキスト】\n{context if context else 'コンテキストなし'}\n\n"
-            "回答ルール:\n"
-            "- 簡潔かつ具体的に回答\n"
-            "- 不確実な情報は「推測です」と明記\n"
-            "- 投資アドバイスは控え、情報提供に徹する"
-        )
-        st.session_state["_chat_history"] = [
-            {"role": "user", "content": system_prompt},
-            {"role": "model", "content": "了解しました。金融市場に関するご質問にお答えします。"},
-        ]
+    if history is not None:
+        return history
 
-    return st.session_state["_chat_history"]
-
-
-def reset_chat_session():
-    """チャットセッションをリセットします。"""
-    st.session_state.pop("_chat_session", None)
-    st.session_state.pop("_chat_history", None)
+    system_prompt = (
+        "あなたは金融市場のニュースと分析に精通したAIアナリストです。\n"
+        "以下のコンテキスト情報を参考に、ユーザーの質問に日本語で簡潔に回答してください。\n\n"
+        f"【コンテキスト】\n{context if context else 'コンテキストなし'}\n\n"
+        "回答ルール:\n"
+        "- 簡潔かつ具体的に回答\n"
+        "- 不確実な情報は「推測です」と明記\n"
+        "- 投資アドバイスは控え、情報提供に徹する"
+    )
+    return [
+        {"role": "user", "content": system_prompt},
+        {"role": "model", "content": "了解しました。金融市場に関するご質問にお答えします。"},
+    ]
 
 
-def send_message(message: str, context: str = "") -> str:
+def send_message(message: str, history: list[dict] | None = None, context: str = "") -> tuple[str, list[dict]]:
     """
     チャットメッセージを送信し、応答を取得します。
 
     Args:
         message: ユーザーメッセージ
+        history: 既存の履歴（Noneの場合は新規作成）
         context: チャットコンテキスト
 
     Returns:
-        AIの応答テキスト
+        (AIの応答テキスト, 更新された履歴)
     """
-    history = get_chat_session(context)
+    chat_history = get_chat_session(history, context)
 
     # 履歴をプロンプトに組み込む（最新3往復分）
     history_text = "\n".join(
         f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
-        for m in history[-6:]
+        for m in chat_history[-6:]
     )
 
     prompt = (
@@ -70,10 +64,10 @@ def send_message(message: str, context: str = "") -> str:
 
     result = generate_content(prompt)
     if result:
-        history.append({"role": "user", "content": message})
-        history.append({"role": "model", "content": result})
-        return result
-    return "エラーが発生しました: Gemini APIが利用できません"
+        chat_history.append({"role": "user", "content": message})
+        chat_history.append({"role": "model", "content": result})
+        return result, chat_history
+    return "エラーが発生しました: Gemini APIが利用できません", chat_history
 
 
 def get_market_chat_response(

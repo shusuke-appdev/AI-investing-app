@@ -4,8 +4,8 @@ Market Index Data Provider
 """
 
 import pandas as pd
-import streamlit as st
 import yfinance as yf
+from src.cache import ttl_cache
 
 from src.constants import CACHE_TTL_MEDIUM, MARKET_US
 from src.finnhub_client import get_quote as _finnhub_get_quote
@@ -40,7 +40,7 @@ def _get_stooq_data(ticker: str) -> tuple[float, float] | None:
         return None
 
 
-@st.cache_data(ttl=CACHE_TTL_MEDIUM)
+@ttl_cache(ttl=CACHE_TTL_MEDIUM)
 def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
     """Get major market indices data."""
     config = get_market_config(market_type)

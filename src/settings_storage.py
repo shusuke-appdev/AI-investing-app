@@ -143,17 +143,7 @@ def set_setting(key: str, value) -> bool:
 
 
 def get_gemini_api_key() -> str:
-    """Gemini APIキーを取得（Streamlit secrets/Env対応）"""
-    # 1. Streamlit secretsから取得
-    try:
-        import streamlit as st
-
-        if "GEMINI_API_KEY" in st.secrets:
-            return st.secrets["GEMINI_API_KEY"]
-    except Exception:
-        pass
-    # 2. 環境変数から取得
-
+    """Gemini APIキーを取得（環境変数 → settings_storage）"""
     return os.environ.get("GEMINI_API_KEY", "")
 
 
@@ -163,16 +153,7 @@ def set_gemini_api_key(api_key: str) -> bool:
 
 
 def get_gas_url() -> str:
-    """GAS Web App URLを取得（Streamlit secrets対応）"""
-    # 1. Streamlit secretsから取得
-    try:
-        import streamlit as st
-
-        if "GAS_WEBAPP_URL" in st.secrets:
-            return st.secrets["GAS_WEBAPP_URL"]
-    except Exception:
-        pass
-    # 2. ローカル設定から取得
+    """GAS Web App URLを取得"""
     return get_setting("gas_url", "")
 
 
@@ -192,17 +173,7 @@ def set_storage_type_setting(storage_type: str) -> bool:
 
 
 def get_finnhub_api_key() -> str:
-    """Finnhub APIキーを取得（Streamlit secrets/Env対応）"""
-    # 1. Streamlit secretsから取得
-    try:
-        import streamlit as st
-
-        if "FINNHUB_API_KEY" in st.secrets:
-            return st.secrets["FINNHUB_API_KEY"]
-    except Exception:
-        pass
-    # 2. 環境変数から取得
-
+    """Finnhub APIキーを取得（環境変数）"""
     return os.environ.get("FINNHUB_API_KEY", "")
 
 
@@ -212,32 +183,12 @@ def set_finnhub_api_key(api_key: str) -> bool:
 
 
 def get_edinet_api_key() -> str:
-    """EDINET APIキーを取得（Streamlit secrets/Env対応）"""
-    # 1. Streamlit secretsから取得
-    try:
-        import streamlit as st
-
-        if "EDINET_API_KEY" in st.secrets:
-            return st.secrets["EDINET_API_KEY"]
-    except Exception:
-        pass
-    # 2. 環境変数から取得
-
+    """EDINET APIキーを取得（環境変数）"""
     return os.environ.get("EDINET_API_KEY", "")
 
 
 def get_jquants_api_key() -> str:
-    """J-Quants API Key を取得（Streamlit secrets/Env対応）"""
-    # 1. Streamlit secretsから取得
-    try:
-        import streamlit as st
-
-        if "JQUANTS_API_KEY" in st.secrets:
-            return st.secrets["JQUANTS_API_KEY"]
-    except Exception:
-        pass
-    # 2. 環境変数から取得
-
+    """J-Quants API Key を取得（環境変数）"""
     return os.environ.get("JQUANTS_API_KEY", "")
 
 

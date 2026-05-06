@@ -26,17 +26,17 @@ StorageType = Literal["local", "gas", "supabase"]
 
 
 def set_storage_type(storage_type: StorageType):
-    """ストレージタイプを設定（session_stateで管理）"""
-    import streamlit as st
+    """ストレージタイプを設定"""
+    from src.settings_storage import set_storage_type_setting
 
-    st.session_state["_storage_type"] = storage_type
+    set_storage_type_setting(storage_type)
 
 
 def get_storage_type() -> StorageType:
     """現在のストレージタイプを取得"""
-    import streamlit as st
+    from src.settings_storage import get_storage_type as _get_st
 
-    return st.session_state.get("_storage_type", "supabase")
+    return _get_st()
 
 
 @dataclass

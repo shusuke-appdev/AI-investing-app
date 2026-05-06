@@ -206,6 +206,59 @@ def _evaluate_option_sentiment(
     return MarketSignal("オプションセンチメント", val_pcr, score, 0.5, rat)
 
 
+def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
+    """
+    マーケットマイクロストラクチャー指標のシグナル化
+    VRP, CTAポジショニング, 流動性(Amihud)
+    """
+    if market_type != "US":
+        return []
+
+    try:
+        from src.market_microstructure import analyze_market_structure
+        micro = analyze_market_structure("SPY")
+        if not micro:
+            return []
+
+        signals = []
+        
+        # 1. VRP (Volatility Risk Premium)
+        vrp_val = micro.get("vrp", "")
+        if "マイナス" in vrp_val or "縮小" in vrp_val:
+            signals.append(MarketSignal("VRP (ボラリスクプレミアム)", vrp_val, -0.6, 0.6, "VRP縮小。マーケットメーカーのプット売り意欲減退によりダウンサイドリスク増大。"))
+        elif "プラス" in vrp_val or "拡大" in vrp_val:
+            signals.append(MarketSignal("VRP (ボラリスクプレミアム)", vrp_val, 0.5, 0.6, "VRP拡大。オプションの売り手が存在し、ダウンサイドは保護されやすい。"))
+        else:
+            signals.append(MarketSignal("VRP (ボラリスクプレミアム)", vrp_val, 0.0, 0.6, "VRPはニュートラル圏内。"))
+
+        # 2. CTAポジショニング
+        cta_val = micro.get("cta_extremity", "")
+        if "Extreme Long" in cta_val:
+            signals.append(MarketSignal("CTAポジショニング", cta_val, -0.5, 0.4, "トレンドフォロー勢の過剰ロング。アンワインド時の急落リスクあり。"))
+        elif "Extreme Short" in cta_val:
+            signals.append(MarketSignal("CTAポジショニング", cta_val, 0.5, 0.4, "過剰ショート。ショートカバーによる急騰リスクあり。"))
+        elif "Long" in cta_val:
+            signals.append(MarketSignal("CTAポジショニング", cta_val, 0.2, 0.4, "CTAはロング基調。トレンド継続。"))
+        elif "Short" in cta_val:
+            signals.append(MarketSignal("CTAポジショニング", cta_val, -0.2, 0.4, "CTAはショート基調。"))
+        else:
+            signals.append(MarketSignal("CTAポジショニング", cta_val, 0.0, 0.4, "極端な偏りなし。"))
+
+        # 3. 流動性 (Amihud Illiquidity)
+        liq_val = micro.get("liquidity_status", "")
+        if "悪化" in liq_val or "枯渇" in liq_val:
+            signals.append(MarketSignal("市場流動性", liq_val, -0.8, 0.5, "流動性が悪化。小さなフローで価格が飛びやすい脆弱な状態。"))
+        elif "良好" in liq_val:
+            signals.append(MarketSignal("市場流動性", liq_val, 0.3, 0.5, "流動性は十分。ショック吸収力あり。"))
+        else:
+            signals.append(MarketSignal("市場流動性", liq_val, 0.0, 0.5, "流動性は標準レベル。"))
+
+        return signals
+    except Exception as e:
+        logger.warning(f"Microstructure evaluation failed: {e}")
+        return []
+
+
 def evaluate_market_environment(
     market_type: str, option_state: Any = None
 ) -> dict[str, Any]:
@@ -238,6 +291,8 @@ def evaluate_market_environment(
     opt_sig = _evaluate_option_sentiment(market_type, option_state)
     if opt_sig:
         signals.append(opt_sig)
+
+    signals.extend(_evaluate_microstructure(market_type))
 
     if not signals:
         return {

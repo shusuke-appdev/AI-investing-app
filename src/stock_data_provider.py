@@ -12,7 +12,7 @@ os.environ["OPENBB_AUTO_BUILD"] = "False"
 from datetime import datetime, timedelta
 
 import pandas as pd
-import streamlit as st
+from src.cache import ttl_cache
 from openbb import obb
 
 from src import jquants_client
@@ -33,7 +33,7 @@ def is_japanese_stock(ticker: str) -> bool:
     )
 
 
-@st.cache_data(ttl=CACHE_TTL_SHORT)
+@ttl_cache(ttl=CACHE_TTL_SHORT)
 def get_current_price(ticker: str) -> float:
     if is_japanese_stock(ticker) and jquants_client.is_configured():
         price = jquants_client.get_current_price(ticker)
@@ -54,7 +54,7 @@ def get_current_price(ticker: str) -> float:
     return 0.0
 
 
-@st.cache_data(ttl=CACHE_TTL_MEDIUM)
+@ttl_cache(ttl=CACHE_TTL_MEDIUM)
 def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
     if is_japanese_stock(ticker) and jquants_client.is_configured():
         df = jquants_client.get_daily_quotes(ticker, period)
@@ -165,7 +165,7 @@ def _extract_openbb_profile(ticker: str, info: StockInfo) -> None:
         logger.warning(f"OpenBB profile fetch failed for {ticker}: {e}")
 
 
-@st.cache_data(ttl=CACHE_TTL_DAILY)
+@ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_stock_info(ticker: str) -> StockInfo:
     info: StockInfo = {
         "name": ticker,
@@ -238,7 +238,7 @@ def get_stock_info(ticker: str) -> StockInfo:
     return info
 
 
-@st.cache_data(ttl=CACHE_TTL_SHORT)
+@ttl_cache(ttl=CACHE_TTL_SHORT)
 def get_quote(ticker: str) -> dict | None:
     try:
         q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
@@ -263,7 +263,7 @@ def get_quote(ticker: str) -> dict | None:
     return None
 
 
-@st.cache_data(ttl=CACHE_TTL_DAILY)
+@ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_earnings_calendar(
     from_date: str | None = None, to_date: str | None = None
 ) -> list[dict]:
@@ -271,13 +271,13 @@ def get_earnings_calendar(
     return []
 
 
-@st.cache_data(ttl=CACHE_TTL_DAILY)
+@ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
     # Placeholder: OpenBB implementation or other data source needed
     return []
 
 
-@st.cache_data(ttl=CACHE_TTL_DAILY)
+@ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_financials_reported(symbol: str, freq: str = "quarterly") -> list[dict]:
     # Placeholder: OpenBB implementation or other data source needed
     return []
