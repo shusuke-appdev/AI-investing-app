@@ -293,9 +293,10 @@ class MarketState(rx.State):
                         performance=perf,
                         performance_str=f"{perf:+.1f}%"
                     ))
+                period_str = themes[-1].get("period", "") if themes else ""
                 result.append(MomentumCategory(
                     category=cat_name,
-                    period=t.get("period", "") if themes else "",
+                    period=period_str,
                     themes=theme_list
                 ))
             return result

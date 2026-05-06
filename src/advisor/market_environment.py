@@ -235,13 +235,13 @@ def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
         # 2. CTAポジショニング
         cta = micro.get("cta_proxy") or {}
         cta_val = cta.get("extremity", "")
-        if "Extreme Long" in cta_val:
+        if "過剰ロング" in cta_val:
             signals.append(MarketSignal("CTAポジショニング", cta_val, -0.5, 0.4, "トレンドフォロー勢の過剰ロング。アンワインド時の急落リスクあり。"))
-        elif "Extreme Short" in cta_val:
+        elif "過剰ショート" in cta_val:
             signals.append(MarketSignal("CTAポジショニング", cta_val, 0.5, 0.4, "過剰ショート。ショートカバーによる急騰リスクあり。"))
-        elif "Long" in cta_val:
+        elif cta.get("score", 0) > 0:
             signals.append(MarketSignal("CTAポジショニング", cta_val, 0.2, 0.4, "CTAはロング基調。トレンド継続。"))
-        elif "Short" in cta_val:
+        elif cta.get("score", 0) < 0:
             signals.append(MarketSignal("CTAポジショニング", cta_val, -0.2, 0.4, "CTAはショート基調。"))
         else:
             signals.append(MarketSignal("CTAポジショニング", cta_val, 0.0, 0.4, "極端な偏りなし。"))
@@ -249,9 +249,9 @@ def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
         # 3. 流動性 (Amihud Illiquidity)
         liq = micro.get("liquidity") or {}
         liq_val = liq.get("status", "")
-        if "悪化" in liq_val or "枯渇" in liq_val:
-            signals.append(MarketSignal("市場流動性", liq_val, -0.8, 0.5, "流動性が悪化。小さなフローで価格が飛びやすい脆弱な状態。"))
-        elif "良好" in liq_val:
+        if "枯渇" in liq_val:
+            signals.append(MarketSignal("市場流動性", liq_val, -0.8, 0.5, "流動性が枯渇。小さなフローで価格が飛びやすい脆弱な状態。"))
+        elif "正常" in liq_val:
             signals.append(MarketSignal("市場流動性", liq_val, 0.3, 0.5, "流動性は十分。ショック吸収力あり。"))
         else:
             signals.append(MarketSignal("市場流動性", liq_val, 0.0, 0.5, "流動性は標準レベル。"))

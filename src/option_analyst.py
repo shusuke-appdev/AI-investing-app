@@ -4,6 +4,7 @@ GEX (Gamma Exposure)、PCR (Put/Call Ratio)、Gamma Wallの計算を行います
 Finnhub APIから取得したGreeksを活用し、より正確な分析を提供します。
 """
 
+import time
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -540,7 +541,6 @@ def get_major_indices_options(market_type: str = "US") -> list[dict]:
     results = []
     failed_tickers = []
 
-    import time
     for ticker in indices:
         try:
             analysis = analyze_option_sentiment(ticker)

@@ -6,12 +6,11 @@ Option Data Provider
 
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 import yfinance as yf
 
-from src.cache import ttl_cache
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
@@ -27,7 +26,7 @@ BACKOFF_BASE = 2  # 指数バックオフのベース
 
 def _is_market_likely_closed() -> bool:
     """米国市場が閉場中かどうかの簡易判定（週末チェック）"""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     # 土曜=5, 日曜=6
     return now.weekday() in (5, 6)
 
@@ -81,7 +80,6 @@ def _fetch_with_timeout(ticker: str, timeout: int = FETCH_TIMEOUT) -> tuple[pd.D
             return None
 
 
-@ttl_cache(ttl=300)  # 5分キャッシュ
 def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """
     オプションチェーンデータを取得する。
