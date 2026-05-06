@@ -50,18 +50,16 @@ US_CONFIG: MarketSettings = {
         "Nasdaq 100": "^NDX",
         "Dow 30": "^DJI",
         "Russell 2000": "^RUT",
-        # ボラティリティ
-        "VIX": "^VIX",
+        # 米国外株式指数
+        "Euro 600": "^STOXX",
+        "Hang Seng": "^HSI",
+        "KOSPI": "^KS11",
+        "Sensex": "^BSESN",
         # 米国債利回り
         "US 10Y Yield": "^TNX",
         "US 30Y Yield": "^TYX",
-        # 欧州指数
-        "FTSE 100": "^FTSE",
-        "DAX": "^GDAXI",
-        "CAC 40": "^FCHI",
-        # アジア指数
-        "Hang Seng": "^HSI",
-        "STI": "^STI",
+        # ボラティリティ
+        "VIX": "^VIX",
     },
     "sectors": {
         "情報技術": "XLK",

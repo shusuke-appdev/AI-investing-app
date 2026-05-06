@@ -258,7 +258,23 @@ class MarketState(rx.State):
         """マイクロストラクチャー分析データを取得"""
         try:
             from src.market_microstructure import analyze_market_structure
-            return analyze_market_structure("SPY")
+            data = analyze_market_structure("SPY")
+            if not data:
+                return None
+            
+            cta = data.get("cta_proxy") or {}
+            liq = data.get("liquidity") or {}
+            vrp_val = data.get("vrp")
+            
+            return {
+                "unwind_score": data.get("unwind_score", 0),
+                "unwind_level": data.get("unwind_level", ""),
+                "vrp": f"{vrp_val:.2%}" if vrp_val is not None else "-",
+                "cta_score": cta.get("score", 0),
+                "cta_extremity": cta.get("extremity", ""),
+                "liquidity_status": liq.get("status", ""),
+                "narrative": data.get("narrative_text", "")
+            }
         except Exception:
             return None
 

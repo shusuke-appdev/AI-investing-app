@@ -223,16 +223,18 @@ def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
         signals = []
         
         # 1. VRP (Volatility Risk Premium)
-        vrp_val = micro.get("vrp", "")
-        if "マイナス" in vrp_val or "縮小" in vrp_val:
-            signals.append(MarketSignal("VRP (ボラリスクプレミアム)", vrp_val, -0.6, 0.6, "VRP縮小。マーケットメーカーのプット売り意欲減退によりダウンサイドリスク増大。"))
-        elif "プラス" in vrp_val or "拡大" in vrp_val:
-            signals.append(MarketSignal("VRP (ボラリスクプレミアム)", vrp_val, 0.5, 0.6, "VRP拡大。オプションの売り手が存在し、ダウンサイドは保護されやすい。"))
-        else:
-            signals.append(MarketSignal("VRP (ボラリスクプレミアム)", vrp_val, 0.0, 0.6, "VRPはニュートラル圏内。"))
+        vrp_val = micro.get("vrp")
+        if vrp_val is not None:
+            if vrp_val < 0.0:
+                signals.append(MarketSignal("VRP (ボラリスクプレミアム)", f"{vrp_val:.2%}", -0.6, 0.6, "VRP縮小。マーケットメーカーのプット売り意欲減退によりダウンサイドリスク増大。"))
+            elif vrp_val > 0.05:
+                signals.append(MarketSignal("VRP (ボラリスクプレミアム)", f"{vrp_val:.2%}", 0.5, 0.6, "VRP拡大。オプションの売り手が存在し、ダウンサイドは保護されやすい。"))
+            else:
+                signals.append(MarketSignal("VRP (ボラリスクプレミアム)", f"{vrp_val:.2%}", 0.0, 0.6, "VRPはニュートラル圏内。"))
 
         # 2. CTAポジショニング
-        cta_val = micro.get("cta_extremity", "")
+        cta = micro.get("cta_proxy") or {}
+        cta_val = cta.get("extremity", "")
         if "Extreme Long" in cta_val:
             signals.append(MarketSignal("CTAポジショニング", cta_val, -0.5, 0.4, "トレンドフォロー勢の過剰ロング。アンワインド時の急落リスクあり。"))
         elif "Extreme Short" in cta_val:
@@ -245,7 +247,8 @@ def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
             signals.append(MarketSignal("CTAポジショニング", cta_val, 0.0, 0.4, "極端な偏りなし。"))
 
         # 3. 流動性 (Amihud Illiquidity)
-        liq_val = micro.get("liquidity_status", "")
+        liq = micro.get("liquidity") or {}
+        liq_val = liq.get("status", "")
         if "悪化" in liq_val or "枯渇" in liq_val:
             signals.append(MarketSignal("市場流動性", liq_val, -0.8, 0.5, "流動性が悪化。小さなフローで価格が飛びやすい脆弱な状態。"))
         elif "良好" in liq_val:
