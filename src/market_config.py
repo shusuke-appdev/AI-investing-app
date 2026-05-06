@@ -83,8 +83,8 @@ US_CONFIG: MarketSettings = {
         "Silver": "SI=F",
     },
     "crypto": {
-        "Bitcoin": "BINANCE:BTCUSDT",
-        "Ethereum": "BINANCE:ETHUSDT",
+        "Bitcoin": "BTC-USD",
+        "Ethereum": "ETH-USD",
     },
     "forex": {
         "USD/JPY": "JPY=X",

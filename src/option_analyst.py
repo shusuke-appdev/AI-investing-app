@@ -540,11 +540,13 @@ def get_major_indices_options(market_type: str = "US") -> list[dict]:
     results = []
     failed_tickers = []
 
+    import time
     for ticker in indices:
         try:
             analysis = analyze_option_sentiment(ticker)
             if analysis:
                 results.append(analysis)
+                time.sleep(1.0)  # yfinanceのRate Limit対策として1秒待機
             else:
                 failed_tickers.append(ticker)
                 logger.warning(

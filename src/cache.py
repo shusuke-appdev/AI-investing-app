@@ -13,7 +13,8 @@ from src.log_config import get_logger
 logger = get_logger(__name__)
 
 _cache_store: dict[str, tuple[Any, float]] = {}
-_lock = threading.Lock()
+_global_lock = threading.Lock()
+_locks: dict[str, threading.Lock] = {}
 
 
 def ttl_cache(ttl: int = 300):
@@ -43,24 +44,28 @@ def ttl_cache(ttl: int = 300):
 
             now = time.time()
 
-            with _lock:
+            with _global_lock:
+                if key not in _locks:
+                    _locks[key] = threading.Lock()
+                key_lock = _locks[key]
+
+            with key_lock:
+                # Double-checked locking
                 if key in _cache_store:
                     val, ts = _cache_store[key]
                     if now - ts < ttl:
                         return val
 
-            # キャッシュミス: 関数実行
-            result = func(*args, **kwargs)
-
-            with _lock:
-                _cache_store[key] = (result, now)
+                # キャッシュミス: 関数実行
+                result = func(*args, **kwargs)
+                _cache_store[key] = (result, time.time())
 
             return result
 
         # キャッシュクリアメソッドを付与（テスト用）
         def _clear_cache():
             prefix = f"{func.__module__}.{func.__qualname__}:"
-            with _lock:
+            with _global_lock:
                 keys_to_delete = [k for k in _cache_store if k.startswith(prefix)]
                 for k in keys_to_delete:
                     del _cache_store[k]
@@ -73,8 +78,9 @@ def ttl_cache(ttl: int = 300):
 
 def clear_all_cache():
     """全キャッシュエントリをクリアする。"""
-    with _lock:
+    with _global_lock:
         count = len(_cache_store)
         _cache_store.clear()
+        _locks.clear()
     if count > 0:
         logger.info(f"[Cache] Cleared {count} cached entries")

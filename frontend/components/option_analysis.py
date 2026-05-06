@@ -95,7 +95,7 @@ def option_analysis_component() -> rx.Component:
                     spacing="4",
                     width="100%"
                 ),
-                rx.text("オプションデータを取得できませんでした。", color="gray")
+                rx.text("Yahoo Financeの利用制限（Rate Limit）により現在データが取得できません。数十秒〜数分経ってから更新をお試しください。", color="gray")
             )
         ),
         width="100%",

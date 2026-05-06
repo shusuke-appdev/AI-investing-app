@@ -8,6 +8,7 @@
 import numpy as np
 import pandas as pd
 
+from src.cache import ttl_cache
 from src.data_provider import DataProvider
 from src.log_config import get_logger
 from src.option_analyst import analyze_option_sentiment
@@ -111,6 +112,7 @@ def estimate_cta_positioning(df: pd.DataFrame) -> dict | None:
         "deviation_50ma": float(dev_50)
     }
 
+@ttl_cache(ttl=600)  # 10分間キャッシュ
 def analyze_market_structure(ticker: str = "SPY") -> dict | None:
     """
     ターゲット銘柄（主にSPY想定）の市場構造を総合分析する。
