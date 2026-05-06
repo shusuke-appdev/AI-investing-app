@@ -22,7 +22,7 @@ class ThemeItem(BaseModel):
 class ThemeState(rx.State):
     """テーマ（Theme）ページ用の状態管理クラス"""
 
-    selected_period: str = "1w"
+    selected_period: str = "1週間"
     is_fetching: bool = False
     error_msg: str = ""
 
@@ -32,7 +32,7 @@ class ThemeState(rx.State):
     def set_period(self, period: str | List[str]):
         """期間を変更し、データを再取得する"""
         if isinstance(period, list):
-            period = period[0] if period else "1w"
+            period = period[0] if period else "1週間"
 
         if period in PERIODS:
             self.selected_period = period
