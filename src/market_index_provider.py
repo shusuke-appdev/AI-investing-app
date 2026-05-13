@@ -4,6 +4,7 @@ Market Index Data Provider
 """
 
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import StringIO
 
 import pandas as pd
@@ -80,79 +81,66 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
         finnhub_targets = {}
 
 
-    for name, ticker in finnhub_targets.items():
+    def _fetch_finnhub(n: str, t: str) -> tuple[str, str, dict | None]:
         try:
-            q = _finnhub_get_quote(ticker)
-            if isinstance(q, dict) and q.get("c") not in (0, None):
-                result[name] = {
-                    "price": float(q.get("c", 0.0)),  # type: ignore
-                    "change": float(q.get("dp", 0.0)),  # type: ignore
-                    "ticker": ticker,
+            return n, t, _finnhub_get_quote(t)
+        except Exception:
+            return n, t, None
+
+    if finnhub_targets:
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(_fetch_finnhub, n, t) for n, t in finnhub_targets.items()]
+            for future in as_completed(futures):
+                n, t, q = future.result()
+                if isinstance(q, dict) and q.get("c") not in (0, None):
+                    result[n] = {
+                        "price": float(q.get("c", 0.0)),  # type: ignore
+                        "change": float(q.get("dp", 0.0)),  # type: ignore
+                        "ticker": t,
+                    }
+                else:
+                    yf_targets[n] = t
+
+    def _fetch_yf(n: str, t: str) -> tuple[str, str, dict]:
+        try:
+            hist = yf.Ticker(t).history(period="5d")
+            if "Close" in hist.columns:
+                hist.dropna(subset=["Close"], inplace=True)
+            else:
+                hist.dropna(inplace=True)
+
+            if not hist.empty and len(hist) >= 1:
+                if "Close" in hist.columns:
+                    current = hist["Close"].iloc[-1]
+                    prev = hist["Close"].iloc[-2] if len(hist) >= 2 else current
+                else:
+                    current = hist.iloc[-1, 0]
+                    prev = hist.iloc[-2, 0] if len(hist) >= 2 else current
+
+                # NaN ガード
+                if math.isnan(current) or math.isnan(prev):
+                    return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
+
+                change = ((current - prev) / prev) * 100 if prev != 0 else 0
+                return n, t, {
+                    "price": float(current),
+                    "change": float(change),
+                    "ticker": t,
                 }
             else:
-                yf_targets[name] = ticker
-        except Exception:
-            yf_targets[name] = ticker
+                return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
+        except Exception as e:
+            logger.warning(f"[MarketIndexProvider] Failed to fetch {t}: {e}")
+            return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
 
     if yf_targets:
         try:
-            tickers_list = list(yf_targets.values())
-            if tickers_list:
-                # 複数銘柄の場合、エラーを防ぐため順次取得（yfinanceのマルチカラム仕様変更等のトラブルを回避）
-                # 取得する銘柄数は通常5〜10個程度のため、直列でも大きな遅延にはならない
-                for name, ticker in yf_targets.items():
-                    try:
-                        hist = yf.Ticker(ticker).history(period="5d")
-                        if "Close" in hist.columns:
-                            hist.dropna(subset=["Close"], inplace=True)
-                        else:
-                            hist.dropna(inplace=True)
-
-                        if not hist.empty and len(hist) >= 1:
-                            if "Close" in hist.columns:
-                                current = hist["Close"].iloc[-1]
-                                prev = (
-                                    hist["Close"].iloc[-2]
-                                    if len(hist) >= 2
-                                    else current
-                                )
-                            else:
-                                current = hist.iloc[-1, 0]
-                                prev = hist.iloc[-2, 0] if len(hist) >= 2 else current
-
-                            # NaN ガード: yfinanceが無効な値を返す場合がある
-                            if math.isnan(current) or math.isnan(prev):
-                                result[name] = {
-                                    "price": 0.0,
-                                    "change": 0.0,
-                                    "ticker": ticker,
-                                }
-                                continue
-
-                            change = ((current - prev) / prev) * 100 if prev != 0 else 0
-                            result[name] = {
-                                "price": float(current),
-                                "change": float(change),
-                                "ticker": ticker,
-                            }
-                        else:
-                            result[name] = {
-                                "price": 0.0,
-                                "change": 0.0,
-                                "ticker": ticker,
-                            }
-                    except Exception as e:
-                        logger.warning(
-                            f"[MarketIndexProvider] Failed to fetch {ticker}: {e}"
-                        )
-                        result[name] = {
-                            "price": 0.0,
-                            "change": 0.0,
-                            "ticker": ticker,
-                        }
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [executor.submit(_fetch_yf, n, t) for n, t in yf_targets.items()]
+                for future in as_completed(futures):
+                    n, t, data = future.result()
+                    result[n] = data
         except Exception as e:
-            logger.error(
-                f"[MarketIndexProvider] Batch download preparation failed: {e}"
-            )
+            logger.error(f"[MarketIndexProvider] Batch download execution failed: {e}")
 
     return result

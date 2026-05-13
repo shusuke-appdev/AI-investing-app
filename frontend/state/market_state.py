@@ -4,6 +4,15 @@ from typing import Any
 import reflex as rx
 from pydantic import BaseModel
 
+from src.advisor.market_environment import evaluate_market_environment
+from src.advisor.market_monitor import track_distribution_days, detect_market_climax, evaluate_yield_spread
+from src.market_config import get_market_config
+from src.market_data import get_market_indices, get_stock_data, get_stock_info
+from src.market_microstructure import analyze_market_structure
+from src.momentum_monitor import get_momentum_themes
+from src.option_analyst import get_major_indices_options
+from src.services.market_analyst_service import generate_market_analysis_report
+
 
 class MarketSignal(BaseModel):
     name: str = ""
@@ -135,11 +144,6 @@ class MarketState(rx.State):
         yield
 
         try:
-            from src.advisor.market_environment import evaluate_market_environment
-            from src.market_config import get_market_config
-            from src.market_data import get_market_indices
-            from src.option_analyst import get_major_indices_options
-
             # 同期ブロッキング関数をバックグラウンドスレッドで実行
             raw_data_task = asyncio.to_thread(get_market_indices, self.market_type)
             config_task = asyncio.to_thread(get_market_config, self.market_type)
@@ -183,31 +187,34 @@ class MarketState(rx.State):
                 self.option_error_msg = "市場閉場中のため最新のオプションデータがありません"
 
             self.option_analysis = opt_list
-            eval_data = await asyncio.to_thread(evaluate_market_environment, self.market_type, option_data)
-
-            # マイクロストラクチャー分析
-            try:
-                micro_data = await asyncio.to_thread(self._fetch_microstructure)
-                if micro_data:
-                    self.microstructure = MicrostructureData(**micro_data)
-            except Exception:
-                pass  # マイクロストラクチャーは失敗しても継続
-
-            # テーマモメンタム取得
-            try:
-                momentum_raw = await asyncio.to_thread(self._fetch_momentum)
-                if momentum_raw:
-                    self.momentum_data = momentum_raw
-            except Exception:
-                pass  # モメンタムは失敗しても継続
-
-            # 市場監視データ取得
-            try:
-                monitor_data = await asyncio.to_thread(self._fetch_market_monitor, option_data)
-                if monitor_data:
-                    self.market_monitor = MarketMonitorData(**monitor_data)
-            except Exception:
-                pass
+            
+            # 残りの重い分析タスクを並行実行
+            eval_task = asyncio.to_thread(evaluate_market_environment, self.market_type, option_data)
+            micro_task = asyncio.to_thread(self._fetch_microstructure)
+            momentum_task = asyncio.to_thread(self._fetch_momentum)
+            monitor_task = asyncio.to_thread(self._fetch_market_monitor, option_data)
+            
+            eval_res, micro_res, momentum_res, monitor_res = await asyncio.gather(
+                eval_task, micro_task, momentum_task, monitor_task, return_exceptions=True
+            )
+            
+            # 評価データの反映
+            if not isinstance(eval_res, Exception) and eval_res:
+                eval_data = eval_res
+            else:
+                eval_data = {}
+                
+            # マイクロストラクチャーの反映
+            if not isinstance(micro_res, Exception) and micro_res:
+                self.microstructure = MicrostructureData(**micro_res)
+                
+            # モメンタムの反映
+            if not isinstance(momentum_res, Exception) and momentum_res:
+                self.momentum_data = momentum_res
+                
+            # 市場監視の反映
+            if not isinstance(monitor_res, Exception) and monitor_res:
+                self.market_monitor = MarketMonitorData(**monitor_res)
 
             # データをカテゴライズしてリスト化
             indices_list = []
@@ -306,7 +313,6 @@ class MarketState(rx.State):
     def _fetch_microstructure(self) -> dict | None:
         """マイクロストラクチャー分析データを取得"""
         try:
-            from src.market_microstructure import analyze_market_structure
             data = analyze_market_structure("SPY")
             if not data:
                 return None
@@ -330,7 +336,6 @@ class MarketState(rx.State):
     def _fetch_momentum(self) -> list[MomentumCategory]:
         """テーマモメンタムデータを取得"""
         try:
-            from src.momentum_monitor import get_momentum_themes
             raw = get_momentum_themes(self.market_type)
             result = []
             for cat_name, themes in raw.items():
@@ -355,9 +360,6 @@ class MarketState(rx.State):
     def _fetch_market_monitor(self, option_data: list[dict] | None) -> dict | None:
         """市場監視データを取得"""
         try:
-            from src.advisor.market_monitor import track_distribution_days, detect_market_climax, evaluate_yield_spread
-            from src.market_data import get_stock_data, get_stock_info
-            
             spy_df = get_stock_data("SPY", "6mo")
             ndx_df = get_stock_data("^NDX", "6mo")
             
@@ -398,10 +400,6 @@ class MarketState(rx.State):
         yield
 
         try:
-            from src.services.market_analyst_service import (
-                generate_market_analysis_report,
-            )
-
             recap = await asyncio.to_thread(generate_market_analysis_report, self.market_type)
 
             if recap:
