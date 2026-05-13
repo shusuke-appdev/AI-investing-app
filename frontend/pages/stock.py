@@ -82,11 +82,11 @@ def stock_page() -> rx.Component:
                     rx.cond(
                         StockState.technical_data.contains("overall_signal"),
                         rx.hstack(
-                            rx.badge(StockState.technical_data["overall_signal"], size="3", color_scheme=rx.cond(StockState.technical_data["overall_score"] >= 60, "green", rx.cond(StockState.technical_data["overall_score"] <= 40, "red", "yellow"))),
-                            rx.badge("モード: " + StockState.technical_data["analysis_mode"], size="3", color_scheme="purple"),
+                            rx.badge(StockState.technical_data["overall_signal"].to_string(), size="3", color_scheme=rx.cond(StockState.technical_data["overall_score"].to(int) >= 60, "green", rx.cond(StockState.technical_data["overall_score"].to(int) <= 40, "red", "yellow"))),
+                            rx.badge("モード: " + StockState.technical_data["analysis_mode"].to_string(), size="3", color_scheme="purple"),
                             rx.cond(
-                                StockState.technical_data["entry_signal"] != "",
-                                rx.badge(StockState.technical_data["entry_signal"], size="3", color_scheme="orange")
+                                StockState.technical_data["entry_signal"].to_string() != "",
+                                rx.badge(StockState.technical_data["entry_signal"].to_string(), size="3", color_scheme="orange")
                             ),
                             margin_bottom="1rem",
                             wrap="wrap",
@@ -185,12 +185,12 @@ def stock_page() -> rx.Component:
 
                     # SMART基準セクション
                     rx.cond(
-                        StockState.smart_criteria.contains("all_met"),
+                        StockState.smart_criteria.S.value != "",
                         rx.card(
                             rx.hstack(
                                 rx.heading("SMART基準評価", size="4"),
                                 rx.cond(
-                                    StockState.smart_criteria["all_met"],
+                                    StockState.smart_criteria.all_met,
                                     rx.badge("ALL CLEAR", color_scheme="green"),
                                     rx.badge("条件未達", color_scheme="orange")
                                 ),
@@ -198,11 +198,11 @@ def stock_page() -> rx.Component:
                                 margin_bottom="1rem"
                             ),
                             rx.vstack(
-                                rx.text(rx.cond(StockState.smart_criteria["S"]["met"], "✅ ", "❌ ") + "S (Sales): " + StockState.smart_criteria["S"]["desc"] + " - " + StockState.smart_criteria["S"]["value"].to_string()),
-                                rx.text(rx.cond(StockState.smart_criteria["M"]["met"], "✅ ", "❌ ") + "M (Margin): " + StockState.smart_criteria["M"]["desc"] + " - " + StockState.smart_criteria["M"]["value"].to_string()),
-                                rx.text(rx.cond(StockState.smart_criteria["A"]["met"], "✅ ", "❌ ") + "A (Accel): " + StockState.smart_criteria["A"]["desc"] + " - " + StockState.smart_criteria["A"]["value"].to_string()),
-                                rx.text(rx.cond(StockState.smart_criteria["R"]["met"], "✅ ", "❌ ") + "R (ROE): " + StockState.smart_criteria["R"]["desc"] + " - " + StockState.smart_criteria["R"]["value"].to_string()),
-                                rx.text(rx.cond(StockState.smart_criteria["T"]["met"], "✅ ", "❌ ") + "T (Timing): " + StockState.smart_criteria["T"]["desc"] + " - " + StockState.smart_criteria["T"]["value"].to_string()),
+                                rx.text(rx.cond(StockState.smart_criteria.S.met, "✅ ", "❌ ") + "S (Sales): " + StockState.smart_criteria.S.desc + " - " + StockState.smart_criteria.S.value),
+                                rx.text(rx.cond(StockState.smart_criteria.M.met, "✅ ", "❌ ") + "M (Margin): " + StockState.smart_criteria.M.desc + " - " + StockState.smart_criteria.M.value),
+                                rx.text(rx.cond(StockState.smart_criteria.A.met, "✅ ", "❌ ") + "A (Accel): " + StockState.smart_criteria.A.desc + " - " + StockState.smart_criteria.A.value),
+                                rx.text(rx.cond(StockState.smart_criteria.R.met, "✅ ", "❌ ") + "R (ROE): " + StockState.smart_criteria.R.desc + " - " + StockState.smart_criteria.R.value),
+                                rx.text(rx.cond(StockState.smart_criteria.T.met, "✅ ", "❌ ") + "T (Timing): " + StockState.smart_criteria.T.desc + " - " + StockState.smart_criteria.T.value),
                             ),
                             width="100%",
                             margin_bottom="2rem"

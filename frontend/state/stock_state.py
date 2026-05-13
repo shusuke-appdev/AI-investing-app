@@ -4,6 +4,20 @@ from typing import Any
 
 import reflex as rx
 
+from pydantic import BaseModel
+
+class SmartItem(BaseModel):
+    met: bool = False
+    desc: str = ""
+    value: str = ""
+
+class SmartCriteria(BaseModel):
+    all_met: bool = False
+    S: SmartItem = SmartItem()
+    M: SmartItem = SmartItem()
+    A: SmartItem = SmartItem()
+    R: SmartItem = SmartItem()
+    T: SmartItem = SmartItem()
 
 class StockState(rx.State):
     """個別銘柄（Stock）ページ用の状態管理クラス"""
@@ -25,7 +39,7 @@ class StockState(rx.State):
     technical_data: dict[str, Any] = {}
 
     # SMART基準
-    smart_criteria: dict[str, Any] = {}
+    smart_criteria: SmartCriteria = SmartCriteria()
 
     # 決算・財務データ
     earnings: list[dict[str, Any]] = []
