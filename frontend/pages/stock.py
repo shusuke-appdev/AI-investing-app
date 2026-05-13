@@ -78,6 +78,22 @@ def stock_page() -> rx.Component:
                         margin_bottom="1rem"
                     ),
 
+                    # 総合評価・モードバッジ
+                    rx.cond(
+                        StockState.technical_data.contains("overall_signal"),
+                        rx.hstack(
+                            rx.badge(StockState.technical_data["overall_signal"], size="3", color_scheme=rx.cond(StockState.technical_data["overall_score"] >= 60, "green", rx.cond(StockState.technical_data["overall_score"] <= 40, "red", "yellow"))),
+                            rx.badge("モード: " + StockState.technical_data["analysis_mode"], size="3", color_scheme="purple"),
+                            rx.cond(
+                                StockState.technical_data["entry_signal"] != "",
+                                rx.badge(StockState.technical_data["entry_signal"], size="3", color_scheme="orange")
+                            ),
+                            margin_bottom="1rem",
+                            wrap="wrap",
+                            spacing="2",
+                        )
+                    ),
+
                     # メトリックカード（主要指標）
                     rx.grid(
                         metric_card(
@@ -109,23 +125,31 @@ def stock_page() -> rx.Component:
                                 rx.heading("株価推移 (1年)", size="4", margin_bottom="1rem"),
                                 rx.cond(
                                     StockState.chart_data.length() > 0,
-                                    rx.recharts.area_chart(
+                                    rx.recharts.composed_chart(
                                         rx.recharts.area(
                                             data_key="price",
                                             stroke=rx.color("blue", 9),
                                             fill=rx.color("blue", 4),
+                                            y_axis_id="left",
                                         ),
+                                        rx.recharts.line(data_key="ma10", stroke="#FF8042", dot=False, y_axis_id="left"),
+                                        rx.recharts.line(data_key="ma20", stroke="#00C49F", dot=False, y_axis_id="left"),
+                                        rx.recharts.line(data_key="ma50", stroke="#FFBB28", dot=False, y_axis_id="left"),
+                                        rx.recharts.line(data_key="ma200", stroke="#0088FE", dot=False, y_axis_id="left"),
+                                        rx.recharts.bar(data_key="volume", fill=rx.color("gray", 5), y_axis_id="right"),
                                         rx.recharts.x_axis(data_key="name"),
-                                        rx.recharts.y_axis(domain=["auto", "auto"]),
+                                        rx.recharts.y_axis(y_axis_id="left", domain=["auto", "auto"], scale="log", orientation="left"),
+                                        rx.recharts.y_axis(y_axis_id="right", orientation="right"),
                                         rx.recharts.cartesian_grid(stroke_dasharray="3 3"),
                                         rx.recharts.tooltip(),
+                                        rx.recharts.legend(),
                                         data=StockState.chart_data,
-                                        height=300,
+                                        height=400,
                                         width="100%",
                                     ),
                                     rx.center(
                                         rx.text("チャートデータがありません", color="gray"),
-                                        height="300px",
+                                        height="400px",
                                     )
                                 )
                             ),
@@ -157,6 +181,32 @@ def stock_page() -> rx.Component:
                         spacing="4",
                         width="100%",
                         margin_bottom="2rem",
+                    ),
+
+                    # SMART基準セクション
+                    rx.cond(
+                        StockState.smart_criteria.contains("all_met"),
+                        rx.card(
+                            rx.hstack(
+                                rx.heading("SMART基準評価", size="4"),
+                                rx.cond(
+                                    StockState.smart_criteria["all_met"],
+                                    rx.badge("ALL CLEAR", color_scheme="green"),
+                                    rx.badge("条件未達", color_scheme="orange")
+                                ),
+                                align_items="center",
+                                margin_bottom="1rem"
+                            ),
+                            rx.vstack(
+                                rx.text(rx.cond(StockState.smart_criteria["S"]["met"], "✅ ", "❌ ") + "S (Sales): " + StockState.smart_criteria["S"]["desc"] + " - " + StockState.smart_criteria["S"]["value"].to_string()),
+                                rx.text(rx.cond(StockState.smart_criteria["M"]["met"], "✅ ", "❌ ") + "M (Margin): " + StockState.smart_criteria["M"]["desc"] + " - " + StockState.smart_criteria["M"]["value"].to_string()),
+                                rx.text(rx.cond(StockState.smart_criteria["A"]["met"], "✅ ", "❌ ") + "A (Accel): " + StockState.smart_criteria["A"]["desc"] + " - " + StockState.smart_criteria["A"]["value"].to_string()),
+                                rx.text(rx.cond(StockState.smart_criteria["R"]["met"], "✅ ", "❌ ") + "R (ROE): " + StockState.smart_criteria["R"]["desc"] + " - " + StockState.smart_criteria["R"]["value"].to_string()),
+                                rx.text(rx.cond(StockState.smart_criteria["T"]["met"], "✅ ", "❌ ") + "T (Timing): " + StockState.smart_criteria["T"]["desc"] + " - " + StockState.smart_criteria["T"]["value"].to_string()),
+                            ),
+                            width="100%",
+                            margin_bottom="2rem"
+                        )
                     ),
 
                     # テクニカル分析

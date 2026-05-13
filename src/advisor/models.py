@@ -197,6 +197,17 @@ class TechnicalScore:
     advanced_patterns_data: dict = field(default_factory=dict)
     ma_long_term_data: dict = field(default_factory=dict)
 
+    # === Analysis Mode & New Indicators ===
+    analysis_mode: str = ""
+    ma_10: float | None = None
+    ma_20: float | None = None
+    ma_50: float | None = None
+    ma_200: float | None = None
+    base_recognition_data: dict = field(default_factory=dict)
+    entry_signal: str = ""
+    stop_loss: float | None = None
+    profit_line: float | None = None
+
 
 
 @dataclass

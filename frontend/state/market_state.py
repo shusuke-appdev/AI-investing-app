@@ -50,6 +50,13 @@ class MomentumCategory(BaseModel):
     period: str = ""
     themes: list[MomentumTheme] = []
 
+class MarketMonitorData(BaseModel):
+    """市場監視データ"""
+    distribution_spy: dict[str, Any] = {}
+    distribution_ndx: dict[str, Any] = {}
+    climax: dict[str, Any] = {}
+    yield_spread: dict[str, Any] = {}
+
 
 class MarketState(rx.State):
     """マーケット（市況）ページ用の状態管理クラス"""
@@ -76,6 +83,9 @@ class MarketState(rx.State):
 
     # テーマモメンタム監視
     momentum_data: list[MomentumCategory] = []
+
+    # 市場監視機能 (Phase 3)
+    market_monitor: MarketMonitorData = MarketMonitorData()
 
     # AIレポート関連
     ai_recap: str = ""
@@ -160,6 +170,14 @@ class MarketState(rx.State):
                     self.momentum_data = momentum_raw
             except Exception:
                 pass  # モメンタムは失敗しても継続
+
+            # 市場監視データ取得
+            try:
+                monitor_data = await asyncio.to_thread(self._fetch_market_monitor, option_data)
+                if monitor_data:
+                    self.market_monitor = MarketMonitorData(**monitor_data)
+            except Exception:
+                pass
 
             # データをカテゴライズしてリスト化
             indices_list = []
@@ -303,6 +321,46 @@ class MarketState(rx.State):
             return result
         except Exception:
             return []
+
+    def _fetch_market_monitor(self, option_data: list[dict] | None) -> dict | None:
+        """市場監視データを取得"""
+        try:
+            from src.advisor.market_monitor import track_distribution_days, detect_market_climax, evaluate_yield_spread
+            from src.market_data import get_stock_data, get_stock_info
+            
+            spy_df = get_stock_data("SPY", "6mo")
+            ndx_df = get_stock_data("^NDX", "6mo")
+            
+            dist_spy = track_distribution_days(spy_df)
+            dist_ndx = track_distribution_days(ndx_df)
+            
+            opt_pcr = 0.8
+            if option_data and len(option_data) > 0:
+                pcr_dict = option_data[0].get("pcr", {})
+                if pcr_dict:
+                    opt_pcr = float(pcr_dict.get("volume_pcr", 0.8))
+                    
+            climax = detect_market_climax(spy_df, ndx_df, opt_pcr)
+            
+            tnx_df = get_stock_data("^TNX", "5d")
+            tnx_yield = float(tnx_df["Close"].iloc[-1]) / 10.0 if not tnx_df.empty else 4.0
+            
+            spy_info = get_stock_info("SPY")
+            qqq_info = get_stock_info("QQQ")
+            spy_pe = spy_info.get("pe_ratio") if spy_info and isinstance(spy_info.get("pe_ratio"), (int, float)) else 22.0
+            ndx_pe = qqq_info.get("pe_ratio") if qqq_info and isinstance(qqq_info.get("pe_ratio"), (int, float)) else 30.0
+            index_pe = {"SPY": float(spy_pe), "NDX": float(ndx_pe)}
+            
+            spread = evaluate_yield_spread(tnx_yield, index_pe)
+            
+            return {
+                "distribution_spy": dist_spy,
+                "distribution_ndx": dist_ndx,
+                "climax": climax,
+                "yield_spread": spread
+            }
+        except Exception:
+            return None
 
     async def generate_ai_recap(self):
         """GeminiによるAI市況レポート生成"""

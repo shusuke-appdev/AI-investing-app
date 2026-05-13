@@ -49,6 +49,8 @@ from src.advisor.technical_scoring import (
     calc_pattern_score,
     calc_trend_score,
 )
+from src.advisor.mode_selector import determine_analysis_mode
+from src.advisor.base_recognition import detect_bases
 from src.market_data import get_stock_data
 
 # スコアリングの重み付け定数
@@ -126,8 +128,14 @@ def analyze_technical(ticker: str, period: str = "5y") -> TechnicalScore | None:
 
     # --- 指標計算 ---
     rsi = calculate_rsi(close)
-    ma_dev = calculate_ma_deviation(close)
+    ma_dev = calculate_ma_deviation(close, period=50) # ここは既存のまま
     ma_trend = calculate_ma_trend(close)
+    
+    # 新規追加の移動平均線計算 (10, 20, 50, 200)
+    ma_10 = float(close.rolling(10).mean().iloc[-1]) if len(close) >= 10 else None
+    ma_20 = float(close.rolling(20).mean().iloc[-1]) if len(close) >= 20 else None
+    ma_50 = float(close.rolling(50).mean().iloc[-1]) if len(close) >= 50 else None
+    ma_200 = float(close.rolling(200).mean().iloc[-1]) if len(close) >= 200 else None
     macd_data = calculate_macd_signal(close)
     bb = calculate_bollinger_bands(close)
     atr_data = calculate_atr(high, low, close)
@@ -204,14 +212,13 @@ def analyze_technical(ticker: str, period: str = "5y") -> TechnicalScore | None:
         else 0.0
     )
 
-    # 重み付き集約 (Pattern 20%, Flow 20%)
-    if opt_data["gex_regime"] == "positive_gamma":
-        weights = SCORE_WEIGHTS_POS_GAMMA
-    elif opt_data["gex_regime"] == "negative_gamma":
-        weights = SCORE_WEIGHTS_NEG_GAMMA
-    else:
-        weights = SCORE_WEIGHTS_DEFAULT
+    # モード判定とウェイト取得
+    long_term_dev = (current_price - ma_200) / ma_200 if ma_200 and ma_200 > 0 else 0.0
+    mode_info = determine_analysis_mode(close, stage_res["stage"], rsi, long_term_dev)
+    analysis_mode = mode_info["mode"]
+    weights = mode_info["weights"]
 
+    # 重み付き集約
     weighted = (
         trend_score * weights["trend"]
         + momentum_score * weights["mom"]
@@ -219,19 +226,39 @@ def analyze_technical(ticker: str, period: str = "5y") -> TechnicalScore | None:
         + flow_score * weights["flow"]
         + mtf_score * weights["mtf"]
     )
-    score = int(max(-100, min(100, weighted * 50)))
+    
+    # 0〜100に正規化（weightedが-1〜1の範囲を想定）
+    raw_score = (weighted + 1) * 50
+    score = int(max(0, min(100, raw_score)))
 
-    # シグナル判定
-    if score > 30:
-        overall = "強気"
-    elif score > 10:
-        overall = "やや強気"
-    elif score < -30:
-        overall = "弱気"
-    elif score < -10:
-        overall = "やや弱気"
+    # シグナル判定 (5段階評価)
+    if score >= 80:
+        overall = "Strong Buy"
+    elif score >= 60:
+        overall = "Buy"
+    elif score >= 40:
+        overall = "Hold"
+    elif score >= 20:
+        overall = "Sell"
     else:
-        overall = "中立"
+        overall = "Strong Sell"
+
+    # ベース認識
+    base_data = detect_bases(df)
+
+    # エントリー判定（ブレイク＋出来高）
+    entry_signal = ""
+    vol_ma50 = volume.rolling(50).mean().iloc[-1] if len(volume) >= 50 else 0
+    vol_today = volume.iloc[-1]
+    # 出来高が平均の40%以上上回っているか
+    vol_surge = vol_ma50 > 0 and (vol_today / vol_ma50) > 1.4
+    
+    if base_data["detected"] and any(p["status"] == "breakout" for p in base_data["patterns"]) and vol_surge:
+        entry_signal = "買いシグナル発火（出来高を伴うブレイクアウト）"
+
+    # 損切り・収益ライン
+    stop_loss = current_price * 0.92  # 買値（現在値）から8%下落
+    profit_line = current_price * 1.2 # モック: 本来は企業価値やEPS成長率から算出
 
     if current_price <= contrarian_zone[1]:
         c_sig = "買い検討ゾーン"
@@ -306,6 +333,15 @@ def analyze_technical(ticker: str, period: str = "5y") -> TechnicalScore | None:
         volume_climax_bleed_data=volume_data,
         advanced_patterns_data=adv_patterns,
         ma_long_term_data=long_term_ma,
+        analysis_mode=analysis_mode,
+        ma_10=ma_10,
+        ma_20=ma_20,
+        ma_50=ma_50,
+        ma_200=ma_200,
+        base_recognition_data=base_data,
+        entry_signal=entry_signal,
+        stop_loss=stop_loss,
+        profit_line=profit_line,
     )
 
 
@@ -372,8 +408,13 @@ def get_technical_summary_for_ai(ticker: str) -> str:
     if tech.ma_long_term_data.get("signal") in ("deep_discount", "near_support"):
         drop_str += f"【長期MA】 {tech.ma_long_term_data.get('description', '')} "
 
+    base_str = "未検出"
+    if tech.base_recognition_data.get("detected"):
+        base_str = ", ".join([f"{p['type']} ({p['status']})" for p in tech.base_recognition_data.get("patterns", [])])
+
     return f"""【{ticker} テクニカル分析】
-- 総合: {tech.overall_score}点 ({tech.overall_signal}) | トレンド: {tech.ma_trend}
+- 総合評価: {tech.overall_signal} ({tech.overall_score}点) | 分析モード: {tech.analysis_mode}
+- トレンド: {tech.ma_trend}
 - RSI: {tech.rsi:.1f} ({tech.rsi_signal}) | 動的: {tech.rsi_dynamic_signal} ({tech.rsi_regime})
 - MACD: {tech.macd_signal} (Hist: {tech.macd_hist_slope})
 - 一目均衡表: {tech.ichimoku_signal} ({tech.ichimoku_regime})
@@ -385,4 +426,7 @@ def get_technical_summary_for_ai(ticker: str) -> str:
 - 平均回帰・過熱感: {mr_str if mr_str else "目立った過熱感・反発セットアップなし"}
 - 下落時判定・特殊シグナル: {drop_str if drop_str else "特になし"}
 - AVWAP(YTD): ${tech.avwap_ytd:.2f} (乖離 {tech.avwap_deviation:+.1f}%)
+- ベース認識: {base_str}
+- エントリーシグナル: {tech.entry_signal if tech.entry_signal else 'なし'}
+- 目安: 損切り ${tech.stop_loss:.2f} / 収益ライン ${tech.profit_line:.2f}
 """

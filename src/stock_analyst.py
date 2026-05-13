@@ -38,6 +38,16 @@ def analyze_stock(
     # テクニカル分析を取得
     technical_summary = get_technical_summary_for_ai(ticker)
 
+    # SMART基準を評価
+    from src.advisor.smart_criteria import evaluate_smart_criteria
+    smart_res = evaluate_smart_criteria(ticker, stock_info)
+    smart_lines = []
+    for k in ["S", "M", "A", "R", "T"]:
+        v = smart_res.get(k, {})
+        mark = "✅" if v.get("met") else "❌"
+        smart_lines.append(f"- {k}: {mark} {v.get('desc')} (現在: {v.get('value')})")
+    smart_criteria_summary = "\n".join(smart_lines)
+
     # ユーザー参照知識を取得
     from src.knowledge_storage import get_knowledge_for_ai_context
 
@@ -59,6 +69,7 @@ def analyze_stock(
         forward_pe=forward_pe,
         target_price=target_price,
         technical_summary=technical_summary,
+        smart_criteria_summary=smart_criteria_summary,
         news_headlines=chr(10).join(news_headlines[:5])
         if news_headlines
         else "ニュースなし",

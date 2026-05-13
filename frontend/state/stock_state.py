@@ -24,6 +24,9 @@ class StockState(rx.State):
     # テクニカル分析データ
     technical_data: dict[str, Any] = {}
 
+    # SMART基準
+    smart_criteria: dict[str, Any] = {}
+
     # 決算・財務データ
     earnings: list[dict[str, Any]] = []
     financials: list[dict[str, Any]] = []
@@ -55,16 +58,29 @@ class StockState(rx.State):
             news_data = await asyncio.to_thread(get_stock_news, self.ticker, 5)
             tech_data = await asyncio.to_thread(analyze_technical, self.ticker, "1y")
 
-            # TODO: Option data, Earnings data...
+            # SMART基準を評価
+            from src.advisor.smart_criteria import evaluate_smart_criteria
+            smart_res = await asyncio.to_thread(evaluate_smart_criteria, self.ticker, dict(info_data) if info_data else {}, "不明")
 
             # Recharts用の形式に変換
             chart_list = []
             if history_df is not None and not history_df.empty:
+                import pandas as pd
+                history_df["MA10"] = history_df["Close"].rolling(10).mean()
+                history_df["MA20"] = history_df["Close"].rolling(20).mean()
+                history_df["MA50"] = history_df["Close"].rolling(50).mean()
+                history_df["MA200"] = history_df["Close"].rolling(200).mean()
+
                 # pandas DataFrame を dict のリストに変換
                 for date, row in history_df.iterrows():
                     chart_list.append({
                         "name": date.strftime("%Y-%m-%d"),
-                        "price": float(row["Close"])
+                        "price": float(row["Close"]),
+                        "volume": float(row["Volume"]) if "Volume" in history_df.columns else 0.0,
+                        "ma10": float(row["MA10"]) if not pd.isna(row["MA10"]) else None,
+                        "ma20": float(row["MA20"]) if not pd.isna(row["MA20"]) else None,
+                        "ma50": float(row["MA50"]) if not pd.isna(row["MA50"]) else None,
+                        "ma200": float(row["MA200"]) if not pd.isna(row["MA200"]) else None,
                     })
 
             # NewsItem を dict に変換
@@ -73,6 +89,7 @@ class StockState(rx.State):
             self.info = dict(info_data) if info_data else {}
             self.chart_data = chart_list
             self.news = news_list
+            self.smart_criteria = smart_res
 
             # Technical Data
             if tech_data:
@@ -97,6 +114,7 @@ class StockState(rx.State):
             self.chart_data = []
             self.news = []
             self.technical_data = {}
+            self.smart_criteria = {}
         finally:
             self.is_fetching = False
             yield

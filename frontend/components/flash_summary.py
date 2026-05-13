@@ -230,6 +230,92 @@ def market_monitor() -> rx.Component:
                         rx.fragment(),
                     ),
 
+                    # 市場監視モジュール (Phase 3)
+                    rx.cond(
+                        MarketState.market_monitor.distribution_spy.contains("count"),
+                        rx.box(
+                            rx.text("市場監視 (Market Monitor)", weight="bold", size="2", margin_bottom="0.5rem"),
+                            rx.grid(
+                                # Distribution Day
+                                rx.card(
+                                    rx.vstack(
+                                        rx.text("売り抜け日 (Distribution Day)", weight="bold", size="1"),
+                                        rx.hstack(
+                                            rx.text("SPY: " + MarketState.market_monitor.distribution_spy["count"].to_string() + "日", size="2"),
+                                            rx.badge(MarketState.market_monitor.distribution_spy["status"].to_string(), color_scheme=rx.cond(MarketState.market_monitor.distribution_spy["level"] == "red", "red", rx.cond(MarketState.market_monitor.distribution_spy["level"] == "yellow", "orange", "green"))),
+                                            align_items="center"
+                                        ),
+                                        rx.hstack(
+                                            rx.text("NDX: " + MarketState.market_monitor.distribution_ndx["count"].to_string() + "日", size="2"),
+                                            rx.badge(MarketState.market_monitor.distribution_ndx["status"].to_string(), color_scheme=rx.cond(MarketState.market_monitor.distribution_ndx["level"] == "red", "red", rx.cond(MarketState.market_monitor.distribution_ndx["level"] == "yellow", "orange", "green"))),
+                                            align_items="center"
+                                        ),
+                                    ),
+                                    padding="0.5rem",
+                                ),
+                                # Yield Spread
+                                rx.card(
+                                    rx.vstack(
+                                        rx.text("イールドスプレッド", weight="bold", size="1"),
+                                        rx.cond(
+                                            MarketState.market_monitor.yield_spread.contains("spreads"),
+                                            rx.vstack(
+                                                rx.hstack(
+                                                    rx.text("SPY:", size="2"),
+                                                    rx.badge(MarketState.market_monitor.yield_spread["spreads"]["SPY"]["status"].to_string(), color_scheme=rx.cond(MarketState.market_monitor.yield_spread["spreads"]["SPY"]["status"].to_string().contains("株式優位"), "green", "red")),
+                                                ),
+                                                rx.hstack(
+                                                    rx.text("NDX:", size="2"),
+                                                    rx.badge(MarketState.market_monitor.yield_spread["spreads"]["NDX"]["status"].to_string(), color_scheme=rx.cond(MarketState.market_monitor.yield_spread["spreads"]["NDX"]["status"].to_string().contains("株式優位"), "green", "red")),
+                                                ),
+                                                spacing="1"
+                                            ),
+                                            rx.text("-", size="2")
+                                        )
+                                    ),
+                                    padding="0.5rem",
+                                ),
+                                # Market Climax
+                                rx.card(
+                                    rx.vstack(
+                                        rx.text("市場天井複合検知", weight="bold", size="1"),
+                                        rx.cond(
+                                            MarketState.market_monitor.climax.contains("is_climax"),
+                                            rx.vstack(
+                                                rx.cond(
+                                                    MarketState.market_monitor.climax["is_climax"].to(bool),
+                                                    rx.badge("天井警戒 (Climax Detected)", color_scheme="red"),
+                                                    rx.badge("正常", color_scheme="green")
+                                                ),
+                                                rx.cond(
+                                                    MarketState.market_monitor.climax.contains("warnings"),
+                                                    rx.vstack(
+                                                        rx.foreach(
+                                                            MarketState.market_monitor.climax["warnings"],
+                                                            lambda w: rx.text("- " + w.to_string(), size="1", color=rx.color("red", 11))
+                                                        ),
+                                                        spacing="0",
+                                                    )
+                                                )
+                                            ),
+                                            rx.text("-", size="2")
+                                        )
+                                    ),
+                                    padding="0.5rem",
+                                ),
+                                columns=rx.breakpoints(initial="1", md="3"),
+                                spacing="2",
+                                width="100%",
+                            ),
+                            width="100%",
+                            margin_top="1rem",
+                            padding="0.75rem",
+                            border=f"1px solid {rx.color('gray', 4)}",
+                            border_radius="8px",
+                        ),
+                        rx.fragment()
+                    ),
+
                     width="100%",
                     spacing="3",
                 ),

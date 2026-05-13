@@ -239,6 +239,61 @@ def generate_market_analysis_report(
         logger.error(f"Advanced Tech Analysis fetch error: {e}")
         advanced_tech_parts.append("- 高度テクニカルデータ取得エラー")
 
+    # 8.6 Market Monitor (Distribution, Climax, Spread)
+    try:
+        from src.advisor.market_monitor import track_distribution_days, detect_market_climax, evaluate_yield_spread
+        from src.market_data import get_stock_info
+        
+        spy_df = get_stock_data("SPY", "6mo")
+        ndx_df = get_stock_data("^NDX", "6mo")
+        
+        dist_spy = track_distribution_days(spy_df)
+        dist_ndx = track_distribution_days(ndx_df)
+        
+        advanced_tech_parts.append(f"\n【市場監視 (Distribution Day)】")
+        advanced_tech_parts.append(f"- S&P500: {dist_spy['count']}日 ({dist_spy['level']} - {dist_spy['status']})")
+        advanced_tech_parts.append(f"- NASDAQ: {dist_ndx['count']}日 ({dist_ndx['level']} - {dist_ndx['status']})")
+        
+        # PCR
+        opt_pcr = 0.8
+        if option_analysis and len(option_analysis) > 0:
+            opt_pcr = option_analysis[0].get("pcr", 0.8)
+            
+        climax = detect_market_climax(spy_df, ndx_df, opt_pcr)
+        if climax["warnings"]:
+            advanced_tech_parts.append(f"【市場天井警戒】")
+            for w in climax["warnings"]:
+                advanced_tech_parts.append(f"- {w}")
+                
+        # Yield Spread
+        tnx_df = get_stock_data("^TNX", "5d")
+        tnx_yield = float(tnx_df["Close"].iloc[-1]) / 10.0 if not tnx_df.empty else 4.0
+        
+        spy_info = get_stock_info("SPY")
+        qqq_info = get_stock_info("QQQ")
+        
+        # PER取得（取れなければ固定の近似値を入れる）
+        spy_pe = spy_info.get("pe_ratio") if spy_info and isinstance(spy_info.get("pe_ratio"), (int, float)) else 22.0
+        ndx_pe = qqq_info.get("pe_ratio") if qqq_info and isinstance(qqq_info.get("pe_ratio"), (int, float)) else 30.0
+        
+        index_pe = {"SPY": float(spy_pe), "NDX": float(ndx_pe)}
+        
+        spread = evaluate_yield_spread(tnx_yield, index_pe)
+        advanced_tech_parts.append(f"\n【イールドスプレッド (10年債利回り: {tnx_yield:.2f}%)】")
+        for idx, res in spread["spreads"].items():
+            advanced_tech_parts.append(f"- {idx}: 益回り {res['earnings_yield']:.2f}% (スプレッド: {res['spread']:.2f}%) -> {res['status']}")
+        
+        # market_data dictに格納してフロントエンドでも使えるようにする
+        market_data["market_monitor"] = {
+            "distribution_days": {"SPY": dist_spy, "NDX": dist_ndx},
+            "climax": climax,
+            "yield_spread": spread
+        }
+        
+    except Exception as e:
+        logger.error(f"Market Monitor fetch error: {e}")
+        advanced_tech_parts.append("- 市場監視データ取得エラー")
+
     advanced_tech_analysis_str = "\n".join(advanced_tech_parts)
 
     # 9. Generate Recap
