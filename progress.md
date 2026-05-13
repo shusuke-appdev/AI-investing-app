@@ -7,6 +7,7 @@
   - AI分析ボタンが ImportError で常時失敗する問題を修正 (stock_analyst.py)
   - yfinance NaN値によるフロントエンド表示崩壊を修正 (market_index_provider.py)
   - 5y期間マッピング欠落で長期MA(250/500/750日)が常に計算不能だった問題を修正 (stock_data_provider.py)
+  - Reflexコンパイル時のUntypedVarErrorを修正 — MarketMonitorDataの型をPydantic BaseModelで厳密化しUIの属性アクセスへ変更 (market_state.py, flash_summary.py)
 - **分析ロジック修正**: RSIゼロ除算防止強化、ボラティリティweight不均衡修正、iv変数スコープ修正
 - **機能間連携**: Flash Summaryキー名修正、決算Placeholder→Finnhub委譲、query_generatorキー修正
 - **堅牢性**: キャッシュメモリリーク防止、Gemini 429/503リトライ、フォールバックキャッシュ排他制御、Stooqタイムアウト

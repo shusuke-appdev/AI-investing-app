@@ -50,12 +50,42 @@ class MomentumCategory(BaseModel):
     period: str = ""
     themes: list[MomentumTheme] = []
 
+class DistributionData(BaseModel):
+    count: int = 0
+    status: str = ""
+    level: str = "normal"
+
+
+class ClimaxData(BaseModel):
+    is_climax: bool = False
+    warnings: list[str] = []
+    level: str = "normal"
+
+
+class SpreadItem(BaseModel):
+    earnings_yield: float = 0.0
+    spread: float = 0.0
+    status: str = "neutral"
+
+
+class Spreads(BaseModel):
+    SPY: SpreadItem = SpreadItem()
+    NDX: SpreadItem = SpreadItem()
+
+
+class YieldSpreadData(BaseModel):
+    yield_10y: float = 0.0
+    spreads: Spreads = Spreads()
+    overall_status: str = "neutral"
+    warnings: list[str] = []
+
+
 class MarketMonitorData(BaseModel):
     """市場監視データ"""
-    distribution_spy: dict[str, Any] = {}
-    distribution_ndx: dict[str, Any] = {}
-    climax: dict[str, Any] = {}
-    yield_spread: dict[str, Any] = {}
+    distribution_spy: DistributionData = DistributionData()
+    distribution_ndx: DistributionData = DistributionData()
+    climax: ClimaxData = ClimaxData()
+    yield_spread: YieldSpreadData = YieldSpreadData()
 
 
 class MarketState(rx.State):
