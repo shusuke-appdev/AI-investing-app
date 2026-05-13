@@ -91,7 +91,7 @@ def _evaluate_momentum(bm_data: pd.DataFrame) -> MarketSignal:
 
 
 def _evaluate_volatility(bm_data: pd.DataFrame) -> MarketSignal:
-    """ボラティリティ・クラスタリング判定 (Weight: 2.0)"""
+    """ボラティリティ・クラスタリング判定 (Weight: 1.0)"""
     from src.advisor.volatility import compute_volatility
     from src.advisor.volatility_clustering import generate_signals as gen_vol_signals
 
@@ -106,10 +106,10 @@ def _evaluate_volatility(bm_data: pd.DataFrame) -> MarketSignal:
             score = 0.5
             rationale = f"安定期 ({vol_sig['signal']}) - ボラティリティは落ち着いている"
 
-        return MarketSignal("市場リスク (Vol)", vol_sig, score, 2.0, rationale)
+        return MarketSignal("市場リスク (Vol)", vol_sig, score, 1.0, rationale)
     except Exception as e:
         logger.error(f"Volatility Evaluation Error: {e}")
-        return MarketSignal("市場リスク (Vol)", None, 0.0, 2.0, "計算エラー")
+        return MarketSignal("市場リスク (Vol)", None, 0.0, 1.0, "計算エラー")
 
 
 def _evaluate_breadth(market_type: str) -> list[MarketSignal]:

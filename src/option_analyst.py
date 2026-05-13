@@ -78,19 +78,21 @@ def calculate_pcr(
         PCR情報の辞書
     """
     if calls is None or puts is None:
+        if not ticker:
+            return None
         option_data = get_option_chain(ticker)
         if option_data is None:
             return None
         calls, puts = option_data
 
-    # Volume PCR
-    call_volume = calls["volume"].sum() if "volume" in calls.columns else 0
-    put_volume = puts["volume"].sum() if "volume" in puts.columns else 0
+    # Volume PCR (NaN値の安全な処理)
+    call_volume = calls["volume"].fillna(0).sum() if "volume" in calls.columns else 0
+    put_volume = puts["volume"].fillna(0).sum() if "volume" in puts.columns else 0
     volume_pcr = put_volume / call_volume if call_volume > 0 else 0
 
     # Open Interest PCR
-    call_oi = calls["openInterest"].sum() if "openInterest" in calls.columns else 0
-    put_oi = puts["openInterest"].sum() if "openInterest" in puts.columns else 0
+    call_oi = calls["openInterest"].fillna(0).sum() if "openInterest" in calls.columns else 0
+    put_oi = puts["openInterest"].fillna(0).sum() if "openInterest" in puts.columns else 0
     oi_pcr = put_oi / call_oi if call_oi > 0 else 0
 
     return {
@@ -125,12 +127,14 @@ def calculate_gex(
         GEX情報の辞書（ストライク別GEXとWall情報を含む）
     """
     if calls is None or puts is None or current_price == 0.0:
+        if not ticker:
+            return None
         fetched = _fetch_option_data(ticker)
         if fetched is None:
             return None
         calls, puts, current_price, _ = fetched
 
-    total_oi = calls["openInterest"].sum() + puts["openInterest"].sum()
+    total_oi = calls["openInterest"].fillna(0).sum() + puts["openInterest"].fillna(0).sum()
     if total_oi == 0:
         logger.warning(
             f"[OptionAnalyst] {ticker}: OpenInterest is 0. Cannot calculate GEX."
@@ -211,6 +215,8 @@ def calculate_max_pain(
 ) -> float | None:
     """Max Pain (最もオプション価値が失効するストライク価格) を計算"""
     if calls is None or puts is None:
+        if not ticker:
+            return None
         option_data = get_option_chain(ticker)
         if option_data is None:
             return None
@@ -294,6 +300,8 @@ def calculate_atm_iv(
 ) -> float | None:
     """ATM (At The Money) の平均IVを計算"""
     if calls is None or puts is None or current_price == 0.0:
+        if not ticker:
+            return None
         fetched = _fetch_option_data(ticker)
         if fetched is None:
             return None
@@ -339,6 +347,8 @@ def calculate_skew(
     正の値は下落リスク（Putの割高感）を、負の値は上昇リスクを強く織り込んでいることを示します。
     """
     if calls is None or puts is None or current_price == 0.0:
+        if not ticker:
+            return None
         fetched = _fetch_option_data(ticker)
         if fetched is None:
             return None
@@ -541,12 +551,11 @@ def get_major_indices_options(market_type: str = "US") -> list[dict]:
     results = []
     failed_tickers = []
 
-    for ticker in indices:
+    for i, ticker in enumerate(indices):
         try:
             analysis = analyze_option_sentiment(ticker)
             if analysis:
                 results.append(analysis)
-                time.sleep(1.0)  # yfinanceのRate Limit対策として1秒待機
             else:
                 failed_tickers.append(ticker)
                 logger.warning(
@@ -555,6 +564,11 @@ def get_major_indices_options(market_type: str = "US") -> list[dict]:
         except Exception as e:
             failed_tickers.append(ticker)
             logger.error(f"[OptionAnalyst] Exception analyzing {ticker}: {e}")
+
+        # yfinance Rate Limit対策: 銘柄間に十分な待機時間を確保
+        # 各銘柄で内部的に3期限×option_chain = 約9回のAPIコールが発生するため
+        if i < len(indices) - 1:
+            time.sleep(2.0)
 
     if failed_tickers:
         logger.warning(f"[OptionAnalyst] Failed tickers: {failed_tickers}")

@@ -17,6 +17,29 @@ _cache_store: dict[str, tuple[Any, float]] = {}
 _global_lock = threading.Lock()
 _locks: dict[str, threading.Lock] = {}
 
+# 期限切れエントリの掃除間隔（秒）
+_SWEEP_INTERVAL = 300  # 5分
+_last_sweep_time: float = 0.0
+
+
+def _sweep_expired_entries() -> None:
+    """期限切れキャッシュエントリを掃除する（メモリリーク防止）。
+    _global_lock を保持した状態で呼び出すこと。
+    """
+    global _last_sweep_time
+    now = time.time()
+    if now - _last_sweep_time < _SWEEP_INTERVAL:
+        return
+
+    _last_sweep_time = now
+    keys_to_delete = [k for k, (_, ts) in _cache_store.items() if now - ts >= _SWEEP_INTERVAL * 6]
+    for k in keys_to_delete:
+        del _cache_store[k]
+        _locks.pop(k, None)
+
+    if keys_to_delete:
+        logger.debug(f"[Cache] Swept {len(keys_to_delete)} expired entries")
+
 
 def ttl_cache(ttl: int = 300):
     """
@@ -49,6 +72,8 @@ def ttl_cache(ttl: int = 300):
                 if key not in _locks:
                     _locks[key] = threading.Lock()
                 key_lock = _locks[key]
+                # 低頻度で期限切れエントリを掃除（メモリリーク防止）
+                _sweep_expired_entries()
 
             with key_lock:
                 # Double-checked locking

@@ -131,8 +131,8 @@ def analyze_market_structure(ticker: str = "SPY") -> dict | None:
         hv20 = calculate_historical_volatility(df, window=20)
         vrp = None
         vrp_narrative = "データ不足"
-        if opt_data and opt_data.get("iv") and hv20:
-            iv = opt_data["iv"]
+        iv = opt_data.get("iv") if opt_data else None
+        if iv and hv20:
             vrp = iv - hv20
             if vrp < -0.02:
                 vrp_narrative = f"VRPマイナス幅大 ({vrp:+.2%})：オプションによる下値支持力が極めて弱く、ショック時に脆弱"

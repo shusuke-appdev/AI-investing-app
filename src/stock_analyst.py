@@ -107,3 +107,7 @@ def get_quick_summary(ticker: str, stock_info: dict) -> str:
     if result:
         return result.strip()
     return f"{company_name} ({ticker}) - {sector}"
+
+
+# 後方互換エイリアス: stock_state.py が参照する関数名
+generate_stock_analysis_report = analyze_stock

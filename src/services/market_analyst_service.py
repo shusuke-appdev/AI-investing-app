@@ -42,9 +42,8 @@ def generate_market_analysis_report(
 
     config = get_market_config(market_type)
 
-    # 0. Prepare Market Data
-    if market_data is None:
-        market_data = {}
+    # 0. Prepare Market Data (防御的コピーで呼び出し元のdictを破壊しない)
+    market_data = dict(market_data) if market_data else {}
 
     # 1. Fetch Company News from Finnhub (using configured targets)
     target_tickers = config.get("ai_analysis_targets", [])
@@ -241,7 +240,11 @@ def generate_market_analysis_report(
 
     # 8.6 Market Monitor (Distribution, Climax, Spread)
     try:
-        from src.advisor.market_monitor import track_distribution_days, detect_market_climax, evaluate_yield_spread
+        from src.advisor.market_monitor import (
+            detect_market_climax,
+            evaluate_yield_spread,
+            track_distribution_days,
+        )
         from src.market_data import get_stock_info
         
         spy_df = get_stock_data("SPY", "6mo")
@@ -254,10 +257,14 @@ def generate_market_analysis_report(
         advanced_tech_parts.append(f"- S&P500: {dist_spy['count']}日 ({dist_spy['level']} - {dist_spy['status']})")
         advanced_tech_parts.append(f"- NASDAQ: {dist_ndx['count']}日 ({dist_ndx['level']} - {dist_ndx['status']})")
         
-        # PCR
+        # PCR (pcrフィールドはdict型: {"volume_pcr": float, ...})
         opt_pcr = 0.8
         if option_analysis and len(option_analysis) > 0:
-            opt_pcr = option_analysis[0].get("pcr", 0.8)
+            pcr_dict = option_analysis[0].get("pcr")
+            if isinstance(pcr_dict, dict):
+                opt_pcr = float(pcr_dict.get("volume_pcr", 0.8))
+            elif isinstance(pcr_dict, (int, float)):
+                opt_pcr = float(pcr_dict)
             
         climax = detect_market_climax(spy_df, ndx_df, opt_pcr)
         if climax["warnings"]:

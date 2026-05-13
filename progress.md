@@ -1,5 +1,23 @@
 # AI投資アプリ - 進捗メモ
 
+## 最終セッション: 2026-05-13 (全コード総点検)
+- [x] 17件のバグ修正・堅牢性改善を14ファイルに実施
+- **致命的バグ修正**:
+  - PCR型エラーによる天井警戒シグナル常時発火を修正 (market_analyst_service.py)
+  - AI分析ボタンが ImportError で常時失敗する問題を修正 (stock_analyst.py)
+  - yfinance NaN値によるフロントエンド表示崩壊を修正 (market_index_provider.py)
+  - 5y期間マッピング欠落で長期MA(250/500/750日)が常に計算不能だった問題を修正 (stock_data_provider.py)
+- **分析ロジック修正**: RSIゼロ除算防止強化、ボラティリティweight不均衡修正、iv変数スコープ修正
+- **機能間連携**: Flash Summaryキー名修正、決算Placeholder→Finnhub委譲、query_generatorキー修正
+- **堅牢性**: キャッシュメモリリーク防止、Gemini 429/503リトライ、フォールバックキャッシュ排他制御、Stooqタイムアウト
+- **追加修正 (第2パス)**:
+  - GARCH Mockテスト失敗を修正 — persistence変数の型ガード追加 (volatility_clustering.py)
+  - オプション取得のyfinance Rate Limit対策: 期限数3に制限、期限間0.3秒・銘柄間2.0秒待機
+  - オプションデータのカラム名正規化（yfinanceバージョン間差分吸収）
+  - PCR/GEX計算でNaN値の安全なfillna(0)処理
+  - stock.options取得のtry/except追加
+- pytest 38/38 全通過
+
 ## 最終セッション: 2026-05-01 (UI改善・データ拡充)
 - [x] 株式指数をETF→生指数（^GSPC, ^NDX等）に変更
 - [x] 欧州（FTSE 100, DAX, CAC 40）・アジア（Hang Seng, STI）指数を追加

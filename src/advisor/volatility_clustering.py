@@ -83,7 +83,12 @@ def detect_clustering(df: pd.DataFrame) -> dict:
         # persistence = alpha + beta
         alpha = res.params.get("alpha[1]", 0)
         beta = res.params.get("beta[1]", 0)
-        persistence = alpha + beta
+
+        # 数値型ガード（テスト環境のMock対策 & 異常値対策）
+        if not isinstance(alpha, (int, float)) or not isinstance(beta, (int, float)):
+            raise ValueError(f"GARCH params non-numeric: alpha={alpha}, beta={beta}")
+
+        persistence = float(alpha) + float(beta)
 
         # ショック検知（直近20日で3σ超えのリターンがあったか）
         std_ret = recent_df["log_return"].std() * 100
@@ -117,7 +122,7 @@ def detect_clustering(df: pd.DataFrame) -> dict:
     state = confidence >= 0.5  # 2点以上でTrue (GARCH単独、またはACF+VoV)
 
     # 推定持続期間: GARCHの理論的半減期 または ACFベース
-    if persistence > 0 and persistence < 1:
+    if isinstance(persistence, (int, float)) and 0 < persistence < 1:
         # half-life = -ln(2) / ln(persistence)  (※日次)
         theoretical_hl = -np.log(2) / np.log(persistence)
         duration = min(int(theoretical_hl), 120)

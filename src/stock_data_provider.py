@@ -69,7 +69,10 @@ def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
             "3mo": timedelta(days=90),
             "6mo": timedelta(days=180),
             "1y": timedelta(days=365),
-            "max": timedelta(days=1825),
+            "2y": timedelta(days=730),
+            "3y": timedelta(days=1095),
+            "5y": timedelta(days=1825),
+            "max": timedelta(days=3650),
         }
         days = period_map.get(period, timedelta(days=30))
         start_date = (datetime.now() - days).strftime("%Y-%m-%d")
@@ -267,17 +270,32 @@ def get_quote(ticker: str) -> dict | None:
 def get_earnings_calendar(
     from_date: str | None = None, to_date: str | None = None
 ) -> list[dict]:
-    # Placeholder: OpenBB implementation or other data source needed
-    return []
+    """決算カレンダーを取得（Finnhub APIに委譲）"""
+    from src.finnhub_client import get_earnings_calendar as _fh_earnings_calendar
+    from src.finnhub_client import is_configured as _fh_configured
+
+    if not _fh_configured():
+        return []
+    return _fh_earnings_calendar(from_date, to_date)
 
 
 @ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
-    # Placeholder: OpenBB implementation or other data source needed
-    return []
+    """EPSサプライズデータを取得（Finnhub APIに委譲）"""
+    from src.finnhub_client import get_earnings_surprises as _fh_earnings_surprises
+    from src.finnhub_client import is_configured as _fh_configured
+
+    if not _fh_configured():
+        return []
+    return _fh_earnings_surprises(symbol, limit)
 
 
 @ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_financials_reported(symbol: str, freq: str = "quarterly") -> list[dict]:
-    # Placeholder: OpenBB implementation or other data source needed
-    return []
+    """報告済み財務諸表を取得（Finnhub APIに委譲）"""
+    from src.finnhub_client import get_financials_reported as _fh_financials_reported
+    from src.finnhub_client import is_configured as _fh_configured
+
+    if not _fh_configured():
+        return []
+    return _fh_financials_reported(symbol, freq)

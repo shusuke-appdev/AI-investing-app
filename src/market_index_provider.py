@@ -3,7 +3,11 @@ Market Index Data Provider
 主要な市場指数・コモディティ・暗号資産のデータを取得します。
 """
 
+import math
+from io import StringIO
+
 import pandas as pd
+import requests
 import yfinance as yf
 
 from src.cache import ttl_cache
@@ -25,14 +29,18 @@ JP_STOOQ_TICKERS: dict[str, str] = {
 
 
 def _get_stooq_data(ticker: str) -> tuple[float, float] | None:
-    """Stooqから日本市場データを取得する"""
+    """Stooqから日本市場データを取得する（タイムアウト付き）"""
     try:
         url = f"https://stooq.com/q/l/?s={ticker}&f=sd2t2ohlcv&h&e=csv"
-        df = pd.read_csv(url)
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        df = pd.read_csv(StringIO(resp.text))
         if df.empty or "Close" not in df.columns:
             return None
         close = float(df["Close"].iloc[0])
         open_price = float(df["Open"].iloc[0])
+        if math.isnan(close) or math.isnan(open_price):
+            return None
         change = ((close - open_price) / open_price * 100) if open_price != 0 else 0.0
         return close, round(change, 2)
     except Exception as e:
@@ -111,6 +119,15 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                             else:
                                 current = hist.iloc[-1, 0]
                                 prev = hist.iloc[-2, 0] if len(hist) >= 2 else current
+
+                            # NaN ガード: yfinanceが無効な値を返す場合がある
+                            if math.isnan(current) or math.isnan(prev):
+                                result[name] = {
+                                    "price": 0.0,
+                                    "change": 0.0,
+                                    "ticker": ticker,
+                                }
+                                continue
 
                             change = ((current - prev) / prev) * 100 if prev != 0 else 0
                             result[name] = {

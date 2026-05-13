@@ -3,13 +3,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# テスト環境で未インストールのオプショナル依存パッケージをモック注入。
-# 各モジュールが import 時にこれらを必要とするため、
-# pytest 収集前に sys.modules へ注入する。
-_optional_packages = ["openbb", "edinet_tools", "arch", "arch.unitroot", "finnhub", "gnews"]
-for _pkg in _optional_packages:
-    if _pkg not in sys.modules:
-        sys.modules[_pkg] = MagicMock()
+# NOTE: 全オプショナルパッケージ (openbb, arch, finnhub, gnews, edinet_tools) は
+# インストール済みのため、sys.modules への MagicMock 注入は行わない。
+# 外部APIの呼び出しは、以下の autouse fixture で個別にパッチする。
 
 
 @pytest.fixture(autouse=True)

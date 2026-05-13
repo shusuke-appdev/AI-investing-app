@@ -34,10 +34,10 @@ def generate_dynamic_search_queries(
     # 簡易な市場概況文字列の作成
     market_summary = ""
     for name, data in market_data.items():
-        if isinstance(data, dict):
+        if isinstance(data, dict) and "price" in data:
             price = data.get("price", "N/A")
-            change = data.get("change_percent", "N/A")
-            market_summary += f"- {name}: {price} ({change}%)\n"
+            change = data.get("change", "N/A")
+            market_summary += f"- {name}: {price} ({change:+.2f}%)\n" if isinstance(change, (int, float)) else f"- {name}: {price}\n"
 
     prompt = f"""
 あなたはプロの金融情報アナリストです。

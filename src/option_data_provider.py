@@ -4,6 +4,7 @@ Option Data Provider
 リトライ・タイムアウト・フォールバックキャッシュ機構搭載。
 """
 
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
@@ -18,6 +19,7 @@ logger = get_logger(__name__)
 
 # フォールバックキャッシュ: 最終成功データを保持（市場閉場時に前回データを返す）
 _fallback_cache: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
+_fallback_lock = threading.Lock()
 
 # リトライ設定
 MAX_RETRIES = 3
@@ -35,7 +37,11 @@ def _is_market_likely_closed() -> bool:
 def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """yfinanceからオプションチェーンを取得する内部関数（タイムアウトなし）"""
     stock = yf.Ticker(ticker)
-    expirations = stock.options
+    try:
+        expirations = stock.options
+    except Exception as e:
+        logger.warning(f"[OptionProvider] Failed to get expirations for {ticker}: {e}")
+        return None
 
     if not expirations:
         logger.warning(f"[OptionProvider] yfinance returned no expirations for {ticker}")
@@ -43,7 +49,9 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
 
     all_calls = []
     all_puts = []
-    for exp in expirations[:4]:
+    # yfinance API負荷を制御: 最大3期限に制限し、期限間に待機
+    max_expirations = min(3, len(expirations))
+    for i, exp in enumerate(expirations[:max_expirations]):
         try:
             opt = stock.option_chain(exp)
             calls = opt.calls.copy()
@@ -57,14 +65,29 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
                 f"[OptionProvider] yfinance option_chain({exp}) failed for {ticker}: {e}"
             )
             continue
+        # yfinance Rate Limit対策: 期限間に短い待機
+        if i < max_expirations - 1:
+            time.sleep(0.3)
 
     if not all_calls:
         logger.warning(f"[OptionProvider] yfinance returned no option chains for {ticker}")
         return None
 
-    return pd.concat(all_calls, ignore_index=True), pd.concat(
-        all_puts, ignore_index=True
-    )
+    calls_df = pd.concat(all_calls, ignore_index=True)
+    puts_df = pd.concat(all_puts, ignore_index=True)
+
+    # カラム名の正規化（yfinanceバージョン差分吸収）
+    col_map = {
+        "Volume": "volume",
+        "Open Interest": "openInterest",
+        "Implied Volatility": "impliedVolatility",
+        "Strike": "strike",
+        "Last Price": "lastPrice",
+    }
+    calls_df.rename(columns={k: v for k, v in col_map.items() if k in calls_df.columns}, inplace=True)
+    puts_df.rename(columns={k: v for k, v in col_map.items() if k in puts_df.columns}, inplace=True)
+
+    return calls_df, puts_df
 
 
 def _fetch_with_timeout(ticker: str, timeout: int = FETCH_TIMEOUT) -> tuple[pd.DataFrame, pd.DataFrame] | None:
@@ -95,9 +118,11 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
         (calls_df, puts_df) のタプル。取得不可の場合はNone。
     """
     # 市場閉場時はフォールバックキャッシュを優先
-    if _is_market_likely_closed() and ticker in _fallback_cache:
-        logger.info(f"[OptionProvider] Market closed, using fallback cache for {ticker}")
-        return _fallback_cache[ticker]
+    if _is_market_likely_closed():
+        with _fallback_lock:
+            if ticker in _fallback_cache:
+                logger.info(f"[OptionProvider] Market closed, using fallback cache for {ticker}")
+                return _fallback_cache[ticker]
 
     # リトライループ
     last_error = None
@@ -106,7 +131,8 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
             result = _fetch_with_timeout(ticker)
             if result is not None:
                 # 成功 → フォールバックキャッシュに保存
-                _fallback_cache[ticker] = result
+                with _fallback_lock:
+                    _fallback_cache[ticker] = result
                 return result
         except Exception as e:
             last_error = e
@@ -120,11 +146,12 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
             time.sleep(wait)
 
     # 全リトライ失敗 → フォールバックキャッシュ
-    if ticker in _fallback_cache:
-        logger.info(
-            f"[OptionProvider] All retries failed for {ticker}, using fallback cache"
-        )
-        return _fallback_cache[ticker]
+    with _fallback_lock:
+        if ticker in _fallback_cache:
+            logger.info(
+                f"[OptionProvider] All retries failed for {ticker}, using fallback cache"
+            )
+            return _fallback_cache[ticker]
 
     logger.error(
         f"[OptionProvider] All retries exhausted for {ticker}, no fallback available. "

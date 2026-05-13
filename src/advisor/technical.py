@@ -149,23 +149,10 @@ def analyze_technical(ticker: str, period: str = "5y") -> TechnicalScore | None:
     mtf_data = analyze_multi_timeframe(ticker)
 
     # ダイバージェンス
-    div_rsi = detect_divergence(
-        close,
-        100
-        - (
-            100
-            / (
-                1
-                + (
-                    close.diff().where(close.diff() > 0, 0).rolling(14).mean()
-                    / (
-                        -close.diff().where(close.diff() < 0, 0).rolling(14).mean()
-                        + 1e-10
-                    )
-                )
-            )
-        ),
-    )
+    _gain = close.diff().where(close.diff() > 0, 0).rolling(14).mean()
+    _loss = (-close.diff().where(close.diff() < 0, 0)).rolling(14).mean().clip(lower=1e-10)
+    _rsi_series = 100 - (100 / (1 + _gain / _loss))
+    div_rsi = detect_divergence(close, _rsi_series)
     div_macd = detect_divergence(
         close, close.ewm(span=12).mean() - close.ewm(span=26).mean()
     )

@@ -36,22 +36,20 @@ def generate_flash_summary(
     """
     lines = []
 
-    # 指数
+    # 指数（market_config.py のキー名に合わせる）
     if "S&P 500" in market_data:
         sp = market_data["S&P 500"]
         lines.append(f"■ S&P500 {sp.get('change', 0):+.2f}%")
-    if "Nasdaq" in market_data:
-        nq = market_data["Nasdaq"]
+    if "Nasdaq 100" in market_data:
+        nq = market_data["Nasdaq 100"]
         lines.append(f"■ ナスダック {nq.get('change', 0):+.2f}%")
 
-    # 金利
+    # 金利（market_config.py のキー名に合わせる）
     treasury_line = []
-    if "2Y Treasury" in market_data:
-        treasury_line.append(f"2y {market_data['2Y Treasury'].get('price', 0):.3f}%")
-    if "10Y Treasury" in market_data:
-        treasury_line.append(f"10y {market_data['10Y Treasury'].get('price', 0):.3f}%")
-    if "30Y Treasury" in market_data:
-        treasury_line.append(f"30y {market_data['30Y Treasury'].get('price', 0):.3f}%")
+    if "US 10Y Yield" in market_data:
+        treasury_line.append(f"10y {market_data['US 10Y Yield'].get('price', 0):.3f}%")
+    if "US 30Y Yield" in market_data:
+        treasury_line.append(f"30y {market_data['US 30Y Yield'].get('price', 0):.3f}%")
     if treasury_line:
         lines.append(f"■ {', '.join(treasury_line)}")
 
@@ -105,12 +103,15 @@ def generate_market_recap(
     context_parts = [f"【レポート生成日: {today_str}】"]
 
     # 市場データ（5日変動）
+    # メタデータキーと非dict値をフィルタして安全にイテレート
     context_parts.append("【短期変動 (5日)】")
+    _meta_keys = ("trend_1mo", "weekly_performance", "market_monitor")
     for name, data in market_data.items():
-        if name not in ("trend_1mo", "weekly_performance"):
-            context_parts.append(
-                f"- {name}: {data.get('price', 'N/A')}, 変化: {data.get('change', 0):+.2f}%"
-            )
+        if name in _meta_keys or not isinstance(data, dict):
+            continue
+        context_parts.append(
+            f"- {name}: {data.get('price', 'N/A')}, 変化: {data.get('change', 0):+.2f}%"
+        )
 
     # 週次パフォーマンス（アセットクラス横断）
     if "weekly_performance" in market_data:
