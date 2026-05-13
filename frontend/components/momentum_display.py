@@ -4,6 +4,7 @@
 """
 
 import reflex as rx
+
 from frontend.state.market_state import MarketState, MomentumCategory, MomentumTheme
 
 

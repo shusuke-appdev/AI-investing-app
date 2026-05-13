@@ -1,7 +1,8 @@
-import reflex as rx
 import asyncio
-from typing import List
+
+import reflex as rx
 from pydantic import BaseModel
+
 from src.themes_config import PERIODS
 
 
@@ -16,7 +17,7 @@ class ThemeItem(BaseModel):
     """テーマランキングの1行"""
     theme: str = ""
     performance: float = 0.0
-    stocks: List[ThemeStock] = []
+    stocks: list[ThemeStock] = []
 
 
 class ThemeState(rx.State):
@@ -27,9 +28,9 @@ class ThemeState(rx.State):
     error_msg: str = ""
 
     # テーマランキングデータ（型付き）
-    ranked_themes: List[ThemeItem] = []
+    ranked_themes: list[ThemeItem] = []
 
-    def set_period(self, period: str | List[str]):
+    def set_period(self, period: str | list[str]):
         """期間を変更し、データを再取得する"""
         if isinstance(period, list):
             period = period[0] if period else "1週間"
@@ -39,19 +40,19 @@ class ThemeState(rx.State):
             return ThemeState.fetch_themes
 
     @rx.var
-    def periods(self) -> List[str]:
+    def periods(self) -> list[str]:
         """選択可能な期間のリスト"""
         return list(PERIODS.keys())
 
     @rx.var
-    def top_10_themes(self) -> List[ThemeItem]:
+    def top_10_themes(self) -> list[ThemeItem]:
         """トップ10テーマ（パフォーマンス降順）"""
         if not self.ranked_themes:
             return []
         return self.ranked_themes[:10]
 
     @rx.var
-    def bottom_10_themes(self) -> List[ThemeItem]:
+    def bottom_10_themes(self) -> list[ThemeItem]:
         """ワースト10テーマ（パフォーマンス昇順）"""
         if not self.ranked_themes:
             return []

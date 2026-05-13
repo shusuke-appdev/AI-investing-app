@@ -1,13 +1,15 @@
 import reflex as rx
+
 from frontend.state.stock_state import StockState
+
 
 def _render_score_row() -> rx.Component:
     """総合スコアとコア指標の1行表示"""
     tech = StockState.technical_data
-    
+
     overall_score = tech["overall_score"].to(int)
     overall_signal = tech["overall_signal"].to_string()
-    
+
     # 総合スコアのバッジ表示用
     badge_color = rx.cond(
         overall_score > 20, "green",
@@ -17,11 +19,11 @@ def _render_score_row() -> rx.Component:
         overall_score > 20, "🟢",
         rx.cond(overall_score < -20, "🔴", "🟡")
     )
-    
+
     # RSIアイコン
     rsi_val = tech["rsi"].to(float)
     rsi_icon = rx.cond(rsi_val < 30, "🟢", rx.cond(rsi_val > 70, "🔴", "⚪"))
-    
+
     return rx.grid(
         rx.vstack(
             rx.text("総合評価", size="1", color="gray", weight="bold"),
@@ -72,7 +74,7 @@ def _render_score_row() -> rx.Component:
 def _render_detail_section() -> rx.Component:
     """詳細指標の展開表示"""
     tech = StockState.technical_data
-    
+
     return rx.accordion.root(
         rx.accordion.item(
             header="詳細指標を見る",
@@ -80,18 +82,18 @@ def _render_detail_section() -> rx.Component:
                 rx.text("基本指標", weight="bold", size="3", margin_bottom="0.5rem"),
                 rx.grid(
                     rx.vstack(
-                        rx.text(f"MA乖離: ", tech["ma_deviation"].to(float), "%", size="2"),
-                        rx.text(f"BB: ", tech["bb_position"].to_string(), size="2"),
+                        rx.text("MA乖離: ", tech["ma_deviation"].to(float), "%", size="2"),
+                        rx.text("BB: ", tech["bb_position"].to_string(), size="2"),
                         align_items="start"
                     ),
                     rx.vstack(
-                        rx.text(f"ATR: $", tech["atr"].to(float), " (", tech["atr_percent"].to(float), "%)", size="2"),
-                        rx.text(f"BB幅: ", tech["bb_width"].to(float), "%", size="2"),
+                        rx.text("ATR: $", tech["atr"].to(float), " (", tech["atr_percent"].to(float), "%)", size="2"),
+                        rx.text("BB幅: ", tech["bb_width"].to(float), "%", size="2"),
                         align_items="start"
                     ),
                     rx.vstack(
-                        rx.text(f"サポート: $", tech["support_price"].to(float), size="2"),
-                        rx.text(f"レジスタンス: $", tech["resistance_price"].to(float), size="2"),
+                        rx.text("サポート: $", tech["support_price"].to(float), size="2"),
+                        rx.text("レジスタンス: $", tech["resistance_price"].to(float), size="2"),
                         align_items="start"
                     ),
                     columns="3",
@@ -99,21 +101,21 @@ def _render_detail_section() -> rx.Component:
                     width="100%",
                     margin_bottom="1rem"
                 ),
-                
+
                 rx.divider(),
-                
+
                 rx.text("高度指標", weight="bold", size="3", margin_top="1rem", margin_bottom="0.5rem"),
                 rx.grid(
                     rx.vstack(
-                        rx.text(f"一目: ", tech["ichimoku_signal"].to_string(), size="2"),
+                        rx.text("一目: ", tech["ichimoku_signal"].to_string(), size="2"),
                         align_items="start"
                     ),
                     rx.vstack(
-                        rx.text(f"動的RSI: ", tech["rsi_dynamic_signal"].to_string(), size="2"),
+                        rx.text("動的RSI: ", tech["rsi_dynamic_signal"].to_string(), size="2"),
                         align_items="start"
                     ),
                     rx.vstack(
-                        rx.text(f"BBスクイズ: ", tech["bb_squeeze_signal"].to_string(), size="2"),
+                        rx.text("BBスクイズ: ", tech["bb_squeeze_signal"].to_string(), size="2"),
                         align_items="start"
                     ),
                     columns="3",

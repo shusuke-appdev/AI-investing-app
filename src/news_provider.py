@@ -6,7 +6,6 @@ News Provider
 from datetime import datetime
 
 from src.cache import ttl_cache
-
 from src.constants import CACHE_TTL_MEDIUM
 from src.finnhub_client import (
     get_company_news as _finnhub_get_company_news,

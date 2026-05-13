@@ -1,6 +1,8 @@
+
 import reflex as rx
-from typing import Dict, Any
+
 from frontend.state.market_state import MarketState
+
 
 def render_ticker_compact(opt) -> rx.Component:
     """個別銘柄のコンパクト表示（ナラティブ形式）"""
@@ -9,13 +11,13 @@ def render_ticker_compact(opt) -> rx.Component:
 
     icon = rx.cond(sentiment == "強気", "🟢", rx.cond(sentiment == "弱気", "🔴", "⚪"))
     current_price = opt.current_price
-    
+
     net_gex = opt.net_gex
     pcr_vol = opt.pcr_vol
-    
+
     pcr_color = rx.cond(pcr_vol > 1.2, "red", rx.cond(pcr_vol < 0.7, "green", "gray"))
     gex_color = rx.cond(net_gex > 0, "green", "red")
-    
+
     return rx.card(
         rx.vstack(
             rx.hstack(

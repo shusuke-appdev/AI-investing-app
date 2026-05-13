@@ -1,6 +1,8 @@
 import reflex as rx
+
 from frontend.state.knowledge_state import KnowledgeState
 from frontend.template import template
+
 
 def render_knowledge_item(item: dict) -> rx.Component:
     """知識アイテムの1行表示"""
@@ -11,7 +13,7 @@ def render_knowledge_item(item: dict) -> rx.Component:
         "youtube": "youtube",
         "url": "globe"
     }
-    
+
     # Reflexの機能制約により、辞書から直接条件分岐するのが複雑なので、単純にアイコンを固定するかcondを使用する。
     # ここではシンプルに default アイコンとして 'file' を使用し、判定する
     icon_name = rx.cond(
@@ -107,7 +109,7 @@ def render_add_mode() -> rx.Component:
     """追加モード"""
     return rx.vstack(
         rx.heading("📥 知識を追加", size="5", margin_bottom="1rem"),
-        
+
         rx.text("入力方式", weight="bold", size="2"),
         rx.radio(
             ["text", "file", "youtube", "url"],
@@ -117,9 +119,9 @@ def render_add_mode() -> rx.Component:
             spacing="4",
             margin_bottom="1rem"
         ),
-        
+
         rx.divider(margin_bottom="1rem"),
-        
+
         rx.cond(
             KnowledgeState.input_type == "text",
             rx.text_area(
@@ -130,7 +132,7 @@ def render_add_mode() -> rx.Component:
                 width="100%"
             )
         ),
-        
+
         rx.cond(
             KnowledgeState.input_type == "youtube",
             rx.input(
@@ -140,7 +142,7 @@ def render_add_mode() -> rx.Component:
                 width="100%"
             )
         ),
-        
+
         rx.cond(
             KnowledgeState.input_type == "url",
             rx.input(
@@ -150,7 +152,7 @@ def render_add_mode() -> rx.Component:
                 width="100%"
             )
         ),
-        
+
         rx.cond(
             KnowledgeState.input_type == "file",
             rx.vstack(
@@ -172,7 +174,7 @@ def render_add_mode() -> rx.Component:
                 align_items="center"
             )
         ),
-        
+
         rx.cond(
             (KnowledgeState.input_type != "file") & (KnowledgeState.input_type != "text"),
             rx.button(
@@ -182,7 +184,7 @@ def render_add_mode() -> rx.Component:
                 margin_top="1rem"
             )
         ),
-        
+
         rx.cond(
             KnowledgeState.input_type == "text",
             rx.button(
@@ -192,7 +194,7 @@ def render_add_mode() -> rx.Component:
                 margin_top="1rem"
             )
         ),
-        
+
         rx.cond(
             KnowledgeState.extracted_content != "",
             rx.box(
@@ -206,9 +208,9 @@ def render_add_mode() -> rx.Component:
                 width="100%"
             )
         ),
-        
+
         rx.divider(margin_top="2rem", margin_bottom="1rem"),
-        
+
         rx.hstack(
             rx.button(
                 "💾 保存してAIに学習させる",
@@ -224,7 +226,7 @@ def render_add_mode() -> rx.Component:
             ),
             spacing="4"
         ),
-        
+
         width="100%",
         max_width="800px"
     )
@@ -233,7 +235,7 @@ def render_edit_mode() -> rx.Component:
     """編集モード"""
     return rx.vstack(
         rx.heading("✏️ 知識を編集", size="5", margin_bottom="1rem"),
-        
+
         rx.text("タイトル", weight="bold", size="2"),
         rx.input(
             value=KnowledgeState.edit_title,
@@ -241,7 +243,7 @@ def render_edit_mode() -> rx.Component:
             width="100%",
             margin_bottom="1rem"
         ),
-        
+
         rx.text("要約 (AIが参照する内容)", weight="bold", size="2"),
         rx.text_area(
             value=KnowledgeState.edit_summary,
@@ -250,7 +252,7 @@ def render_edit_mode() -> rx.Component:
             width="100%",
             margin_bottom="1rem"
         ),
-        
+
         rx.text("元のコンテンツ", weight="bold", size="2"),
         rx.text_area(
             value=KnowledgeState.edit_original,
@@ -259,7 +261,7 @@ def render_edit_mode() -> rx.Component:
             width="100%",
             margin_bottom="2rem"
         ),
-        
+
         rx.hstack(
             rx.button(
                 "💾 更新を保存",
@@ -273,7 +275,7 @@ def render_edit_mode() -> rx.Component:
             ),
             spacing="4"
         ),
-        
+
         width="100%",
         max_width="800px"
     )
@@ -284,7 +286,7 @@ def knowledge() -> rx.Component:
     return rx.vstack(
         rx.heading("📚 参照知識管理", size="7", margin_bottom="0.5rem"),
         rx.text("AIチャットが参照する知識ソースを管理します。", color="gray", margin_bottom="2rem"),
-        
+
         rx.cond(
             KnowledgeState.mode == "list",
             render_list_mode(),

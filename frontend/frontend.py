@@ -1,13 +1,14 @@
 import reflex as rx
+
 from frontend.pages.index import index
-from frontend.state.market_state import MarketState
+from frontend.pages.knowledge import knowledge as knowledge_page
+from frontend.pages.portfolio import portfolio_page
 from frontend.pages.stock import stock_page
 from frontend.pages.theme import theme_page
-from frontend.state.theme_state import ThemeState
-from frontend.pages.portfolio import portfolio_page
-from frontend.state.portfolio_state import PortfolioState
-from frontend.pages.knowledge import knowledge as knowledge_page
 from frontend.state.knowledge_state import KnowledgeState
+from frontend.state.market_state import MarketState
+from frontend.state.portfolio_state import PortfolioState
+from frontend.state.theme_state import ThemeState
 
 app = rx.App(
     theme=rx.theme(

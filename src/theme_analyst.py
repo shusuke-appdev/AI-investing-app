@@ -7,7 +7,6 @@ from datetime import timedelta
 
 import pandas as pd
 import yfinance as yf
-import time
 
 from src.cache import ttl_cache
 from src.log_config import get_logger

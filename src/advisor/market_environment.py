@@ -221,7 +221,7 @@ def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
             return []
 
         signals = []
-        
+
         # 1. VRP (Volatility Risk Premium)
         vrp_val = micro.get("vrp")
         if vrp_val is not None:

@@ -1,6 +1,6 @@
-import edinet_tools
 import os
-import json
+
+import edinet_tools
 
 # Replace with an actual check if you have a mocked key or run it when set
 os.environ["EDINET_API_KEY"] = os.environ.get("EDINET_API_KEY", "YOUR_API_KEY")

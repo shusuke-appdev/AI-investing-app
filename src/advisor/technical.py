@@ -30,8 +30,11 @@ from src.advisor.technical_indicators import (
     calculate_support_resistance,
 )
 from src.advisor.technical_patterns import (
+    detect_advanced_patterns,
     detect_candlestick_patterns,
     detect_peaks_valleys,
+    detect_pinbar,
+    detect_volume_climax_vs_bleed,
 )
 from src.advisor.technical_regimes import (
     calculate_anchored_vwap,
@@ -72,7 +75,45 @@ SCORE_WEIGHTS_NEG_GAMMA = {
 }
 
 
-def analyze_technical(ticker: str, period: str = "1y") -> TechnicalScore | None:
+def calculate_long_term_ma(close: pd.Series) -> dict:
+    """長期MA(250, 500, 750日)を計算し、乖離率とシグナルを判定する。"""
+    res = {"ma_250": None, "ma_500": None, "ma_750": None, "signal": "neutral", "description": "長期MA乖離なし"}
+    if len(close) < 250:
+        return {"signal": "neutral", "description": "データ不足（長期MA計算不可）"}
+
+    latest = close.iloc[-1]
+
+    ma250 = close.rolling(250).mean().iloc[-1]
+    res["ma_250"] = ma250
+    dev250 = (latest - ma250) / ma250 if ma250 else 0
+
+    if len(close) >= 500:
+        ma500 = close.rolling(500).mean().iloc[-1]
+        res["ma_500"] = ma500
+        dev500 = (latest - ma500) / ma500 if ma500 else 0
+    else:
+        dev500 = 0
+
+    if len(close) >= 750:
+        ma750 = close.rolling(750).mean().iloc[-1]
+        res["ma_750"] = ma750
+        dev750 = (latest - ma750) / ma750 if ma750 else 0
+    else:
+        dev750 = 0
+
+    # 判定：いずれかの長期MAから極端に下方に乖離しているか、または長期MA付近（サポート）にいるか
+    if dev250 < -0.3 or dev500 < -0.3 or dev750 < -0.3:
+        res["signal"] = "deep_discount"
+        res["description"] = "長期移動平均から30%以上下方に乖離。歴史的売られすぎ水準。"
+    elif abs(dev250) < 0.03 or abs(dev500) < 0.03 or abs(dev750) < 0.03:
+        res["signal"] = "near_support"
+        res["description"] = "長期MA（1-3年）の強力なサポート水準に接近。"
+
+    return res
+
+
+
+def analyze_technical(ticker: str, period: str = "5y") -> TechnicalScore | None:
     """銘柄の包括的テクニカル分析を実行します。"""
     df = get_stock_data(ticker, period)
     if df.empty or len(df) < 50:
@@ -141,6 +182,12 @@ def analyze_technical(ticker: str, period: str = "1y") -> TechnicalScore | None:
     # Mean Reversion 分析
     mr_analyzer = MeanReversionAnalyzer(ticker)
     mr_data = mr_analyzer.analyze(df)
+
+    # 拡張下落判定 (Pinbar, Climax, Patterns, LongTerm MA)
+    pinbar_data = detect_pinbar(open_, high, low, close)
+    volume_data = detect_volume_climax_vs_bleed(close, volume)
+    adv_patterns = detect_advanced_patterns(close, high, low)
+    long_term_ma = calculate_long_term_ma(close)
 
     # オプション分析 & スコアリング
     opt_data = analyze_options_data(ticker, current_price)
@@ -255,6 +302,10 @@ def analyze_technical(ticker: str, period: str = "1y") -> TechnicalScore | None:
         price_range=opt_data.get("price_range"),
         mr_parabolic_state=mr_data.get("parabolic_state", {}),
         mr_rebound_state=mr_data.get("rebound_state", {}),
+        pinbar_data=pinbar_data,
+        volume_climax_bleed_data=volume_data,
+        advanced_patterns_data=adv_patterns,
+        ma_long_term_data=long_term_ma,
     )
 
 
@@ -305,6 +356,22 @@ def get_technical_summary_for_ai(ticker: str) -> str:
     if tech.mr_rebound_state.get("is_dip_buyable"):
         mr_str += f"[DipBuy好機] {tech.mr_rebound_state.get('description', '')} "
 
+    # 暴落・下落時の対応強化用テキスト構築
+    drop_str = ""
+    if tech.volume_climax_bleed_data.get("signal") == "selling_climax":
+        drop_str += f"【セリクラ示唆(買い場)】 {tech.volume_climax_bleed_data.get('description', '')} "
+    elif tech.volume_climax_bleed_data.get("signal") == "low_volume_bleed":
+        drop_str += f"【ナンピン厳禁(ダラダラ下落)】 {tech.volume_climax_bleed_data.get('description', '')} "
+
+    if tech.pinbar_data.get("is_pinbar"):
+        drop_str += f"【ヒゲ異常】 {tech.pinbar_data.get('description', '')} "
+
+    if tech.advanced_patterns_data.get("detected_patterns"):
+        drop_str += f"【注意パターン】 {tech.advanced_patterns_data.get('description', '')} "
+
+    if tech.ma_long_term_data.get("signal") in ("deep_discount", "near_support"):
+        drop_str += f"【長期MA】 {tech.ma_long_term_data.get('description', '')} "
+
     return f"""【{ticker} テクニカル分析】
 - 総合: {tech.overall_score}点 ({tech.overall_signal}) | トレンド: {tech.ma_trend}
 - RSI: {tech.rsi:.1f} ({tech.rsi_signal}) | 動的: {tech.rsi_dynamic_signal} ({tech.rsi_regime})
@@ -316,5 +383,6 @@ def get_technical_summary_for_ai(ticker: str) -> str:
 - パターン: 極値={tech.peak_valley_signal}, ローソク足={cdl_str}
 - サポート/レジスタンス: ${tech.support_price:.2f} / ${tech.resistance_price:.2f}
 - 平均回帰・過熱感: {mr_str if mr_str else "目立った過熱感・反発セットアップなし"}
+- 下落時判定・特殊シグナル: {drop_str if drop_str else "特になし"}
 - AVWAP(YTD): ${tech.avwap_ytd:.2f} (乖離 {tech.avwap_deviation:+.1f}%)
 """

@@ -1,31 +1,33 @@
-import reflex as rx
 import asyncio
 import dataclasses
-from typing import Dict, Any, List
+from typing import Any
+
+import reflex as rx
+
 
 class StockState(rx.State):
     """個別銘柄（Stock）ページ用の状態管理クラス"""
-    
+
     ticker: str = ""
     is_fetching: bool = False
     error_msg: str = ""
-    
+
     # 基本情報
-    info: Dict[str, Any] = {}
-    
+    info: dict[str, Any] = {}
+
     # チャート用データ
-    chart_data: List[Dict[str, Any]] = []
-    
+    chart_data: list[dict[str, Any]] = []
+
     # ニュースデータ
-    news: List[Dict[str, Any]] = []
-    
+    news: list[dict[str, Any]] = []
+
     # テクニカル分析データ
-    technical_data: Dict[str, Any] = {}
-    
+    technical_data: dict[str, Any] = {}
+
     # 決算・財務データ
-    earnings: List[Dict[str, Any]] = []
-    financials: List[Dict[str, Any]] = []
-    
+    earnings: list[dict[str, Any]] = []
+    financials: list[dict[str, Any]] = []
+
     # テクニカル分析・AI分析結果
     ai_analysis: str = ""
     is_generating_analysis: bool = False
@@ -38,28 +40,23 @@ class StockState(rx.State):
         if not self.ticker:
             self.error_msg = "ティッカーシンボルを入力してください。"
             return
-            
+
         self.is_fetching = True
         self.error_msg = ""
         yield
-            
+
         try:
-            from src.market_data import (
-                get_stock_info, 
-                get_stock_data, 
-                get_stock_news
-            )
             from src.advisor.technical import analyze_technical
-            from src.data_provider import DataProvider
-            
+            from src.market_data import get_stock_data, get_stock_info, get_stock_news
+
             # APIコールのブロッキングを回避してデータ取得
             info_data = await asyncio.to_thread(get_stock_info, self.ticker)
             history_df = await asyncio.to_thread(get_stock_data, self.ticker, "1y")
             news_data = await asyncio.to_thread(get_stock_news, self.ticker, 5)
             tech_data = await asyncio.to_thread(analyze_technical, self.ticker, "1y")
-            
+
             # TODO: Option data, Earnings data...
-            
+
             # Recharts用の形式に変換
             chart_list = []
             if history_df is not None and not history_df.empty:
@@ -69,14 +66,14 @@ class StockState(rx.State):
                         "name": date.strftime("%Y-%m-%d"),
                         "price": float(row["Close"])
                     })
-            
+
             # NewsItem を dict に変換
             news_list = [dict(n) for n in news_data] if news_data else []
-            
+
             self.info = dict(info_data) if info_data else {}
             self.chart_data = chart_list
             self.news = news_list
-            
+
             # Technical Data
             if tech_data:
                 # asdictで辞書化。タプルなどを適切に処理
@@ -89,11 +86,11 @@ class StockState(rx.State):
                 self.technical_data = tech_dict
             else:
                 self.technical_data = {}
-            
+
             # APIキーが未設定等の場合のエラーハンドリング
             if self.info.get("summary") == "情報なし" and self.info.get("sector") == "N/A":
                 self.error_msg = "企業情報を取得できませんでした。Finnhub APIキーが正しく設定されているか確認してください。"
-                
+
         except Exception as e:
             self.error_msg = f"データの取得に失敗しました: {str(e)}"
             self.info = {}
@@ -110,12 +107,12 @@ class StockState(rx.State):
             return
         self.is_generating_analysis = True
         yield
-            
+
         try:
             from src.stock_analyst import generate_stock_analysis_report
             # info をディクショナリとして渡す
             recap = await asyncio.to_thread(generate_stock_analysis_report, self.ticker, self.info)
-            
+
             if recap:
                 self.ai_analysis = recap
             else:

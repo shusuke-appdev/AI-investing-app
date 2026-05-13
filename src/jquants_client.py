@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 import requests
-from src.cache import ttl_cache
 
+from src.cache import ttl_cache
 from src.constants import CACHE_TTL_DAILY, CACHE_TTL_SHORT
 from src.log_config import get_logger
 from src.settings_storage import get_jquants_api_key

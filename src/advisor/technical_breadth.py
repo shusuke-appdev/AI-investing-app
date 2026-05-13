@@ -3,8 +3,9 @@ from io import StringIO
 
 import pandas as pd
 import requests
-from src.cache import ttl_cache
 import yfinance as yf
+
+from src.cache import ttl_cache
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,7 @@
+import os
+
 import yfinance as yf
 from openbb import obb
-import os
 
 # Disable OpenBB auto build to prevent permissions errors
 os.environ["OPENBB_AUTO_BUILD"] = "False"

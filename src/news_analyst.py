@@ -130,7 +130,7 @@ def generate_market_recap(
     context_parts.append(
         "\n【ニュースヘッドライン (AI・テック・市場・マクロ・コモディティ・暗号資産)】"
     )
-    for news in news_data[:60]:  # 60件に拡大
+    for news in news_data[:20]:  # 負荷軽減のため20件に制限
         related = (
             f"[{news.get('related_ticker', '')}] " if news.get("related_ticker") else ""
         )

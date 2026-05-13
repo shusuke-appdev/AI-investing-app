@@ -1,5 +1,6 @@
 import reflex as rx
 
+
 def navbar() -> rx.Component:
     """上部に配置されるナビゲーションバー"""
     return rx.hstack(

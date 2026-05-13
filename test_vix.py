@@ -1,4 +1,3 @@
-import pandas as pd
 import yfinance as yf
 
 symbols = ["^VIX9D", "^VIX", "^VIX3M", "^VIX6M", "^VIX1Y", "^VVIX", "^SKEW"]

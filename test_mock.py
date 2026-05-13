@@ -1,7 +1,9 @@
 import asyncio
 import sys
+
 sys.path.append('.')
 from frontend.state.market_state import MarketState
+
 
 class MockState:
     market_type = 'US'
@@ -16,7 +18,7 @@ class MockState:
     evaluation = {}
     microstructure = None
     momentum_data = []
-    
+
     _fetch_microstructure = MarketState._fetch_microstructure
     _fetch_momentum = MarketState._fetch_momentum
 
@@ -29,7 +31,7 @@ async def main():
             await gen.__anext__()
     except StopAsyncIteration:
         pass
-    
+
     print('Error:', state.error_msg)
     print('Option error:', state.option_error_msg)
     print('Options len:', len(state.option_analysis))

@@ -1,8 +1,10 @@
 import reflex as rx
-from frontend.state.stock_state import StockState
-from frontend.template import template
+
 from frontend.components.metric_card import metric_card
 from frontend.components.technical_analysis import technical_analysis
+from frontend.state.stock_state import StockState
+from frontend.template import template
+
 
 @template
 def stock_page() -> rx.Component:
@@ -16,7 +18,7 @@ def stock_page() -> rx.Component:
             align_items="center",
             margin_bottom="1rem",
         ),
-        
+
         # ティッカー入力と取得ボタン
         rx.card(
             rx.hstack(
@@ -39,7 +41,7 @@ def stock_page() -> rx.Component:
             width="100%",
             margin_bottom="2rem"
         ),
-        
+
         # エラーメッセージ
         rx.cond(
             StockState.error_msg != "",
@@ -51,7 +53,7 @@ def stock_page() -> rx.Component:
                 width="100%",
             )
         ),
-        
+
         # ローディングスピナー（全体）
         rx.cond(
             StockState.is_fetching,
@@ -75,22 +77,22 @@ def stock_page() -> rx.Component:
                         width="100%",
                         margin_bottom="1rem"
                     ),
-                    
+
                     # メトリックカード（主要指標）
                     rx.grid(
                         metric_card(
-                            "時価総額 (Market Cap)", 
-                            rx.cond(StockState.info.contains("marketCapitalization"), rx.text(StockState.info["marketCapitalization"].to_string(), " M"), "N/A"), 
+                            "時価総額 (Market Cap)",
+                            rx.cond(StockState.info.contains("marketCapitalization"), rx.text(StockState.info["marketCapitalization"].to_string(), " M"), "N/A"),
                             ""
                         ),
                         metric_card(
-                            "PER (株価収益率)", 
-                            rx.cond(StockState.info.contains("peRatio"), StockState.info["peRatio"].to_string(), "N/A"), 
+                            "PER (株価収益率)",
+                            rx.cond(StockState.info.contains("peRatio"), StockState.info["peRatio"].to_string(), "N/A"),
                             ""
                         ),
                         metric_card(
-                            "配当利回り", 
-                            rx.cond(StockState.info.contains("dividendYield"), rx.text(StockState.info["dividendYield"].to_string(), "%"), "N/A"), 
+                            "配当利回り",
+                            rx.cond(StockState.info.contains("dividendYield"), rx.text(StockState.info["dividendYield"].to_string(), "%"), "N/A"),
                             ""
                         ),
                         columns="3",
@@ -98,7 +100,7 @@ def stock_page() -> rx.Component:
                         width="100%",
                         margin_bottom="2rem",
                     ),
-                    
+
                     # 上段: チャート + 企業概要
                     rx.grid(
                         # チャートエリア (左 2/3)
@@ -129,7 +131,7 @@ def stock_page() -> rx.Component:
                             ),
                             width="100%"
                         ),
-                        
+
                         # 企業概要エリア (右 1/3)
                         rx.card(
                             rx.vstack(
@@ -156,10 +158,10 @@ def stock_page() -> rx.Component:
                         width="100%",
                         margin_bottom="2rem",
                     ),
-                    
+
                     # テクニカル分析
                     technical_analysis(),
-                    
+
                     # AI Recap (Gemini)
                     rx.box(
                         rx.hstack(
@@ -189,7 +191,7 @@ def stock_page() -> rx.Component:
                         width="100%",
                         margin_bottom="2rem"
                     ),
-                    
+
                     # 最新ニュース
                     rx.heading("最新ニュース", size="5", margin_bottom="1rem"),
                     rx.cond(
@@ -213,7 +215,7 @@ def stock_page() -> rx.Component:
                         ),
                         rx.text("ニュースデータがありません", color="gray")
                     ),
-                    
+
                     width="100%",
                 ),
                 # 初期状態またはデータなし

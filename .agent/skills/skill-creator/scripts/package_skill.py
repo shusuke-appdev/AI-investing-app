@@ -23,7 +23,7 @@ def validate_skill(skill_path):
         return False
 
     # 3. Check frontmatter
-    with open(skill_md_path, "r", encoding="utf-8") as f:
+    with open(skill_md_path, encoding="utf-8") as f:
         content = f.read()
 
     match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)

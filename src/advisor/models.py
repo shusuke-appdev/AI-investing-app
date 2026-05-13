@@ -191,6 +191,13 @@ class TechnicalScore:
         default_factory=lambda: MeanReversionReboundState()
     )
 
+    # === Extended Technical Breakdown (Dip Buy & Climax) ===
+    pinbar_data: dict = field(default_factory=dict)
+    volume_climax_bleed_data: dict = field(default_factory=dict)
+    advanced_patterns_data: dict = field(default_factory=dict)
+    ma_long_term_data: dict = field(default_factory=dict)
+
+
 
 @dataclass
 class TechnicalAnalysis:

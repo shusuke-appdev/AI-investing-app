@@ -6,7 +6,8 @@ Streamlitの @st.cache_data を完全に代替する、フレームワーク非�
 import functools
 import threading
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from src.log_config import get_logger
 

@@ -1,23 +1,25 @@
+
 import reflex as rx
-from typing import Dict, Any
+
 from frontend.state.market_state import MarketState
+
 
 def market_item(item: dict) -> rx.Component:
     """市場データの1行表示"""
     is_positive = item["change"].to(float) >= 0
     color_scheme = rx.cond(is_positive, "green", "red")
     arrow = rx.cond(is_positive, "↑", "↓")
-    
+
     # abs(change)
     abs_change = rx.cond(is_positive, item["change"].to(float), item["change"].to(float) * -1)
-    
+
     return rx.hstack(
         rx.text(item["name"], weight="medium", color=rx.color("gray", 11)),
         rx.spacer(),
         rx.text(item["price"], weight="bold"),
         rx.badge(
-            rx.text(f"{arrow} ", abs_change, "%"), 
-            color_scheme=color_scheme, 
+            rx.text(f"{arrow} ", abs_change, "%"),
+            color_scheme=color_scheme,
             variant="surface"
         ),
         width="100%",
@@ -112,7 +114,7 @@ def market_monitor() -> rx.Component:
     """総合市場監視"""
     eval_data = MarketState.evaluation
     micro = MarketState.microstructure
-    
+
     return rx.box(
         rx.heading("総合市場監視", size="5", margin_bottom="1rem"),
         rx.card(
@@ -138,7 +140,7 @@ def market_monitor() -> rx.Component:
                         ),
                         width="100%",
                     ),
-                    
+
                     # シグナル詳細（グループ分け）
                     rx.grid(
                         # 強気シグナル
@@ -200,7 +202,7 @@ def market_monitor() -> rx.Component:
                         width="100%",
                         margin_top="1rem",
                     ),
-                    
+
                     # マイクロストラクチャー指標
                     rx.cond(
                         micro.unwind_level != "",
@@ -227,7 +229,7 @@ def market_monitor() -> rx.Component:
                         ),
                         rx.fragment(),
                     ),
-                    
+
                     width="100%",
                     spacing="3",
                 ),

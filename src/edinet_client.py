@@ -6,8 +6,8 @@ EDINET DB API Client
 import os
 
 import edinet_tools
-from src.cache import ttl_cache
 
+from src.cache import ttl_cache
 from src.constants import CACHE_TTL_DAILY
 from src.log_config import get_logger
 from src.settings_storage import get_edinet_api_key

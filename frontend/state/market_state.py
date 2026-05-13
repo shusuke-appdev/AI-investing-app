@@ -1,6 +1,7 @@
-import reflex as rx
 import asyncio
-from typing import Dict, Any, List
+from typing import Any
+
+import reflex as rx
 from pydantic import BaseModel
 
 
@@ -22,7 +23,7 @@ class OptionSummary(BaseModel):
     net_gex_str: str = ""
     iv: str = "-"
     max_pain: str = "-"
-    analysis: List[str] = []
+    analysis: list[str] = []
 
 
 class MicrostructureData(BaseModel):
@@ -47,35 +48,35 @@ class MomentumCategory(BaseModel):
     """モメンタムカテゴリデータ"""
     category: str = ""
     period: str = ""
-    themes: List[MomentumTheme] = []
+    themes: list[MomentumTheme] = []
 
 
 class MarketState(rx.State):
     """マーケット（市況）ページ用の状態管理クラス"""
-    
+
     market_type: str = "US"
     is_fetching: bool = False
     error_msg: str = ""
     option_error_msg: str = ""  # オプション専用エラー
-    
+
     # UI表示用の整形済みデータリスト
-    indices_data: List[Dict[str, Any]] = []
-    sectors_data: List[Dict[str, Any]] = []
-    others_data: List[Dict[str, Any]] = []
-    
+    indices_data: list[dict[str, Any]] = []
+    sectors_data: list[dict[str, Any]] = []
+    others_data: list[dict[str, Any]] = []
+
     # 市場環境の評価結果
-    evaluation: Dict[str, Any] = {}
-    market_signals: List[MarketSignal] = []
-    
+    evaluation: dict[str, Any] = {}
+    market_signals: list[MarketSignal] = []
+
     # マイクロストラクチャー分析
     microstructure: MicrostructureData = MicrostructureData()
-    
+
     # オプション分析データ
-    option_analysis: List[OptionSummary] = []
-    
+    option_analysis: list[OptionSummary] = []
+
     # テーマモメンタム監視
-    momentum_data: List[MomentumCategory] = []
-    
+    momentum_data: list[MomentumCategory] = []
+
     # AIレポート関連
     ai_recap: str = ""
     is_generating_recap: bool = False
@@ -92,30 +93,30 @@ class MarketState(rx.State):
         self.error_msg = ""
         self.option_error_msg = ""
         yield
-            
+
         try:
-            from src.market_data import get_market_indices
             from src.advisor.market_environment import evaluate_market_environment
             from src.market_config import get_market_config
+            from src.market_data import get_market_indices
             from src.option_analyst import get_major_indices_options
-            
+
             # 同期ブロッキング関数をバックグラウンドスレッドで実行
             raw_data_task = asyncio.to_thread(get_market_indices, self.market_type)
             config_task = asyncio.to_thread(get_market_config, self.market_type)
-            
+
             # オプションデータは分離して取得（失敗しても他に影響しない）
             option_data_task = asyncio.to_thread(get_major_indices_options, self.market_type)
-            
+
             # 指数・設定は必須、オプションは失敗許容
             raw_data, config = await asyncio.gather(raw_data_task, config_task)
-            
+
             # オプションデータは個別にエラーハンドリング
             option_data = None
             try:
                 option_data = await option_data_task
             except Exception as opt_e:
                 self.option_error_msg = f"オプションデータの取得に失敗しました: {opt_e}"
-            
+
             # Format option data for UI
             opt_list = []
             if option_data:
@@ -140,18 +141,18 @@ class MarketState(rx.State):
                     ))
             elif not self.option_error_msg:
                 self.option_error_msg = "市場閉場中のため最新のオプションデータがありません"
-            
+
             self.option_analysis = opt_list
             eval_data = await asyncio.to_thread(evaluate_market_environment, self.market_type, option_data)
-            
+
             # マイクロストラクチャー分析
             try:
                 micro_data = await asyncio.to_thread(self._fetch_microstructure)
                 if micro_data:
                     self.microstructure = MicrostructureData(**micro_data)
-            except Exception as micro_e:
+            except Exception:
                 pass  # マイクロストラクチャーは失敗しても継続
-            
+
             # テーマモメンタム取得
             try:
                 momentum_raw = await asyncio.to_thread(self._fetch_momentum)
@@ -159,20 +160,20 @@ class MarketState(rx.State):
                     self.momentum_data = momentum_raw
             except Exception:
                 pass  # モメンタムは失敗しても継続
-            
+
             # データをカテゴライズしてリスト化
             indices_list = []
             sectors_list = []
             commodities_list = []
             forex_list = []
             crypto_list = []
-            
+
             idx_tickers = set(config["indices"].values())
             sec_tickers = set(config.get("sectors", {}).values())
             commodity_tickers = set(config.get("commodities", {}).values())
             crypto_tickers = set(config.get("crypto", {}).values())
             forex_tickers = set(config.get("forex", {}).values())
-            
+
             # 日本市場の特別対応
             if self.market_type == "JP":
                 jp_names = ["日経平均", "TOPIX"]
@@ -181,7 +182,7 @@ class MarketState(rx.State):
                         d = raw_data[name]
                         change_rounded = round(float(d.get('change', 0.0)), 1)
                         indices_list.append({"name": name, "price": f"¥{d.get('price', 0):,.0f}", "change": change_rounded})
-            
+
             for name, data in raw_data.items():
                 if name in ("trend_1mo", "weekly_performance"):
                     continue
@@ -189,9 +190,9 @@ class MarketState(rx.State):
                 price = data.get("price", 0.0)
                 change = data.get("change", 0.0)
                 change_rounded = round(float(change), 1)
-                
+
                 item = {"name": name, "change": change_rounded}
-                
+
                 if ticker in idx_tickers and self.market_type != "JP":
                     if "VIX" in name:
                         item["price"] = f"{price:.2f}"
@@ -220,13 +221,13 @@ class MarketState(rx.State):
                 elif ticker in crypto_tickers:
                     item["price"] = f"${price / 1000:.1f}K"
                     crypto_list.append(item)
-            
+
             # others_data: Commodity → FX → Crypto の順序
             self.indices_data = indices_list
             self.sectors_data = sectors_list
             self.others_data = commodities_list + forex_list + crypto_list
             self.evaluation = eval_data
-            
+
             # シグナルにカテゴリを付与して抽出
             if "signals" in eval_data:
                 self.market_signals = [
@@ -242,7 +243,7 @@ class MarketState(rx.State):
                 ]
             else:
                 self.market_signals = []
-                
+
         except Exception as e:
             self.error_msg = f"データの取得に失敗しました: {str(e)}"
             self.indices_data = []
@@ -261,11 +262,11 @@ class MarketState(rx.State):
             data = analyze_market_structure("SPY")
             if not data:
                 return None
-            
+
             cta = data.get("cta_proxy") or {}
             liq = data.get("liquidity") or {}
             vrp_val = data.get("vrp")
-            
+
             return {
                 "unwind_score": data.get("unwind_score", 0),
                 "unwind_level": data.get("unwind_level", ""),
@@ -307,12 +308,14 @@ class MarketState(rx.State):
         """GeminiによるAI市況レポート生成"""
         self.is_generating_recap = True
         yield
-            
+
         try:
-            from src.services.market_analyst_service import generate_market_analysis_report
-            
+            from src.services.market_analyst_service import (
+                generate_market_analysis_report,
+            )
+
             recap = await asyncio.to_thread(generate_market_analysis_report, self.market_type)
-            
+
             if recap:
                 self.ai_recap = recap
             else:

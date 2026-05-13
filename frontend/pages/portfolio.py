@@ -1,5 +1,6 @@
 import reflex as rx
-from frontend.state.portfolio_state import PortfolioState, HoldingItem
+
+from frontend.state.portfolio_state import HoldingItem, PortfolioState
 from frontend.template import template
 
 

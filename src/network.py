@@ -3,7 +3,6 @@ Centralized Networking Module
 Provides a shared session with User-Agent, timeouts, and optional caching.
 """
 
-import functools
 
 import requests
 from requests.adapters import HTTPAdapter

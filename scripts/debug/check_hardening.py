@@ -1,22 +1,27 @@
-import pandas as pd
-import sys
 import os
+import sys
+
+import pandas as pd
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from src.advisor.technical_indicators import (
-    calculate_rsi, calculate_ma_deviation, calculate_macd_signal,
-    calculate_bollinger_bands, calculate_atr, calculate_support_resistance
-)
 from src.advisor.mean_reversion import MeanReversionAnalyzer
-from src.theme_analyst import get_all_theme_names
+from src.advisor.technical_indicators import (
+    calculate_atr,
+    calculate_bollinger_bands,
+    calculate_ma_deviation,
+    calculate_macd_signal,
+    calculate_rsi,
+    calculate_support_resistance,
+)
 from src.news_analyst import generate_flash_summary
+
 
 def test_technical_indicators():
     print("Testing technical indicators with empty data...")
     empty_series = pd.Series(dtype=float)
     short_series = pd.Series([100, 101, 102])
-    
+
     print("RSI:", calculate_rsi(short_series))
     print("MA Dev:", calculate_ma_deviation(short_series))
     print("MACD:", calculate_macd_signal(short_series))

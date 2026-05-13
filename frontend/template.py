@@ -1,7 +1,10 @@
+from collections.abc import Callable
+
 import reflex as rx
-from typing import Callable
-from frontend.components.sidebar_nav import sidebar_nav
+
 from frontend.components.navbar import navbar
+from frontend.components.sidebar_nav import sidebar_nav
+
 
 def template(page: Callable[[], rx.Component]) -> rx.Component:
     """
@@ -12,12 +15,12 @@ def template(page: Callable[[], rx.Component]) -> rx.Component:
         rx.hstack(
             # サイドバー (左側固定)
             sidebar_nav(),
-            
+
             # メインコンテンツエリア
             rx.vstack(
                 # トップナビゲーションバー
                 navbar(),
-                
+
                 # ページ固有のコンテンツ
                 rx.box(
                     page(),
@@ -26,13 +29,13 @@ def template(page: Callable[[], rx.Component]) -> rx.Component:
                     max_width="1400px",
                     margin="0 auto",
                 ),
-                
+
                 width="100%",
                 bg=rx.color("gray", 2),
                 min_height="100vh",
                 overflow_y="auto",
             ),
-            
+
             width="100vw",
             min_height="100vh",
             spacing="0",

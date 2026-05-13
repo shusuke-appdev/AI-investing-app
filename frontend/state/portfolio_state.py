@@ -1,6 +1,7 @@
-import reflex as rx
 import asyncio
-from typing import List, Dict, Any
+from typing import Any
+
+import reflex as rx
 from pydantic import BaseModel
 
 
@@ -15,11 +16,11 @@ class PortfolioState(rx.State):
     """ポートフォリオ管理ページ用の状態管理クラス"""
 
     # ポートフォリオ一覧
-    portfolio_names: List[str] = []
+    portfolio_names: list[str] = []
     current_portfolio_name: str = "新規ポートフォリオ"
 
     # 保有銘柄一覧
-    holdings: List[HoldingItem] = []
+    holdings: list[HoldingItem] = []
 
     # 入力用
     new_ticker: str = ""
@@ -28,7 +29,7 @@ class PortfolioState(rx.State):
     save_name: str = ""
 
     # 分析結果
-    analysis_result: Dict[str, Any] = {}
+    analysis_result: dict[str, Any] = {}
     ai_advice: str = ""
 
     # UI状態

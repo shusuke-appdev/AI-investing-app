@@ -1,13 +1,13 @@
-import pandas as pd
-import sys
 import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from src.option_data_provider import get_option_chain
-from src.market_index_provider import get_market_indices
 from src.advisor.minervini_analyzer import detect_follow_through_day
+from src.market_index_provider import get_market_indices
+from src.option_data_provider import get_option_chain
 from src.stock_data_provider import get_historical_data
+
 
 def test_all():
     print("--- OPTIONS ---")

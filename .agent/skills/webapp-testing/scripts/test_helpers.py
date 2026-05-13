@@ -4,7 +4,8 @@ Helper utilities for web application testing with Playwright (Python)
 
 import datetime
 import time
-from typing import Any, Callable, Dict, List
+from collections.abc import Callable
+from typing import Any
 
 from playwright.sync_api import Page
 
@@ -28,7 +29,7 @@ def wait_for_condition(
     raise TimeoutError("Condition not met within timeout")
 
 
-def capture_console_logs(page: Page) -> List[Dict[str, Any]]:
+def capture_console_logs(page: Page) -> list[dict[str, Any]]:
     """
     Capture browser console logs
 

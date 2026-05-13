@@ -18,12 +18,12 @@ from src.supabase_client import get_supabase_client
 def load_json_robust(path: Path) -> dict:
     """Try to load JSON with utf-8, fallback to cp932."""
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except UnicodeDecodeError:
         pass
 
-    with open(path, "r", encoding="cp932") as f:
+    with open(path, encoding="cp932") as f:
         return json.load(f)
 
 

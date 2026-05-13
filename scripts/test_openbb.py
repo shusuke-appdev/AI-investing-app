@@ -1,5 +1,6 @@
+
 from openbb import obb
-import sys
+
 
 def test_openbb():
     try:
@@ -11,7 +12,7 @@ def test_openbb():
         hist = obb.equity.price.historical(symbol="AAPL", provider="yfinance")
         # limit just to see structure
         print("Historical columns:", hist.to_df().columns)
-        
+
         # Profile
         profile = obb.equity.profile(symbol="AAPL", provider="yfinance")
         print("Profile Keys:", profile.to_dict().keys() if profile else "No profile")

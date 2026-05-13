@@ -5,8 +5,8 @@ Market Index Data Provider
 
 import pandas as pd
 import yfinance as yf
-from src.cache import ttl_cache
 
+from src.cache import ttl_cache
 from src.constants import CACHE_TTL_MEDIUM, MARKET_US
 from src.finnhub_client import get_quote as _finnhub_get_quote
 from src.finnhub_client import is_configured

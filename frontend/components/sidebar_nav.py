@@ -1,5 +1,7 @@
 import reflex as rx
+
 from frontend.state.market_state import MarketState
+
 
 def nav_item(text: str, icon: str, url: str) -> rx.Component:
     """ナビゲーションアイテム"""
@@ -78,10 +80,10 @@ def sidebar_nav() -> rx.Component:
             margin_bottom="1rem",
             padding_x="1rem",
         ),
-        
+
         # 市場切り替え
         market_switcher(),
-        
+
         # ナビゲーションリンク
         rx.vstack(
             nav_item("Market", "globe", "/"),
@@ -92,9 +94,9 @@ def sidebar_nav() -> rx.Component:
             width="100%",
             spacing="2",
         ),
-        
+
         rx.spacer(),
-        
+
         # フッター情報
         rx.vstack(
             rx.text("v2.0 (Reflex)", size="1", color=rx.color("gray", 8)),
@@ -102,7 +104,7 @@ def sidebar_nav() -> rx.Component:
             width="100%",
             align_items="center",
         ),
-        
+
         width="250px",
         height="100vh",
         padding="1.5rem 1rem",

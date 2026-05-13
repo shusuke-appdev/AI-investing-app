@@ -1,9 +1,11 @@
 import reflex as rx
-from frontend.state.market_state import MarketState
+
 from frontend.components.flash_summary import flash_summary, market_monitor
-from frontend.components.option_analysis import option_analysis_component
 from frontend.components.momentum_display import momentum_monitor_component
+from frontend.components.option_analysis import option_analysis_component
+from frontend.state.market_state import MarketState
 from frontend.template import template
+
 
 @template
 def index() -> rx.Component:
@@ -35,7 +37,7 @@ def index() -> rx.Component:
             align_items="center",
             margin_bottom="2rem",
         ),
-        
+
         # エラーメッセージ
         rx.cond(
             MarketState.error_msg != "",
@@ -47,7 +49,7 @@ def index() -> rx.Component:
                 width="100%",
             )
         ),
-        
+
         # ローディングスピナー（全体）
         rx.cond(
             MarketState.is_fetching,
@@ -61,16 +63,16 @@ def index() -> rx.Component:
             rx.vstack(
                 # 総合市場監視
                 market_monitor(),
-                
+
                 # アセットクラス別概要
                 flash_summary(),
-                
+
                 # テーマモメンタム監視
                 momentum_monitor_component(),
-                
+
                 # オプション分析
                 option_analysis_component(),
-                
+
                 # AI Recap (Gemini)
                 rx.box(
                     rx.heading("AI Market Recap", size="5", margin_bottom="1rem"),
@@ -89,7 +91,7 @@ def index() -> rx.Component:
                     width="100%",
                     margin_top="1rem"
                 ),
-                
+
                 width="100%",
                 spacing="4"
             )
