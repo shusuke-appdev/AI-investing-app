@@ -37,7 +37,11 @@ def generate_dynamic_search_queries(
         if isinstance(data, dict) and "price" in data:
             price = data.get("price", "N/A")
             change = data.get("change", "N/A")
-            market_summary += f"- {name}: {price} ({change:+.2f}%)\n" if isinstance(change, (int, float)) else f"- {name}: {price}\n"
+            market_summary += (
+                f"- {name}: {price} ({change:+.2f}%)\n"
+                if isinstance(change, (int, float))
+                else f"- {name}: {price}\n"
+            )
 
     prompt = f"""
 あなたはプロの金融情報アナリストです。
@@ -79,7 +83,9 @@ def generate_dynamic_search_queries(
             return []
 
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON from Gemini response: {e}\nResponse: {result}")
+        logger.error(
+            f"Failed to parse JSON from Gemini response: {e}\nResponse: {result}"
+        )
         return []
     except Exception as e:
         logger.error(f"Error generating dynamic queries with Gemini: {e}")

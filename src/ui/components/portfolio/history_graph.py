@@ -131,7 +131,9 @@ def render_history_graph(portfolio_name: str, holdings_data: list) -> None:
     st.plotly_chart(fig, use_container_width=True)
 
 
-def _render_total_return_header(total_return_val: float, total_return_pct: float) -> None:
+def _render_total_return_header(
+    total_return_val: float, total_return_pct: float
+) -> None:
     """ヘッダー横の総合収益表示用"""
     total_color = "green" if total_return_val >= 0 else "red"
     total_sign = "+" if total_return_val >= 0 else ""

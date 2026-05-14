@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 class HoldingItem(BaseModel):
     """ポートフォリオ内の個別銘柄"""
+
     ticker: str = ""
     shares: float = 0.0
     avg_cost: float | None = None
@@ -62,6 +63,7 @@ class PortfolioState(rx.State):
         """保存済みポートフォリオ一覧を取得"""
         try:
             from src.portfolio_storage import list_portfolios
+
             names = await asyncio.to_thread(list_portfolios, self.storage_type)
             self.portfolio_names = names
         except Exception as e:
@@ -75,6 +77,7 @@ class PortfolioState(rx.State):
 
         try:
             from src.portfolio_storage import load_portfolio
+
             data = await asyncio.to_thread(load_portfolio, name, self.storage_type)
             if data:
                 raw_holdings = data.get("holdings", [])
@@ -82,7 +85,9 @@ class PortfolioState(rx.State):
                     HoldingItem(
                         ticker=h.get("ticker", ""),
                         shares=float(h.get("shares", 0)),
-                        avg_cost=float(h["avg_cost"]) if h.get("avg_cost") is not None else None,
+                        avg_cost=float(h["avg_cost"])
+                        if h.get("avg_cost") is not None
+                        else None,
                     )
                     for h in raw_holdings
                 ]
@@ -153,6 +158,7 @@ class PortfolioState(rx.State):
 
         try:
             from src.portfolio_storage import save_portfolio
+
             holdings_data = [
                 {
                     "ticker": h.ticker,
@@ -169,6 +175,7 @@ class PortfolioState(rx.State):
                 self.success_msg = f"「{name}」を保存しました"
                 # リストを更新
                 from src.portfolio_storage import list_portfolios
+
                 self.portfolio_names = await asyncio.to_thread(
                     list_portfolios, self.storage_type
                 )
@@ -190,6 +197,7 @@ class PortfolioState(rx.State):
 
         try:
             from src.portfolio_storage import delete_portfolio
+
             await asyncio.to_thread(
                 delete_portfolio, self.current_portfolio_name, self.storage_type
             )
@@ -197,6 +205,7 @@ class PortfolioState(rx.State):
             self.current_portfolio_name = "新規ポートフォリオ"
             self.success_msg = "ポートフォリオを削除しました"
             from src.portfolio_storage import list_portfolios
+
             self.portfolio_names = await asyncio.to_thread(
                 list_portfolios, self.storage_type
             )
@@ -233,6 +242,7 @@ class PortfolioState(rx.State):
             if result:
                 # Reflexで扱える形式に変換（TechnicalScoreオブジェクトをdictに）
                 import dataclasses
+
                 safe_result = {}
                 for key, val in result.items():
                     if key == "holdings":
@@ -270,6 +280,7 @@ class PortfolioState(rx.State):
 
         try:
             from src.portfolio_advisor import generate_portfolio_advice
+
             advice = await asyncio.to_thread(
                 generate_portfolio_advice, self.analysis_result
             )

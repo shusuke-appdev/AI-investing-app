@@ -12,7 +12,11 @@ os.environ["OPENBB_AUTO_BUILD"] = "False"
 from datetime import datetime, timedelta
 
 import pandas as pd
-from openbb import obb
+
+try:
+    from openbb import obb
+except ImportError:
+    obb = None
 
 from src import jquants_client
 from src.cache import ttl_cache
@@ -40,6 +44,10 @@ def get_current_price(ticker: str) -> float:
         if price > 0:
             return price
 
+    if obb is None:
+        logger.warning("OpenBB is not installed. Falling back to price=0.")
+        return 0.0
+
     try:
         q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
         if q:
@@ -60,6 +68,10 @@ def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
         df = jquants_client.get_daily_quotes(ticker, period)
         if not df.empty:
             return df
+
+    if obb is None:
+        logger.warning("OpenBB is not installed. Returning empty historical data.")
+        return pd.DataFrame()
 
     try:
         period_map = {
@@ -99,6 +111,10 @@ def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
 
 
 def _extract_openbb_profile(ticker: str, info: StockInfo) -> None:
+    if obb is None:
+        logger.warning("OpenBB is not installed. Skipping OpenBB profile fetch.")
+        return
+
     try:
         profile_obj = obb.equity.profile(symbol=ticker, provider="yfinance")
         if profile_obj:
@@ -219,9 +235,13 @@ def get_stock_info(ticker: str) -> StockInfo:
 
         jq_fins = jquants_client.get_fins_statements(ticker)
         if jq_fins and jq_fins.get("net_sales") and jq_fins.get("operating_income"):
-            info["operatingMargins"] = (jq_fins["operating_income"] / jq_fins["net_sales"]) * 100
+            info["operatingMargins"] = (
+                jq_fins["operating_income"] / jq_fins["net_sales"]
+            ) * 100
 
-    if is_jp and (not jquants_client.is_configured() or info["operatingMargins"] is None):
+    if is_jp and (
+        not jquants_client.is_configured() or info["operatingMargins"] is None
+    ):
         edinet_data = get_company_finance(ticker)
         if edinet_data and edinet_data["financials"]:
             latest_finance = edinet_data["financials"][0]
@@ -235,7 +255,11 @@ def get_stock_info(ticker: str) -> StockInfo:
                     latest_finance["operating_income"] / latest_finance["net_sales"]
                 ) * 100
 
-    if info["summary"] and info["summary"] != "情報なし" and not is_japanese_stock(ticker):
+    if (
+        info["summary"]
+        and info["summary"] != "情報なし"
+        and not is_japanese_stock(ticker)
+    ):
         info["summary"] = translate_to_japanese(info["summary"])
 
     return info
@@ -243,6 +267,10 @@ def get_stock_info(ticker: str) -> StockInfo:
 
 @ttl_cache(ttl=CACHE_TTL_SHORT)
 def get_quote(ticker: str) -> dict | None:
+    if obb is None:
+        logger.warning("OpenBB is not installed. Quote fetch skipped.")
+        return None
+
     try:
         q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
         if q:

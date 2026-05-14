@@ -50,7 +50,9 @@ def configure_gemini(api_key: str | None = None) -> bool:
     return True
 
 
-def generate_content(prompt: str, model: str | None = None, max_retries: int = 3) -> str | None:
+def generate_content(
+    prompt: str, model: str | None = None, max_retries: int = 3
+) -> str | None:
     """
     Gemini API でコンテンツを生成します。
     429 (Rate Limit) / 503 (Service Unavailable) は指数バックオフでリトライします。
@@ -83,14 +85,21 @@ def generate_content(prompt: str, model: str | None = None, max_retries: int = 3
             last_error = e
             error_str = str(e)
             # 429 (Rate Limit) / 503 (Service Unavailable) はリトライ対象
-            is_retryable = any(code in error_str for code in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"))
+            is_retryable = any(
+                code in error_str
+                for code in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")
+            )
             if is_retryable and attempt < max_retries - 1:
                 wait = 2 ** (attempt + 1)  # 2s, 4s, 8s
-                logger.warning(f"Gemini API retryable error (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait}s...")
+                logger.warning(
+                    f"Gemini API retryable error (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait}s..."
+                )
                 time.sleep(wait)
                 continue
             logger.error(f"Gemini generate_content error: {e}")
             return None
 
-    logger.error(f"Gemini generate_content: max retries exhausted. Last error: {last_error}")
+    logger.error(
+        f"Gemini generate_content: max retries exhausted. Last error: {last_error}"
+    )
     return None

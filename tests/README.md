@@ -1,21 +1,28 @@
-# Tests for AI Investing App
+# テスト
 
-This directory contains unit tests for the application.
+このディレクトリには、外部APIをできるだけモック化した単体テストを配置します。
 
-## Running Tests
+## 実行
 
-```bash
-# Install test dependencies
-pip install pytest pytest-cov
-
-# Run all tests
-pytest tests/
-
-# Run with coverage
-pytest tests/ --cov=src --cov-report=html
+```powershell
+python -m pytest -q
+python -m pytest tests/ --cov=src --cov-report=html
 ```
 
-## Test Structure
-- `test_option_analyst.py` - PCR/GEX calculation tests
-- `test_market_data.py` - Data fetching and error handling tests
-- `test_portfolio_storage.py` - Save/load functionality tests
+## 主な対象
+
+- `test_option_analyst.py`: PCR、GEX、Max Pain、IV、Skew などの計算
+- `test_option_analyst_logic.py`: オプション分析の境界値
+- `test_data_provider.py`: データプロバイダの差し替え
+- `test_news_aggregator.py`: ニュース統合・重複排除
+- `test_jquants_client.py`: J-Quants クライアント
+- `test_mean_reversion.py`: ミーンリバージョン分析
+- `test_volatility_clustering.py`: ボラティリティクラスタリング
+- `test_advisor_phase3.py`: 市場監視、SMART基準、ベース認識
+
+## 方針
+
+- 実APIを直接呼ぶテストは標準テストに含めない
+- APIレスポンスの形が変わりやすい箇所は fixture を用意する
+- 取得処理と計算処理を分け、計算処理は純粋関数としてテストする
+- Reflex state は、画面描画ではなく状態遷移とサービス呼び出し結果を中心にテストする

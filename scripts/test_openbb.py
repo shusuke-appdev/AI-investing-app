@@ -1,4 +1,3 @@
-
 from openbb import obb
 
 
@@ -22,7 +21,8 @@ def test_openbb():
         print("Metrics:", metrics.to_dict() if metrics else "No metrics")
 
     except Exception as e:
-         print(f"Error openbb: {e}")
+        print(f"Error openbb: {e}")
+
 
 if __name__ == "__main__":
     test_openbb()

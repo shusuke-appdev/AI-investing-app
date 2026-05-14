@@ -209,7 +209,6 @@ class TechnicalScore:
     profit_line: float | None = None
 
 
-
 @dataclass
 class TechnicalAnalysis:
     """AI用テクニカル分析サマリー"""

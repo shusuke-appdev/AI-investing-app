@@ -5,7 +5,10 @@ EDINET DB API Client
 
 import os
 
-import edinet_tools
+try:
+    import edinet_tools
+except ImportError:
+    edinet_tools = None
 
 from src.cache import ttl_cache
 from src.constants import CACHE_TTL_DAILY
@@ -17,6 +20,9 @@ logger = get_logger(__name__)
 
 def is_configured() -> bool:
     """EDINET API キーが設定されているかどうかを返す"""
+    if edinet_tools is None:
+        return False
+
     api_key = get_edinet_api_key()
     if api_key:
         os.environ["EDINET_API_KEY"] = api_key

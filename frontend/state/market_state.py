@@ -5,7 +5,11 @@ import reflex as rx
 from pydantic import BaseModel
 
 from src.advisor.market_environment import evaluate_market_environment
-from src.advisor.market_monitor import track_distribution_days, detect_market_climax, evaluate_yield_spread
+from src.advisor.market_monitor import (
+    detect_market_climax,
+    evaluate_yield_spread,
+    track_distribution_days,
+)
 from src.market_config import get_market_config
 from src.market_data import get_market_indices, get_stock_data, get_stock_info
 from src.market_microstructure import analyze_market_structure
@@ -37,6 +41,7 @@ class OptionSummary(BaseModel):
 
 class MicrostructureData(BaseModel):
     """マイクロストラクチャー分析データ"""
+
     unwind_score: int = 0
     unwind_level: str = ""
     vrp: str = "-"
@@ -48,6 +53,7 @@ class MicrostructureData(BaseModel):
 
 class MomentumTheme(BaseModel):
     """モメンタムテーマデータ"""
+
     theme: str = ""
     performance: float = 0.0
     performance_str: str = ""
@@ -55,9 +61,11 @@ class MomentumTheme(BaseModel):
 
 class MomentumCategory(BaseModel):
     """モメンタムカテゴリデータ"""
+
     category: str = ""
     period: str = ""
     themes: list[MomentumTheme] = []
+
 
 class DistributionData(BaseModel):
     count: int = 0
@@ -91,6 +99,7 @@ class YieldSpreadData(BaseModel):
 
 class MarketMonitorData(BaseModel):
     """市場監視データ"""
+
     distribution_spy: DistributionData = DistributionData()
     distribution_ndx: DistributionData = DistributionData()
     climax: ClimaxData = ClimaxData()
@@ -149,7 +158,9 @@ class MarketState(rx.State):
             config_task = asyncio.to_thread(get_market_config, self.market_type)
 
             # オプションデータは分離して取得（失敗しても他に影響しない）
-            option_data_task = asyncio.to_thread(get_major_indices_options, self.market_type)
+            option_data_task = asyncio.to_thread(
+                get_major_indices_options, self.market_type
+            )
 
             # 指数・設定は必須、オプションは失敗許容
             raw_data, config = await asyncio.gather(raw_data_task, config_task)
@@ -171,47 +182,57 @@ class MarketState(rx.State):
                     gex_dict = opt.get("gex") or {}
                     pcr_val = float(pcr_dict.get("volume_pcr", 0.0))
                     gex_val = float(gex_dict.get("nearby_net_gex", 0.0))
-                    opt_list.append(OptionSummary(
-                        ticker=opt.get("ticker", ""),
-                        sentiment=opt.get("sentiment", "中立"),
-                        current_price=opt.get("current_price", 0.0),
-                        pcr_vol=pcr_val,
-                        pcr_vol_str=f"{pcr_val:.2f}",
-                        net_gex=gex_val,
-                        net_gex_str=f"{gex_val / 1e6:+.0f}M",
-                        iv=f"{iv_val*100:.1f}%" if iv_val is not None else "-",
-                        max_pain=f"${mp_val:.0f}" if mp_val is not None else "-",
-                        analysis=opt.get("analysis", [])
-                    ))
+                    opt_list.append(
+                        OptionSummary(
+                            ticker=opt.get("ticker", ""),
+                            sentiment=opt.get("sentiment", "中立"),
+                            current_price=opt.get("current_price", 0.0),
+                            pcr_vol=pcr_val,
+                            pcr_vol_str=f"{pcr_val:.2f}",
+                            net_gex=gex_val,
+                            net_gex_str=f"{gex_val / 1e6:+.0f}M",
+                            iv=f"{iv_val * 100:.1f}%" if iv_val is not None else "-",
+                            max_pain=f"${mp_val:.0f}" if mp_val is not None else "-",
+                            analysis=opt.get("analysis", []),
+                        )
+                    )
             elif not self.option_error_msg:
-                self.option_error_msg = "市場閉場中のため最新のオプションデータがありません"
+                self.option_error_msg = (
+                    "市場閉場中のため最新のオプションデータがありません"
+                )
 
             self.option_analysis = opt_list
-            
+
             # 残りの重い分析タスクを並行実行
-            eval_task = asyncio.to_thread(evaluate_market_environment, self.market_type, option_data)
+            eval_task = asyncio.to_thread(
+                evaluate_market_environment, self.market_type, option_data
+            )
             micro_task = asyncio.to_thread(self._fetch_microstructure)
             momentum_task = asyncio.to_thread(self._fetch_momentum)
             monitor_task = asyncio.to_thread(self._fetch_market_monitor, option_data)
-            
+
             eval_res, micro_res, momentum_res, monitor_res = await asyncio.gather(
-                eval_task, micro_task, momentum_task, monitor_task, return_exceptions=True
+                eval_task,
+                micro_task,
+                momentum_task,
+                monitor_task,
+                return_exceptions=True,
             )
-            
+
             # 評価データの反映
             if not isinstance(eval_res, Exception) and eval_res:
                 eval_data = eval_res
             else:
                 eval_data = {}
-                
+
             # マイクロストラクチャーの反映
             if not isinstance(micro_res, Exception) and micro_res:
                 self.microstructure = MicrostructureData(**micro_res)
-                
+
             # モメンタムの反映
             if not isinstance(momentum_res, Exception) and momentum_res:
                 self.momentum_data = momentum_res
-                
+
             # 市場監視の反映
             if not isinstance(monitor_res, Exception) and monitor_res:
                 self.market_monitor = MarketMonitorData(**monitor_res)
@@ -235,8 +256,14 @@ class MarketState(rx.State):
                 for name in jp_names:
                     if name in raw_data:
                         d = raw_data[name]
-                        change_rounded = round(float(d.get('change', 0.0)), 1)
-                        indices_list.append({"name": name, "price": f"¥{d.get('price', 0):,.0f}", "change": change_rounded})
+                        change_rounded = round(float(d.get("change", 0.0)), 1)
+                        indices_list.append(
+                            {
+                                "name": name,
+                                "price": f"¥{d.get('price', 0):,.0f}",
+                                "change": change_rounded,
+                            }
+                        )
 
             for name, data in raw_data.items():
                 if name in ("trend_1mo", "weekly_performance"):
@@ -291,10 +318,13 @@ class MarketState(rx.State):
                         score=float(s.get("score", 0.0)),
                         weight=float(s.get("weight", 0.0)),
                         rationale=s.get("rationale", ""),
-                        category="bullish" if float(s.get("score", 0.0)) >= 0.3
-                            else "bearish" if float(s.get("score", 0.0)) <= -0.3
-                            else "neutral"
-                    ) for s in eval_data["signals"]
+                        category="bullish"
+                        if float(s.get("score", 0.0)) >= 0.3
+                        else "bearish"
+                        if float(s.get("score", 0.0)) <= -0.3
+                        else "neutral",
+                    )
+                    for s in eval_data["signals"]
                 ]
             else:
                 self.market_signals = []
@@ -328,7 +358,7 @@ class MarketState(rx.State):
                 "cta_score": cta.get("score", 0),
                 "cta_extremity": cta.get("extremity", ""),
                 "liquidity_status": liq.get("status", ""),
-                "narrative": data.get("narrative_text", "")
+                "narrative": data.get("narrative_text", ""),
             }
         except Exception:
             return None
@@ -342,17 +372,19 @@ class MarketState(rx.State):
                 theme_list = []
                 for t in themes:
                     perf = float(t.get("performance", 0.0))
-                    theme_list.append(MomentumTheme(
-                        theme=t.get("theme", ""),
-                        performance=perf,
-                        performance_str=f"{perf:+.1f}%"
-                    ))
+                    theme_list.append(
+                        MomentumTheme(
+                            theme=t.get("theme", ""),
+                            performance=perf,
+                            performance_str=f"{perf:+.1f}%",
+                        )
+                    )
                 period_str = themes[-1].get("period", "") if themes else ""
-                result.append(MomentumCategory(
-                    category=cat_name,
-                    period=period_str,
-                    themes=theme_list
-                ))
+                result.append(
+                    MomentumCategory(
+                        category=cat_name, period=period_str, themes=theme_list
+                    )
+                )
             return result
         except Exception:
             return []
@@ -362,34 +394,44 @@ class MarketState(rx.State):
         try:
             spy_df = get_stock_data("SPY", "6mo")
             ndx_df = get_stock_data("^NDX", "6mo")
-            
+
             dist_spy = track_distribution_days(spy_df)
             dist_ndx = track_distribution_days(ndx_df)
-            
+
             opt_pcr = 0.8
             if option_data and len(option_data) > 0:
                 pcr_dict = option_data[0].get("pcr", {})
                 if pcr_dict:
                     opt_pcr = float(pcr_dict.get("volume_pcr", 0.8))
-                    
+
             climax = detect_market_climax(spy_df, ndx_df, opt_pcr)
-            
+
             tnx_df = get_stock_data("^TNX", "5d")
-            tnx_yield = float(tnx_df["Close"].iloc[-1]) / 10.0 if not tnx_df.empty else 4.0
-            
+            tnx_yield = (
+                float(tnx_df["Close"].iloc[-1]) / 10.0 if not tnx_df.empty else 4.0
+            )
+
             spy_info = get_stock_info("SPY")
             qqq_info = get_stock_info("QQQ")
-            spy_pe = spy_info.get("pe_ratio") if spy_info and isinstance(spy_info.get("pe_ratio"), (int, float)) else 22.0
-            ndx_pe = qqq_info.get("pe_ratio") if qqq_info and isinstance(qqq_info.get("pe_ratio"), (int, float)) else 30.0
+            spy_pe = (
+                spy_info.get("pe_ratio")
+                if spy_info and isinstance(spy_info.get("pe_ratio"), (int, float))
+                else 22.0
+            )
+            ndx_pe = (
+                qqq_info.get("pe_ratio")
+                if qqq_info and isinstance(qqq_info.get("pe_ratio"), (int, float))
+                else 30.0
+            )
             index_pe = {"SPY": float(spy_pe), "NDX": float(ndx_pe)}
-            
+
             spread = evaluate_yield_spread(tnx_yield, index_pe)
-            
+
             return {
                 "distribution_spy": dist_spy,
                 "distribution_ndx": dist_ndx,
                 "climax": climax,
-                "yield_spread": spread
+                "yield_spread": spread,
             }
         except Exception:
             return None
@@ -400,7 +442,9 @@ class MarketState(rx.State):
         yield
 
         try:
-            recap = await asyncio.to_thread(generate_market_analysis_report, self.market_type)
+            recap = await asyncio.to_thread(
+                generate_market_analysis_report, self.market_type
+            )
 
             if recap:
                 self.ai_recap = recap

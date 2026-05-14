@@ -39,6 +39,7 @@ def nav_item(text: str, icon: str, url: str) -> rx.Component:
         width="100%",
     )
 
+
 def _market_button(label: str, market_value: str, emoji: str) -> rx.Component:
     """市場切り替え用の個別ボタン"""
     is_active = MarketState.market_type == market_value
@@ -51,6 +52,7 @@ def _market_button(label: str, market_value: str, emoji: str) -> rx.Component:
         flex="1",
         cursor="pointer",
     )
+
 
 def market_switcher() -> rx.Component:
     """市場切り替えセグメントコントロール"""
@@ -68,6 +70,7 @@ def market_switcher() -> rx.Component:
         margin_bottom="1.5rem",
     )
 
+
 def sidebar_nav() -> rx.Component:
     """左側に固定されるメインナビゲーションサイドバー"""
     return rx.vstack(
@@ -80,10 +83,8 @@ def sidebar_nav() -> rx.Component:
             margin_bottom="1rem",
             padding_x="1rem",
         ),
-
         # 市場切り替え
         market_switcher(),
-
         # ナビゲーションリンク
         rx.vstack(
             nav_item("Market", "globe", "/"),
@@ -94,9 +95,7 @@ def sidebar_nav() -> rx.Component:
             width="100%",
             spacing="2",
         ),
-
         rx.spacer(),
-
         # フッター情報
         rx.vstack(
             rx.text("v2.0 (Reflex)", size="1", color=rx.color("gray", 8)),
@@ -104,7 +103,6 @@ def sidebar_nav() -> rx.Component:
             width="100%",
             align_items="center",
         ),
-
         width="250px",
         height="100vh",
         padding="1.5rem 1rem",
@@ -113,4 +111,3 @@ def sidebar_nav() -> rx.Component:
         position="sticky",
         top="0",
     )
-

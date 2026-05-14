@@ -144,7 +144,11 @@ def detect_candlestick_patterns(
 
 
 def detect_pinbar(
-    open_: pd.Series, high: pd.Series, low: pd.Series, close: pd.Series, threshold_ratio: float = 0.6
+    open_: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    threshold_ratio: float = 0.6,
 ) -> dict:
     """
     ローソク足の日足に対して、上髭または下髭が異常な割合を占めているか検知する。
@@ -168,9 +172,17 @@ def detect_pinbar(
     lower_ratio = lower_shadow / total_length
 
     if lower_ratio >= threshold_ratio:
-        return {"is_pinbar": True, "type": "bullish_pinbar", "description": f"長い下髭（全体の{lower_ratio:.0%}）。底打ち・買い向かいのサイン。"}
+        return {
+            "is_pinbar": True,
+            "type": "bullish_pinbar",
+            "description": f"長い下髭（全体の{lower_ratio:.0%}）。底打ち・買い向かいのサイン。",
+        }
     elif upper_ratio >= threshold_ratio:
-        return {"is_pinbar": True, "type": "bearish_pinbar", "description": f"長い上髭（全体の{upper_ratio:.0%}）。上値の重さを示唆。"}
+        return {
+            "is_pinbar": True,
+            "type": "bearish_pinbar",
+            "description": f"長い上髭（全体の{upper_ratio:.0%}）。上値の重さを示唆。",
+        }
 
     return {"is_pinbar": False, "type": "none", "description": "特筆すべきヒゲなし"}
 
@@ -183,7 +195,7 @@ def detect_volume_climax_vs_bleed(
     だらだら下落（ナンピン厳禁）かを判定する。
     """
     if len(close) < window or volume.sum() == 0:
-         return {"signal": "none", "description": "データ不足"}
+        return {"signal": "none", "description": "データ不足"}
 
     recent_vol = volume.iloc[-1]
     avg_vol = volume.iloc[-window:-1].mean()
@@ -200,13 +212,13 @@ def detect_volume_climax_vs_bleed(
     if price_change < -0.03 and vol_ratio >= 2.5:
         return {
             "signal": "selling_climax",
-            "description": f"急激な下落と異常な出来高（平均の{vol_ratio:.1f}倍）。セリングクライマックス（投げ売り）の可能性があり、リバウンド買いの好機か。"
+            "description": f"急激な下落と異常な出来高（平均の{vol_ratio:.1f}倍）。セリングクライマックス（投げ売り）の可能性があり、リバウンド買いの好機か。",
         }
 
     if recent_trend < -0.03 and vol_ratio < 1.0:
         return {
             "signal": "low_volume_bleed",
-            "description": "出来高を伴わない継続的なだらだら下落。買い手不在（ナンピン厳禁）を示唆。"
+            "description": "出来高を伴わない継続的なだらだら下落。買い手不在（ナンピン厳禁）を示唆。",
         }
 
     return {"signal": "neutral", "description": "出来高・価格変動に異常なし"}
@@ -242,16 +254,19 @@ def detect_advanced_patterns(close: pd.Series, high: pd.Series, low: pd.Series) 
         gap_down = recent_high.iloc[1] < recent_low.iloc[0]
         gap_up = recent_low.iloc[4] > recent_high.iloc[3]
         if gap_down and gap_up:
-             patterns.append("ボトム・リバーサルアイランド出現（強力な反転上昇サイン）")
+            patterns.append("ボトム・リバーサルアイランド出現（強力な反転上昇サイン）")
 
         # Top Island Reversal (売りシグナル/ナンピン厳禁)
         gap_up_top = recent_low.iloc[1] > recent_high.iloc[0]
         gap_down_top = recent_high.iloc[4] < recent_low.iloc[3]
         if gap_up_top and gap_down_top:
-             patterns.append("トップ・リバーサルアイランド出現（ナンピン厳禁・急落サイン）")
+            patterns.append(
+                "トップ・リバーサルアイランド出現（ナンピン厳禁・急落サイン）"
+            )
 
     return {
         "detected_patterns": patterns,
-        "description": "、".join(patterns) if patterns else "特筆すべき高度パターンなし"
+        "description": "、".join(patterns)
+        if patterns
+        else "特筆すべき高度パターンなし",
     }
-

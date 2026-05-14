@@ -4,7 +4,6 @@
 疑似的に算出・数値化し、AIレポート用のコンテキストを提供します。
 """
 
-
 import numpy as np
 import pandas as pd
 
@@ -14,6 +13,7 @@ from src.log_config import get_logger
 from src.option_analyst import analyze_option_sentiment
 
 logger = get_logger(__name__)
+
 
 def calculate_historical_volatility(df: pd.DataFrame, window: int = 20) -> float | None:
     """ヒストリカル・ボラティリティ（HV）を年率換算で計算"""
@@ -28,12 +28,13 @@ def calculate_historical_volatility(df: pd.DataFrame, window: int = 20) -> float
     hv = df["log_ret"].tail(window).std() * np.sqrt(252)
     return float(hv)
 
+
 def analyze_liquidity(df: pd.DataFrame, window: int = 10) -> dict | None:
     """
     Amihud非流動性比率のプロキシおよび出来高枯渇状況をチェック。
     Amihud = |Return| / (Volume * Price)
     """
-    if df is None or len(df) < 50: # 比較用に十分なデータが必要
+    if df is None or len(df) < 50:  # 比較用に十分なデータが必要
         return None
 
     df = df.copy()
@@ -44,16 +45,18 @@ def analyze_liquidity(df: pd.DataFrame, window: int = 10) -> dict | None:
     # Volumeが0のケースを避ける
     df["dollar_volume"] = df["dollar_volume"].replace(0, np.nan)
 
-    df["amihud"] = df["return"].abs() / df["dollar_volume"] * 1e9 # スケール調整
+    df["amihud"] = df["return"].abs() / df["dollar_volume"] * 1e9  # スケール調整
 
     recent_amihud = df["amihud"].tail(window).mean()
-    historical_amihud = df["amihud"].tail(50).head(40).mean() # 過去40日の平均
+    historical_amihud = df["amihud"].tail(50).head(40).mean()  # 過去40日の平均
 
     recent_vol = df["Volume"].tail(window).mean()
     historical_vol = df["Volume"].tail(50).head(40).mean()
 
     # 流動性枯渇度（1.0以上なら通常より流動性が低い）
-    liquidity_dryup_ratio = (recent_amihud / historical_amihud) if historical_amihud > 0 else 1.0
+    liquidity_dryup_ratio = (
+        (recent_amihud / historical_amihud) if historical_amihud > 0 else 1.0
+    )
     vol_dryup_ratio = (historical_vol / recent_vol) if recent_vol > 0 else 1.0
 
     status = "正常"
@@ -64,8 +67,9 @@ def analyze_liquidity(df: pd.DataFrame, window: int = 10) -> dict | None:
         "recent_amihud": float(recent_amihud),
         "liquidity_dryup_ratio": float(liquidity_dryup_ratio),
         "vol_dryup_ratio": float(vol_dryup_ratio),
-        "status": status
+        "status": status,
     }
+
 
 def estimate_cta_positioning(df: pd.DataFrame) -> dict | None:
     """
@@ -106,11 +110,8 @@ def estimate_cta_positioning(df: pd.DataFrame) -> dict | None:
     elif score <= -80 and dev_50 < -0.05:
         extremity = "過剰ショート（踏み上げ警戒）"
 
-    return {
-        "score": score,
-        "extremity": extremity,
-        "deviation_50ma": float(dev_50)
-    }
+    return {"score": score, "extremity": extremity, "deviation_50ma": float(dev_50)}
+
 
 @ttl_cache(ttl=600)  # 10分間キャッシュ
 def analyze_market_structure(ticker: str = "SPY") -> dict | None:
@@ -152,9 +153,13 @@ def analyze_market_structure(ticker: str = "SPY") -> dict | None:
         if opt_data:
             dte = opt_data.get("dte", 30.0)
             if dte <= 3.0:
-                opex_narrative = "SQ(OPEX)直前：ガンマ消失によるボラティリティ急拡大に警戒"
-            elif dte >= 25.0: # SQ直後
-                opex_narrative = "SQ(OPEX)通過直後：ピン留め効果が消え、新たなトレンドが発生しやすい"
+                opex_narrative = (
+                    "SQ(OPEX)直前：ガンマ消失によるボラティリティ急拡大に警戒"
+                )
+            elif dte >= 25.0:  # SQ直後
+                opex_narrative = (
+                    "SQ(OPEX)通過直後：ピン留め効果が消え、新たなトレンドが発生しやすい"
+                )
 
         # --- Unwind Risk Score の総合算出 (0-100) ---
         unwind_score = 0
@@ -173,8 +178,10 @@ def analyze_market_structure(ticker: str = "SPY") -> dict | None:
             risk_flags.append("VRPマイナス(下支え脆弱)")
 
         unwind_level = (
-            "高（急変に警戒）" if unwind_score >= 70
-            else "中（注視が必要）" if unwind_score >= 40
+            "高（急変に警戒）"
+            if unwind_score >= 70
+            else "中（注視が必要）"
+            if unwind_score >= 40
             else "低（安定状態）"
         )
 
@@ -183,16 +190,26 @@ def analyze_market_structure(ticker: str = "SPY") -> dict | None:
         narrative_parts.append(f"【{ticker}の市場構造・デリバティブ内部力学分析】")
 
         if cta:
-            narrative_parts.append(f"・CTA/トレンドフォロー陣のポジション推定: スコア {cta['score']} ({cta['extremity']})")
+            narrative_parts.append(
+                f"・CTA/トレンドフォロー陣のポジション推定: スコア {cta['score']} ({cta['extremity']})"
+            )
         if liq:
-            narrative_parts.append(f"・市場流動性（板の状況）: {liq['status']} (枯渇レシオ {liq['liquidity_dryup_ratio']:.2f})")
+            narrative_parts.append(
+                f"・市場流動性（板の状況）: {liq['status']} (枯渇レシオ {liq['liquidity_dryup_ratio']:.2f})"
+            )
         if opt_data and vrp is not None:
-            narrative_parts.append(f"・VRP(ボラティリティ・リスク・プレミアム): {vrp_narrative} (IV: {iv:.1%} / HV20: {hv20:.1%})")
+            narrative_parts.append(
+                f"・VRP(ボラティリティ・リスク・プレミアム): {vrp_narrative} (IV: {iv:.1%} / HV20: {hv20:.1%})"
+            )
         narrative_parts.append(f"・オプション需給/OPEXイベント: {opex_narrative}")
-        narrative_parts.append(f"・総合巻き戻し(Unwind)リスクスコア: {unwind_score}/100 - {unwind_level}")
+        narrative_parts.append(
+            f"・総合巻き戻し(Unwind)リスクスコア: {unwind_score}/100 - {unwind_level}"
+        )
 
         if risk_flags:
-            narrative_parts.append(f"※現在発火しているリスクシグナル: {', '.join(risk_flags)}")
+            narrative_parts.append(
+                f"※現在発火しているリスクシグナル: {', '.join(risk_flags)}"
+            )
 
         return {
             "ticker": ticker,
@@ -204,7 +221,7 @@ def analyze_market_structure(ticker: str = "SPY") -> dict | None:
             "hv20": hv20,
             "iv": opt_data.get("iv") if opt_data else None,
             "opex_narrative": opex_narrative,
-            "narrative_text": "\n".join(narrative_parts)
+            "narrative_text": "\n".join(narrative_parts),
         }
     except Exception as e:
         logger.error(f"Error in analyze_market_structure for {ticker}: {e}")

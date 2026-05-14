@@ -4,7 +4,9 @@ import reflex as rx
 def metric_card(title: str, value: str, change: str) -> rx.Component:
     """KPIを表示するメトリックカード"""
     # 変動率がプラスかマイナスかで色を変える簡易ロジック
-    is_positive = "+" in change or (change and change[0].isdigit() and float(change.replace("%", "")) > 0)
+    is_positive = "+" in change or (
+        change and change[0].isdigit() and float(change.replace("%", "")) > 0
+    )
     change_color = rx.color("green", 9) if is_positive else rx.color("red", 9)
     change_icon = "trending-up" if is_positive else "trending-down"
 

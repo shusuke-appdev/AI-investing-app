@@ -55,9 +55,7 @@ def _render_market_monitor(market_type: str):
 
     # -1.0 〜 +1.0 を 0.0 〜 1.0 に正規化してプログレスバーに表示
     norm_score = max(0.0, min(1.0, (score + 1.0) / 2.0))
-    st.progress(
-        norm_score, text=f"総合スコア: {score:+.2f} ({desc})"
-    )
+    st.progress(norm_score, text=f"総合スコア: {score:+.2f} ({desc})")
 
     clean_status_flag = "弱気" in status_clean or "強気" in status_clean
     with st.expander("評価コンポーネント内訳", expanded=clean_status_flag):
@@ -85,7 +83,7 @@ def _render_market_monitor(market_type: str):
                 st.markdown(
                     f"- **{name}** (スコア: {sc:+.2f}, ウェイト: {wt:.1f})  \n"
                     f"  <span style='color: #555555; font-size: 0.9em; margin-left:1rem;'>└ {rat}</span>",
-                    unsafe_allow_html=True
+                    unsafe_allow_html=True,
                 )
             st.write("")  # 適切な余白
 

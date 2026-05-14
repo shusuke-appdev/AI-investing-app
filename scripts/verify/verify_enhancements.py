@@ -70,22 +70,26 @@ def test_financials_logic():
             concept = entry.get("concept", "")
             value = entry.get("value", 0)
 
-            if concept in [
-                "Revenues",
-                "RevenueFromContractWithCustomerExcludingAssessedTax",
-                "SalesRevenueNet",
-                "SalesRevenueGoodsNet",
-            ]:
-                if revenue == 0:
-                    revenue = value
+            if (
+                concept
+                in [
+                    "Revenues",
+                    "RevenueFromContractWithCustomerExcludingAssessedTax",
+                    "SalesRevenueNet",
+                    "SalesRevenueGoodsNet",
+                ]
+                and revenue == 0
+            ):
+                revenue = value
 
-            if concept in ["OperatingIncomeLoss", "OperatingIncome"]:
-                if operating_income == 0:
-                    operating_income = value
+            if (
+                concept in ["OperatingIncomeLoss", "OperatingIncome"]
+                and operating_income == 0
+            ):
+                operating_income = value
 
-            if concept in ["NetIncomeLoss", "ProfitLoss"]:
-                if net_income == 0:
-                    net_income = value
+            if concept in ["NetIncomeLoss", "ProfitLoss"] and net_income == 0:
+                net_income = value
 
         financials_data.append(
             {

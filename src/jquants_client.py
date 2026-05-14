@@ -29,9 +29,7 @@ def _get_headers() -> dict:
     api_key = get_jquants_api_key()
     if not api_key:
         return {}
-    return {
-        "x-api-key": api_key
-    }
+    return {"x-api-key": api_key}
 
 
 @ttl_cache(ttl=CACHE_TTL_SHORT)
@@ -51,13 +49,13 @@ def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
     try:
         # 日付範囲の計算
         period_map = {
-            "1d": timedelta(days=5), # 休日を考慮して少し長めに
+            "1d": timedelta(days=5),  # 休日を考慮して少し長めに
             "5d": timedelta(days=10),
             "1mo": timedelta(days=35),
             "3mo": timedelta(days=100),
             "6mo": timedelta(days=190),
             "1y": timedelta(days=380),
-            "max": timedelta(days=1825), # 約5年
+            "max": timedelta(days=1825),  # 約5年
         }
         days = period_map.get(period, timedelta(days=35))
         # J-Quants Freeプラン制限: データは約12週間遅延で提供される
@@ -69,7 +67,7 @@ def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
         params = {
             "code": f"{code}0",  # J-Quantsは5桁コード(末尾0)
             "from": from_date,
-            "to": to_date
+            "to": to_date,
         }
 
         response = requests.get(url, params=params, headers=headers, timeout=15)
@@ -93,17 +91,17 @@ def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
                 "AdjustmentHigh": "Adj High",
                 "AdjustmentLow": "Adj Low",
                 "AdjustmentClose": "Adj Close",
-                "AdjustmentVolume": "Adj Volume"
+                "AdjustmentVolume": "Adj Volume",
             },
             inplace=True,
         )
         # yfinance の挙動に合わせる: Open/High/Low/Close は分割調整済みの値を使う方が安全
         if "Adj Close" in df.columns:
-             df["Open"] = df["Adj Open"]
-             df["High"] = df["Adj High"]
-             df["Low"] = df["Adj Low"]
-             df["Close"] = df["Adj Close"]
-             df["Volume"] = df["Adj Volume"]
+            df["Open"] = df["Adj Open"]
+            df["High"] = df["Adj High"]
+            df["Low"] = df["Adj Low"]
+            df["Close"] = df["Adj Close"]
+            df["Volume"] = df["Adj Volume"]
 
         if "Date" in df.columns:
             df["Date"] = pd.to_datetime(df["Date"])
@@ -176,7 +174,7 @@ def get_fins_statements(ticker: str) -> dict | None:
             "equity": _parse_num(latest.get("Equity")),
             "disclose_date": latest.get("DiscloseDate"),
             "type": latest.get("TypeOfDocument"),
-            "company_name": latest.get("CompanyName")
+            "company_name": latest.get("CompanyName"),
         }
 
     except Exception as e:
@@ -213,7 +211,7 @@ def get_company_info(ticker: str) -> dict | None:
             "sector_name": info.get("Sector33CodeName"),
             "industry_name": info.get("Sector17CodeName"),
             "market_code_name": info.get("MarketCodeName"),
-            "margin_code_name": info.get("MarginCodeName")
+            "margin_code_name": info.get("MarginCodeName"),
         }
     except Exception as e:
         logger.warning(f"J-Quants: Failed to get company info for {ticker}: {e}")

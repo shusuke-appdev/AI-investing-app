@@ -74,12 +74,13 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
     # 生指数ティッカー（^始まり）はFinnhubで取得不可 → yfinanceに回す
     raw_index_tickers = {k: v for k, v in finnhub_targets.items() if v.startswith("^")}
     yf_targets.update(raw_index_tickers)
-    finnhub_targets = {k: v for k, v in finnhub_targets.items() if not v.startswith("^")}
+    finnhub_targets = {
+        k: v for k, v in finnhub_targets.items() if not v.startswith("^")
+    }
 
     if not is_configured():
         yf_targets.update(finnhub_targets)
         finnhub_targets = {}
-
 
     def _fetch_finnhub(n: str, t: str) -> tuple[str, str, dict | None]:
         try:
@@ -89,7 +90,10 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
 
     if finnhub_targets:
         with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [executor.submit(_fetch_finnhub, n, t) for n, t in finnhub_targets.items()]
+            futures = [
+                executor.submit(_fetch_finnhub, n, t)
+                for n, t in finnhub_targets.items()
+            ]
             for future in as_completed(futures):
                 n, t, q = future.result()
                 if isinstance(q, dict) and q.get("c") not in (0, None):
@@ -122,11 +126,15 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                     return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
 
                 change = ((current - prev) / prev) * 100 if prev != 0 else 0
-                return n, t, {
-                    "price": float(current),
-                    "change": float(change),
-                    "ticker": t,
-                }
+                return (
+                    n,
+                    t,
+                    {
+                        "price": float(current),
+                        "change": float(change),
+                        "ticker": t,
+                    },
+                )
             else:
                 return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
         except Exception as e:
@@ -136,7 +144,9 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
     if yf_targets:
         try:
             with ThreadPoolExecutor(max_workers=5) as executor:
-                futures = [executor.submit(_fetch_yf, n, t) for n, t in yf_targets.items()]
+                futures = [
+                    executor.submit(_fetch_yf, n, t) for n, t in yf_targets.items()
+                ]
                 for future in as_completed(futures):
                     n, t, data = future.result()
                     result[n] = data

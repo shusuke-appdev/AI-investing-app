@@ -5,6 +5,7 @@ import edinet_tools
 # Replace with an actual check if you have a mocked key or run it when set
 os.environ["EDINET_API_KEY"] = os.environ.get("EDINET_API_KEY", "YOUR_API_KEY")
 
+
 def test_edinet():
     try:
         toyota = edinet_tools.entity("7203")
@@ -25,6 +26,7 @@ def test_edinet():
                     break
     except Exception as e:
         print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     test_edinet()

@@ -91,8 +91,12 @@ def calculate_pcr(
     volume_pcr = put_volume / call_volume if call_volume > 0 else 0
 
     # Open Interest PCR
-    call_oi = calls["openInterest"].fillna(0).sum() if "openInterest" in calls.columns else 0
-    put_oi = puts["openInterest"].fillna(0).sum() if "openInterest" in puts.columns else 0
+    call_oi = (
+        calls["openInterest"].fillna(0).sum() if "openInterest" in calls.columns else 0
+    )
+    put_oi = (
+        puts["openInterest"].fillna(0).sum() if "openInterest" in puts.columns else 0
+    )
     oi_pcr = put_oi / call_oi if call_oi > 0 else 0
 
     return {
@@ -134,7 +138,9 @@ def calculate_gex(
             return None
         calls, puts, current_price, _ = fetched
 
-    total_oi = calls["openInterest"].fillna(0).sum() + puts["openInterest"].fillna(0).sum()
+    total_oi = (
+        calls["openInterest"].fillna(0).sum() + puts["openInterest"].fillna(0).sum()
+    )
     if total_oi == 0:
         logger.warning(
             f"[OptionAnalyst] {ticker}: OpenInterest is 0. Cannot calculate GEX."

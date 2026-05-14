@@ -20,34 +20,36 @@ def detect_bases(df: pd.DataFrame) -> dict:
     high = df["High"].values
     low = df["Low"].values
     volume = df["Volume"].values if "Volume" in df else np.zeros_like(close)
-    
+
     # 簡易的なベース認識の結果を格納
     patterns = []
-    
+
     # 直近数ヶ月（例えば過去100日）の最高値と最安値
     lookback = min(100, len(df))
     recent_high = np.max(high[-lookback:])
     recent_low = np.min(low[-lookback:])
-    
+
     # 下落率 (Drawdown)
     current_price = close[-1]
-    drawdown = (recent_high - current_price) / recent_high * 100
+    (recent_high - current_price) / recent_high * 100
     max_drawdown = (recent_high - recent_low) / recent_high * 100
-    
+
     # 1. フラットベース判定
     # 深さ15%以下、期間5〜7週（25〜35営業日）以上横ばい
     # ここでは直近25日間の変動幅が15%以下であるかを見る
     recent_25_high = np.max(high[-25:])
     recent_25_low = np.min(low[-25:])
     flat_drawdown = (recent_25_high - recent_25_low) / recent_25_high * 100
-    
+
     if flat_drawdown <= 15.0 and current_price > recent_25_low:
-        patterns.append({
-            "type": "Flat Base",
-            "depth": float(flat_drawdown),
-            "status": "forming" if current_price < recent_25_high else "breakout"
-        })
-        
+        patterns.append(
+            {
+                "type": "Flat Base",
+                "depth": float(flat_drawdown),
+                "status": "forming" if current_price < recent_25_high else "breakout",
+            }
+        )
+
     # 2. 取手付きカップ (Cup with Handle) 判定
     # 下落率12〜30%、期間7週〜24週
     # 取手部分は下落率10〜12%以内、出来高急減
@@ -57,17 +59,19 @@ def detect_bases(df: pd.DataFrame) -> dict:
         recent_10_high = np.max(high[-10:])
         recent_10_low = np.min(low[-10:])
         handle_drawdown = (recent_10_high - recent_10_low) / recent_10_high * 100
-        
+
         vol_ma50 = np.mean(volume[-50:])
         recent_vol = np.mean(volume[-5:])
-        
+
         if handle_drawdown <= 15.0 and recent_vol < vol_ma50:
-            patterns.append({
-                "type": "Cup with Handle",
-                "depth": float(max_drawdown),
-                "status": "forming"
-            })
-            
+            patterns.append(
+                {
+                    "type": "Cup with Handle",
+                    "depth": float(max_drawdown),
+                    "status": "forming",
+                }
+            )
+
     # 3. ダブルボトム (W型) 判定
     # 深さ40%以下、2回目の底が1回目を下回る（アンダーカット）
     if max_drawdown <= 40.0:
@@ -79,11 +83,13 @@ def detect_bases(df: pd.DataFrame) -> dict:
     # 本来はデータベースやセッションで過去のブレイクアウト回数を保存する
     breakout_count = 1  # 実際には状態管理から取得する
     is_warning = breakout_count >= 3
-    
+
     return {
         "detected": len(patterns) > 0,
         "patterns": patterns,
         "breakout_count": breakout_count,
         "warning": is_warning,
-        "message": "3回目以上のベースブレイクアウトは下落リスクが高いため警告" if is_warning else "ベース形成中 / ブレイクアウト初期"
+        "message": "3回目以上のベースブレイクアウトは下落リスクが高いため警告"
+        if is_warning
+        else "ベース形成中 / ブレイクアウト初期",
     }

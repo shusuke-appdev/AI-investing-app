@@ -69,7 +69,9 @@ def momentum_monitor_component() -> rx.Component:
                 width="100%",
             ),
             rx.center(
-                rx.text("モメンタムデータの取得中...", color="gray", font_size="0.85rem"),
+                rx.text(
+                    "モメンタムデータの取得中...", color="gray", font_size="0.85rem"
+                ),
                 height="80px",
             ),
         ),

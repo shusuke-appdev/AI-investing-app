@@ -216,6 +216,7 @@ def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
 
     try:
         from src.market_microstructure import analyze_market_structure
+
         micro = analyze_market_structure("SPY")
         if not micro:
             return []
@@ -226,35 +227,107 @@ def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
         vrp_val = micro.get("vrp")
         if vrp_val is not None:
             if vrp_val < 0.0:
-                signals.append(MarketSignal("VRP (ボラリスクプレミアム)", f"{vrp_val:.2%}", -0.6, 0.6, "VRP縮小。マーケットメーカーのプット売り意欲減退によりダウンサイドリスク増大。"))
+                signals.append(
+                    MarketSignal(
+                        "VRP (ボラリスクプレミアム)",
+                        f"{vrp_val:.2%}",
+                        -0.6,
+                        0.6,
+                        "VRP縮小。マーケットメーカーのプット売り意欲減退によりダウンサイドリスク増大。",
+                    )
+                )
             elif vrp_val > 0.05:
-                signals.append(MarketSignal("VRP (ボラリスクプレミアム)", f"{vrp_val:.2%}", 0.5, 0.6, "VRP拡大。オプションの売り手が存在し、ダウンサイドは保護されやすい。"))
+                signals.append(
+                    MarketSignal(
+                        "VRP (ボラリスクプレミアム)",
+                        f"{vrp_val:.2%}",
+                        0.5,
+                        0.6,
+                        "VRP拡大。オプションの売り手が存在し、ダウンサイドは保護されやすい。",
+                    )
+                )
             else:
-                signals.append(MarketSignal("VRP (ボラリスクプレミアム)", f"{vrp_val:.2%}", 0.0, 0.6, "VRPはニュートラル圏内。"))
+                signals.append(
+                    MarketSignal(
+                        "VRP (ボラリスクプレミアム)",
+                        f"{vrp_val:.2%}",
+                        0.0,
+                        0.6,
+                        "VRPはニュートラル圏内。",
+                    )
+                )
 
         # 2. CTAポジショニング
         cta = micro.get("cta_proxy") or {}
         cta_val = cta.get("extremity", "")
         if "過剰ロング" in cta_val:
-            signals.append(MarketSignal("CTAポジショニング", cta_val, -0.5, 0.4, "トレンドフォロー勢の過剰ロング。アンワインド時の急落リスクあり。"))
+            signals.append(
+                MarketSignal(
+                    "CTAポジショニング",
+                    cta_val,
+                    -0.5,
+                    0.4,
+                    "トレンドフォロー勢の過剰ロング。アンワインド時の急落リスクあり。",
+                )
+            )
         elif "過剰ショート" in cta_val:
-            signals.append(MarketSignal("CTAポジショニング", cta_val, 0.5, 0.4, "過剰ショート。ショートカバーによる急騰リスクあり。"))
+            signals.append(
+                MarketSignal(
+                    "CTAポジショニング",
+                    cta_val,
+                    0.5,
+                    0.4,
+                    "過剰ショート。ショートカバーによる急騰リスクあり。",
+                )
+            )
         elif cta.get("score", 0) > 0:
-            signals.append(MarketSignal("CTAポジショニング", cta_val, 0.2, 0.4, "CTAはロング基調。トレンド継続。"))
+            signals.append(
+                MarketSignal(
+                    "CTAポジショニング",
+                    cta_val,
+                    0.2,
+                    0.4,
+                    "CTAはロング基調。トレンド継続。",
+                )
+            )
         elif cta.get("score", 0) < 0:
-            signals.append(MarketSignal("CTAポジショニング", cta_val, -0.2, 0.4, "CTAはショート基調。"))
+            signals.append(
+                MarketSignal(
+                    "CTAポジショニング", cta_val, -0.2, 0.4, "CTAはショート基調。"
+                )
+            )
         else:
-            signals.append(MarketSignal("CTAポジショニング", cta_val, 0.0, 0.4, "極端な偏りなし。"))
+            signals.append(
+                MarketSignal("CTAポジショニング", cta_val, 0.0, 0.4, "極端な偏りなし。")
+            )
 
         # 3. 流動性 (Amihud Illiquidity)
         liq = micro.get("liquidity") or {}
         liq_val = liq.get("status", "")
         if "枯渇" in liq_val:
-            signals.append(MarketSignal("市場流動性", liq_val, -0.8, 0.5, "流動性が枯渇。小さなフローで価格が飛びやすい脆弱な状態。"))
+            signals.append(
+                MarketSignal(
+                    "市場流動性",
+                    liq_val,
+                    -0.8,
+                    0.5,
+                    "流動性が枯渇。小さなフローで価格が飛びやすい脆弱な状態。",
+                )
+            )
         elif "正常" in liq_val:
-            signals.append(MarketSignal("市場流動性", liq_val, 0.3, 0.5, "流動性は十分。ショック吸収力あり。"))
+            signals.append(
+                MarketSignal(
+                    "市場流動性",
+                    liq_val,
+                    0.3,
+                    0.5,
+                    "流動性は十分。ショック吸収力あり。",
+                )
+            )
         else:
-            signals.append(MarketSignal("市場流動性", liq_val, 0.0, 0.5, "流動性は標準レベル。"))
+            signals.append(
+                MarketSignal("市場流動性", liq_val, 0.0, 0.5, "流動性は標準レベル。")
+            )
 
         return signals
     except Exception as e:

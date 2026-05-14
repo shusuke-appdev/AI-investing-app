@@ -3,7 +3,7 @@ import sys
 
 import pandas as pd
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from src.advisor.mean_reversion import MeanReversionAnalyzer
 from src.advisor.technical_indicators import (
@@ -30,23 +30,25 @@ def test_technical_indicators():
     print("Support:", calculate_support_resistance(empty_series, 20))
     print("Technical indicators passed.")
 
+
 def test_mean_reversion():
     print("Testing mean reversion with insufficient data...")
-    df = pd.DataFrame({"Close": [100]*10, "Open": [100]*10, "High": [100]*10, "Low": [100]*10})
+    df = pd.DataFrame(
+        {"Close": [100] * 10, "Open": [100] * 10, "High": [100] * 10, "Low": [100] * 10}
+    )
     analyzer = MeanReversionAnalyzer("TEST")
     res = analyzer.analyze(df)
     print("Mean Reversion Result keys:", res.keys())
     print("Mean Reversion passed.")
 
+
 def test_news_analyst():
     print("Testing news analyst with missing keys...")
-    market_data = {
-        "S&P 500": {"wrong_key": 100},
-        "USD/JPY": {"wrong_key": 150}
-    }
+    market_data = {"S&P 500": {"wrong_key": 100}, "USD/JPY": {"wrong_key": 150}}
     summary = generate_flash_summary(market_data, ["News 1"])
     print("Flash Summary generated successfully:")
     print(summary)
+
 
 if __name__ == "__main__":
     try:
@@ -57,5 +59,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[CRITICAL] Error during test: {e}")
         import traceback
-        traceback.print_exc()
 
+        traceback.print_exc()

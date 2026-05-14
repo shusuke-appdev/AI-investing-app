@@ -59,10 +59,14 @@ class TestCalculateGEX:
             {"strike": [100], "openInterest": [1000], "gamma": [0.05]}
         )
 
-        with patch(
-            "src.option_analyst.get_option_chain", return_value=(mock_calls, mock_puts)
-        ), patch(
-            "src.option_analyst.DataProvider.get_current_price", return_value=0.0
+        with (
+            patch(
+                "src.option_analyst.get_option_chain",
+                return_value=(mock_calls, mock_puts),
+            ),
+            patch(
+                "src.option_analyst.DataProvider.get_current_price", return_value=0.0
+            ),
         ):
             from src.option_analyst import calculate_gex
 

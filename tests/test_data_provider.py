@@ -6,19 +6,17 @@ from src.data_provider import DataProvider
 class TestDataProvider:
     @patch("src.stock_data_provider.is_japanese_stock", return_value=False)
     @patch("src.stock_data_provider._extract_openbb_profile")
-    def test_get_stock_info_structure(
-        self, mock_extract, mock_is_jp
-    ):
+    def test_get_stock_info_structure(self, mock_extract, mock_is_jp):
         """Test if get_stock_info returns correct StockInfo TypedDict structure."""
 
         # Mock responses
         def side_effect_extract(ticker, info):
-             info["name"] = "Test Inc."
-             info["ticker"] = "TEST"
-             info["market_cap"] = 1000 * 1e6
-             info["pe_ratio"] = 20.5
-             info["current_price"] = 145.0
-             info["beta"] = 1.1
+            info["name"] = "Test Inc."
+            info["ticker"] = "TEST"
+            info["market_cap"] = 1000 * 1e6
+            info["pe_ratio"] = 20.5
+            info["current_price"] = 145.0
+            info["beta"] = 1.1
 
         mock_extract.side_effect = side_effect_extract
 

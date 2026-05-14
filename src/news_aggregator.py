@@ -9,6 +9,11 @@ from datetime import datetime, timedelta
 
 from src.log_config import get_logger
 
+try:
+    from gnews import GNews
+except ImportError:
+    GNews = None
+
 logger = get_logger(__name__)
 
 
@@ -40,9 +45,11 @@ def get_gnews_articles(
     Returns:
         [{"title", "summary", "source", "published", "published_dt", "link", "category"}, ...]
     """
-    try:
-        from gnews import GNews
+    if GNews is None:
+        logger.info("gnews library not installed. Run: pip install gnews")
+        return []
 
+    try:
         gn = GNews(
             language=language,
             country=country,
@@ -100,9 +107,6 @@ def get_gnews_articles(
 
         return results
 
-    except ImportError:
-        logger.info("gnews library not installed. Run: pip install gnews")
-        return []
     except Exception as e:
         logger.error(f"GNews fetch error: {e}")
         return []

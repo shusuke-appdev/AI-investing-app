@@ -19,7 +19,9 @@ MOMENTUM_CATEGORIES: dict[str, str] = {
 
 
 @ttl_cache(ttl=43200)  # 12時間キャッシュ
-def get_momentum_themes(market_type: str = "US", top_n: int = 5) -> dict[str, list[dict]]:
+def get_momentum_themes(
+    market_type: str = "US", top_n: int = 5
+) -> dict[str, list[dict]]:
     """
     4カテゴリ×上位Nテーマのモメンタムランキングを取得する。
 
@@ -37,14 +39,18 @@ def get_momentum_themes(market_type: str = "US", top_n: int = 5) -> dict[str, li
             ranked = get_ranked_themes(period_name, market_type)
             top_themes = []
             for t in ranked[:top_n]:
-                top_themes.append({
-                    "theme": t["theme"],
-                    "performance": round(t["performance"], 1),
-                    "period": period_name,
-                })
+                top_themes.append(
+                    {
+                        "theme": t["theme"],
+                        "performance": round(t["performance"], 1),
+                        "period": period_name,
+                    }
+                )
             result[cat_name] = top_themes
         except Exception as e:
-            logger.warning(f"[MomentumMonitor] Failed to get themes for {cat_name}: {e}")
+            logger.warning(
+                f"[MomentumMonitor] Failed to get themes for {cat_name}: {e}"
+            )
             result[cat_name] = []
 
     return result

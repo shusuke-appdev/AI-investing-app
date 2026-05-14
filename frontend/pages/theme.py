@@ -31,9 +31,7 @@ def _render_theme_item(theme_data: ThemeItem, index: int) -> rx.Component:
     perf_icon = rx.cond(perf >= 0, "📈", "📉")
 
     header_content = rx.hstack(
-        rx.badge(
-            index + 1, color_scheme="gray", variant="solid", radius="full"
-        ),
+        rx.badge(index + 1, color_scheme="gray", variant="solid", radius="full"),
         rx.text(theme_data.theme, weight="bold", size="3"),
         rx.spacer(),
         rx.hstack(
@@ -89,9 +87,7 @@ def theme_page() -> rx.Component:
             rx.segmented_control.root(
                 rx.foreach(
                     ThemeState.periods,
-                    lambda period: rx.segmented_control.item(
-                        period, value=period
-                    ),
+                    lambda period: rx.segmented_control.item(period, value=period),
                 ),
                 value=ThemeState.selected_period,
                 on_change=ThemeState.set_period,

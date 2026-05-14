@@ -6,6 +6,7 @@ import reflex as rx
 
 class KnowledgeState(rx.State):
     """Knowledge DB 用の状態管理クラス"""
+
     mode: str = "list"  # "list", "add", "edit"
 
     # 知識一覧データ
@@ -55,6 +56,7 @@ class KnowledgeState(rx.State):
         yield
         try:
             from src.knowledge_storage import load_all_knowledge
+
             db_items = await asyncio.to_thread(load_all_knowledge)
             # Serialize for Reflex
             self.items = [
@@ -75,6 +77,7 @@ class KnowledgeState(rx.State):
     async def delete_item(self, item_id: str):
         try:
             from src.knowledge_storage import delete_knowledge
+
             await asyncio.to_thread(delete_knowledge, item_id)
             return KnowledgeState.load_items
         except Exception as e:
@@ -82,6 +85,7 @@ class KnowledgeState(rx.State):
 
     def prepare_edit(self, item_id: str):
         from src.knowledge_storage import get_knowledge_by_id
+
         item = get_knowledge_by_id(item_id)
         if item:
             self.edit_id = item.id
@@ -93,6 +97,7 @@ class KnowledgeState(rx.State):
     async def save_edit(self):
         try:
             from src.knowledge_storage import update_knowledge
+
             updates = {"title": self.edit_title, "summary": self.edit_summary}
             await asyncio.to_thread(update_knowledge, self.edit_id, updates)
             self.mode = "list"
@@ -107,12 +112,17 @@ class KnowledgeState(rx.State):
 
         try:
             from src.knowledge_extractor import extract_from_url, extract_from_youtube
+
             if self.input_type == "text":
                 self.extracted_content = self.text_content
             elif self.input_type == "url":
-                self.extracted_content = await asyncio.to_thread(extract_from_url, self.url_input)
+                self.extracted_content = await asyncio.to_thread(
+                    extract_from_url, self.url_input
+                )
             elif self.input_type == "youtube":
-                self.extracted_content = await asyncio.to_thread(extract_from_youtube, self.url_input)
+                self.extracted_content = await asyncio.to_thread(
+                    extract_from_youtube, self.url_input
+                )
         except Exception as e:
             self.extracted_content = f"[Error] {e}"
         finally:
@@ -130,8 +140,12 @@ class KnowledgeState(rx.State):
             from src.knowledge_extractor import generate_title, summarize_content
             from src.knowledge_storage import KnowledgeItem, save_knowledge
 
-            summary = await asyncio.to_thread(summarize_content, self.extracted_content, self.input_type)
-            title = await asyncio.to_thread(generate_title, self.extracted_content, self.input_type)
+            summary = await asyncio.to_thread(
+                summarize_content, self.extracted_content, self.input_type
+            )
+            title = await asyncio.to_thread(
+                generate_title, self.extracted_content, self.input_type
+            )
 
             metadata = {}
             if self.input_type == "url":
@@ -144,7 +158,7 @@ class KnowledgeState(rx.State):
                 source_type=self.input_type,
                 original_content=self.extracted_content,
                 summary=summary,
-                metadata=metadata
+                metadata=metadata,
             )
             await asyncio.to_thread(save_knowledge, item)
 
@@ -163,10 +177,13 @@ class KnowledgeState(rx.State):
 
         try:
             from src.knowledge_extractor import extract_from_file
+
             if files:
                 file = files[0]
                 upload_data = await file.read()
-                self.extracted_content = await asyncio.to_thread(extract_from_file, upload_data, file.filename)
+                self.extracted_content = await asyncio.to_thread(
+                    extract_from_file, upload_data, file.filename
+                )
         except Exception as e:
             self.extracted_content = f"[Error] {e}"
         finally:

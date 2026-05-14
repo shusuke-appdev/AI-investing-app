@@ -47,8 +47,8 @@ def determine_analysis_mode(
         description = "長期MAからの下方乖離や売られすぎを検知。【逆張りモード】を適用し、モメンタムとパターンのウェイトを引き上げます。"
         weights = {
             "trend": 0.10,  # トレンドは下落しているので重要度を下げる
-            "mom": 0.40,    # 反発モメンタムを重視
-            "pat": 0.30,    # ボトム形成パターンを重視
+            "mom": 0.40,  # 反発モメンタムを重視
+            "pat": 0.30,  # ボトム形成パターンを重視
             "flow": 0.10,
             "mtf": 0.10,
         }
@@ -62,12 +62,8 @@ def determine_analysis_mode(
             "trend": 0.40,  # トレンドの継続性を重視
             "mom": 0.10,
             "pat": 0.20,
-            "flow": 0.20,   # 機関投資家の資金流入を重視
+            "flow": 0.20,  # 機関投資家の資金流入を重視
             "mtf": 0.10,
         }
 
-    return {
-        "mode": mode,
-        "weights": weights,
-        "description": description
-    }
+    return {"mode": mode, "weights": weights, "description": description}

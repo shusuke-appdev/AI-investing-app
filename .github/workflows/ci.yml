@@ -1,9 +1,11 @@
-name: Sync to Hugging Face Hub
+name: CI
 
 on:
+  pull_request:
   push:
-    branches: [main, master]
-  workflow_dispatch:
+    branches-ignore:
+      - main
+      - master
 
 jobs:
   quality:
@@ -33,19 +35,3 @@ jobs:
 
       - name: Test
         run: python -m pytest -q
-
-  sync-to-hub:
-    name: Push to Hugging Face Spaces
-    runs-on: ubuntu-latest
-    needs: quality
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          lfs: true
-
-      - name: Push to Hugging Face Spaces
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          git push --force https://shusuke12345:${HF_TOKEN}@huggingface.co/spaces/shusuke12345/AI-investing-app main

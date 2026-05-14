@@ -7,7 +7,9 @@ google.genai SDK を使用した対話型チャット機能を提供します。
 from src.gemini_client import generate_content
 
 
-def get_chat_session(history: list[dict] | None = None, context: str = "") -> list[dict]:
+def get_chat_session(
+    history: list[dict] | None = None, context: str = ""
+) -> list[dict]:
     """
     チャットセッション（履歴リスト）を取得または作成します。
 
@@ -32,11 +34,16 @@ def get_chat_session(history: list[dict] | None = None, context: str = "") -> li
     )
     return [
         {"role": "user", "content": system_prompt},
-        {"role": "model", "content": "了解しました。金融市場に関するご質問にお答えします。"},
+        {
+            "role": "model",
+            "content": "了解しました。金融市場に関するご質問にお答えします。",
+        },
     ]
 
 
-def send_message(message: str, history: list[dict] | None = None, context: str = "") -> tuple[str, list[dict]]:
+def send_message(
+    message: str, history: list[dict] | None = None, context: str = ""
+) -> tuple[str, list[dict]]:
     """
     チャットメッセージを送信し、応答を取得します。
 

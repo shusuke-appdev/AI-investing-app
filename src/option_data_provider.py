@@ -44,7 +44,9 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
         return None
 
     if not expirations:
-        logger.warning(f"[OptionProvider] yfinance returned no expirations for {ticker}")
+        logger.warning(
+            f"[OptionProvider] yfinance returned no expirations for {ticker}"
+        )
         return None
 
     all_calls = []
@@ -70,7 +72,9 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
             time.sleep(0.3)
 
     if not all_calls:
-        logger.warning(f"[OptionProvider] yfinance returned no option chains for {ticker}")
+        logger.warning(
+            f"[OptionProvider] yfinance returned no option chains for {ticker}"
+        )
         return None
 
     calls_df = pd.concat(all_calls, ignore_index=True)
@@ -84,20 +88,29 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
         "Strike": "strike",
         "Last Price": "lastPrice",
     }
-    calls_df.rename(columns={k: v for k, v in col_map.items() if k in calls_df.columns}, inplace=True)
-    puts_df.rename(columns={k: v for k, v in col_map.items() if k in puts_df.columns}, inplace=True)
+    calls_df.rename(
+        columns={k: v for k, v in col_map.items() if k in calls_df.columns},
+        inplace=True,
+    )
+    puts_df.rename(
+        columns={k: v for k, v in col_map.items() if k in puts_df.columns}, inplace=True
+    )
 
     return calls_df, puts_df
 
 
-def _fetch_with_timeout(ticker: str, timeout: int = FETCH_TIMEOUT) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+def _fetch_with_timeout(
+    ticker: str, timeout: int = FETCH_TIMEOUT
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """タイムアウト付きでオプションデータを取得"""
     with ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(_fetch_option_chain_raw, ticker)
         try:
             return future.result(timeout=timeout)
         except FuturesTimeoutError:
-            logger.warning(f"[OptionProvider] Timeout ({timeout}s) fetching options for {ticker}")
+            logger.warning(
+                f"[OptionProvider] Timeout ({timeout}s) fetching options for {ticker}"
+            )
             return None
         except Exception as e:
             logger.warning(f"[OptionProvider] Error fetching options for {ticker}: {e}")
@@ -121,7 +134,9 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     if _is_market_likely_closed():
         with _fallback_lock:
             if ticker in _fallback_cache:
-                logger.info(f"[OptionProvider] Market closed, using fallback cache for {ticker}")
+                logger.info(
+                    f"[OptionProvider] Market closed, using fallback cache for {ticker}"
+                )
                 return _fallback_cache[ticker]
 
     # リトライループ
@@ -141,7 +156,7 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
             )
 
         if attempt < MAX_RETRIES - 1:
-            wait = BACKOFF_BASE ** attempt
+            wait = BACKOFF_BASE**attempt
             logger.info(f"[OptionProvider] Retrying in {wait}s...")
             time.sleep(wait)
 

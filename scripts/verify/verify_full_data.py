@@ -74,7 +74,7 @@ def test_market_indices_us():
                 log_fail(f"Missing key: {k}")
 
         # Check if sectors loaded (yfinance batch)
-        sector_keys = [k for k in indices.keys() if k in ["情報技術", "ヘルスケア"]]
+        sector_keys = [k for k in indices if k in ["情報技術", "ヘルスケア"]]
         if sector_keys:
             log_pass(f"Sectors loaded: {len(sector_keys)}")
         else:

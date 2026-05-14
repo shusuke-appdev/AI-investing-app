@@ -32,7 +32,9 @@ def _sweep_expired_entries() -> None:
         return
 
     _last_sweep_time = now
-    keys_to_delete = [k for k, (_, ts) in _cache_store.items() if now - ts >= _SWEEP_INTERVAL * 6]
+    keys_to_delete = [
+        k for k, (_, ts) in _cache_store.items() if now - ts >= _SWEEP_INTERVAL * 6
+    ]
     for k in keys_to_delete:
         del _cache_store[k]
         _locks.pop(k, None)

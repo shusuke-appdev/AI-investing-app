@@ -3,13 +3,14 @@ import dataclasses
 from typing import Any
 
 import reflex as rx
-
 from pydantic import BaseModel
+
 
 class SmartItem(BaseModel):
     met: bool = False
     desc: str = ""
     value: str = ""
+
 
 class SmartCriteria(BaseModel):
     all_met: bool = False
@@ -18,6 +19,7 @@ class SmartCriteria(BaseModel):
     A: SmartItem = SmartItem()
     R: SmartItem = SmartItem()
     T: SmartItem = SmartItem()
+
 
 class StockState(rx.State):
     """個別銘柄（Stock）ページ用の状態管理クラス"""
@@ -74,12 +76,19 @@ class StockState(rx.State):
 
             # SMART基準を評価
             from src.advisor.smart_criteria import evaluate_smart_criteria
-            smart_res = await asyncio.to_thread(evaluate_smart_criteria, self.ticker, dict(info_data) if info_data else {}, "不明")
+
+            smart_res = await asyncio.to_thread(
+                evaluate_smart_criteria,
+                self.ticker,
+                dict(info_data) if info_data else {},
+                "不明",
+            )
 
             # Recharts用の形式に変換
             chart_list = []
             if history_df is not None and not history_df.empty:
                 import pandas as pd
+
                 history_df["MA10"] = history_df["Close"].rolling(10).mean()
                 history_df["MA20"] = history_df["Close"].rolling(20).mean()
                 history_df["MA50"] = history_df["Close"].rolling(50).mean()
@@ -87,15 +96,27 @@ class StockState(rx.State):
 
                 # pandas DataFrame を dict のリストに変換
                 for date, row in history_df.iterrows():
-                    chart_list.append({
-                        "name": date.strftime("%Y-%m-%d"),
-                        "price": float(row["Close"]),
-                        "volume": float(row["Volume"]) if "Volume" in history_df.columns else 0.0,
-                        "ma10": float(row["MA10"]) if not pd.isna(row["MA10"]) else None,
-                        "ma20": float(row["MA20"]) if not pd.isna(row["MA20"]) else None,
-                        "ma50": float(row["MA50"]) if not pd.isna(row["MA50"]) else None,
-                        "ma200": float(row["MA200"]) if not pd.isna(row["MA200"]) else None,
-                    })
+                    chart_list.append(
+                        {
+                            "name": date.strftime("%Y-%m-%d"),
+                            "price": float(row["Close"]),
+                            "volume": float(row["Volume"])
+                            if "Volume" in history_df.columns
+                            else 0.0,
+                            "ma10": float(row["MA10"])
+                            if not pd.isna(row["MA10"])
+                            else None,
+                            "ma20": float(row["MA20"])
+                            if not pd.isna(row["MA20"])
+                            else None,
+                            "ma50": float(row["MA50"])
+                            if not pd.isna(row["MA50"])
+                            else None,
+                            "ma200": float(row["MA200"])
+                            if not pd.isna(row["MA200"])
+                            else None,
+                        }
+                    )
 
             # NewsItem を dict に変換
             news_list = [dict(n) for n in news_data] if news_data else []
@@ -110,16 +131,25 @@ class StockState(rx.State):
                 # asdictで辞書化。タプルなどを適切に処理
                 tech_dict = dataclasses.asdict(tech_data)
                 # listやtupleを含む場合、Reflexのstateでうまく扱えるように変換
-                if "contrarian_buy_zone" in tech_dict and isinstance(tech_dict["contrarian_buy_zone"], tuple):
-                    tech_dict["contrarian_buy_zone"] = list(tech_dict["contrarian_buy_zone"])
-                if "price_range" in tech_dict and isinstance(tech_dict["price_range"], tuple):
+                if "contrarian_buy_zone" in tech_dict and isinstance(
+                    tech_dict["contrarian_buy_zone"], tuple
+                ):
+                    tech_dict["contrarian_buy_zone"] = list(
+                        tech_dict["contrarian_buy_zone"]
+                    )
+                if "price_range" in tech_dict and isinstance(
+                    tech_dict["price_range"], tuple
+                ):
                     tech_dict["price_range"] = list(tech_dict["price_range"])
                 self.technical_data = tech_dict
             else:
                 self.technical_data = {}
 
             # APIキーが未設定等の場合のエラーハンドリング
-            if self.info.get("summary") == "情報なし" and self.info.get("sector") == "N/A":
+            if (
+                self.info.get("summary") == "情報なし"
+                and self.info.get("sector") == "N/A"
+            ):
                 self.error_msg = "企業情報を取得できませんでした。Finnhub APIキーが正しく設定されているか確認してください。"
 
         except Exception as e:
@@ -142,8 +172,11 @@ class StockState(rx.State):
 
         try:
             from src.stock_analyst import generate_stock_analysis_report
+
             # info をディクショナリとして渡す
-            recap = await asyncio.to_thread(generate_stock_analysis_report, self.ticker, self.info)
+            recap = await asyncio.to_thread(
+                generate_stock_analysis_report, self.ticker, self.info
+            )
 
             if recap:
                 self.ai_analysis = recap

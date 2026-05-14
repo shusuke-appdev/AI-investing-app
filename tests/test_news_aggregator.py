@@ -74,7 +74,7 @@ class TestMergeWithFinnhubNews:
 class TestGetGnewsArticles:
     """get_gnews_articles関数のテスト（モック使用）"""
 
-    @patch("gnews.GNews")
+    @patch("src.news_aggregator.GNews")
     def test_returns_formatted_articles(self, mock_gnews_class):
         """GNewsから取得した記事を正しいフォーマットで返す"""
         from src.news_aggregator import get_gnews_articles
@@ -101,10 +101,12 @@ class TestGetGnewsArticles:
 
     def test_handles_import_error(self):
         """gnewsがインストールされていない場合は空リストを返す"""
-        with patch.dict("sys.modules", {"gnews": None}):
+        with patch("src.news_aggregator.GNews", None):
             # ImportErrorが発生しても空リストを返す
             # 実際のテストではgnewsがインストールされているのでこのテストはスキップ
-            pass
+            from src.news_aggregator import get_gnews_articles
+
+            assert get_gnews_articles() == []
 
 
 class TestGetAggregatedNews:

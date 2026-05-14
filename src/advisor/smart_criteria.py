@@ -13,10 +13,10 @@ T (Timing): 市場トレンドが「Confirmed up trend」である時
 
 from typing import Any
 
-from src.data_provider import DataProvider
 
-
-def evaluate_smart_criteria(ticker: str, info: dict[str, Any], market_state_status: str = "") -> dict[str, Any]:
+def evaluate_smart_criteria(
+    ticker: str, info: dict[str, Any], market_state_status: str = ""
+) -> dict[str, Any]:
     """
     指定銘柄のSMART基準達成度を評価します。
 
@@ -34,8 +34,12 @@ def evaluate_smart_criteria(ticker: str, info: dict[str, Any], market_state_stat
         "M": {"met": False, "value": "データなし", "desc": "利益率(30~50%)"},
         "A": {"met": False, "value": "データなし", "desc": "EPS増加率(>30%)"},
         "R": {"met": False, "value": "データなし", "desc": "ROE(>25%)"},
-        "T": {"met": False, "value": market_state_status or "不明", "desc": "市場トレンド(上昇)"},
-        "all_met": False
+        "T": {
+            "met": False,
+            "value": market_state_status or "不明",
+            "desc": "市場トレンド(上昇)",
+        },
+        "all_met": False,
     }
 
     # S (Sales) - 簡易判定: 直近のRevenue Growthが25%超か
@@ -84,12 +88,22 @@ def evaluate_smart_criteria(ticker: str, info: dict[str, Any], market_state_stat
 
     # T (Timing)
     # market_state_status に "強気相場入り確認" や "UPTREND" などの文字が含まれていればOK
-    if "強気" in market_state_status or "UPTREND" in market_state_status.upper() or "上昇トレンド" in market_state_status:
+    if (
+        "強気" in market_state_status
+        or "UPTREND" in market_state_status.upper()
+        or "上昇トレンド" in market_state_status
+    ):
         results["T"]["met"] = True
 
     # 全条件クリア判定
     results["all_met"] = all(
-        [results["S"]["met"], results["M"]["met"], results["A"]["met"], results["R"]["met"], results["T"]["met"]]
+        [
+            results["S"]["met"],
+            results["M"]["met"],
+            results["A"]["met"],
+            results["R"]["met"],
+            results["T"]["met"],
+        ]
     )
 
     return results

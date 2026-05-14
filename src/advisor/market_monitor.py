@@ -11,7 +11,7 @@ import pandas as pd
 def track_distribution_days(df: pd.DataFrame) -> dict:
     """
     指定された指数のDistribution Day (売り抜け日) をトラッキングします。
-    
+
     加算条件: 前日の出来高を上回り、かつ指数が0.2%以上下落して引けた日
     減算条件: 売り抜け日の終値から5%上昇、または25営業日経過
     """
@@ -52,7 +52,7 @@ def track_distribution_days(df: pd.DataFrame) -> dict:
             distribution_days.append((i, current["Close"]))
 
     count = len(distribution_days)
-    
+
     if count >= 8:
         level = "red"
         status = "警戒警報 (新規株式購入停止・出口戦略発動)"
@@ -70,30 +70,40 @@ def track_distribution_days(df: pd.DataFrame) -> dict:
     }
 
 
-def detect_market_climax(spy_df: pd.DataFrame, ndx_df: pd.DataFrame, opt_pcr: float) -> dict:
+def detect_market_climax(
+    spy_df: pd.DataFrame, ndx_df: pd.DataFrame, opt_pcr: float
+) -> dict:
     """
     市場天井（ファイナルクライマックス）の複合検知を行います。
     """
     warnings = []
-    
+
     if len(spy_df) < 5 or len(ndx_df) < 5:
         return {"is_climax": False, "warnings": warnings}
 
     spy_recent = spy_df.iloc[-5:]
-    
+
     # 1. 株価と出来高の乖離 (Chugging / Stalling)
     # 出来高が増加しているが、価格がほとんど上がっていない
     vol_trend = spy_recent["Volume"].is_monotonic_increasing
-    price_trend = (spy_recent["Close"].iloc[-1] - spy_recent["Close"].iloc[0]) / spy_recent["Close"].iloc[0]
+    price_trend = (
+        spy_recent["Close"].iloc[-1] - spy_recent["Close"].iloc[0]
+    ) / spy_recent["Close"].iloc[0]
     if vol_trend and price_trend < 0.005:
         warnings.append("株価と出来高の乖離 (出来高増も価格上昇伴わず)")
 
     # 2. ダイバージェンス (SPYとNDXの逆行)
-    spy_ret = (spy_df["Close"].iloc[-1] - spy_df["Close"].iloc[-5]) / spy_df["Close"].iloc[-5]
-    ndx_ret = (ndx_df["Close"].iloc[-1] - ndx_df["Close"].iloc[-5]) / ndx_df["Close"].iloc[-5]
-    
+    spy_ret = (spy_df["Close"].iloc[-1] - spy_df["Close"].iloc[-5]) / spy_df[
+        "Close"
+    ].iloc[-5]
+    ndx_ret = (ndx_df["Close"].iloc[-1] - ndx_df["Close"].iloc[-5]) / ndx_df[
+        "Close"
+    ].iloc[-5]
+
     if (spy_ret > 0 and ndx_ret < 0) or (spy_ret < 0 and ndx_ret > 0):
-        warnings.append(f"指数間ダイバージェンス (SPY {spy_ret:+.1%}, NDX {ndx_ret:+.1%})")
+        warnings.append(
+            f"指数間ダイバージェンス (SPY {spy_ret:+.1%}, NDX {ndx_ret:+.1%})"
+        )
 
     # 3. PCR悪化
     if opt_pcr >= 1.0:
@@ -107,7 +117,7 @@ def detect_market_climax(spy_df: pd.DataFrame, ndx_df: pd.DataFrame, opt_pcr: fl
     return {
         "is_climax": is_climax,
         "warnings": warnings,
-        "level": "critical" if is_climax else "normal"
+        "level": "critical" if is_climax else "normal",
     }
 
 
@@ -122,10 +132,10 @@ def evaluate_yield_spread(yield_10y: float, index_pe_dict: dict[str, float]) -> 
     for idx, pe in index_pe_dict.items():
         if pe <= 0:
             continue
-            
+
         earnings_yield = (1 / pe) * 100
         spread = earnings_yield - yield_10y
-        
+
         status = "neutral"
         if idx == "NDX":
             if spread >= 2.3:
@@ -139,19 +149,19 @@ def evaluate_yield_spread(yield_10y: float, index_pe_dict: dict[str, float]) -> 
             elif spread <= 3.0:
                 status = "債券優位 (天井警戒)"
                 warnings.append("S&P500のイールドスプレッドが3.0%以下 (割高警戒)")
-                
+
         results[idx] = {
             "earnings_yield": earnings_yield,
             "spread": spread,
-            "status": status
+            "status": status,
         }
-        
+
     if len(warnings) > 0:
         overall_status = "caution"
-        
+
     return {
         "yield_10y": yield_10y,
         "spreads": results,
         "overall_status": overall_status,
-        "warnings": warnings
+        "warnings": warnings,
     }

@@ -37,7 +37,6 @@ def index() -> rx.Component:
             align_items="center",
             margin_bottom="2rem",
         ),
-
         # エラーメッセージ
         rx.cond(
             MarketState.error_msg != "",
@@ -47,9 +46,8 @@ def index() -> rx.Component:
                 color_scheme="red",
                 margin_bottom="1rem",
                 width="100%",
-            )
+            ),
         ),
-
         # ローディングスピナー（全体）
         rx.cond(
             MarketState.is_fetching,
@@ -63,16 +61,12 @@ def index() -> rx.Component:
             rx.vstack(
                 # 総合市場監視
                 market_monitor(),
-
                 # アセットクラス別概要
                 flash_summary(),
-
                 # テーマモメンタム監視
                 momentum_monitor_component(),
-
                 # オプション分析
                 option_analysis_component(),
-
                 # AI Recap (Gemini)
                 rx.box(
                     rx.heading("AI Market Recap", size="5", margin_bottom="1rem"),
@@ -81,24 +75,24 @@ def index() -> rx.Component:
                             MarketState.ai_recap != "",
                             rx.markdown(MarketState.ai_recap),
                             rx.center(
-                                rx.text("上部の「AI Market Recap」ボタンを押して、最新の市況レポートを生成します。", color="gray"),
-                                height="150px"
-                            )
+                                rx.text(
+                                    "上部の「AI Market Recap」ボタンを押して、最新の市況レポートを生成します。",
+                                    color="gray",
+                                ),
+                                height="150px",
+                            ),
                         ),
                         width="100%",
-                        padding="1.5rem"
+                        padding="1.5rem",
                     ),
                     width="100%",
-                    margin_top="1rem"
+                    margin_top="1rem",
                 ),
-
                 width="100%",
-                spacing="4"
-            )
+                spacing="4",
+            ),
         ),
         width="100%",
         max_width="1400px",
         margin="0 auto",
     )
-
-

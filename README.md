@@ -1,94 +1,105 @@
----
-title: AI Investing Dashboard
-emoji: 📈
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-pinned: false
----
+# AI Investing App
 
-# AI投資アプリ
+AI Investing App は、米国株・日本株を対象に、市場環境、テーマ別モメンタム、個別銘柄、ポートフォリオ、ユーザー知識ベースを横断して分析する投資調査ダッシュボードです。
 
-金融市場分析と投資戦略検証のためのPythonアプリケーション。
+現在の主UIは **Reflex** です。Streamlit 実装は `src/ui/` と `legacy_streamlit/` に残っていますが、現行画面の入口は `frontend/` です。
 
-## 機能
+> 注意: 本アプリは投資判断を補助する調査ツールです。売買助言、投資一任、金融商品の推奨を目的としたものではありません。
 
-### 1. Market Intelligence (市場サマリー)
-- **Flash Summary**: 主要指数、金利、為替、商品の速報
-- **オプション分析**: SPY/QQQ/IWMのGEX、PCR、Gamma Wall
-- **AI Market Recap**: Gemini APIを使用したナラティブ形式の市況解説
+## 主な機能
 
-### 2. テーマ別トレンド
-- 18種類の投資テーマ（AI半導体、宇宙、レアアースなど）
-- 期間別（1日〜3ヶ月）の騰落ランキング
-- テーマごとの構成銘柄とパフォーマンス詳細
+- Market Intelligence: 主要指数、セクター、コモディティ、為替、暗号資産、VIX、米国債利回りを一覧化
+- 市場環境評価: トレンド、モメンタム、ボラティリティ、マーケットブレッドス、オプションセンチメントを統合評価
+- オプション分析: SPY / QQQ / IWM の Put/Call Ratio、Gamma Exposure、Max Pain、ATM IV、Skew を算出
+- テーマ別トレンド: AI、半導体、エネルギー、ヘルスケアなどのテーマを期間別にランキング
+- 個別銘柄分析: 企業概要、価格チャート、ニュース、テクニカル、SMART基準、AI分析レポート
+- ポートフォリオ分析: 保有銘柄、評価額、セクター・テーマ露出、AIアドバイス
+- 参照知識管理: テキスト、URL、YouTube、ファイルから知識を登録し、AI分析のコンテキストに利用
 
-### 3. 個別銘柄分析
-- 株価チャート（ローソク足）
-- 企業概要と事業内容
-- 基本指標（PER、時価総額など）
-- 関連ニュース
+## 技術スタック
 
-### 4. バックテスト
-- 3種類の戦略（SMAクロスオーバー、RSI、MACD）
-- パラメータ調整可能
-- 資産曲線の可視化
+- UI: Reflex
+- 旧UI: Streamlit
+- データ取得: OpenBB、yfinance、Finnhub、J-Quants、EDINET、Google News
+- AI: Google Gemini API
+- 保存先: ローカルJSON、Google Apps Script、Supabase
+- グラフ・数値処理: pandas、numpy、scipy、plotly、statsmodels、arch
+- 品質確認: pytest、ruff
+
+## ディレクトリ構成
+
+```text
+AI-investing-app/
+  frontend/                Reflex UI、ページ、状態管理
+  src/                     データ取得、分析、保存、AI連携の本体
+    advisor/               テクニカル、ボラティリティ、市場環境、ポートフォリオ分析
+    services/              AI市場分析などのユースケース調整層
+    storage/               保存先の抽象インターフェース
+    ui/                    旧Streamlit UI
+  tests/                   単体テスト
+  docs/                    設計・運用・点検・改修計画
+  scripts/                 検証・デバッグ用スクリプト
+  legacy_streamlit/        旧Streamlitアプリ
+  gas/                     Google Apps Script 連携コード
+```
 
 ## セットアップ
 
-### 1. 仮想環境の作成
-```bash
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # macOS/Linux
+Python 3.12 を推奨します。このワークスペースでは `py -3.12` で Python 3.12.10 を起動できます。
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-### 2. 依存関係のインストール
-```bash
-pip install -r requirements.txt
+`.env.example` を参考に `.env` を作成します。
+
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+FINNHUB_API_KEY=your_finnhub_api_key_here
+JQUANTS_API_KEY=your_jquants_api_key_here
+EDINET_API_KEY=your_edinet_api_key_here
+SUPABASE_URL=your_supabase_url_here
+SUPABASE_KEY=your_supabase_key_here
 ```
 
-### 3. 環境変数の設定
-`.env.example` をコピーして `.env` を作成し、Gemini APIキーを設定：
-```
-GEMINI_API_KEY=your_api_key_here
-```
+## 起動
 
-### 4. アプリの起動
-```bash
-streamlit run app.py
+Reflex 版:
+
+```powershell
+reflex run
 ```
 
-## ファイル構成
+Docker / Hugging Face Spaces 相当:
 
-```
-AI-investing-app/
-├── app.py                  # メインアプリケーション
-├── themes_config.py        # テーマと銘柄の定義
-├── requirements.txt        # 依存関係
-├── .env                    # 環境変数（要作成）
-├── .env.example            # 環境変数テンプレート
-├── README.md               # このファイル
-└── src/
-    ├── __init__.py
-    ├── market_data.py      # 市場データ取得
-    ├── theme_analyst.py    # テーマ分析
-    ├── option_analyst.py   # オプション分析
-    ├── news_analyst.py     # AIレポート生成
-    ├── strategies.py       # 売買戦略定義
-    └── backtester.py       # バックテストエンジン
+```powershell
+docker build -t ai-investing-app .
+docker run --env-file .env -p 7860:7860 ai-investing-app
 ```
 
-## 使用技術
+旧Streamlit版:
 
-- **UI**: Streamlit
-- **データ**: yfinance
-- **AI**: Google Gemini API
-- **可視化**: Plotly
-- **バックテスト**: backtesting.py
+```powershell
+streamlit run legacy_streamlit/app.py
+```
 
-## 注意事項
+## 品質確認
 
-- yfinanceの無料APIには制限があります
-- Gemini APIキーはGoogle AI Studioで取得できます
-- 本アプリは投資助言を目的としていません
+```powershell
+python -m pytest -q
+python -m ruff check .
+python -m ruff format --check .
+```
+
+このワークスペースでは、2026-05-14 に `.venv\Scripts\python.exe` の起動不全を復旧し、Python 3.12.10 ベースで `.venv` を再作成済みです。現在は上記の通常コマンドで `pytest`、`compileall`、`ruff check`、`ruff format --check` が通ります。詳細は [コード点検結果](docs/CODE_AUDIT.md) を参照してください。
+
+## 必読資料
+
+- [アーキテクチャ概要](docs/ARCHITECTURE.md)
+- [運用・環境設定ガイド](docs/OPERATIONS.md)
+- [コード点検結果](docs/CODE_AUDIT.md)
+- [根本改修ロードマップ](docs/REMEDIATION_ROADMAP.md)
+- [実行タスク](task.md)

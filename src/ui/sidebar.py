@@ -209,7 +209,9 @@ def _render_settings():
         if jquants_configured:
             st.success("✅ J-Quants API: 接続済み")
         else:
-            st.warning("⚠️ J-Quants API: 未設定 (日本株データが古いソースから取得されます)")
+            st.warning(
+                "⚠️ J-Quants API: 未設定 (日本株データが古いソースから取得されます)"
+            )
 
         st.markdown("---")
 

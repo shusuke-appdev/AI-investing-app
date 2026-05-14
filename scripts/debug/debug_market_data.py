@@ -23,10 +23,7 @@ def test_sectors():
 
     for name, ticker in sectors.items():
         try:
-            if len(tickers) > 1:
-                df = data[ticker]
-            else:
-                df = data
+            df = data[ticker] if len(tickers) > 1 else data
 
             if df.empty:
                 print(f"[FAIL] {name} ({ticker}): Empty DataFrame")

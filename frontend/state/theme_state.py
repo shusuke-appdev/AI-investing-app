@@ -8,6 +8,7 @@ from src.themes_config import PERIODS
 
 class ThemeStock(BaseModel):
     """テーマ内の個別銘柄"""
+
     ticker: str = ""
     display_name: str = ""
     performance: float = 0.0
@@ -15,6 +16,7 @@ class ThemeStock(BaseModel):
 
 class ThemeItem(BaseModel):
     """テーマランキングの1行"""
+
     theme: str = ""
     performance: float = 0.0
     stocks: list[ThemeStock] = []

@@ -40,6 +40,7 @@ def analyze_stock(
 
     # SMART基準を評価
     from src.advisor.smart_criteria import evaluate_smart_criteria
+
     smart_res = evaluate_smart_criteria(ticker, stock_info)
     smart_lines = []
     for k in ["S", "M", "A", "R", "T"]:

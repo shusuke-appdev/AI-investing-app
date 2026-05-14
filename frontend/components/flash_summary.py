@@ -1,4 +1,3 @@
-
 import reflex as rx
 
 from frontend.state.market_state import MarketState
@@ -11,7 +10,9 @@ def market_item(item: dict) -> rx.Component:
     arrow = rx.cond(is_positive, "↑", "↓")
 
     # abs(change)
-    abs_change = rx.cond(is_positive, item["change"].to(float), item["change"].to(float) * -1)
+    abs_change = rx.cond(
+        is_positive, item["change"].to(float), item["change"].to(float) * -1
+    )
 
     return rx.hstack(
         rx.text(item["name"], weight="medium", color=rx.color("gray", 11)),
@@ -20,7 +21,7 @@ def market_item(item: dict) -> rx.Component:
         rx.badge(
             rx.text(f"{arrow} ", abs_change, "%"),
             color_scheme=color_scheme,
-            variant="surface"
+            variant="surface",
         ),
         width="100%",
         padding_y="0.5rem",
@@ -28,25 +29,26 @@ def market_item(item: dict) -> rx.Component:
         align_items="center",
     )
 
+
 def render_signal(sig) -> rx.Component:
     """内部指標シグナルの1行表示"""
     return rx.hstack(
         rx.badge(
             sig.name,
             color_scheme=rx.cond(
-                sig.score >= 0.3, "green",
-                rx.cond(sig.score <= -0.3, "red", "gray")
+                sig.score >= 0.3, "green", rx.cond(sig.score <= -0.3, "red", "gray")
             ),
             variant="surface",
             width="140px",
-            justify_content="center"
+            justify_content="center",
         ),
         rx.text(sig.rationale, size="2", color=rx.color("gray", 11)),
         width="100%",
         align_items="center",
         spacing="2",
-        padding_y="0.25rem"
+        padding_y="0.25rem",
     )
+
 
 def flash_summary() -> rx.Component:
     """アセットクラス別概要"""
@@ -61,11 +63,11 @@ def flash_summary() -> rx.Component:
                         MarketState.indices_data.length() > 0,
                         rx.vstack(
                             rx.foreach(MarketState.indices_data, market_item),
-                            width="100%"
+                            width="100%",
                         ),
-                        rx.text("データがありません", color="gray")
+                        rx.text("データがありません", color="gray"),
                     ),
-                    width="100%"
+                    width="100%",
                 ),
                 width="100%",
             ),
@@ -77,11 +79,11 @@ def flash_summary() -> rx.Component:
                         MarketState.sectors_data.length() > 0,
                         rx.vstack(
                             rx.foreach(MarketState.sectors_data, market_item),
-                            width="100%"
+                            width="100%",
                         ),
-                        rx.text("データがありません", color="gray")
+                        rx.text("データがありません", color="gray"),
                     ),
-                    width="100%"
+                    width="100%",
                 ),
                 width="100%",
             ),
@@ -93,11 +95,11 @@ def flash_summary() -> rx.Component:
                         MarketState.others_data.length() > 0,
                         rx.vstack(
                             rx.foreach(MarketState.others_data, market_item),
-                            width="100%"
+                            width="100%",
                         ),
-                        rx.text("データがありません", color="gray")
+                        rx.text("データがありません", color="gray"),
                     ),
-                    width="100%"
+                    width="100%",
                 ),
                 width="100%",
             ),
@@ -106,11 +108,11 @@ def flash_summary() -> rx.Component:
             width="100%",
         ),
         width="100%",
-        margin_bottom="2rem"
+        margin_bottom="2rem",
     )
 
-def market_monitor() -> rx.Component:
 
+def market_monitor() -> rx.Component:
     """総合市場監視"""
     eval_data = MarketState.evaluation
     micro = MarketState.microstructure
@@ -126,7 +128,11 @@ def market_monitor() -> rx.Component:
                         rx.text("総合評価:", weight="bold", size="4"),
                         rx.badge(eval_data["status"].to_string(), size="3"),
                         rx.spacer(),
-                        rx.text(eval_data["description"].to_string(), size="2", color=rx.color("gray", 11)),
+                        rx.text(
+                            eval_data["description"].to_string(),
+                            size="2",
+                            color=rx.color("gray", 11),
+                        ),
                         align_items="center",
                         spacing="3",
                         width="100%",
@@ -135,17 +141,24 @@ def market_monitor() -> rx.Component:
                         value=((eval_data["score"].to(float) + 1.0) * 50).to(int),
                         max=100,
                         color_scheme=rx.cond(
-                            eval_data["score"].to(float) >= 0.3, "green",
-                            rx.cond(eval_data["score"].to(float) <= -0.3, "red", "gray")
+                            eval_data["score"].to(float) >= 0.3,
+                            "green",
+                            rx.cond(
+                                eval_data["score"].to(float) <= -0.3, "red", "gray"
+                            ),
                         ),
                         width="100%",
                     ),
-
                     # シグナル詳細（グループ分け）
                     rx.grid(
                         # 強気シグナル
                         rx.vstack(
-                            rx.text("🟢 強気シグナル", weight="bold", size="2", color="#10b981"),
+                            rx.text(
+                                "🟢 強気シグナル",
+                                weight="bold",
+                                size="2",
+                                color="#10b981",
+                            ),
                             rx.cond(
                                 MarketState.market_signals.length() > 0,  # type: ignore
                                 rx.foreach(
@@ -154,7 +167,7 @@ def market_monitor() -> rx.Component:
                                         sig.category == "bullish",
                                         render_signal(sig),
                                         rx.fragment(),
-                                    )
+                                    ),
                                 ),
                                 rx.text("-", size="2", color="gray"),
                             ),
@@ -163,7 +176,12 @@ def market_monitor() -> rx.Component:
                         ),
                         # 弱気シグナル
                         rx.vstack(
-                            rx.text("🔴 弱気シグナル", weight="bold", size="2", color="#ef4444"),
+                            rx.text(
+                                "🔴 弱気シグナル",
+                                weight="bold",
+                                size="2",
+                                color="#ef4444",
+                            ),
                             rx.cond(
                                 MarketState.market_signals.length() > 0,  # type: ignore
                                 rx.foreach(
@@ -172,7 +190,7 @@ def market_monitor() -> rx.Component:
                                         sig.category == "bearish",
                                         render_signal(sig),
                                         rx.fragment(),
-                                    )
+                                    ),
                                 ),
                                 rx.text("-", size="2", color="gray"),
                             ),
@@ -181,7 +199,9 @@ def market_monitor() -> rx.Component:
                         ),
                         # 中立シグナル
                         rx.vstack(
-                            rx.text("⚪ 中立シグナル", weight="bold", size="2", color="gray"),
+                            rx.text(
+                                "⚪ 中立シグナル", weight="bold", size="2", color="gray"
+                            ),
                             rx.cond(
                                 MarketState.market_signals.length() > 0,  # type: ignore
                                 rx.foreach(
@@ -190,7 +210,7 @@ def market_monitor() -> rx.Component:
                                         sig.category == "neutral",
                                         render_signal(sig),
                                         rx.fragment(),
-                                    )
+                                    ),
                                 ),
                                 rx.text("-", size="2", color="gray"),
                             ),
@@ -202,12 +222,16 @@ def market_monitor() -> rx.Component:
                         width="100%",
                         margin_top="1rem",
                     ),
-
                     # マイクロストラクチャー指標
                     rx.cond(
                         micro.unwind_level != "",
                         rx.box(
-                            rx.text("マイクロストラクチャー", weight="bold", size="2", margin_bottom="0.5rem"),
+                            rx.text(
+                                "マイクロストラクチャー",
+                                weight="bold",
+                                size="2",
+                                margin_bottom="0.5rem",
+                            ),
                             rx.grid(
                                 _micro_card("VRP", micro.vrp, ""),
                                 _micro_card("CTA偏り", micro.cta_extremity, ""),
@@ -229,26 +253,70 @@ def market_monitor() -> rx.Component:
                         ),
                         rx.fragment(),
                     ),
-
                     # 市場監視モジュール (Phase 3)
                     rx.cond(
                         MarketState.market_monitor.distribution_spy.status != "",
                         rx.box(
-                            rx.text("市場監視 (Market Monitor)", weight="bold", size="2", margin_bottom="0.5rem"),
+                            rx.text(
+                                "市場監視 (Market Monitor)",
+                                weight="bold",
+                                size="2",
+                                margin_bottom="0.5rem",
+                            ),
                             rx.grid(
                                 # Distribution Day
                                 rx.card(
                                     rx.vstack(
-                                        rx.text("売り抜け日 (Distribution Day)", weight="bold", size="1"),
-                                        rx.hstack(
-                                            rx.text("SPY: ", MarketState.market_monitor.distribution_spy.count.to_string(), "日", size="2"),
-                                            rx.badge(MarketState.market_monitor.distribution_spy.status, color_scheme=rx.cond(MarketState.market_monitor.distribution_spy.level == "red", "red", rx.cond(MarketState.market_monitor.distribution_spy.level == "yellow", "orange", "green"))),
-                                            align_items="center"
+                                        rx.text(
+                                            "売り抜け日 (Distribution Day)",
+                                            weight="bold",
+                                            size="1",
                                         ),
                                         rx.hstack(
-                                            rx.text("NDX: ", MarketState.market_monitor.distribution_ndx.count.to_string(), "日", size="2"),
-                                            rx.badge(MarketState.market_monitor.distribution_ndx.status, color_scheme=rx.cond(MarketState.market_monitor.distribution_ndx.level == "red", "red", rx.cond(MarketState.market_monitor.distribution_ndx.level == "yellow", "orange", "green"))),
-                                            align_items="center"
+                                            rx.text(
+                                                "SPY: ",
+                                                MarketState.market_monitor.distribution_spy.count.to_string(),
+                                                "日",
+                                                size="2",
+                                            ),
+                                            rx.badge(
+                                                MarketState.market_monitor.distribution_spy.status,
+                                                color_scheme=rx.cond(
+                                                    MarketState.market_monitor.distribution_spy.level
+                                                    == "red",
+                                                    "red",
+                                                    rx.cond(
+                                                        MarketState.market_monitor.distribution_spy.level
+                                                        == "yellow",
+                                                        "orange",
+                                                        "green",
+                                                    ),
+                                                ),
+                                            ),
+                                            align_items="center",
+                                        ),
+                                        rx.hstack(
+                                            rx.text(
+                                                "NDX: ",
+                                                MarketState.market_monitor.distribution_ndx.count.to_string(),
+                                                "日",
+                                                size="2",
+                                            ),
+                                            rx.badge(
+                                                MarketState.market_monitor.distribution_ndx.status,
+                                                color_scheme=rx.cond(
+                                                    MarketState.market_monitor.distribution_ndx.level
+                                                    == "red",
+                                                    "red",
+                                                    rx.cond(
+                                                        MarketState.market_monitor.distribution_ndx.level
+                                                        == "yellow",
+                                                        "orange",
+                                                        "green",
+                                                    ),
+                                                ),
+                                            ),
+                                            align_items="center",
                                         ),
                                     ),
                                     padding="0.5rem",
@@ -256,50 +324,88 @@ def market_monitor() -> rx.Component:
                                 # Yield Spread
                                 rx.card(
                                     rx.vstack(
-                                        rx.text("イールドスプレッド", weight="bold", size="1"),
+                                        rx.text(
+                                            "イールドスプレッド",
+                                            weight="bold",
+                                            size="1",
+                                        ),
                                         rx.cond(
-                                            MarketState.market_monitor.yield_spread.overall_status != "",
+                                            MarketState.market_monitor.yield_spread.overall_status
+                                            != "",
                                             rx.vstack(
                                                 rx.hstack(
                                                     rx.text("SPY:", size="2"),
-                                                    rx.badge(MarketState.market_monitor.yield_spread.spreads.SPY.status, color_scheme=rx.cond(MarketState.market_monitor.yield_spread.spreads.SPY.status.contains("株式優位"), "green", "red")),
+                                                    rx.badge(
+                                                        MarketState.market_monitor.yield_spread.spreads.SPY.status,
+                                                        color_scheme=rx.cond(
+                                                            MarketState.market_monitor.yield_spread.spreads.SPY.status.contains(
+                                                                "株式優位"
+                                                            ),
+                                                            "green",
+                                                            "red",
+                                                        ),
+                                                    ),
                                                 ),
                                                 rx.hstack(
                                                     rx.text("NDX:", size="2"),
-                                                    rx.badge(MarketState.market_monitor.yield_spread.spreads.NDX.status, color_scheme=rx.cond(MarketState.market_monitor.yield_spread.spreads.NDX.status.contains("株式優位"), "green", "red")),
+                                                    rx.badge(
+                                                        MarketState.market_monitor.yield_spread.spreads.NDX.status,
+                                                        color_scheme=rx.cond(
+                                                            MarketState.market_monitor.yield_spread.spreads.NDX.status.contains(
+                                                                "株式優位"
+                                                            ),
+                                                            "green",
+                                                            "red",
+                                                        ),
+                                                    ),
                                                 ),
-                                                spacing="1"
+                                                spacing="1",
                                             ),
-                                            rx.text("-", size="2")
-                                        )
+                                            rx.text("-", size="2"),
+                                        ),
                                     ),
                                     padding="0.5rem",
                                 ),
                                 # Market Climax
                                 rx.card(
                                     rx.vstack(
-                                        rx.text("市場天井複合検知", weight="bold", size="1"),
+                                        rx.text(
+                                            "市場天井複合検知", weight="bold", size="1"
+                                        ),
                                         rx.cond(
-                                            MarketState.market_monitor.distribution_spy.status != "", # Climax is populated along with distribution
+                                            MarketState.market_monitor.distribution_spy.status
+                                            != "",  # Climax is populated along with distribution
                                             rx.vstack(
                                                 rx.cond(
                                                     MarketState.market_monitor.climax.is_climax,
-                                                    rx.badge("天井警戒 (Climax Detected)", color_scheme="red"),
-                                                    rx.badge("正常", color_scheme="green")
+                                                    rx.badge(
+                                                        "天井警戒 (Climax Detected)",
+                                                        color_scheme="red",
+                                                    ),
+                                                    rx.badge(
+                                                        "正常", color_scheme="green"
+                                                    ),
                                                 ),
                                                 rx.cond(
-                                                    MarketState.market_monitor.climax.warnings.length() > 0,
+                                                    MarketState.market_monitor.climax.warnings.length()
+                                                    > 0,
                                                     rx.vstack(
                                                         rx.foreach(
                                                             MarketState.market_monitor.climax.warnings,
-                                                            lambda w: rx.text("- " + w.to_string(), size="1", color=rx.color("red", 11))
+                                                            lambda w: rx.text(
+                                                                "- " + w.to_string(),
+                                                                size="1",
+                                                                color=rx.color(
+                                                                    "red", 11
+                                                                ),
+                                                            ),
                                                         ),
                                                         spacing="0",
-                                                    )
-                                                )
+                                                    ),
+                                                ),
                                             ),
-                                            rx.text("-", size="2")
-                                        )
+                                            rx.text("-", size="2"),
+                                        ),
                                     ),
                                     padding="0.5rem",
                                 ),
@@ -313,17 +419,16 @@ def market_monitor() -> rx.Component:
                             border=f"1px solid {rx.color('gray', 4)}",
                             border_radius="8px",
                         ),
-                        rx.fragment()
+                        rx.fragment(),
                     ),
-
                     width="100%",
                     spacing="3",
                 ),
-                rx.text("市場環境を評価中...", color="gray")
+                rx.text("市場環境を評価中...", color="gray"),
             ),
             width="100%",
-            margin_bottom="2rem"
-        )
+            margin_bottom="2rem",
+        ),
     )
 
 
