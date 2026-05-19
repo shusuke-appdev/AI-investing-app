@@ -50,6 +50,7 @@ class StockState(rx.State):
     # テクニカル分析・AI分析結果
     ai_analysis: str = ""
     is_generating_analysis: bool = False
+    probabilistic_signal: dict[str, Any] = {}
 
     def set_ticker(self, value: str):
         self.ticker = value.upper()
@@ -65,6 +66,10 @@ class StockState(rx.State):
         yield
 
         try:
+            from src.advisor.probabilistic_signal import (
+                generate_probabilistic_stock_signal,
+                signal_to_dict,
+            )
             from src.advisor.technical import analyze_technical
             from src.market_data import get_stock_data, get_stock_info, get_stock_news
 
@@ -145,6 +150,16 @@ class StockState(rx.State):
             else:
                 self.technical_data = {}
 
+            probabilistic = await asyncio.to_thread(
+                generate_probabilistic_stock_signal,
+                self.ticker,
+                "5y",
+                "SPY",
+                self.info,
+                self.technical_data,
+            )
+            self.probabilistic_signal = signal_to_dict(probabilistic)
+
             # APIキーが未設定等の場合のエラーハンドリング
             if (
                 self.info.get("summary") == "情報なし"
@@ -158,6 +173,7 @@ class StockState(rx.State):
             self.chart_data = []
             self.news = []
             self.technical_data = {}
+            self.probabilistic_signal = {}
             self.smart_criteria = {}
         finally:
             self.is_fetching = False
@@ -175,7 +191,12 @@ class StockState(rx.State):
 
             # info をディクショナリとして渡す
             recap = await asyncio.to_thread(
-                generate_stock_analysis_report, self.ticker, self.info
+                generate_stock_analysis_report,
+                self.ticker,
+                self.info,
+                None,
+                None,
+                self.probabilistic_signal,
             )
 
             if recap:

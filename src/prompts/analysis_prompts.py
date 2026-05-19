@@ -18,6 +18,8 @@ STOCK_ANALYSIS_PROMPT_TEMPLATE = """あなたはエクイティリサーチア�
 
 {technical_summary}
 
+{probabilistic_context}
+
 【ファンダメンタルズ条件 (SMART基準)】
 {smart_criteria_summary}
 

@@ -12,6 +12,7 @@ def analyze_stock(
     stock_info: dict,
     historical_data: dict | None = None,
     news_headlines: list[str] | None = None,
+    probabilistic_signal: dict | None = None,
 ) -> str:
     """
     銘柄の詳細分析を生成します（テクニカル分析統合版）。
@@ -37,6 +38,7 @@ def analyze_stock(
 
     # テクニカル分析を取得
     technical_summary = get_technical_summary_for_ai(ticker)
+    probabilistic_context = _format_probabilistic_context(probabilistic_signal)
 
     # SMART基準を評価
     from src.advisor.smart_criteria import evaluate_smart_criteria
@@ -70,6 +72,7 @@ def analyze_stock(
         forward_pe=forward_pe,
         target_price=target_price,
         technical_summary=technical_summary,
+        probabilistic_context=probabilistic_context,
         smart_criteria_summary=smart_criteria_summary,
         news_headlines=chr(10).join(news_headlines[:5])
         if news_headlines
@@ -112,3 +115,28 @@ def get_quick_summary(ticker: str, stock_info: dict) -> str:
 
 # 後方互換エイリアス: stock_state.py が参照する関数名
 generate_stock_analysis_report = analyze_stock
+
+
+def _format_probabilistic_context(signal: dict | None) -> str:
+    if not signal:
+        return "Probabilistic Stock Signal: unavailable."
+
+    risk_notes = signal.get("risk_notes") or []
+    positive = signal.get("why_positive") or []
+    negative = signal.get("why_negative") or []
+    return f"""Probabilistic Stock Signal (local calculation; do not overwrite these numbers):
+- Signal Label: {signal.get("signal_label", "Unknown")}
+- Expected 5D Return: {signal.get("expected_5d_return_display", "N/A")}
+- Expected 20D Excess Return: {signal.get("expected_20d_excess_return_display", "N/A")}
+- Probability Up: {signal.get("probability_up_display", "N/A")}
+- Risk-adjusted Signal: {signal.get("risk_adjusted_signal_display", "N/A")}
+- Confidence: {signal.get("confidence", "N/A")}
+- Regime Fit: {signal.get("regime_fit_display", "N/A")}
+- Suggested Action: {signal.get("suggested_action", "Watch")}
+- Max Allocation: {signal.get("max_allocation_display", "0%")}
+- Similar Samples: {signal.get("sample_size_display", "0")}
+- Walk-forward: {signal.get("walk_forward_summary", "N/A")}
+- Positive Factors: {"; ".join(positive) if positive else "N/A"}
+- Negative Factors: {"; ".join(negative) if negative else "N/A"}
+- Risk Notes: {"; ".join(risk_notes) if risk_notes else "N/A"}
+"""
