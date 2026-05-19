@@ -11,10 +11,26 @@ from src.market_data import get_stock_data
 from src.news_aggregator import get_aggregated_news, merge_with_finnhub_news
 from src.news_analyst import generate_market_recap
 from src.option_analyst import get_major_indices_options
+from src.services.analysis_context import MarketContext
+from src.services.market_dashboard_service import format_market_context_for_ai
 from src.services.query_generator import generate_dynamic_search_queries
 from src.theme_analyst import get_ranked_themes
 
 logger = get_logger(__name__)
+
+
+def _resolve_market_context(
+    market_type: str,
+    *,
+    market_data: dict | None,
+    option_analysis: list[dict] | None,
+    market_context: MarketContext | dict | None,
+) -> MarketContext | None:
+    if isinstance(market_context, MarketContext):
+        return market_context
+    if isinstance(market_context, dict):
+        return MarketContext.from_mapping(market_context)
+    return None
 
 
 def generate_market_analysis_report(
@@ -22,6 +38,7 @@ def generate_market_analysis_report(
     market_data: dict | None = None,
     option_analysis: list[dict] | None = None,
     gemini_configured: bool = True,
+    market_context: MarketContext | dict | None = None,
 ) -> str | None:
     """
     Generates a comprehensive AI market analysis report.
@@ -38,10 +55,16 @@ def generate_market_analysis_report(
     if not gemini_configured:
         return None
 
+    context = _resolve_market_context(
+        market_type,
+        market_data=market_data,
+        option_analysis=option_analysis,
+        market_context=market_context,
+    )
     config = get_market_config(market_type)
 
     # 0. Prepare Market Data (防御的コピーで呼び出し元のdictを破壊しない)
-    market_data = dict(market_data) if market_data else {}
+    market_data = dict(context.market_data if context else market_data or {})
 
     # 1. Fetch Company News from Finnhub (using configured targets)
     target_tickers = config.get("ai_analysis_targets", [])
@@ -182,11 +205,23 @@ def generate_market_analysis_report(
     market_data["weekly_performance"] = weekly_performance
 
     # 8. Option Analysis
+    if option_analysis is None and context:
+        option_analysis = context.options.items
+
     if option_analysis is None:
         try:
             option_analysis = get_major_indices_options(market_type)
         except Exception:
             option_analysis = []
+
+    if context:
+        return generate_market_recap(
+            market_data,
+            all_news,
+            option_analysis,
+            theme_analysis=theme_analysis_str,
+            advanced_tech_analysis=format_market_context_for_ai(context),
+        )
 
     # 8.5 Advanced Technical Analysis (Breadth & Volatility)
     advanced_tech_parts = ["【高度テクニカル＆ボラティリティ分析】"]

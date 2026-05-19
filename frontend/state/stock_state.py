@@ -51,6 +51,7 @@ class StockState(rx.State):
     ai_analysis: str = ""
     is_generating_analysis: bool = False
     probabilistic_signal: dict[str, Any] = {}
+    stock_signal_context: dict[str, Any] = {}
 
     def set_ticker(self, value: str):
         self.ticker = value.upper()
@@ -159,6 +160,14 @@ class StockState(rx.State):
                 self.technical_data,
             )
             self.probabilistic_signal = signal_to_dict(probabilistic)
+            from src.services.analysis_context import StockSignalContext
+
+            self.stock_signal_context = StockSignalContext(
+                ticker=self.ticker,
+                stock_info=self.info,
+                technical_data=self.technical_data,
+                probabilistic_signal=self.probabilistic_signal,
+            ).to_dict()
 
             # APIキーが未設定等の場合のエラーハンドリング
             if (
@@ -174,6 +183,7 @@ class StockState(rx.State):
             self.news = []
             self.technical_data = {}
             self.probabilistic_signal = {}
+            self.stock_signal_context = {}
             self.smart_criteria = {}
         finally:
             self.is_fetching = False

@@ -86,3 +86,9 @@ reflex run
 # レガシーStreamlit（退避済み）
 streamlit run legacy_streamlit/app.py
 ```
+# Session update: 2026-05-19 market monitoring / prediction integration
+- Added shared `MarketContext`, `OptionContext`, and `StockSignalContext` data structures.
+- Moved Market Intelligence fetching through `build_market_context()` so UI state and AI market recap can reuse the same monitoring data.
+- Updated AI market recap generation to avoid recomputing market monitoring when a UI-fetched context is supplied.
+- Added tests for market context generation, option-data failure degradation, and AI report context reuse.
+- Validation: compileall passed, ruff check passed, ruff format --check passed, pytest passed with 47 tests.
