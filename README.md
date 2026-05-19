@@ -1,3 +1,14 @@
+---
+title: AI Investing App
+emoji: 📈
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Market intelligence and investment research dashboard
+---
+
 # AI Investing App
 
 AI Investing App は、米国株・日本株を対象に、市場環境、テーマ別モメンタム、個別銘柄、ポートフォリオ、ユーザー知識ベースを横断して分析する投資調査ダッシュボードです。
