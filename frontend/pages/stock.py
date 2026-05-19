@@ -7,6 +7,19 @@ from frontend.state.stock_state import StockState
 from frontend.template import template
 
 
+def _info_text(primary_key: str, fallback_key: str = ""):
+    fallback_key = fallback_key or primary_key
+    return rx.cond(
+        StockState.info.contains(primary_key),
+        StockState.info[primary_key].to_string(),
+        rx.cond(
+            StockState.info.contains(fallback_key),
+            StockState.info[fallback_key].to_string(),
+            "N/A",
+        ),
+    )
+
+
 @template
 def stock_page() -> rx.Component:
     """個別銘柄分析画面 (Stock)"""
@@ -70,11 +83,19 @@ def stock_page() -> rx.Component:
                     rx.hstack(
                         rx.heading(StockState.info["name"].to_string(), size="6"),
                         rx.badge(
-                            StockState.info.get("exchange", "").to_string(),
+                            rx.cond(
+                                StockState.info.contains("exchange"),
+                                StockState.info["exchange"].to_string(),
+                                "",
+                            ),
                             variant="surface",
                         ),
                         rx.badge(
-                            StockState.info.get("sector", "").to_string(),
+                            rx.cond(
+                                StockState.info.contains("sector"),
+                                StockState.info["sector"].to_string(),
+                                "",
+                            ),
                             color_scheme="cyan",
                         ),
                         align_items="center",
@@ -130,34 +151,17 @@ def stock_page() -> rx.Component:
                     rx.grid(
                         metric_card(
                             "時価総額 (Market Cap)",
-                            rx.cond(
-                                StockState.info.contains("marketCapitalization"),
-                                rx.text(
-                                    StockState.info["marketCapitalization"].to_string(),
-                                    " M",
-                                ),
-                                "N/A",
-                            ),
+                            _info_text("market_cap", "marketCapitalization"),
                             "",
                         ),
                         metric_card(
                             "PER (株価収益率)",
-                            rx.cond(
-                                StockState.info.contains("peRatio"),
-                                StockState.info["peRatio"].to_string(),
-                                "N/A",
-                            ),
+                            _info_text("pe_ratio", "peRatio"),
                             "",
                         ),
                         metric_card(
                             "配当利回り",
-                            rx.cond(
-                                StockState.info.contains("dividendYield"),
-                                rx.text(
-                                    StockState.info["dividendYield"].to_string(), "%"
-                                ),
-                                "N/A",
-                            ),
+                            _info_text("dividend_yield", "dividendYield"),
                             "",
                         ),
                         columns="3",

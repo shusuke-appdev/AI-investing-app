@@ -28,8 +28,13 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     )
     monkeypatch.setattr(
         service,
-        "get_major_indices_options",
-        lambda market_type: [{"ticker": "SPY", "pcr": {"volume_pcr": 0.9}}],
+        "get_major_indices_option_status",
+        lambda market_type: {
+            "items": [{"ticker": "SPY", "pcr": {"volume_pcr": 0.9}}],
+            "status": "available",
+            "failed_tickers": [],
+            "error_message": "",
+        },
     )
     monkeypatch.setattr(
         service,
@@ -73,7 +78,7 @@ def test_build_market_context_keeps_partial_data_when_options_fail(monkeypatch):
     monkeypatch.setattr(service, "get_market_config", lambda market_type: {})
     monkeypatch.setattr(
         service,
-        "get_major_indices_options",
+        "get_major_indices_option_status",
         lambda market_type: (_ for _ in ()).throw(RuntimeError("rate limited")),
     )
     monkeypatch.setattr(
@@ -91,6 +96,7 @@ def test_build_market_context_keeps_partial_data_when_options_fail(monkeypatch):
 
     assert context.market_data == {"SPY": {}}
     assert context.options.items == []
+    assert context.options.status == "unavailable"
     assert "Option analysis failed" in context.options.error_message
 
 

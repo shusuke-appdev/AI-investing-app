@@ -25,8 +25,10 @@ from src.edinet_client import get_company_finance
 from src.log_config import get_logger
 from src.models import StockInfo
 from src.translator import translate_to_japanese
+from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
+configure_yfinance_cache()
 
 
 def is_japanese_stock(ticker: str) -> bool:

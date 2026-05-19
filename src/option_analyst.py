@@ -580,3 +580,58 @@ def get_major_indices_options(market_type: str = "US") -> list[dict]:
         logger.warning(f"[OptionAnalyst] Failed tickers: {failed_tickers}")
 
     return results
+
+
+def get_major_indices_option_status(market_type: str = "US") -> dict:
+    """Return option analyses plus retrieval status for UI and AI context."""
+
+    if market_type == "JP":
+        return {
+            "items": [],
+            "status": "not_applicable",
+            "failed_tickers": [],
+            "error_message": "Option data is not available for JP market monitoring.",
+        }
+
+    indices = ["SPY", "QQQ", "IWM"]
+    results = []
+    failed_tickers = []
+
+    for i, ticker in enumerate(indices):
+        try:
+            analysis = analyze_option_sentiment(ticker)
+            if analysis:
+                results.append(analysis)
+            else:
+                failed_tickers.append(ticker)
+                logger.warning(
+                    f"[OptionAnalyst] analyze_option_sentiment returned None for {ticker}"
+                )
+        except Exception as exc:
+            failed_tickers.append(ticker)
+            logger.error(f"[OptionAnalyst] Exception analyzing {ticker}: {exc}")
+
+        if i < len(indices) - 1:
+            time.sleep(2.0)
+
+    if failed_tickers:
+        logger.warning(f"[OptionAnalyst] Failed tickers: {failed_tickers}")
+
+    if results and failed_tickers:
+        status = "partial"
+        error_message = "Option data partially unavailable: " + ", ".join(
+            failed_tickers
+        )
+    elif results:
+        status = "available"
+        error_message = ""
+    else:
+        status = "failed"
+        error_message = "Option data unavailable for SPY, QQQ, and IWM."
+
+    return {
+        "items": results,
+        "status": status,
+        "failed_tickers": failed_tickers,
+        "error_message": error_message,
+    }

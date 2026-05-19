@@ -17,6 +17,8 @@ from src.log_config import get_logger
 from src.settings_storage import get_finnhub_api_key
 
 logger = get_logger(__name__)
+_disabled_api_key: str | None = None
+_auth_state_lock = threading.Lock()
 
 
 # --- Custom Exceptions ---
@@ -49,15 +51,33 @@ class FinnhubNetworkError(FinnhubError):
 
 def _get_api_key() -> str:
     """APIキーを取得（環境変数 → settings_storage）"""
-    # 1. Environment Variable
+    key = _read_api_key()
+    with _auth_state_lock:
+        if key and key == _disabled_api_key:
+            return ""
+    return key
+
+
+def _read_api_key() -> str:
+    """Read the configured Finnhub key without runtime auth suppression."""
+
     import os
 
     key = os.environ.get("FINNHUB_API_KEY")
     if key:
         return key
-
-    # 2. Settings Storage
     return get_finnhub_api_key()
+
+
+def _mark_current_api_key_invalid() -> None:
+    """Disable the current bad key for this process so providers can fall back."""
+
+    global _disabled_api_key
+    key = _read_api_key()
+    if not key:
+        return
+    with _auth_state_lock:
+        _disabled_api_key = key
 
 
 def _get_client() -> finnhub.Client | None:
@@ -107,6 +127,7 @@ def _rate_limited_call(
 
             if e.status_code in (401, 403):
                 logger.error(f"Permission Denied ({e.status_code})")
+                _mark_current_api_key_invalid()
                 raise FinnhubConfigError(
                     f"Invalid API Key or Permission Denied: {e}"
                 ) from e

@@ -14,8 +14,10 @@ import pandas as pd
 import yfinance as yf
 
 from src.log_config import get_logger
+from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
+configure_yfinance_cache()
 
 # フォールバックキャッシュ: 最終成功データを保持（市場閉場時に前回データを返す）
 _fallback_cache: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
@@ -56,8 +58,18 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
     for i, exp in enumerate(expirations[:max_expirations]):
         try:
             opt = stock.option_chain(exp)
+            if opt.calls is None or opt.puts is None:
+                logger.warning(
+                    f"[OptionProvider] yfinance option_chain({exp}) returned incomplete data for {ticker}"
+                )
+                continue
             calls = opt.calls.copy()
             puts = opt.puts.copy()
+            if calls.empty or puts.empty:
+                logger.warning(
+                    f"[OptionProvider] yfinance option_chain({exp}) returned empty data for {ticker}"
+                )
+                continue
             calls["expiration"] = exp
             puts["expiration"] = exp
             all_calls.append(calls)
@@ -71,7 +83,7 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
         if i < max_expirations - 1:
             time.sleep(0.3)
 
-    if not all_calls:
+    if not all_calls or not all_puts:
         logger.warning(
             f"[OptionProvider] yfinance returned no option chains for {ticker}"
         )

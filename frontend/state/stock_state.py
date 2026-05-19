@@ -1,5 +1,6 @@
 import asyncio
 import dataclasses
+from collections.abc import Mapping
 from typing import Any
 
 import reflex as rx
@@ -19,6 +20,30 @@ class SmartCriteria(BaseModel):
     A: SmartItem = SmartItem()
     R: SmartItem = SmartItem()
     T: SmartItem = SmartItem()
+
+
+def plain_state_value(value: Any) -> Any:
+    """Return Reflex mutable proxy values as plain Python containers."""
+
+    if hasattr(value, "__wrapped__"):
+        return plain_state_value(value.__wrapped__)
+    if isinstance(value, BaseModel):
+        return value.model_dump()
+    if isinstance(value, Mapping):
+        return {str(key): plain_state_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [plain_state_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [plain_state_value(item) for item in value]
+    return value
+
+
+def smart_criteria_from_mapping(value: Mapping[str, Any] | None) -> SmartCriteria:
+    """Normalize SMART criteria payloads into the Reflex state model."""
+
+    if not value:
+        return SmartCriteria()
+    return SmartCriteria(**plain_state_value(value))
 
 
 class StockState(rx.State):
@@ -127,10 +152,11 @@ class StockState(rx.State):
             # NewsItem を dict に変換
             news_list = [dict(n) for n in news_data] if news_data else []
 
-            self.info = dict(info_data) if info_data else {}
+            info_dict = plain_state_value(info_data) if info_data else {}
+            self.info = info_dict
             self.chart_data = chart_list
             self.news = news_list
-            self.smart_criteria = smart_res
+            self.smart_criteria = smart_criteria_from_mapping(smart_res)
 
             # Technical Data
             if tech_data:
@@ -147,26 +173,29 @@ class StockState(rx.State):
                     tech_dict["price_range"], tuple
                 ):
                     tech_dict["price_range"] = list(tech_dict["price_range"])
-                self.technical_data = tech_dict
+                self.technical_data = plain_state_value(tech_dict)
             else:
                 self.technical_data = {}
 
+            stock_info = plain_state_value(self.info)
+            technical_data = plain_state_value(self.technical_data)
             probabilistic = await asyncio.to_thread(
                 generate_probabilistic_stock_signal,
                 self.ticker,
                 "5y",
                 "SPY",
-                self.info,
-                self.technical_data,
+                stock_info,
+                technical_data,
             )
-            self.probabilistic_signal = signal_to_dict(probabilistic)
+            self.probabilistic_signal = plain_state_value(signal_to_dict(probabilistic))
+            probabilistic_signal = plain_state_value(self.probabilistic_signal)
             from src.services.analysis_context import StockSignalContext
 
             self.stock_signal_context = StockSignalContext(
                 ticker=self.ticker,
-                stock_info=self.info,
-                technical_data=self.technical_data,
-                probabilistic_signal=self.probabilistic_signal,
+                stock_info=stock_info,
+                technical_data=technical_data,
+                probabilistic_signal=probabilistic_signal,
             ).to_dict()
 
             # APIキーが未設定等の場合のエラーハンドリング
@@ -184,7 +213,7 @@ class StockState(rx.State):
             self.technical_data = {}
             self.probabilistic_signal = {}
             self.stock_signal_context = {}
-            self.smart_criteria = {}
+            self.smart_criteria = SmartCriteria()
         finally:
             self.is_fetching = False
             yield
@@ -199,14 +228,17 @@ class StockState(rx.State):
         try:
             from src.stock_analyst import generate_stock_analysis_report
 
+            stock_info = plain_state_value(self.info)
+            probabilistic_signal = plain_state_value(self.probabilistic_signal)
+
             # info をディクショナリとして渡す
             recap = await asyncio.to_thread(
                 generate_stock_analysis_report,
                 self.ticker,
-                self.info,
+                stock_info,
                 None,
                 None,
-                self.probabilistic_signal,
+                probabilistic_signal,
             )
 
             if recap:

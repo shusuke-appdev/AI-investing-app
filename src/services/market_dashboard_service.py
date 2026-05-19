@@ -15,7 +15,7 @@ from src.market_config import get_market_config
 from src.market_data import get_market_indices, get_stock_data, get_stock_info
 from src.market_microstructure import analyze_market_structure
 from src.momentum_monitor import get_momentum_themes
-from src.option_analyst import get_major_indices_options
+from src.option_analyst import get_major_indices_option_status
 from src.services.analysis_context import MarketContext, OptionContext
 
 
@@ -154,7 +154,13 @@ def format_market_context_for_ai(context: MarketContext) -> str:
 
 def _build_option_context(market_type: str) -> OptionContext:
     try:
-        return OptionContext(items=get_major_indices_options(market_type))
+        result = get_major_indices_option_status(market_type)
+        return OptionContext(
+            items=list(result.get("items") or []),
+            error_message=str(result.get("error_message") or ""),
+            status=str(result.get("status") or "unavailable"),
+            failed_tickers=list(result.get("failed_tickers") or []),
+        )
     except Exception as exc:
         return OptionContext(error_message=f"Option analysis failed: {exc}")
 

@@ -92,3 +92,10 @@ streamlit run legacy_streamlit/app.py
 - Updated AI market recap generation to avoid recomputing market monitoring when a UI-fetched context is supplied.
 - Added tests for market context generation, option-data failure degradation, and AI report context reuse.
 - Validation: compileall passed, ruff check passed, ruff format --check passed, pytest passed with 47 tests.
+
+# Session update: 2026-05-19 stock analysis / market data reliability
+- Fixed Reflex stock-analysis state normalization so mutable state proxies are converted to plain containers before analysis services and AI prompt context use them.
+- Added repo-local yfinance cache configuration under `.states/yfinance_cache`, avoiding the inaccessible AppData yfinance SQLite cache.
+- Suppressed invalid Finnhub keys for the current process after 401/403 so market data can fall back to yfinance without repeated auth failures.
+- Added option retrieval status metadata for available, partial, failed, and JP not-applicable states.
+- Validation: compileall passed, ruff check passed, ruff format --check passed, pytest passed with 56 tests; live US market smoke returned 30 indices, 3 option rows, monitor data, and no context errors.

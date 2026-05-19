@@ -12,6 +12,8 @@ class OptionContext:
 
     items: list[dict[str, Any]] = field(default_factory=list)
     error_message: str = ""
+    status: str = "unavailable"
+    failed_tickers: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -54,6 +56,8 @@ class MarketContext:
             options=OptionContext(
                 items=list(options.get("items") or []),
                 error_message=str(options.get("error_message") or ""),
+                status=str(options.get("status") or "unavailable"),
+                failed_tickers=list(options.get("failed_tickers") or []),
             ),
             evaluation=value.get("evaluation") or {},
             microstructure=value.get("microstructure") or {},

@@ -18,8 +18,10 @@ from src.finnhub_client import is_configured
 from src.log_config import get_logger
 from src.market_config import get_market_config
 from src.models import MarketIndex
+from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
+configure_yfinance_cache()
 
 # --- 日本市場用 Stooq データ取得 ---
 JP_STOOQ_TICKERS: dict[str, str] = {
@@ -89,6 +91,20 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
             return n, t, None
 
     if finnhub_targets:
+        probe_name, probe_ticker = next(iter(finnhub_targets.items()))
+        _, _, probe_quote = _fetch_finnhub(probe_name, probe_ticker)
+        if isinstance(probe_quote, dict) and probe_quote.get("c") not in (0, None):
+            result[probe_name] = {
+                "price": float(probe_quote.get("c", 0.0)),  # type: ignore
+                "change": float(probe_quote.get("dp", 0.0)),  # type: ignore
+                "ticker": probe_ticker,
+            }
+        else:
+            yf_targets[probe_name] = probe_ticker
+
+        finnhub_targets.pop(probe_name, None)
+
+    if finnhub_targets and is_configured():
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = [
                 executor.submit(_fetch_finnhub, n, t)
@@ -104,6 +120,8 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                     }
                 else:
                     yf_targets[n] = t
+    elif finnhub_targets:
+        yf_targets.update(finnhub_targets)
 
     def _fetch_yf(n: str, t: str) -> tuple[str, str, dict]:
         try:
