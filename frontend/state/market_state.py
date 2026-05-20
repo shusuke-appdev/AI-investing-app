@@ -20,6 +20,7 @@ class OptionSummary(BaseModel):
     ticker: str = ""
     sentiment: str = "Neutral"
     current_price: float = 0.0
+    current_price_str: str = ""
     pcr_vol: float = 0.0
     pcr_vol_str: str = ""
     net_gex: float = 0.0
@@ -67,6 +68,7 @@ class SpreadItem(BaseModel):
     earnings_yield: float = 0.0
     spread: float = 0.0
     status: str = "neutral"
+    level: str = "neutral"
 
 
 class Spreads(BaseModel):
@@ -95,6 +97,8 @@ class MarketState(rx.State):
     is_fetching: bool = False
     error_msg: str = ""
     option_error_msg: str = ""
+    option_status: str = "unavailable"
+    option_failed_tickers: list[str] = []
 
     indices_data: list[dict[str, Any]] = []
     sectors_data: list[dict[str, Any]] = []
@@ -127,6 +131,8 @@ class MarketState(rx.State):
 
             if context.options.error_message:
                 self.option_error_msg = context.options.error_message
+            self.option_status = context.options.status
+            self.option_failed_tickers = list(context.options.failed_tickers)
 
             self.option_analysis = self._format_options(context.options.items)
             if not self.option_analysis and not self.option_error_msg:
@@ -151,6 +157,8 @@ class MarketState(rx.State):
             self.sectors_data = []
             self.others_data = []
             self.option_analysis = []
+            self.option_status = "failed"
+            self.option_failed_tickers = []
             self.market_signals = []
         finally:
             self.is_fetching = False
@@ -163,13 +171,17 @@ class MarketState(rx.State):
             gex = opt.get("gex") or {}
             pcr_val = float(pcr.get("volume_pcr", 0.0))
             gex_val = float(gex.get("nearby_net_gex", 0.0))
+            current_price = float(opt.get("current_price") or 0.0)
             iv_val = opt.get("iv")
             max_pain = opt.get("max_pain")
             formatted.append(
                 OptionSummary(
                     ticker=opt.get("ticker", ""),
                     sentiment=opt.get("sentiment", "Neutral"),
-                    current_price=opt.get("current_price", 0.0),
+                    current_price=current_price,
+                    current_price_str=f"${current_price:,.2f}"
+                    if current_price > 0
+                    else "",
                     pcr_vol=pcr_val,
                     pcr_vol_str=f"{pcr_val:.2f}",
                     net_gex=gex_val,

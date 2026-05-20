@@ -137,6 +137,7 @@ def evaluate_yield_spread(yield_10y: float, index_pe_dict: dict[str, float]) -> 
         spread = earnings_yield - yield_10y
 
         status = "neutral"
+        level = "neutral"
         if idx == "NDX":
             if spread >= 2.3:
                 status = "株式優位 (上昇余地あり)"
@@ -150,10 +151,16 @@ def evaluate_yield_spread(yield_10y: float, index_pe_dict: dict[str, float]) -> 
                 status = "債券優位 (天井警戒)"
                 warnings.append("S&P500のイールドスプレッドが3.0%以下 (割高警戒)")
 
+        if idx == "NDX":
+            level = "green" if spread >= 2.3 else "red" if spread <= 1.5 else "neutral"
+        elif idx == "SPY":
+            level = "green" if spread >= 3.8 else "red" if spread <= 3.0 else "neutral"
+
         results[idx] = {
             "earnings_yield": earnings_yield,
             "spread": spread,
             "status": status,
+            "level": level,
         }
 
     if len(warnings) > 0:

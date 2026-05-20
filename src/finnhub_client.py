@@ -18,6 +18,7 @@ from src.settings_storage import get_finnhub_api_key
 
 logger = get_logger(__name__)
 _disabled_api_key: str | None = None
+_disabled_reason: str = ""
 _auth_state_lock = threading.Lock()
 
 
@@ -69,15 +70,16 @@ def _read_api_key() -> str:
     return get_finnhub_api_key()
 
 
-def _mark_current_api_key_invalid() -> None:
+def _mark_current_api_key_invalid(reason: str | None = None) -> None:
     """Disable the current bad key for this process so providers can fall back."""
 
-    global _disabled_api_key
+    global _disabled_api_key, _disabled_reason
     key = _read_api_key()
     if not key:
         return
     with _auth_state_lock:
         _disabled_api_key = key
+        _disabled_reason = reason or "Finnhub API key is invalid or unauthorized."
 
 
 def _get_client() -> finnhub.Client | None:
@@ -91,6 +93,30 @@ def _get_client() -> finnhub.Client | None:
 def is_configured() -> bool:
     """Finnhub APIが設定済みか確認"""
     return _get_api_key() != ""
+
+
+def get_auth_status() -> str:
+    """Return Finnhub runtime auth status: missing, invalid, or configured."""
+
+    key = _read_api_key()
+    if not key:
+        return "missing"
+    with _auth_state_lock:
+        if key == _disabled_api_key:
+            return "invalid"
+    return "configured"
+
+
+def get_auth_error_message() -> str:
+    """Return a user-safe explanation for the current Finnhub auth state."""
+
+    status = get_auth_status()
+    if status == "missing":
+        return "Finnhub API key is not configured."
+    if status == "invalid":
+        with _auth_state_lock:
+            return _disabled_reason or "Finnhub API key is invalid or unauthorized."
+    return ""
 
 
 # --- レート制限 & リトライ ---
@@ -127,7 +153,9 @@ def _rate_limited_call(
 
             if e.status_code in (401, 403):
                 logger.error(f"Permission Denied ({e.status_code})")
-                _mark_current_api_key_invalid()
+                _mark_current_api_key_invalid(
+                    f"Finnhub API returned {e.status_code}: invalid key or permission denied."
+                )
                 raise FinnhubConfigError(
                     f"Invalid API Key or Permission Denied: {e}"
                 ) from e

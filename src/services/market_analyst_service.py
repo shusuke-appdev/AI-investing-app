@@ -279,7 +279,7 @@ def generate_market_analysis_report(
             evaluate_yield_spread,
             track_distribution_days,
         )
-        from src.market_data import get_stock_info
+        from src.stock_data_provider import get_valuation_metrics
 
         spy_df = get_stock_data("SPY", "6mo")
         ndx_df = get_stock_data("^NDX", "6mo")
@@ -314,8 +314,8 @@ def generate_market_analysis_report(
         tnx_df = get_stock_data("^TNX", "5d")
         tnx_yield = float(tnx_df["Close"].iloc[-1]) / 10.0 if not tnx_df.empty else 4.0
 
-        spy_info = get_stock_info("SPY")
-        qqq_info = get_stock_info("QQQ")
+        spy_info = get_valuation_metrics("SPY")
+        qqq_info = get_valuation_metrics("QQQ")
 
         # PER取得（取れなければ固定の近似値を入れる）
         spy_pe = (

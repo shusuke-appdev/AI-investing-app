@@ -37,6 +37,7 @@ class StockInfo(TypedDict, total=False):
     currentRatio: float | None
     debtToEquity: float | None
     returnOnAssets: float | None
+    returnOnEquity: float | None
     pegRatio: float | None
     priceToBook: float | None
 

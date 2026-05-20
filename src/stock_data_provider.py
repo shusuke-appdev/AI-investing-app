@@ -1,17 +1,14 @@
-"""
-Stock Data Provider
-個別株関連のデータ取得（株価、ヒストリカルデータ、企業情報、決算等）を担当。
-OpenBB (v4) および EDINET API を活用する。
-"""
+"""Stock data provider for prices, history, profile, and financial data."""
+
+from __future__ import annotations
 
 import os
-
-# Streamlit CloudなどのRead-Only環境でのPermissionErrorを防ぐ
-os.environ["OPENBB_AUTO_BUILD"] = "False"
-
 from datetime import datetime, timedelta
+from typing import Any
 
 import pandas as pd
+
+os.environ["OPENBB_AUTO_BUILD"] = "False"
 
 try:
     from openbb import obb
@@ -30,13 +27,29 @@ from src.yfinance_runtime import configure_yfinance_cache
 logger = get_logger(__name__)
 configure_yfinance_cache()
 
+NO_SUMMARY_TEXT = "N/A"
+
 
 def is_japanese_stock(ticker: str) -> bool:
-    """日本株（証券コード4桁等）か判定する"""
+    """Return True when a ticker looks like a Japanese listed stock."""
+
     code = "".join(filter(str.isdigit, str(ticker)))
     return (len(code) == 4 and str(ticker).startswith(code)) or str(ticker).endswith(
         ".T"
     )
+
+
+def _first(source: dict[str, Any], key: str, default: Any = None) -> Any:
+    value = source.get(key, default)
+    if isinstance(value, list):
+        return value[0] if value else default
+    return default if value is None else value
+
+
+def _percent(value: Any) -> float | None:
+    if value is None:
+        return None
+    return float(value) * 100
 
 
 @ttl_cache(ttl=CACHE_TTL_SHORT)
@@ -52,15 +65,12 @@ def get_current_price(ticker: str) -> float:
 
     try:
         q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
-        if q:
-            # last_price -> prev_close -> close の順でフォールバック
-            for key in ["last_price", "prev_close", "close", "open"]:
-                if key in q and q[key]:
-                    price = q[key][0]
-                    if price is not None:
-                        return float(price)
-    except Exception as e:
-        logger.warning(f"Failed to get current price for {ticker}: {e}")
+        for key in ["last_price", "prev_close", "close", "open"]:
+            price = _first(q, key)
+            if price is not None:
+                return float(price)
+    except Exception as exc:
+        logger.warning(f"Failed to get current price for {ticker}: {exc}")
     return 0.0
 
 
@@ -88,9 +98,9 @@ def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
             "5y": timedelta(days=1825),
             "max": timedelta(days=3650),
         }
-        days = period_map.get(period, timedelta(days=30))
-        start_date = (datetime.now() - days).strftime("%Y-%m-%d")
-
+        start_date = (
+            datetime.now() - period_map.get(period, timedelta(days=30))
+        ).strftime("%Y-%m-%d")
         hist = obb.equity.price.historical(
             symbol=ticker, start_date=start_date, provider="yfinance"
         ).to_df()
@@ -107,12 +117,14 @@ def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
                 inplace=True,
             )
             return hist
-    except Exception as e:
-        logger.warning(f"Failed to get historical data for {ticker}: {e}")
+    except Exception as exc:
+        logger.warning(f"Failed to get historical data for {ticker}: {exc}")
     return pd.DataFrame()
 
 
-def _extract_openbb_profile(ticker: str, info: StockInfo) -> None:
+def _extract_openbb_profile(
+    ticker: str, info: StockInfo, *, include_summary: bool = True
+) -> None:
     if obb is None:
         logger.warning("OpenBB is not installed. Skipping OpenBB profile fetch.")
         return
@@ -120,80 +132,100 @@ def _extract_openbb_profile(ticker: str, info: StockInfo) -> None:
     try:
         profile_obj = obb.equity.profile(symbol=ticker, provider="yfinance")
         if profile_obj:
-            p = profile_obj.to_dict()
-            info["name"] = p.get("name", [ticker])[0] if p.get("name") else ticker
-            info["sector"] = p.get("sector", ["N/A"])[0] if p.get("sector") else "N/A"
-            info["industry"] = (
-                p.get("industry_category", ["N/A"])[0]
-                if p.get("industry_category")
-                else "N/A"
-            )
-            desc = p.get("long_description", [])
-            info["summary"] = desc[0] if desc else "情報なし"
-            info["website"] = (
-                p.get("company_url", [""])[0] if p.get("company_url") else ""
-            )
-            info["country"] = (
-                p.get("hq_country", [""])[0] if p.get("hq_country") else ""
-            )
-            info["employees"] = p.get("employees", [0])[0] if p.get("employees") else 0
+            profile = profile_obj.to_dict()
+            info["name"] = _first(profile, "name", ticker)
+            info["sector"] = _first(profile, "sector", "N/A")
+            info["industry"] = _first(profile, "industry_category", "N/A")
+            if include_summary:
+                info["summary"] = _first(profile, "long_description", NO_SUMMARY_TEXT)
+            info["website"] = _first(profile, "company_url", "")
+            info["country"] = _first(profile, "hq_country", "")
+            info["employees"] = _first(profile, "employees", 0)
 
             try:
                 metrics_obj = obb.equity.fundamental.metrics(
                     symbol=ticker, provider="yfinance"
                 )
                 if metrics_obj:
-                    m = metrics_obj.to_dict()
-                    info["market_cap"] = m.get("market_cap", [None])[0]
-
-                    rg = m.get("revenue_growth", [None])[0]
-                    if rg is not None:
-                        info["revenueGrowth"] = rg * 100
-
-                    eg = m.get("earnings_growth", [None])[0]
-                    if eg is not None:
-                        info["earningsGrowth"] = eg * 100
-
-                    gm = m.get("gross_margin", [None])[0]
-                    if gm is not None:
-                        info["grossMargins"] = gm * 100
-
-                    om = m.get("operating_margin", [None])[0]
-                    if om is not None:
-                        info["operatingMargins"] = om * 100
-
-                    info["currentRatio"] = m.get("current_ratio", [None])[0]
-                    info["debtToEquity"] = m.get("debt_to_equity", [None])[0]
-
-                    ra = m.get("return_on_assets", [None])[0]
-                    if ra is not None:
-                        info["returnOnAssets"] = ra * 100
-
-                    info["pe_ratio"] = m.get("pe_ratio", [None])[0]
-                    info["priceToBook"] = m.get("price_to_book", [None])[0]
-                    info["beta"] = m.get("beta", [None])[0]
-                    info["forward_pe"] = m.get("forward_pe", [None])[0]
-            except Exception as e:
-                logger.debug(f"Metrics fetch failed for {ticker}: {e}")
+                    _merge_openbb_metrics(info, metrics_obj.to_dict())
+            except Exception as exc:
+                logger.debug(f"Metrics fetch failed for {ticker}: {exc}")
 
         q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
         if q:
-            info["current_price"] = q.get("last_price", [None])[0]
-            info["fifty_two_week_high"] = q.get("year_high", [None])[0]
-            info["fifty_two_week_low"] = q.get("year_low", [None])[0]
+            info["current_price"] = _first(q, "last_price")
+            info["fifty_two_week_high"] = _first(q, "year_high")
+            info["fifty_two_week_low"] = _first(q, "year_low")
+    except Exception as exc:
+        logger.warning(f"OpenBB profile fetch failed for {ticker}: {exc}")
 
-    except Exception as e:
-        logger.warning(f"OpenBB profile fetch failed for {ticker}: {e}")
+
+def _merge_openbb_metrics(info: StockInfo, metrics: dict[str, Any]) -> None:
+    info["market_cap"] = _first(metrics, "market_cap")
+    info["revenueGrowth"] = _percent(_first(metrics, "revenue_growth"))
+    info["earningsGrowth"] = _percent(_first(metrics, "earnings_growth"))
+    info["grossMargins"] = _percent(_first(metrics, "gross_margin"))
+    info["operatingMargins"] = _percent(_first(metrics, "operating_margin"))
+    info["currentRatio"] = _first(metrics, "current_ratio")
+    info["debtToEquity"] = _first(metrics, "debt_to_equity")
+    info["returnOnAssets"] = _percent(_first(metrics, "return_on_assets"))
+    info["returnOnEquity"] = _percent(_first(metrics, "return_on_equity"))
+    info["pe_ratio"] = _first(metrics, "pe_ratio")
+    info["priceToBook"] = _first(metrics, "price_to_book")
+    info["beta"] = _first(metrics, "beta")
+    info["forward_pe"] = _first(metrics, "forward_pe")
 
 
 @ttl_cache(ttl=CACHE_TTL_DAILY)
-def get_stock_info(ticker: str) -> StockInfo:
+def get_valuation_metrics(ticker: str) -> dict[str, Any]:
+    """Return valuation metrics without fetching or translating summary text."""
+
+    metrics: dict[str, Any] = {
+        "current_price": None,
+        "market_cap": None,
+        "forward_pe": None,
+        "pe_ratio": None,
+    }
+    if obb is None:
+        logger.warning("OpenBB is not installed. Skipping valuation metrics fetch.")
+        return metrics
+
+    try:
+        metrics_obj = obb.equity.fundamental.metrics(symbol=ticker, provider="yfinance")
+        if metrics_obj:
+            raw = metrics_obj.to_dict()
+            metrics["market_cap"] = _first(raw, "market_cap")
+            metrics["forward_pe"] = _first(raw, "forward_pe")
+            metrics["pe_ratio"] = _first(raw, "pe_ratio")
+    except Exception as exc:
+        logger.debug(f"Valuation metrics fetch failed for {ticker}: {exc}")
+
+    try:
+        q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
+        for key in ["last_price", "prev_close", "close", "open"]:
+            value = _first(q, key)
+            if value is not None:
+                metrics["current_price"] = value
+                break
+    except Exception as exc:
+        logger.debug(f"Valuation quote fetch failed for {ticker}: {exc}")
+
+    return metrics
+
+
+@ttl_cache(ttl=CACHE_TTL_DAILY)
+def get_stock_info(
+    ticker: str,
+    *,
+    translate_summary: bool = True,
+    include_summary: bool = True,
+) -> StockInfo:
     info: StockInfo = {
         "name": ticker,
         "ticker": ticker,
         "sector": "N/A",
         "industry": "N/A",
-        "summary": "情報なし",
+        "summary": NO_SUMMARY_TEXT,
         "website": "",
         "logo": "",
         "city": "",
@@ -221,8 +253,7 @@ def get_stock_info(ticker: str) -> StockInfo:
         "share_outstanding": None,
     }
 
-    _extract_openbb_profile(ticker, info)
-
+    _extract_openbb_profile(ticker, info, include_summary=include_summary)
     is_jp = is_japanese_stock(ticker)
 
     if is_jp and jquants_client.is_configured():
@@ -258,11 +289,16 @@ def get_stock_info(ticker: str) -> StockInfo:
                 ) * 100
 
     if (
-        info["summary"]
-        and info["summary"] != "情報なし"
+        translate_summary
+        and include_summary
+        and info["summary"]
+        and info["summary"] != NO_SUMMARY_TEXT
         and not is_japanese_stock(ticker)
     ):
         info["summary"] = translate_to_japanese(info["summary"])
+
+    if not include_summary:
+        info["summary"] = NO_SUMMARY_TEXT
 
     return info
 
@@ -278,21 +314,20 @@ def get_quote(ticker: str) -> dict | None:
         if q:
             last = None
             for key in ["last_price", "prev_close", "close", "open"]:
-                if key in q and q[key] and q[key][0] is not None:
-                    last = q[key][0]
+                value = _first(q, key)
+                if value is not None:
+                    last = value
                     break
 
             return {
                 "c": last or 0,
-                "h": q.get("high", [0])[0] if "high" in q and q["high"] else 0,
-                "l": q.get("low", [0])[0] if "low" in q and q["low"] else 0,
-                "o": q.get("open", [0])[0] if "open" in q and q["open"] else 0,
-                "pc": q.get("prev_close", [0])[0]
-                if "prev_close" in q and q["prev_close"]
-                else 0,
+                "h": _first(q, "high", 0),
+                "l": _first(q, "low", 0),
+                "o": _first(q, "open", 0),
+                "pc": _first(q, "prev_close", 0),
             }
-    except Exception as e:
-        logger.warning(f"Quote fetch error for {ticker}: {e}")
+    except Exception as exc:
+        logger.warning(f"Quote fetch error for {ticker}: {exc}")
     return None
 
 
@@ -300,7 +335,8 @@ def get_quote(ticker: str) -> dict | None:
 def get_earnings_calendar(
     from_date: str | None = None, to_date: str | None = None
 ) -> list[dict]:
-    """決算カレンダーを取得（Finnhub APIに委譲）"""
+    """Return earnings calendar data via Finnhub when configured."""
+
     from src.finnhub_client import get_earnings_calendar as _fh_earnings_calendar
     from src.finnhub_client import is_configured as _fh_configured
 
@@ -311,7 +347,8 @@ def get_earnings_calendar(
 
 @ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
-    """EPSサプライズデータを取得（Finnhub APIに委譲）"""
+    """Return earnings surprise data via Finnhub when configured."""
+
     from src.finnhub_client import get_earnings_surprises as _fh_earnings_surprises
     from src.finnhub_client import is_configured as _fh_configured
 
@@ -322,7 +359,8 @@ def get_earnings_surprises(symbol: str, limit: int = 4) -> list[dict]:
 
 @ttl_cache(ttl=CACHE_TTL_DAILY)
 def get_financials_reported(symbol: str, freq: str = "quarterly") -> list[dict]:
-    """報告済み財務諸表を取得（Finnhub APIに委譲）"""
+    """Return reported financial statements via Finnhub when configured."""
+
     from src.finnhub_client import get_financials_reported as _fh_financials_reported
     from src.finnhub_client import is_configured as _fh_configured
 

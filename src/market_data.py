@@ -1,10 +1,4 @@
-"""
-市場データ取得モジュール
-DataProvider への後方互換リエクスポート。
-
-Note: キャッシュは DataProvider 側で管理。
-      このモジュールは既存13箇所の import を壊さないための薄いラッパー。
-"""
+"""Backward-compatible market data facade over DataProvider."""
 
 from typing import Any
 
@@ -15,25 +9,45 @@ from src.data_provider import DataProvider
 
 
 def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
-    """株価データを取得（DataProvider委譲）。"""
+    """Return historical stock data."""
+
     return DataProvider.get_historical_data(ticker, period)
 
 
 def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
-    """オプションチェーンデータを取得（DataProvider委譲）。"""
+    """Return option chain data."""
+
     return DataProvider.get_option_chain(ticker)
 
 
 def get_market_indices(market_type: str = MARKET_US) -> dict[str, Any]:
-    """主要市場指数のデータを取得（DataProvider委譲）。"""
+    """Return configured market index and cross-asset data."""
+
     return DataProvider.get_market_indices(market_type)
 
 
 def get_stock_news(ticker: str, max_items: int = 10) -> list[Any]:
-    """銘柄ニュース取得（DataProvider委譲）。"""
+    """Return stock news items."""
+
     return DataProvider.get_stock_news(ticker, max_items)
 
 
-def get_stock_info(ticker: str) -> dict[str, Any]:
-    """企業概要を取得（DataProvider委譲）。"""
-    return DataProvider.get_stock_info(ticker)
+def get_stock_news_with_status(ticker: str, max_items: int = 10) -> dict[str, Any]:
+    """Return stock news plus provider status metadata."""
+
+    return DataProvider.get_stock_news_with_status(ticker, max_items)
+
+
+def get_stock_info(
+    ticker: str,
+    *,
+    translate_summary: bool = True,
+    include_summary: bool = True,
+) -> dict[str, Any]:
+    """Return company profile and metrics."""
+
+    return DataProvider.get_stock_info(
+        ticker,
+        translate_summary=translate_summary,
+        include_summary=include_summary,
+    )

@@ -7,7 +7,10 @@ import pandas as pd
 import requests
 import yfinance as yf
 
+from src.yfinance_runtime import configure_yfinance_cache
+
 logger = logging.getLogger(__name__)
+configure_yfinance_cache()
 
 
 def get_market_data(
@@ -17,6 +20,7 @@ def get_market_data(
     Step 1: ボラティリティ観測用の市場データ取得
     yfinance または Polygon APIを利用してデータを取得する。
     """
+    configure_yfinance_cache()
     polygon_api_key = os.getenv("POLYGON_API_KEY")
 
     # リトライ共通処理

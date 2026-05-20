@@ -11,7 +11,11 @@ import pandas as pd
 # 実際の実装モジュールから関数をインポート
 from src.market_index_provider import get_market_indices
 from src.models import MarketIndex, NewsItem, StockInfo
-from src.news_provider import get_company_news_raw, get_stock_news
+from src.news_provider import (
+    get_company_news_raw,
+    get_stock_news,
+    get_stock_news_with_status,
+)
 from src.option_data_provider import get_option_chain
 from src.stock_data_provider import (
     get_current_price,
@@ -35,8 +39,15 @@ class DataProviderProtocol(Protocol):
     ) -> tuple[pd.DataFrame, pd.DataFrame] | None: ...
     def get_market_indices(self, market_type: str = "US") -> dict[str, MarketIndex]: ...
     def get_stock_news(self, ticker: str, max_items: int = 10) -> list[NewsItem]: ...
+    def get_stock_news_with_status(self, ticker: str, max_items: int = 10) -> dict: ...
     def get_company_news_raw(self, ticker: str) -> list[dict]: ...
-    def get_stock_info(self, ticker: str) -> StockInfo: ...
+    def get_stock_info(
+        self,
+        ticker: str,
+        *,
+        translate_summary: bool = True,
+        include_summary: bool = True,
+    ) -> StockInfo: ...
     def get_quote(self, ticker: str) -> dict | None: ...
     def get_earnings_calendar(
         self, from_date: str | None = None, to_date: str | None = None
@@ -65,11 +76,24 @@ class DefaultDataProvider:
     def get_stock_news(self, ticker: str, max_items: int = 10) -> list[NewsItem]:
         return get_stock_news(ticker, max_items)
 
+    def get_stock_news_with_status(self, ticker: str, max_items: int = 10) -> dict:
+        return get_stock_news_with_status(ticker, max_items)
+
     def get_company_news_raw(self, ticker: str) -> list[dict]:
         return get_company_news_raw(ticker)
 
-    def get_stock_info(self, ticker: str) -> StockInfo:
-        return get_stock_info(ticker)
+    def get_stock_info(
+        self,
+        ticker: str,
+        *,
+        translate_summary: bool = True,
+        include_summary: bool = True,
+    ) -> StockInfo:
+        return get_stock_info(
+            ticker,
+            translate_summary=translate_summary,
+            include_summary=include_summary,
+        )
 
     def get_quote(self, ticker: str) -> dict | None:
         return get_quote(ticker)
@@ -131,12 +155,27 @@ class DataProvider:
         return _global_provider.get_stock_news(ticker, max_items)
 
     @staticmethod
+    def get_stock_news_with_status(ticker: str, max_items: int = 10) -> dict:
+        return _global_provider.get_stock_news_with_status(ticker, max_items)
+
+    @staticmethod
     def get_company_news_raw(ticker: str) -> list[dict]:
         return _global_provider.get_company_news_raw(ticker)
 
     @staticmethod
-    def get_stock_info(ticker: str) -> StockInfo:
-        return _global_provider.get_stock_info(ticker)
+    def get_stock_info(
+        ticker: str,
+        *,
+        translate_summary: bool = True,
+        include_summary: bool = True,
+    ) -> StockInfo:
+        if translate_summary and include_summary:
+            return _global_provider.get_stock_info(ticker)
+        return _global_provider.get_stock_info(
+            ticker,
+            translate_summary=translate_summary,
+            include_summary=include_summary,
+        )
 
     @staticmethod
     def get_quote(ticker: str) -> dict | None:

@@ -99,3 +99,10 @@ streamlit run legacy_streamlit/app.py
 - Suppressed invalid Finnhub keys for the current process after 401/403 so market data can fall back to yfinance without repeated auth failures.
 - Added option retrieval status metadata for available, partial, failed, and JP not-applicable states.
 - Validation: compileall passed, ruff check passed, ruff format --check passed, pytest passed with 56 tests; live US market smoke returned 30 indices, 3 option rows, monitor data, and no context errors.
+
+# Session update: 2026-05-19 stock/options/market data reliability follow-up
+- Removed hidden Gemini translation from stock info fetch paths used by Reflex stock analysis and market monitor PE lookup; AI generation now stays behind the explicit AI recap/analysis actions.
+- Added Finnhub auth status reporting so invalid 401/403 keys short-circuit news fetches with source status and error reason instead of silent empty data.
+- Covered remaining direct yfinance paths with the repo-local `.states/yfinance_cache` initialization and repaired local Reflex Bun/Node validation.
+- Hardened option and market-monitor UI models with server-formatted option prices and enum-like yield-spread levels instead of localized string matching.
+- Validation: compileall passed, ruff check passed, ruff format --check passed, pytest passed with 61 tests; live US smoke returned 30 indices, 3 option rows, monitor data, AAPL info without Gemini translation, Finnhub invalid status for news, and no context errors; Reflex frontend export passed after using the bundled Node path.

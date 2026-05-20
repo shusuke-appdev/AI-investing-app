@@ -10,7 +10,7 @@ class TestDataProvider:
         """Test if get_stock_info returns correct StockInfo TypedDict structure."""
 
         # Mock responses
-        def side_effect_extract(ticker, info):
+        def side_effect_extract(ticker, info, **kwargs):
             info["name"] = "Test Inc."
             info["ticker"] = "TEST"
             info["market_cap"] = 1000 * 1e6

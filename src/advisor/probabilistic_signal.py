@@ -281,7 +281,7 @@ def generate_probabilistic_stock_signal(
         return _fallback_signal(ticker, "Insufficient price history.")
 
     benchmark_df = get_stock_data(benchmark, period)
-    info = stock_info or get_stock_info(ticker)
+    info = stock_info or get_stock_info(ticker, translate_summary=False)
     feature_frame = build_stock_feature_frame(
         price_df, benchmark_df, info, technical_data
     )

@@ -75,6 +75,8 @@ class StockSignalContext:
     stock_info: dict[str, Any] = field(default_factory=dict)
     technical_data: dict[str, Any] = field(default_factory=dict)
     probabilistic_signal: dict[str, Any] = field(default_factory=dict)
+    news_source_status: str = ""
+    news_error_reason: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

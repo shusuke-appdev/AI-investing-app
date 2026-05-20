@@ -11,8 +11,10 @@ import yfinance as yf
 from src.cache import ttl_cache
 from src.log_config import get_logger
 from src.themes_config import PERIODS, THEMES, get_themes
+from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
+configure_yfinance_cache()
 
 
 def fetch_and_calculate_all_performances(
@@ -28,6 +30,7 @@ def fetch_and_calculate_all_performances(
     Returns:
         {ticker: performance} の辞書
     """
+    configure_yfinance_cache()
     themes = get_themes(market_type)
 
     # 1. 全銘柄リストの作成

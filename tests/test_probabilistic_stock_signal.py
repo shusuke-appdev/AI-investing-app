@@ -119,7 +119,7 @@ def test_generate_probabilistic_signal_with_mocked_data(monkeypatch):
     def fake_get_stock_data(ticker, period="5y"):
         return benchmark if ticker == "SPY" else prices
 
-    def fake_get_stock_info(ticker):
+    def fake_get_stock_info(ticker, **kwargs):
         return {"ticker": ticker, "name": "Test Inc.", "pe_ratio": 22.0}
 
     monkeypatch.setattr("src.market_data.get_stock_data", fake_get_stock_data)

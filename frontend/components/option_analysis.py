@@ -4,27 +4,24 @@ from frontend.state.market_state import MarketState
 
 
 def render_ticker_compact(opt) -> rx.Component:
-    """個別銘柄のコンパクト表示（ナラティブ形式）"""
-    ticker = opt.ticker
+    """Compact option summary card for a major index ETF."""
+
     sentiment = opt.sentiment
+    icon = rx.cond(sentiment == "強気", "▲", rx.cond(sentiment == "弱気", "▼", "■"))
 
-    icon = rx.cond(sentiment == "強気", "🟢", rx.cond(sentiment == "弱気", "🔴", "⚪"))
-    current_price = opt.current_price
-
-    net_gex = opt.net_gex
-    pcr_vol = opt.pcr_vol
-
-    pcr_color = rx.cond(pcr_vol > 1.2, "red", rx.cond(pcr_vol < 0.7, "green", "gray"))
-    gex_color = rx.cond(net_gex > 0, "green", "red")
+    pcr_color = rx.cond(
+        opt.pcr_vol > 1.2, "red", rx.cond(opt.pcr_vol < 0.7, "green", "gray")
+    )
+    gex_color = rx.cond(opt.net_gex > 0, "green", "red")
 
     return rx.card(
         rx.vstack(
             rx.hstack(
-                rx.text(icon, " ", ticker, weight="bold"),
+                rx.text(icon, " ", opt.ticker, weight="bold"),
                 rx.spacer(),
                 rx.cond(
-                    current_price > 0,
-                    rx.text(f"${current_price:,.2f}", weight="bold"),
+                    opt.current_price_str != "",
+                    rx.text(opt.current_price_str, weight="bold"),
                     rx.text(""),
                 ),
                 width="100%",
@@ -69,7 +66,7 @@ def render_ticker_compact(opt) -> rx.Component:
                 rx.vstack(
                     rx.foreach(
                         opt.analysis,
-                        lambda item: rx.text("• ", item, size="1", color="gray"),
+                        lambda item: rx.text("- ", item, size="1", color="gray"),
                     ),
                     align_items="start",
                     spacing="1",
@@ -85,13 +82,14 @@ def render_ticker_compact(opt) -> rx.Component:
 
 
 def option_analysis_component() -> rx.Component:
-    """オプション分析コンポーネント"""
+    """Render option analysis section."""
+
     return rx.box(
-        rx.heading("📊 オプション分析 (詳細)", size="5", margin_bottom="1rem"),
+        rx.heading("オプション分析", size="5", margin_bottom="1rem"),
         rx.cond(
             MarketState.market_type == "JP",
             rx.callout(
-                "🇯🇵 日本市場のオプションデータは現在取得できません（yfinance APIの制約）",
+                "日本市場のオプションデータは対象外です。",
                 icon="info",
                 color_scheme="amber",
                 width="100%",
@@ -105,7 +103,11 @@ def option_analysis_component() -> rx.Component:
                     width="100%",
                 ),
                 rx.text(
-                    "Yahoo Financeの利用制限（Rate Limit）により現在データが取得できません。数十秒〜数分経ってから更新をお試しください。",
+                    rx.cond(
+                        MarketState.option_error_msg != "",
+                        MarketState.option_error_msg,
+                        "Option data is currently unavailable.",
+                    ),
                     color="gray",
                 ),
             ),

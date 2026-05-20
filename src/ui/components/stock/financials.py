@@ -3,8 +3,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.log_config import get_logger
+from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
+configure_yfinance_cache()
 
 
 @st.fragment
@@ -90,6 +92,7 @@ def render_quarterly_financials_graph(ticker: str):
         # --- Fallback: yfinance ---
         if not financials_data:
             try:
+                configure_yfinance_cache()
                 import yfinance as yf
 
                 yf_ticker = yf.Ticker(ticker)

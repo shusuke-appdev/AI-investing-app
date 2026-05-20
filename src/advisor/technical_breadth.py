@@ -6,8 +6,10 @@ import requests
 import yfinance as yf
 
 from src.cache import ttl_cache
+from src.yfinance_runtime import configure_yfinance_cache
 
 logger = logging.getLogger(__name__)
+configure_yfinance_cache()
 
 
 @ttl_cache(ttl=24 * 3600)
@@ -33,6 +35,7 @@ def fetch_breadth_data(period: str = "6mo") -> pd.DataFrame:
     Returns:
         pd.DataFrame (index: Date, columns: ['Advances', 'Declines', 'Net_Advances', 'Total_Issues'])
     """
+    configure_yfinance_cache()
     tickers = get_sp500_components()
     if not tickers:
         return pd.DataFrame()

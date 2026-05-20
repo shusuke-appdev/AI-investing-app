@@ -12,11 +12,12 @@ from src.advisor.market_monitor import (
     track_distribution_days,
 )
 from src.market_config import get_market_config
-from src.market_data import get_market_indices, get_stock_data, get_stock_info
+from src.market_data import get_market_indices, get_stock_data
 from src.market_microstructure import analyze_market_structure
 from src.momentum_monitor import get_momentum_themes
 from src.option_analyst import get_major_indices_option_status
 from src.services.analysis_context import MarketContext, OptionContext
+from src.stock_data_provider import get_valuation_metrics
 
 
 def build_market_context(market_type: str = "US") -> MarketContext:
@@ -78,8 +79,8 @@ def build_market_monitor_context(option_data: list[dict[str, Any]] | None) -> di
     tnx_df = get_stock_data("^TNX", "5d")
     tnx_yield = float(tnx_df["Close"].iloc[-1]) / 10.0 if not tnx_df.empty else 4.0
 
-    spy_pe = _extract_pe(get_stock_info("SPY"), 22.0)
-    ndx_pe = _extract_pe(get_stock_info("QQQ"), 30.0)
+    spy_pe = _extract_pe(get_valuation_metrics("SPY"), 22.0)
+    ndx_pe = _extract_pe(get_valuation_metrics("QQQ"), 30.0)
     spread = evaluate_yield_spread(tnx_yield, {"SPY": spy_pe, "NDX": ndx_pe})
 
     return {
