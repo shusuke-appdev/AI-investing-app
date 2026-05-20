@@ -7,7 +7,7 @@ MARKET_US = "US"
 MARKET_JP = "JP"
 
 # AI Configuration
-GEMINI_MODEL_NAME = "gemini-2.5-flash"
+GEMINI_MODEL_NAME = "gemini-3.5-flash"
 
 # Cache Settings (Seconds)
 CACHE_TTL_SHORT = 60  # 1 min
