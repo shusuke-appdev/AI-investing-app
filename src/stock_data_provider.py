@@ -2,18 +2,10 @@
 
 from __future__ import annotations
 
-import os
-from datetime import datetime, timedelta
 from typing import Any
 
 import pandas as pd
-
-os.environ["OPENBB_AUTO_BUILD"] = "False"
-
-try:
-    from openbb import obb
-except ImportError:
-    obb = None
+import yfinance as yf
 
 from src import jquants_client
 from src.cache import ttl_cache
@@ -46,10 +38,166 @@ def _first(source: dict[str, Any], key: str, default: Any = None) -> Any:
     return default if value is None else value
 
 
-def _percent(value: Any) -> float | None:
+def _pick(source: Any, *keys: str, default: Any = None) -> Any:
+    for key in keys:
+        try:
+            value = source.get(key) if hasattr(source, "get") else None
+        except Exception:
+            value = None
+        if value is None:
+            try:
+                value = getattr(source, key)
+            except Exception:
+                value = None
+        if isinstance(value, list):
+            value = value[0] if value else None
+        if value is not None and not pd.isna(value):
+            return value
+    return default
+
+
+def _safe_float(value: Any) -> float | None:
     if value is None:
         return None
-    return float(value) * 100
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(result):
+        return None
+    return result
+
+
+def _percent(value: Any) -> float | None:
+    result = _safe_float(value)
+    if result is None:
+        return None
+    return result * 100
+
+
+def _get_fast_info(stock: yf.Ticker) -> Any:
+    try:
+        return stock.fast_info
+    except Exception as exc:
+        logger.debug(f"yfinance fast_info fetch failed for {stock.ticker}: {exc}")
+        return {}
+
+
+def _get_info(stock: yf.Ticker) -> dict[str, Any]:
+    try:
+        raw_info = getattr(stock, "info", None)
+    except Exception as exc:
+        logger.warning(f"yfinance profile fetch failed for {stock.ticker}: {exc}")
+        return {}
+    return raw_info if isinstance(raw_info, dict) else {}
+
+
+def _get_history(stock: yf.Ticker, period: str) -> pd.DataFrame:
+    try:
+        return stock.history(period=period)
+    except Exception as exc:
+        logger.warning(f"yfinance history fetch failed for {stock.ticker}: {exc}")
+        return pd.DataFrame()
+
+
+def _normalize_history(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame()
+
+    normalized = df.copy()
+    normalized.rename(
+        columns={
+            "open": "Open",
+            "high": "High",
+            "low": "Low",
+            "close": "Close",
+            "volume": "Volume",
+        },
+        inplace=True,
+    )
+    normalized.index.name = normalized.index.name or "Date"
+    return normalized
+
+
+def _latest_history_values(df: pd.DataFrame) -> dict[str, float | None]:
+    if df.empty:
+        return {}
+
+    normalized = _normalize_history(df)
+    if "Close" in normalized.columns:
+        normalized = normalized.dropna(subset=["Close"])
+    else:
+        normalized = normalized.dropna()
+    if normalized.empty:
+        return {}
+
+    latest = normalized.iloc[-1]
+    previous = normalized.iloc[-2] if len(normalized) >= 2 else latest
+    return {
+        "current": _safe_float(latest.get("Close")),
+        "previous_close": _safe_float(previous.get("Close")),
+        "high": _safe_float(latest.get("High")),
+        "low": _safe_float(latest.get("Low")),
+        "open": _safe_float(latest.get("Open")),
+    }
+
+
+def _build_yfinance_quote(ticker: str) -> dict | None:
+    stock = yf.Ticker(ticker)
+    fast_info = _get_fast_info(stock)
+    history_values = _latest_history_values(_get_history(stock, "5d"))
+
+    current = _safe_float(
+        _pick(
+            fast_info,
+            "lastPrice",
+            "last_price",
+            "regularMarketPrice",
+            "currentPrice",
+        )
+    )
+    current = current if current is not None else history_values.get("current")
+
+    previous_close = _safe_float(
+        _pick(
+            fast_info,
+            "previousClose",
+            "previous_close",
+            "regularMarketPreviousClose",
+        )
+    )
+    previous_close = (
+        previous_close
+        if previous_close is not None
+        else history_values.get("previous_close")
+    )
+
+    open_price = _safe_float(_pick(fast_info, "open", "regularMarketOpen"))
+    high = _safe_float(_pick(fast_info, "dayHigh", "regularMarketDayHigh"))
+    low = _safe_float(_pick(fast_info, "dayLow", "regularMarketDayLow"))
+
+    open_price = open_price if open_price is not None else history_values.get("open")
+    high = high if high is not None else history_values.get("high")
+    low = low if low is not None else history_values.get("low")
+
+    if all(value is None for value in (current, previous_close, open_price, high, low)):
+        return None
+
+    change = None
+    change_percent = None
+    if current is not None and previous_close not in (None, 0):
+        change = current - previous_close
+        change_percent = change / previous_close * 100
+
+    return {
+        "c": current or 0,
+        "d": change,
+        "dp": change_percent,
+        "h": high or 0,
+        "l": low or 0,
+        "o": open_price or 0,
+        "pc": previous_close or 0,
+    }
 
 
 @ttl_cache(ttl=CACHE_TTL_SHORT)
@@ -59,16 +207,11 @@ def get_current_price(ticker: str) -> float:
         if price > 0:
             return price
 
-    if obb is None:
-        logger.warning("OpenBB is not installed. Falling back to price=0.")
-        return 0.0
-
     try:
-        q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
-        for key in ["last_price", "prev_close", "close", "open"]:
-            price = _first(q, key)
-            if price is not None:
-                return float(price)
+        q = _build_yfinance_quote(ticker)
+        price = _safe_float(q.get("c") if q else None)
+        if price is not None:
+            return price
     except Exception as exc:
         logger.warning(f"Failed to get current price for {ticker}: {exc}")
     return 0.0
@@ -81,99 +224,68 @@ def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
         if not df.empty:
             return df
 
-    if obb is None:
-        logger.warning("OpenBB is not installed. Returning empty historical data.")
-        return pd.DataFrame()
-
-    try:
-        period_map = {
-            "1d": timedelta(days=2),
-            "5d": timedelta(days=7),
-            "1mo": timedelta(days=30),
-            "3mo": timedelta(days=90),
-            "6mo": timedelta(days=180),
-            "1y": timedelta(days=365),
-            "2y": timedelta(days=730),
-            "3y": timedelta(days=1095),
-            "5y": timedelta(days=1825),
-            "max": timedelta(days=3650),
-        }
-        start_date = (
-            datetime.now() - period_map.get(period, timedelta(days=30))
-        ).strftime("%Y-%m-%d")
-        hist = obb.equity.price.historical(
-            symbol=ticker, start_date=start_date, provider="yfinance"
-        ).to_df()
-
-        if not hist.empty:
-            hist.rename(
-                columns={
-                    "open": "Open",
-                    "high": "High",
-                    "low": "Low",
-                    "close": "Close",
-                    "volume": "Volume",
-                },
-                inplace=True,
-            )
-            return hist
-    except Exception as exc:
-        logger.warning(f"Failed to get historical data for {ticker}: {exc}")
-    return pd.DataFrame()
+    stock = yf.Ticker(ticker)
+    return _normalize_history(_get_history(stock, period))
 
 
-def _extract_openbb_profile(
+def _extract_yfinance_profile(
     ticker: str, info: StockInfo, *, include_summary: bool = True
 ) -> None:
-    if obb is None:
-        logger.warning("OpenBB is not installed. Skipping OpenBB profile fetch.")
-        return
+    stock = yf.Ticker(ticker)
+    profile = _get_info(stock)
+    fast_info = _get_fast_info(stock)
 
-    try:
-        profile_obj = obb.equity.profile(symbol=ticker, provider="yfinance")
-        if profile_obj:
-            profile = profile_obj.to_dict()
-            info["name"] = _first(profile, "name", ticker)
-            info["sector"] = _first(profile, "sector", "N/A")
-            info["industry"] = _first(profile, "industry_category", "N/A")
-            if include_summary:
-                info["summary"] = _first(profile, "long_description", NO_SUMMARY_TEXT)
-            info["website"] = _first(profile, "company_url", "")
-            info["country"] = _first(profile, "hq_country", "")
-            info["employees"] = _first(profile, "employees", 0)
+    if profile:
+        info["name"] = _first(profile, "longName", ticker)
+        if info["name"] == ticker:
+            info["name"] = _first(profile, "shortName", ticker)
+        info["sector"] = _first(profile, "sector", "N/A")
+        info["industry"] = _first(profile, "industry", "N/A")
+        if include_summary:
+            info["summary"] = _first(profile, "longBusinessSummary", NO_SUMMARY_TEXT)
+        info["website"] = _first(profile, "website", "")
+        info["logo"] = _first(profile, "logo_url", "")
+        info["city"] = _first(profile, "city", "")
+        info["state"] = _first(profile, "state", "")
+        info["country"] = _first(profile, "country", "")
+        info["employees"] = _first(profile, "fullTimeEmployees", 0)
+        info["exchange"] = _first(profile, "exchange", "")
+        _merge_yfinance_metrics(info, profile, fast_info)
 
-            try:
-                metrics_obj = obb.equity.fundamental.metrics(
-                    symbol=ticker, provider="yfinance"
-                )
-                if metrics_obj:
-                    _merge_openbb_metrics(info, metrics_obj.to_dict())
-            except Exception as exc:
-                logger.debug(f"Metrics fetch failed for {ticker}: {exc}")
-
-        q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
-        if q:
-            info["current_price"] = _first(q, "last_price")
-            info["fifty_two_week_high"] = _first(q, "year_high")
-            info["fifty_two_week_low"] = _first(q, "year_low")
-    except Exception as exc:
-        logger.warning(f"OpenBB profile fetch failed for {ticker}: {exc}")
+    q = _build_yfinance_quote(ticker)
+    if q:
+        info["current_price"] = q.get("c")
+        info["fifty_two_week_high"] = _pick(
+            fast_info, "yearHigh", "year_high", default=info["fifty_two_week_high"]
+        )
+        info["fifty_two_week_low"] = _pick(
+            fast_info, "yearLow", "year_low", default=info["fifty_two_week_low"]
+        )
 
 
-def _merge_openbb_metrics(info: StockInfo, metrics: dict[str, Any]) -> None:
-    info["market_cap"] = _first(metrics, "market_cap")
-    info["revenueGrowth"] = _percent(_first(metrics, "revenue_growth"))
-    info["earningsGrowth"] = _percent(_first(metrics, "earnings_growth"))
-    info["grossMargins"] = _percent(_first(metrics, "gross_margin"))
-    info["operatingMargins"] = _percent(_first(metrics, "operating_margin"))
-    info["currentRatio"] = _first(metrics, "current_ratio")
-    info["debtToEquity"] = _first(metrics, "debt_to_equity")
-    info["returnOnAssets"] = _percent(_first(metrics, "return_on_assets"))
-    info["returnOnEquity"] = _percent(_first(metrics, "return_on_equity"))
-    info["pe_ratio"] = _first(metrics, "pe_ratio")
-    info["priceToBook"] = _first(metrics, "price_to_book")
+def _merge_yfinance_metrics(
+    info: StockInfo, metrics: dict[str, Any], fast_info: Any | None = None
+) -> None:
+    info["market_cap"] = _pick(metrics, "marketCap")
+    if info["market_cap"] is None and fast_info is not None:
+        info["market_cap"] = _pick(fast_info, "marketCap", "market_cap")
+    info["revenueGrowth"] = _percent(_first(metrics, "revenueGrowth"))
+    info["earningsGrowth"] = _percent(_first(metrics, "earningsGrowth"))
+    info["grossMargins"] = _percent(_first(metrics, "grossMargins"))
+    info["operatingMargins"] = _percent(_first(metrics, "operatingMargins"))
+    info["currentRatio"] = _first(metrics, "currentRatio")
+    info["debtToEquity"] = _first(metrics, "debtToEquity")
+    info["returnOnAssets"] = _percent(_first(metrics, "returnOnAssets"))
+    info["returnOnEquity"] = _percent(_first(metrics, "returnOnEquity"))
+    info["pegRatio"] = _first(metrics, "pegRatio")
+    info["pe_ratio"] = _first(metrics, "trailingPE")
+    info["priceToBook"] = _first(metrics, "priceToBook")
     info["beta"] = _first(metrics, "beta")
-    info["forward_pe"] = _first(metrics, "forward_pe")
+    info["forward_pe"] = _first(metrics, "forwardPE")
+    info["fifty_two_week_high"] = _first(metrics, "fiftyTwoWeekHigh")
+    info["fifty_two_week_low"] = _first(metrics, "fiftyTwoWeekLow")
+    info["target_price"] = _first(metrics, "targetMeanPrice")
+    info["share_outstanding"] = _first(metrics, "sharesOutstanding")
 
 
 @ttl_cache(ttl=CACHE_TTL_DAILY)
@@ -186,29 +298,19 @@ def get_valuation_metrics(ticker: str) -> dict[str, Any]:
         "forward_pe": None,
         "pe_ratio": None,
     }
-    if obb is None:
-        logger.warning("OpenBB is not installed. Skipping valuation metrics fetch.")
-        return metrics
+    stock = yf.Ticker(ticker)
+    profile = _get_info(stock)
+    fast_info = _get_fast_info(stock)
 
-    try:
-        metrics_obj = obb.equity.fundamental.metrics(symbol=ticker, provider="yfinance")
-        if metrics_obj:
-            raw = metrics_obj.to_dict()
-            metrics["market_cap"] = _first(raw, "market_cap")
-            metrics["forward_pe"] = _first(raw, "forward_pe")
-            metrics["pe_ratio"] = _first(raw, "pe_ratio")
-    except Exception as exc:
-        logger.debug(f"Valuation metrics fetch failed for {ticker}: {exc}")
+    metrics["market_cap"] = _pick(profile, "marketCap")
+    if metrics["market_cap"] is None:
+        metrics["market_cap"] = _pick(fast_info, "marketCap", "market_cap")
+    metrics["forward_pe"] = _first(profile, "forwardPE")
+    metrics["pe_ratio"] = _first(profile, "trailingPE")
 
-    try:
-        q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
-        for key in ["last_price", "prev_close", "close", "open"]:
-            value = _first(q, key)
-            if value is not None:
-                metrics["current_price"] = value
-                break
-    except Exception as exc:
-        logger.debug(f"Valuation quote fetch failed for {ticker}: {exc}")
+    q = _build_yfinance_quote(ticker)
+    if q:
+        metrics["current_price"] = q.get("c")
 
     return metrics
 
@@ -253,7 +355,7 @@ def get_stock_info(
         "share_outstanding": None,
     }
 
-    _extract_openbb_profile(ticker, info, include_summary=include_summary)
+    _extract_yfinance_profile(ticker, info, include_summary=include_summary)
     is_jp = is_japanese_stock(ticker)
 
     if is_jp and jquants_client.is_configured():
@@ -305,27 +407,8 @@ def get_stock_info(
 
 @ttl_cache(ttl=CACHE_TTL_SHORT)
 def get_quote(ticker: str) -> dict | None:
-    if obb is None:
-        logger.warning("OpenBB is not installed. Quote fetch skipped.")
-        return None
-
     try:
-        q = obb.equity.price.quote(symbol=ticker, provider="yfinance").to_dict()
-        if q:
-            last = None
-            for key in ["last_price", "prev_close", "close", "open"]:
-                value = _first(q, key)
-                if value is not None:
-                    last = value
-                    break
-
-            return {
-                "c": last or 0,
-                "h": _first(q, "high", 0),
-                "l": _first(q, "low", 0),
-                "o": _first(q, "open", 0),
-                "pc": _first(q, "prev_close", 0),
-            }
+        return _build_yfinance_quote(ticker)
     except Exception as exc:
         logger.warning(f"Quote fetch error for {ticker}: {exc}")
     return None

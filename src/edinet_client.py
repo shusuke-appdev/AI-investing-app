@@ -4,11 +4,7 @@ EDINET DB API Client
 """
 
 import os
-
-try:
-    import edinet_tools
-except ImportError:
-    edinet_tools = None
+from typing import Any
 
 from src.cache import ttl_cache
 from src.constants import CACHE_TTL_DAILY
@@ -16,18 +12,38 @@ from src.log_config import get_logger
 from src.settings_storage import get_edinet_api_key
 
 logger = get_logger(__name__)
+edinet_tools: Any | None = None
+_import_attempted = False
+
+
+def _get_edinet_tools() -> Any | None:
+    """Import edinet_tools only when EDINET is actually configured."""
+
+    global edinet_tools, _import_attempted
+
+    if _import_attempted:
+        return edinet_tools
+
+    _import_attempted = True
+    try:
+        import edinet_tools as loaded_edinet_tools
+    except ImportError:
+        edinet_tools = None
+    else:
+        edinet_tools = loaded_edinet_tools
+    return edinet_tools
 
 
 def is_configured() -> bool:
     """EDINET API キーが設定されているかどうかを返す"""
-    if edinet_tools is None:
+    api_key = get_edinet_api_key()
+    if not api_key:
+        return False
+    if _get_edinet_tools() is None:
         return False
 
-    api_key = get_edinet_api_key()
-    if api_key:
-        os.environ["EDINET_API_KEY"] = api_key
-        return True
-    return False
+    os.environ["EDINET_API_KEY"] = api_key
+    return True
 
 
 @ttl_cache(ttl=CACHE_TTL_DAILY)

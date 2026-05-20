@@ -52,6 +52,4 @@ testpaths = ["tests"]
 pythonpath = ["."]
 python_files = "test_*.py"
 cache_dir = ".states/pytest_cache"
-filterwarnings = [
-    "ignore::DeprecationWarning:openbb.*",
-]
+addopts = "--basetemp=tmp"

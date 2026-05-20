@@ -31,7 +31,7 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 
 - UI: Reflex
 - 旧UI: Streamlit
-- データ取得: OpenBB、yfinance、Finnhub、J-Quants、EDINET、Google News
+- データ取得: yfinance、Finnhub、J-Quants、EDINET、Google News
 - AI: Google Gemini API
 - 保存先: ローカルJSON、Google Apps Script、Supabase
 - グラフ・数値処理: pandas、numpy、scipy、plotly、statsmodels、arch

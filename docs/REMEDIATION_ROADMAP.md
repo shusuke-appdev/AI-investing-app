@@ -36,7 +36,7 @@
 - Market / Stock / Portfolio / Knowledge の入出力モデルを定義
 - `DataProvider` の戻り値に `source`、`fetched_at`、`is_stale`、`error` を追加する設計を導入
 - 外部APIを呼ばない単体テストを増やす
-- yfinance / OpenBB / Finnhub / J-Quants / EDINET のレスポンス差異を fixture 化
+- yfinance / Finnhub / J-Quants / EDINET のレスポンス差異を fixture 化
 - UIに「取得失敗」「推定値」「キャッシュ値」を表示する最小ルールを定義
 
 完了条件:
@@ -65,7 +65,7 @@
 実施内容:
 - `src/network.py` にタイムアウト、リトライ、レート制限、User-Agent、キャッシュ方針を集約
 - `src/cache.py` のキー設計とTTLをデータ種別ごとに明示
-- yfinance / OpenBB / Finnhub のフォールバック順を仕様化
+- yfinance / Finnhub のフォールバック順を仕様化
 - APIごとのエラー型を定義し、握りつぶしを減らす
 - オプション分析は取得と計算を分け、取得失敗時のUI表示を明確化
 

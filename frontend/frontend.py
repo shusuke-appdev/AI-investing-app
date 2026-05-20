@@ -10,14 +10,7 @@ from frontend.state.market_state import MarketState
 from frontend.state.portfolio_state import PortfolioState
 from frontend.state.theme_state import ThemeState
 
-app = rx.App(
-    theme=rx.theme(
-        appearance="light",
-        has_background=True,
-        radius="large",
-        accent_color="blue",
-    )
-)
+app = rx.App()
 app.add_page(
     index,
     route="/",

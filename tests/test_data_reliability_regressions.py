@@ -11,7 +11,7 @@ def test_get_stock_info_can_skip_gemini_translation(monkeypatch):
         info["sector"] = "Technology"
         info["summary"] = "English business summary."
 
-    monkeypatch.setattr(stock_data_provider, "_extract_openbb_profile", fake_extract)
+    monkeypatch.setattr(stock_data_provider, "_extract_yfinance_profile", fake_extract)
     monkeypatch.setattr(stock_data_provider, "is_japanese_stock", lambda ticker: False)
     monkeypatch.setattr(
         stock_data_provider.jquants_client, "is_configured", lambda: False

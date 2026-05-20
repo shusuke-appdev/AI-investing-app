@@ -70,7 +70,7 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 ## 運用上の注意
 
 - 外部APIの制限により、オプション分析とニュース集約は一時的に空になることがあります
-- `yfinance` と OpenBB のレスポンススキーマは変更されることがあり、列名の変化に備えたテストが必要です
+- `yfinance` など外部データソースのレスポンススキーマは変更されることがあり、列名の変化に備えたテストが必要です
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
 - GitHub Actions の Hugging Face Spaces 同期は `main` / `master` への push で force push します。運用前に対象Spaceとブランチ保護を確認してください

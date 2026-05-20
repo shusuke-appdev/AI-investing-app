@@ -73,11 +73,12 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
 
     yf_targets = {**config.get("treasuries", {}), **config.get("forex", {})}
 
-    # 生指数ティッカー（^始まり）はFinnhubで取得不可 → yfinanceに回す
-    raw_index_tickers = {k: v for k, v in finnhub_targets.items() if v.startswith("^")}
-    yf_targets.update(raw_index_tickers)
+    yfinance_only_targets = {
+        k: v for k, v in finnhub_targets.items() if _uses_yfinance_symbol(v)
+    }
+    yf_targets.update(yfinance_only_targets)
     finnhub_targets = {
-        k: v for k, v in finnhub_targets.items() if not v.startswith("^")
+        k: v for k, v in finnhub_targets.items() if not _uses_yfinance_symbol(v)
     }
 
     if not is_configured():
@@ -172,3 +173,14 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
             logger.error(f"[MarketIndexProvider] Batch download execution failed: {e}")
 
     return result
+
+
+def _uses_yfinance_symbol(ticker: str) -> bool:
+    """Return True for Yahoo-specific symbols that Finnhub cannot quote directly."""
+
+    return (
+        ticker.startswith("^")
+        or ticker.endswith("=F")
+        or ticker.endswith("=X")
+        or ticker.endswith("-USD")
+    )

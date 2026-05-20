@@ -1,26 +1,71 @@
 from unittest.mock import patch
 
+import pandas as pd
+
 from src.data_provider import DataProvider
+
+
+class FakeYFinanceTicker:
+    def __init__(self, ticker):
+        self.ticker = ticker
+        self.fast_info = {
+            "lastPrice": 145.0,
+            "dayHigh": 150.0,
+            "dayLow": 140.0,
+            "open": 142.0,
+            "previousClose": 141.0,
+            "marketCap": 1_000_000_000,
+            "yearHigh": 180.0,
+            "yearLow": 100.0,
+        }
+        self.info = {
+            "longName": "Test Inc.",
+            "sector": "Technology",
+            "industry": "Software",
+            "longBusinessSummary": "English business summary.",
+            "website": "https://example.com",
+            "country": "US",
+            "fullTimeEmployees": 1234,
+            "marketCap": 1_000_000_000,
+            "revenueGrowth": 0.12,
+            "earningsGrowth": 0.08,
+            "grossMargins": 0.55,
+            "operatingMargins": 0.25,
+            "currentRatio": 1.5,
+            "debtToEquity": 20.0,
+            "returnOnAssets": 0.1,
+            "returnOnEquity": 0.2,
+            "trailingPE": 20.5,
+            "forwardPE": 18.0,
+            "priceToBook": 5.0,
+            "beta": 1.1,
+            "targetMeanPrice": 175.0,
+            "sharesOutstanding": 10_000_000,
+        }
+
+    def history(self, period):
+        return pd.DataFrame(
+            {
+                "open": [140.0, 142.0],
+                "high": [146.0, 150.0],
+                "low": [138.0, 140.0],
+                "close": [141.0, 145.0],
+                "volume": [1_000_000, 1_100_000],
+            },
+            index=pd.date_range("2026-01-01", periods=2),
+        )
 
 
 class TestDataProvider:
     @patch("src.stock_data_provider.is_japanese_stock", return_value=False)
-    @patch("src.stock_data_provider._extract_openbb_profile")
-    def test_get_stock_info_structure(self, mock_extract, mock_is_jp):
+    def test_get_stock_info_structure(self, mock_is_jp, monkeypatch):
         """Test if get_stock_info returns correct StockInfo TypedDict structure."""
+        from src import stock_data_provider
 
-        # Mock responses
-        def side_effect_extract(ticker, info, **kwargs):
-            info["name"] = "Test Inc."
-            info["ticker"] = "TEST"
-            info["market_cap"] = 1000 * 1e6
-            info["pe_ratio"] = 20.5
-            info["current_price"] = 145.0
-            info["beta"] = 1.1
+        stock_data_provider.get_stock_info.clear_cache()
+        monkeypatch.setattr(stock_data_provider.yf, "Ticker", FakeYFinanceTicker)
 
-        mock_extract.side_effect = side_effect_extract
-
-        info = DataProvider.get_stock_info("TEST")
+        info = DataProvider.get_stock_info("TEST", translate_summary=False)
 
         assert info["ticker"] == "TEST"
         assert info["name"] == "Test Inc."
@@ -28,6 +73,41 @@ class TestDataProvider:
         assert info["pe_ratio"] == 20.5
         assert info["current_price"] == 145.0
         assert "beta" in info  # Check key existence even if None
+
+    @patch("src.stock_data_provider.is_japanese_stock", return_value=False)
+    def test_yfinance_price_history_quote_and_valuation(self, mock_is_jp, monkeypatch):
+        from src import stock_data_provider
+
+        stock_data_provider.get_current_price.clear_cache()
+        stock_data_provider.get_historical_data.clear_cache()
+        stock_data_provider.get_quote.clear_cache()
+        stock_data_provider.get_valuation_metrics.clear_cache()
+        monkeypatch.setattr(stock_data_provider.yf, "Ticker", FakeYFinanceTicker)
+
+        assert DataProvider.get_current_price("TEST") == 145.0
+
+        history = DataProvider.get_historical_data("TEST", "1mo")
+        assert list(history.columns[:5]) == ["Open", "High", "Low", "Close", "Volume"]
+        assert history["Close"].iloc[-1] == 145.0
+
+        quote = DataProvider.get_quote("TEST")
+        assert quote == {
+            "c": 145.0,
+            "d": 4.0,
+            "dp": 2.8368794326241136,
+            "h": 150.0,
+            "l": 140.0,
+            "o": 142.0,
+            "pc": 141.0,
+        }
+
+        metrics = stock_data_provider.get_valuation_metrics("TEST")
+        assert metrics == {
+            "current_price": 145.0,
+            "market_cap": 1_000_000_000,
+            "forward_pe": 18.0,
+            "pe_ratio": 20.5,
+        }
 
     @patch("src.news_provider._finnhub_get_company_news")
     @patch("src.news_provider.is_configured", return_value=True)

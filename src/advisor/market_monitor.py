@@ -18,7 +18,7 @@ def track_distribution_days(df: pd.DataFrame) -> dict:
     if df is None or len(df) < 26:
         return {"count": 0, "status": "データ不足", "level": "normal"}
 
-    # カラム名の正規化（OpenBB由来の小文字カラム対応）
+    # カラム名の正規化（外部データソース由来の小文字カラム対応）
     col_map = {"close": "Close", "volume": "Volume"}
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     if "Close" not in df.columns or "Volume" not in df.columns:
