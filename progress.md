@@ -1,4 +1,4 @@
-# AI投資アプリ - 進捗メモ
+﻿# AI投資アプリ - 進捗メモ
 
 ## 最終セッション: 2026-05-13 (市場データ取得の高速化)
 - [x] UIフリーズの解消: `market_state.py` 内のバックエンド処理の遅延インポートをモジュールレベルへ移動し、イベントループのブロックを防止
@@ -106,3 +106,16 @@ streamlit run legacy_streamlit/app.py
 - Covered remaining direct yfinance paths with the repo-local `.states/yfinance_cache` initialization and repaired local Reflex Bun/Node validation.
 - Hardened option and market-monitor UI models with server-formatted option prices and enum-like yield-spread levels instead of localized string matching.
 - Validation: compileall passed, ruff check passed, ruff format --check passed, pytest passed with 61 tests; live US smoke returned 30 indices, 3 option rows, monitor data, AAPL info without Gemini translation, Finnhub invalid status for news, and no context errors; Reflex frontend export passed after using the bundled Node path.
+
+# Session update: 2026-05-20 plugin initialization / test environment fix
+- **Plugin Operation Errorの修正**: `google-antigravity-sdk` プラグイン初期化時のパス未検出エラーに対応するため、不足していた `C:\Users\shusk\.gemini\config\plugins\google-antigravity-sdk\examples\getting_started` および `references` ディレクトリを手動作成。
+- **pytest実行環境の堅牢化**: 一時フォルダへのアクセス制限 (`PermissionError`) を回避するため、`--basetemp=tmp` を追加。
+- **動作検証**: pytest 61件がすべて正常にパスすることを確認。
+
+# Session update: 2026-05-20 startup warning cleanup
+- Removed the fragile OpenBB runtime dependency from stock data paths; `stock_data_provider.py` now uses direct yfinance for quotes, history, profile, and valuation metrics.
+- Routed Yahoo-only market symbols such as raw indices, futures, crypto pairs, and FX directly to yfinance instead of probing Finnhub first.
+- Moved Reflex theme configuration from deprecated `App(theme=...)` to `RadixThemesPlugin`, lazy-loaded EDINET tools, and disabled app logger propagation to reduce duplicate startup warnings.
+- Removed stale OpenBB artifacts (`pip_dry_run.txt`, `scripts/test_openbb.py`) and updated docs/requirements/tests to match the yfinance/Finnhub runtime contract.
+- Validation: ruff check passed, ruff format check passed, compileall passed, pytest passed with 65 tests, Reflex frontend export passed, and startup import smoke passed.
+- Release: pushed commit `9fe90d3 Clean startup warnings` to `origin/main`.
