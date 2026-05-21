@@ -48,8 +48,16 @@ class StockState(rx.State):
     ticker: str = ""
     is_fetching: bool = False
     error_msg: str = ""
+    profile_warning: str = ""
 
     info: dict[str, Any] = {}
+    display_name: str = ""
+    display_exchange: str = ""
+    display_sector: str = ""
+    display_market_cap: str = "N/A"
+    display_pe_ratio: str = "N/A"
+    display_dividend_yield: str = "N/A"
+    display_summary: str = "概要情報がありません。"
     chart_data: list[dict[str, Any]] = []
     news: list[dict[str, Any]] = []
     news_source_status: str = ""
@@ -76,6 +84,7 @@ class StockState(rx.State):
 
         self.is_fetching = True
         self.error_msg = ""
+        self.profile_warning = ""
         yield
 
         try:
@@ -83,6 +92,14 @@ class StockState(rx.State):
                 build_stock_dashboard_context, self.ticker
             )
             self.info = plain_state_value(context.info)
+            display_info = plain_state_value(context.display_info)
+            self.display_name = display_info.get("name", self.ticker)
+            self.display_exchange = display_info.get("exchange", "")
+            self.display_sector = display_info.get("sector", "")
+            self.display_market_cap = display_info.get("market_cap", "N/A")
+            self.display_pe_ratio = display_info.get("pe_ratio", "N/A")
+            self.display_dividend_yield = display_info.get("dividend_yield", "N/A")
+            self.display_summary = display_info.get("summary", "概要情報がありません。")
             self.chart_data = plain_state_value(context.chart_data)
             self.news = plain_state_value(context.news)
             self.news_source_status = context.news_source_status
@@ -92,11 +109,20 @@ class StockState(rx.State):
             self.probabilistic_signal = plain_state_value(context.probabilistic_signal)
             self.stock_signal_context = plain_state_value(context.stock_signal_context)
             self.data_status = plain_state_value(context.data_status)
+            self.profile_warning = context.profile_warning
             if context.error_message:
                 self.error_msg = context.error_message
         except Exception as exc:
             self.error_msg = f"データの取得に失敗しました: {exc}"
+            self.profile_warning = ""
             self.info = {}
+            self.display_name = ""
+            self.display_exchange = ""
+            self.display_sector = ""
+            self.display_market_cap = "N/A"
+            self.display_pe_ratio = "N/A"
+            self.display_dividend_yield = "N/A"
+            self.display_summary = "概要情報がありません。"
             self.chart_data = []
             self.news = []
             self.news_source_status = ""

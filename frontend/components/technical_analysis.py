@@ -8,7 +8,7 @@ def _render_score_row() -> rx.Component:
     tech = StockState.technical_data
 
     overall_score = tech["overall_score"].to(int)
-    overall_signal = tech["overall_signal"].to_string()
+    overall_signal = tech["overall_signal"].to(str)
 
     # 総合スコアのバッジ表示用
     badge_color = rx.cond(
@@ -43,20 +43,20 @@ def _render_score_row() -> rx.Component:
         ),
         rx.vstack(
             rx.text("MACD", size="1", color="gray", weight="bold"),
-            rx.text(tech["macd_signal"].to_string(), weight="medium"),
+            rx.text(tech["macd_signal"].to(str), weight="medium"),
             spacing="1",
         ),
         rx.vstack(
             rx.text("トレンド", size="1", color="gray", weight="bold"),
-            rx.text(tech["ma_trend"].to_string(), weight="medium"),
+            rx.text(tech["ma_trend"].to(str), weight="medium"),
             spacing="1",
         ),
         rx.vstack(
             rx.text("逆張り", size="1", color="gray", weight="bold"),
             rx.cond(
-                tech["contrarian_signal"].to_string() == "買い検討ゾーン",
+                tech["contrarian_signal"].to(str) == "買い検討ゾーン",
                 rx.text("🎯 買いゾーン内", weight="bold", color=rx.color("green", 11)),
-                rx.text("📍 ", tech["contrarian_signal"].to_string(), weight="medium"),
+                rx.text("📍 ", tech["contrarian_signal"].to(str), weight="medium"),
             ),
             spacing="1",
         ),
@@ -84,7 +84,7 @@ def _render_detail_section() -> rx.Component:
                         rx.text(
                             "MA乖離: ", tech["ma_deviation"].to(float), "%", size="2"
                         ),
-                        rx.text("BB: ", tech["bb_position"].to_string(), size="2"),
+                        rx.text("BB: ", tech["bb_position"].to(str), size="2"),
                         align_items="start",
                     ),
                     rx.vstack(
@@ -125,15 +125,13 @@ def _render_detail_section() -> rx.Component:
                 ),
                 rx.grid(
                     rx.vstack(
-                        rx.text(
-                            "一目: ", tech["ichimoku_signal"].to_string(), size="2"
-                        ),
+                        rx.text("一目: ", tech["ichimoku_signal"].to(str), size="2"),
                         align_items="start",
                     ),
                     rx.vstack(
                         rx.text(
                             "動的RSI: ",
-                            tech["rsi_dynamic_signal"].to_string(),
+                            tech["rsi_dynamic_signal"].to(str),
                             size="2",
                         ),
                         align_items="start",
@@ -141,7 +139,7 @@ def _render_detail_section() -> rx.Component:
                     rx.vstack(
                         rx.text(
                             "BBスクイズ: ",
-                            tech["bb_squeeze_signal"].to_string(),
+                            tech["bb_squeeze_signal"].to(str),
                             size="2",
                         ),
                         align_items="start",

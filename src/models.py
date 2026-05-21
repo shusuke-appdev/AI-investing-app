@@ -28,6 +28,7 @@ class StockInfo(TypedDict, total=False):
     current_price: float | None
     pe_ratio: float | None
     forward_pe: float | None
+    dividend_yield: float | None
     beta: float | None
 
     revenueGrowth: float | None

@@ -56,6 +56,29 @@ class FakeYFinanceTicker:
         )
 
 
+class FastInfoOnlyTicker:
+    def __init__(self, ticker):
+        self.ticker = ticker
+        self.fast_info = {
+            "lastPrice": 145.0,
+            "previousClose": 141.0,
+            "marketCap": 1_000_000_000,
+        }
+        self.info = {}
+
+    def history(self, period):
+        return pd.DataFrame(
+            {
+                "open": [140.0, 142.0],
+                "high": [146.0, 150.0],
+                "low": [138.0, 140.0],
+                "close": [141.0, 145.0],
+                "volume": [1_000_000, 1_100_000],
+            },
+            index=pd.date_range("2026-01-01", periods=2),
+        )
+
+
 class TestDataProvider:
     @patch("src.stock_data_provider.is_japanese_stock", return_value=False)
     def test_get_stock_info_structure(self, mock_is_jp, monkeypatch):
@@ -73,6 +96,21 @@ class TestDataProvider:
         assert info["pe_ratio"] == 20.5
         assert info["current_price"] == 145.0
         assert "beta" in info  # Check key existence even if None
+
+    @patch("src.stock_data_provider.is_japanese_stock", return_value=False)
+    def test_get_stock_info_uses_fast_info_when_profile_is_unavailable(
+        self, mock_is_jp, monkeypatch
+    ):
+        from src import stock_data_provider
+
+        stock_data_provider.get_stock_info.clear_cache()
+        monkeypatch.setattr(stock_data_provider.yf, "Ticker", FastInfoOnlyTicker)
+
+        info = DataProvider.get_stock_info("TEST", translate_summary=False)
+
+        assert info["name"] == "TEST"
+        assert info["market_cap"] == 1_000_000_000
+        assert info["current_price"] == 145.0
 
     @patch("src.stock_data_provider.is_japanese_stock", return_value=False)
     def test_yfinance_price_history_quote_and_valuation(self, mock_is_jp, monkeypatch):
@@ -107,6 +145,7 @@ class TestDataProvider:
             "market_cap": 1_000_000_000,
             "forward_pe": 18.0,
             "pe_ratio": 20.5,
+            "dividend_yield": None,
         }
 
     @patch("src.news_provider._finnhub_get_company_news")

@@ -250,6 +250,8 @@ def _extract_yfinance_profile(
         info["country"] = _first(profile, "country", "")
         info["employees"] = _first(profile, "fullTimeEmployees", 0)
         info["exchange"] = _first(profile, "exchange", "")
+
+    if profile or fast_info:
         _merge_yfinance_metrics(info, profile, fast_info)
 
     q = _build_yfinance_quote(ticker)
@@ -279,9 +281,12 @@ def _merge_yfinance_metrics(
     info["returnOnEquity"] = _percent(_first(metrics, "returnOnEquity"))
     info["pegRatio"] = _first(metrics, "pegRatio")
     info["pe_ratio"] = _first(metrics, "trailingPE")
+    if info["pe_ratio"] is None and fast_info is not None:
+        info["pe_ratio"] = _pick(fast_info, "trailingPE", "trailing_pe")
     info["priceToBook"] = _first(metrics, "priceToBook")
     info["beta"] = _first(metrics, "beta")
     info["forward_pe"] = _first(metrics, "forwardPE")
+    info["dividend_yield"] = _percent(_first(metrics, "dividendYield"))
     info["fifty_two_week_high"] = _first(metrics, "fiftyTwoWeekHigh")
     info["fifty_two_week_low"] = _first(metrics, "fiftyTwoWeekLow")
     info["target_price"] = _first(metrics, "targetMeanPrice")
@@ -296,6 +301,7 @@ def get_valuation_metrics(ticker: str) -> dict[str, Any]:
         "current_price": None,
         "market_cap": None,
         "forward_pe": None,
+        "dividend_yield": None,
         "pe_ratio": None,
     }
     stock = yf.Ticker(ticker)

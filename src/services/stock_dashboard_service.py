@@ -25,6 +25,7 @@ class StockDashboardContext:
     """Prepared individual-stock dashboard payload."""
 
     info: dict[str, Any] = field(default_factory=dict)
+    display_info: dict[str, str] = field(default_factory=dict)
     chart_data: list[dict[str, Any]] = field(default_factory=list)
     news: list[dict[str, Any]] = field(default_factory=list)
     news_source_status: str = ""
@@ -34,6 +35,7 @@ class StockDashboardContext:
     probabilistic_signal: dict[str, Any] = field(default_factory=dict)
     stock_signal_context: dict[str, Any] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
+    profile_warning: str = ""
     error_message: str = ""
 
 
@@ -92,9 +94,11 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         data_status=data_status,
     ).to_dict()
 
+    chart_data = _history_to_chart_data(history_df)
     return StockDashboardContext(
         info=info_dict,
-        chart_data=_history_to_chart_data(history_df),
+        display_info=_build_display_info(normalized_ticker, info_dict),
+        chart_data=chart_data,
         news=[_normalize_news_item(dict(item)) for item in news_items],
         news_source_status=news_source_status,
         news_error_reason=news_error_reason,
@@ -103,7 +107,8 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         probabilistic_signal=probabilistic_dict,
         stock_signal_context=stock_signal_context,
         data_status=data_status,
-        error_message=_profile_error_message(info_dict),
+        profile_warning=_profile_warning_message(info_dict),
+        error_message=_dashboard_error_message(info_dict, history_df),
     )
 
 
@@ -182,6 +187,76 @@ def _normalize_news_item(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _build_display_info(ticker: str, info: dict[str, Any]) -> dict[str, str]:
+    name = _display_text(info.get("name"), ticker)
+    if name == "N/A":
+        name = ticker
+    return {
+        "name": name,
+        "exchange": _display_text(info.get("exchange")),
+        "sector": _display_text(info.get("sector")),
+        "market_cap": _format_market_cap(info.get("market_cap")),
+        "pe_ratio": _format_number(info.get("pe_ratio"), decimals=2),
+        "dividend_yield": _format_percent(info.get("dividend_yield")),
+        "summary": _display_summary(info.get("summary")),
+    }
+
+
+def _display_text(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    text = str(value).strip()
+    if not text or text.lower() in {"none", "null", "nan"}:
+        return default
+    return text
+
+
+def _display_summary(value: Any) -> str:
+    text = _display_text(value)
+    if not text or text == "N/A":
+        return "概要情報がありません。"
+    return text
+
+
+def _format_market_cap(value: Any) -> str:
+    number = _coerce_float(value)
+    if number is None:
+        return "N/A"
+    if abs(number) >= 1_000_000_000_000:
+        return f"${number / 1_000_000_000_000:.2f}T"
+    if abs(number) >= 1_000_000_000:
+        return f"${number / 1_000_000_000:.2f}B"
+    if abs(number) >= 1_000_000:
+        return f"${number / 1_000_000:.2f}M"
+    return f"${number:,.0f}"
+
+
+def _format_number(value: Any, *, decimals: int = 2) -> str:
+    number = _coerce_float(value)
+    if number is None:
+        return "N/A"
+    return f"{number:,.{decimals}f}"
+
+
+def _format_percent(value: Any) -> str:
+    number = _coerce_float(value)
+    if number is None:
+        return "N/A"
+    return f"{number:.2f}%"
+
+
+def _coerce_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(number):
+        return None
+    return number
+
+
 def _build_data_status(
     info: dict[str, Any],
     history_df: pd.DataFrame | None,
@@ -194,8 +269,8 @@ def _build_data_status(
         DataResult(
             name="stock_profile",
             source="market_data",
-            is_partial=not bool(info) or _is_missing_profile(info),
-            error=_profile_error_message(info),
+            is_partial=not bool(info) or _is_limited_profile(info),
+            error=_profile_warning_message(info),
         ),
         DataResult(
             name="price_history",
@@ -226,11 +301,30 @@ def _build_data_status(
     ]
 
 
-def _is_missing_profile(info: dict[str, Any]) -> bool:
-    return info.get("summary") == "N/A" and info.get("sector") == "N/A"
+def _is_limited_profile(info: dict[str, Any]) -> bool:
+    if not info:
+        return True
+    ticker = _display_text(info.get("ticker"))
+    name = _display_text(info.get("name"))
+    has_named_profile = bool(name and name != ticker and name != "N/A")
+    has_business_text = any(
+        _display_text(info.get(key)) not in {"", "N/A"}
+        for key in ("summary", "sector", "industry")
+    )
+    return not (has_named_profile or has_business_text)
 
 
-def _profile_error_message(info: dict[str, Any]) -> str:
-    if not info or _is_missing_profile(info):
-        return "企業情報を取得できませんでした。価格データやプロバイダー設定を確認してください。"
+def _profile_warning_message(info: dict[str, Any]) -> str:
+    if _is_limited_profile(info):
+        return "企業概要の一部を取得できませんでした。価格・テクニカル分析は取得済みデータで表示しています。"
+    return ""
+
+
+def _dashboard_error_message(
+    info: dict[str, Any],
+    history_df: pd.DataFrame | None,
+) -> str:
+    has_history = history_df is not None and not history_df.empty
+    if not info and not has_history:
+        return "銘柄データを取得できませんでした。ティッカーとデータプロバイダー設定を確認してください。"
     return ""

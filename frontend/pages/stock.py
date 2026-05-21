@@ -7,19 +7,6 @@ from frontend.state.stock_state import StockState
 from frontend.template import template
 
 
-def _info_text(primary_key: str, fallback_key: str = ""):
-    fallback_key = fallback_key or primary_key
-    return rx.cond(
-        StockState.info.contains(primary_key),
-        StockState.info[primary_key].to_string(),
-        rx.cond(
-            StockState.info.contains(fallback_key),
-            StockState.info[fallback_key].to_string(),
-            "N/A",
-        ),
-    )
-
-
 @template
 def stock_page() -> rx.Component:
     """個別銘柄分析画面 (Stock)"""
@@ -65,6 +52,16 @@ def stock_page() -> rx.Component:
                 width="100%",
             ),
         ),
+        rx.cond(
+            StockState.profile_warning != "",
+            rx.callout(
+                StockState.profile_warning,
+                icon="info",
+                color_scheme="amber",
+                margin_bottom="1rem",
+                width="100%",
+            ),
+        ),
         # ローディングスピナー（全体）
         rx.cond(
             StockState.is_fetching,
@@ -77,26 +74,24 @@ def stock_page() -> rx.Component:
             ),
             # データ表示領域
             rx.cond(
-                StockState.info.contains("name"),
+                StockState.display_name != "",
                 rx.vstack(
                     # 企業名ヘッダ
                     rx.hstack(
-                        rx.heading(StockState.info["name"].to_string(), size="6"),
-                        rx.badge(
-                            rx.cond(
-                                StockState.info.contains("exchange"),
-                                StockState.info["exchange"].to_string(),
-                                "",
+                        rx.heading(StockState.display_name, size="6"),
+                        rx.cond(
+                            StockState.display_exchange != "",
+                            rx.badge(
+                                StockState.display_exchange,
+                                variant="surface",
                             ),
-                            variant="surface",
                         ),
-                        rx.badge(
-                            rx.cond(
-                                StockState.info.contains("sector"),
-                                StockState.info["sector"].to_string(),
-                                "",
+                        rx.cond(
+                            StockState.display_sector != "",
+                            rx.badge(
+                                StockState.display_sector,
+                                color_scheme="cyan",
                             ),
-                            color_scheme="cyan",
                         ),
                         align_items="center",
                         width="100%",
@@ -107,7 +102,7 @@ def stock_page() -> rx.Component:
                         StockState.technical_data.contains("overall_signal"),
                         rx.hstack(
                             rx.badge(
-                                StockState.technical_data["overall_signal"].to_string(),
+                                StockState.technical_data["overall_signal"].to(str),
                                 size="3",
                                 color_scheme=rx.cond(
                                     StockState.technical_data["overall_score"].to(int)
@@ -125,19 +120,14 @@ def stock_page() -> rx.Component:
                             ),
                             rx.badge(
                                 "モード: "
-                                + StockState.technical_data[
-                                    "analysis_mode"
-                                ].to_string(),
+                                + StockState.technical_data["analysis_mode"].to(str),
                                 size="3",
                                 color_scheme="purple",
                             ),
                             rx.cond(
-                                StockState.technical_data["entry_signal"].to_string()
-                                != "",
+                                StockState.technical_data["entry_signal"].to(str) != "",
                                 rx.badge(
-                                    StockState.technical_data[
-                                        "entry_signal"
-                                    ].to_string(),
+                                    StockState.technical_data["entry_signal"].to(str),
                                     size="3",
                                     color_scheme="orange",
                                 ),
@@ -151,17 +141,17 @@ def stock_page() -> rx.Component:
                     rx.grid(
                         metric_card(
                             "時価総額 (Market Cap)",
-                            _info_text("market_cap", "marketCapitalization"),
+                            StockState.display_market_cap,
                             "",
                         ),
                         metric_card(
                             "PER (株価収益率)",
-                            _info_text("pe_ratio", "peRatio"),
+                            StockState.display_pe_ratio,
                             "",
                         ),
                         metric_card(
                             "配当利回り",
-                            _info_text("dividend_yield", "dividendYield"),
+                            StockState.display_dividend_yield,
                             "",
                         ),
                         columns="3",
@@ -250,11 +240,7 @@ def stock_page() -> rx.Component:
                                 rx.heading("企業概要", size="4", margin_bottom="1rem"),
                                 rx.scroll_area(
                                     rx.text(
-                                        rx.cond(
-                                            StockState.info.contains("summary"),
-                                            StockState.info["summary"].to_string(),
-                                            "概要情報がありません。",
-                                        ),
+                                        StockState.display_summary,
                                         size="2",
                                         line_height="1.6",
                                     ),

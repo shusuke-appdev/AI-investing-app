@@ -137,3 +137,10 @@ streamlit run legacy_streamlit/app.py
 - Removed tracked local cache/debug artifacts (`app_cache.sqlite`, `yfinance_cache.sqlite`, root debug scripts/results), ignored future local verification artifacts, and moved pytest basetemp under `.states/pytest_tmp`.
 - Added `constraints.txt` and wired local/Docker install docs to use `-c constraints.txt` for reproducible deploy dependency versions.
 - Validation: ruff check passed, ruff format check passed, compileall passed, and pytest passed with 84 tests.
+
+# Session update: 2026-05-21 stock analysis display regression fix
+- Fixed the Reflex stock page regression where dict values rendered through `.to_string()` appeared with JSON quotes such as `"PLTR"` and `"Strong Buy"`.
+- Added stock dashboard display fields for company name, exchange, sector, market cap, PER, dividend yield, and summary so the UI no longer renders raw `null` values.
+- Reclassified missing company profile details as a partial-data warning when price/technical data is available, instead of showing a fatal red error for the whole stock analysis.
+- Added yfinance `fast_info` fallback for market cap when the full profile endpoint is unavailable.
+- Validation: targeted stock/provider tests passed, ruff check passed, compileall passed, and Reflex frontend export passed.
