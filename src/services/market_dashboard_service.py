@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from src.advisor.market_environment import evaluate_market_environment
@@ -19,16 +22,53 @@ from src.option_analyst import get_major_indices_option_status
 from src.services.analysis_context import MarketContext, OptionContext
 from src.stock_data_provider import get_valuation_metrics
 
+MARKET_SUMMARY_FRESH_SECONDS = 300
+MARKET_SUMMARY_STALE_SECONDS = 86400
 
-def build_market_context(market_type: str = "US") -> MarketContext:
-    """Build the canonical current-market context for monitoring and AI."""
+
+def load_cached_market_summary_context(
+    market_type: str = "US",
+) -> MarketContext | None:
+    """Load the last successful lightweight summary for fast startup."""
+
+    return _load_context_cache(
+        market_type,
+        "summary",
+        max_age_seconds=MARKET_SUMMARY_STALE_SECONDS,
+        fresh_seconds=MARKET_SUMMARY_FRESH_SECONDS,
+    )
+
+
+def build_market_summary_context(market_type: str = "US") -> MarketContext:
+    """Fetch only the lightweight market overview used by initial page load."""
 
     errors: list[str] = []
     market_data = _safe_call(lambda: get_market_indices(market_type), {}, errors)
     market_config = _safe_call(lambda: get_market_config(market_type), {}, errors)
-    options = _build_option_context(market_type)
-    if options.error_message:
-        errors.append(options.error_message)
+    context = MarketContext(
+        market_type=market_type,
+        market_data=market_data,
+        market_config=market_config,
+        source="live_summary",
+        fetched_at=_utc_now(),
+        is_partial=bool(errors),
+        quality_warnings=list(errors),
+        errors=errors,
+    )
+    if market_data:
+        _save_context_cache(context, "summary")
+    return context
+
+
+def build_market_details_context(
+    market_type: str = "US",
+    market_context: MarketContext | dict[str, Any] | None = None,
+) -> MarketContext:
+    """Build non-option detailed monitoring data for explicit refresh actions."""
+
+    base = _coerce_context(market_context) or build_market_summary_context(market_type)
+    errors = list(base.errors)
+    options = base.options
 
     def evaluation_task() -> dict[str, Any]:
         return evaluate_market_environment(market_type, options.items)
@@ -53,17 +93,85 @@ def build_market_context(market_type: str = "US") -> MarketContext:
             name: _future_result(future, errors) for name, future in futures.items()
         }
 
-    return MarketContext(
+    context = MarketContext(
         market_type=market_type,
-        market_data=market_data,
-        market_config=market_config,
+        market_data=base.market_data,
+        market_config=base.market_config,
         options=options,
         evaluation=results.get("evaluation") or {},
         microstructure=results.get("microstructure") or {},
         momentum=results.get("momentum") or {},
         monitor=results.get("monitor") or {},
         errors=errors,
+        source="live_details",
+        fetched_at=_utc_now(),
+        is_stale=base.is_stale,
+        is_partial=bool(errors) or base.is_partial or options.is_partial,
+        quality_warnings=_merge_warnings(
+            base.quality_warnings, options.quality_warnings, errors
+        ),
     )
+    if context.market_data:
+        _save_context_cache(context, "full")
+    return context
+
+
+def build_market_options_context(
+    market_type: str = "US",
+    market_context: MarketContext | dict[str, Any] | None = None,
+) -> MarketContext:
+    """Refresh option data and option-dependent monitoring without reloading all data."""
+
+    base = _coerce_context(market_context) or build_market_summary_context(market_type)
+    errors = list(base.errors)
+    options = _build_option_context(market_type)
+    if options.error_message:
+        errors.append(options.error_message)
+
+    def evaluation_task() -> dict[str, Any]:
+        return evaluate_market_environment(market_type, options.items)
+
+    def monitor_task() -> dict[str, Any]:
+        return build_market_monitor_context(options.items)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {
+            "evaluation": executor.submit(evaluation_task),
+            "monitor": executor.submit(monitor_task),
+        }
+        results = {
+            name: _future_result(future, errors) for name, future in futures.items()
+        }
+
+    context = MarketContext(
+        market_type=market_type,
+        market_data=base.market_data,
+        market_config=base.market_config,
+        options=options,
+        evaluation=results.get("evaluation") or base.evaluation,
+        microstructure=base.microstructure,
+        momentum=base.momentum,
+        monitor=results.get("monitor") or base.monitor,
+        errors=errors,
+        source="live_options",
+        fetched_at=_utc_now(),
+        is_stale=base.is_stale or options.is_stale,
+        is_partial=bool(errors) or base.is_partial or options.is_partial,
+        quality_warnings=_merge_warnings(
+            base.quality_warnings, options.quality_warnings, errors
+        ),
+    )
+    if context.market_data:
+        _save_context_cache(context, "full")
+    return context
+
+
+def build_market_context(market_type: str = "US") -> MarketContext:
+    """Build the full context for legacy callers and tests."""
+
+    summary = build_market_summary_context(market_type)
+    with_options = build_market_options_context(market_type, summary)
+    return build_market_details_context(market_type, with_options)
 
 
 def build_market_monitor_context(option_data: list[dict[str, Any]] | None) -> dict:
@@ -95,6 +203,13 @@ def format_market_context_for_ai(context: MarketContext) -> str:
     """Create a compact prompt section from already computed monitoring context."""
 
     parts = ["[Advanced Technical / Market Monitoring]"]
+    if context.quality_warnings:
+        parts.append("- Data quality: " + "; ".join(context.quality_warnings[:6]))
+    if context.options.quality_warnings:
+        parts.append(
+            "- Options data quality: " + "; ".join(context.options.quality_warnings[:6])
+        )
+
     evaluation = context.evaluation or {}
     if evaluation:
         parts.append(
@@ -156,14 +271,27 @@ def format_market_context_for_ai(context: MarketContext) -> str:
 def _build_option_context(market_type: str) -> OptionContext:
     try:
         result = get_major_indices_option_status(market_type)
+        failed_tickers = list(result.get("failed_tickers") or [])
+        status = str(result.get("status") or "unavailable")
         return OptionContext(
             items=list(result.get("items") or []),
             error_message=str(result.get("error_message") or ""),
-            status=str(result.get("status") or "unavailable"),
-            failed_tickers=list(result.get("failed_tickers") or []),
+            status=status,
+            failed_tickers=failed_tickers,
+            source=str(result.get("source") or "yfinance"),
+            fetched_at=str(result.get("fetched_at") or ""),
+            is_stale=bool(result.get("is_stale", False)),
+            is_partial=status == "partial" or bool(failed_tickers),
+            quality_warnings=list(result.get("quality_warnings") or []),
         )
     except Exception as exc:
-        return OptionContext(error_message=f"Option analysis failed: {exc}")
+        return OptionContext(
+            error_message=f"Option analysis failed: {exc}",
+            status="failed",
+            source="yfinance",
+            is_partial=True,
+            quality_warnings=[f"Option analysis failed: {exc}"],
+        )
 
 
 def _safe_call(callback, fallback, errors: list[str]):
@@ -212,3 +340,87 @@ def _display_percent(value: Any) -> str:
     if isinstance(value, (int, float)):
         return f"{value:.2%}"
     return "unknown"
+
+
+def _coerce_context(
+    value: MarketContext | dict[str, Any] | None,
+) -> MarketContext | None:
+    if isinstance(value, MarketContext):
+        return value
+    if isinstance(value, dict) and value:
+        return MarketContext.from_mapping(value)
+    return None
+
+
+def _context_cache_path(market_type: str, kind: str) -> Path:
+    root = Path(__file__).resolve().parents[2] / ".states" / "market_context_cache"
+    return root / f"{market_type.lower()}_{kind}.json"
+
+
+def _save_context_cache(context: MarketContext, kind: str) -> None:
+    path = _context_cache_path(context.market_type, kind)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(context.to_dict(), ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
+    except OSError:
+        return
+
+
+def _load_context_cache(
+    market_type: str,
+    kind: str,
+    *,
+    max_age_seconds: int,
+    fresh_seconds: int,
+) -> MarketContext | None:
+    path = _context_cache_path(market_type, kind)
+    if not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    context = MarketContext.from_mapping(raw)
+    age = _context_age_seconds(context)
+    if age is None or age > max_age_seconds:
+        return None
+    context.source = f"{context.source or kind}_cache"
+    context.is_stale = age > fresh_seconds
+    if context.is_stale:
+        context.quality_warnings = _merge_warnings(
+            context.quality_warnings,
+            [f"Using cached market summary from {context.fetched_at}."],
+        )
+    return context
+
+
+def _context_age_seconds(context: MarketContext) -> float | None:
+    if not context.fetched_at:
+        return None
+    try:
+        fetched_at = datetime.fromisoformat(context.fetched_at)
+    except ValueError:
+        return None
+    if fetched_at.tzinfo is None:
+        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - fetched_at).total_seconds()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _merge_warnings(*groups: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for item in group:
+            text = str(item)
+            if text and text not in seen:
+                merged.append(text)
+                seen.add(text)
+    return merged

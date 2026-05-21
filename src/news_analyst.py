@@ -153,7 +153,10 @@ def generate_market_recap(
             ticker = opt.get("ticker", "")
             sentiment = opt.get("sentiment", "")
             analysis = opt.get("analysis", [])
-            context_parts.append(f"- {ticker}: {sentiment}")
+            quality = opt.get("data_quality", "unknown")
+            context_parts.append(f"- {ticker}: {sentiment} (data_quality={quality})")
+            for warning in opt.get("quality_warnings", [])[:4]:
+                context_parts.append(f"  - Data warning: {warning}")
             for a in analysis:
                 context_parts.append(f"  - {a}")
 

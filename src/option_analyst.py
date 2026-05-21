@@ -4,8 +4,8 @@ GEX (Gamma Exposure)、PCR (Put/Call Ratio)、Gamma Wallの計算を行います
 Finnhub APIから取得したGreeksを活用し、より正確な分析を提供します。
 """
 
-import time
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -13,6 +13,7 @@ import pandas as pd
 from .data_provider import DataProvider
 from .log_config import get_logger
 from .market_data import get_option_chain
+from .option_data_provider import get_option_chain_metadata
 
 logger = get_logger(__name__)
 
@@ -23,12 +24,12 @@ logger = get_logger(__name__)
 
 def _fetch_option_data(
     ticker: str,
-) -> tuple[pd.DataFrame, pd.DataFrame, float, str] | None:
+) -> tuple[pd.DataFrame, pd.DataFrame, float, str, dict[str, Any]] | None:
     """
     オプションチェーンと現在価格を1回で取得する内部ヘルパー。
 
     Returns:
-        (calls_df, puts_df, current_price, fetched_at) のタプル、またはNone
+        (calls_df, puts_df, current_price, fetched_at, metadata) のタプル、またはNone
     """
     option_data = get_option_chain(ticker)
     if option_data is None:
@@ -52,7 +53,9 @@ def _fetch_option_data(
     if not current_price:
         return None
 
-    return calls, puts, current_price, now_str
+    metadata = get_option_chain_metadata(ticker)
+
+    return calls, puts, current_price, now_str, metadata
 
 
 # ============================================================
@@ -110,6 +113,112 @@ def calculate_pcr(
     }
 
 
+def assess_option_data_quality(
+    calls: pd.DataFrame,
+    puts: pd.DataFrame,
+    *,
+    metadata: dict[str, Any] | None = None,
+    gex: dict | None = None,
+    iv: float | None = None,
+    max_pain: float | None = None,
+) -> dict[str, Any]:
+    """Classify option-chain reliability before UI/AI consumers use values."""
+
+    metadata = metadata or {}
+    quality = str(metadata.get("data_quality") or "available")
+    warnings = [str(item) for item in metadata.get("quality_warnings", []) if item]
+
+    if metadata.get("is_stale"):
+        quality = _worse_quality(quality, "stale_cache")
+
+    missing_columns = _missing_option_columns(calls, puts)
+    if missing_columns:
+        quality = _worse_quality(quality, "unreliable")
+        warnings.append("Missing option columns: " + ", ".join(missing_columns))
+
+    call_volume = _column_sum(calls, "volume")
+    put_volume = _column_sum(puts, "volume")
+    call_oi = _column_sum(calls, "openInterest")
+    put_oi = _column_sum(puts, "openInterest")
+
+    if call_volume + put_volume <= 0:
+        quality = _worse_quality(quality, "partial")
+        warnings.append("Option volume is missing or zero.")
+
+    if call_oi + put_oi <= 0:
+        quality = _worse_quality(quality, "unreliable")
+        warnings.append(
+            "Open interest is missing or zero; Max Pain and GEX are disabled."
+        )
+
+    if _real_gamma_count(calls, puts) == 0:
+        quality = _worse_quality(quality, "partial")
+        warnings.append("Greeks/Gamma are missing from yfinance; GEX is hidden.")
+    elif gex and gex.get("is_estimated"):
+        quality = _worse_quality(quality, "estimated")
+        warnings.append("Some Gamma values were estimated; GEX reliability is limited.")
+
+    if iv is None:
+        quality = _worse_quality(quality, "partial")
+        warnings.append("ATM IV could not be calculated from available strikes.")
+
+    if max_pain is None:
+        quality = _worse_quality(quality, "partial")
+        warnings.append("Max Pain could not be calculated from available OI/volume.")
+
+    return {
+        "data_quality": quality,
+        "quality_warnings": _unique_warnings(warnings),
+    }
+
+
+def _missing_option_columns(calls: pd.DataFrame, puts: pd.DataFrame) -> list[str]:
+    required = {"strike", "volume", "openInterest", "impliedVolatility"}
+    missing = []
+    for side, frame in (("calls", calls), ("puts", puts)):
+        for column in sorted(required - set(frame.columns)):
+            missing.append(f"{side}.{column}")
+    return missing
+
+
+def _column_sum(frame: pd.DataFrame, column: str) -> float:
+    if column not in frame.columns:
+        return 0.0
+    return float(pd.to_numeric(frame[column], errors="coerce").fillna(0).sum())
+
+
+def _real_gamma_count(calls: pd.DataFrame, puts: pd.DataFrame) -> int:
+    total = 0
+    for frame in (calls, puts):
+        if "gamma" not in frame.columns:
+            continue
+        gamma = pd.to_numeric(frame["gamma"], errors="coerce")
+        total += int(((gamma.notna()) & (gamma > 0)).sum())
+    return total
+
+
+def _worse_quality(current: str, candidate: str) -> str:
+    order = {
+        "available": 0,
+        "partial": 1,
+        "estimated": 2,
+        "stale_cache": 3,
+        "unreliable": 4,
+        "failed": 5,
+    }
+    return candidate if order.get(candidate, 0) > order.get(current, 0) else current
+
+
+def _unique_warnings(warnings: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for warning in warnings:
+        if warning and warning not in seen:
+            result.append(warning)
+            seen.add(warning)
+    return result
+
+
 def calculate_gex(
     ticker: str = "",
     *,
@@ -136,18 +245,23 @@ def calculate_gex(
         fetched = _fetch_option_data(ticker)
         if fetched is None:
             return None
-        calls, puts, current_price, _ = fetched
+        calls, puts, current_price, _, _ = fetched
 
-    total_oi = (
-        calls["openInterest"].fillna(0).sum() + puts["openInterest"].fillna(0).sum()
-    )
+    total_oi = _column_sum(calls, "openInterest") + _column_sum(puts, "openInterest")
     if total_oi == 0:
         logger.warning(
             f"[OptionAnalyst] {ticker}: OpenInterest is 0. Cannot calculate GEX."
         )
         return None
 
+    if _real_gamma_count(calls, puts) == 0:
+        logger.warning(
+            f"[OptionAnalyst] {ticker}: Gamma/Greeks are missing. GEX is hidden."
+        )
+        return None
+
     gex_data = []
+    estimated_gamma_count = 0
 
     # Callsの処理
     for _, row in calls.iterrows():
@@ -158,6 +272,7 @@ def calculate_gex(
         gamma = row.get("gamma", 0)
 
         if pd.isna(gamma) or gamma == 0:
+            estimated_gamma_count += 1
             moneyness = (
                 abs(strike - current_price) / current_price if current_price > 0 else 1
             )
@@ -175,6 +290,7 @@ def calculate_gex(
         gamma = row.get("gamma", 0)
 
         if pd.isna(gamma) or gamma == 0:
+            estimated_gamma_count += 1
             moneyness = (
                 abs(strike - current_price) / current_price if current_price > 0 else 1
             )
@@ -210,6 +326,8 @@ def calculate_gex(
         else None,
         "nearby_net_gex": nearby_gex,
         "total_gex": strike_gex["gex"].sum(),
+        "is_estimated": estimated_gamma_count > 0,
+        "estimated_gamma_count": estimated_gamma_count,
     }
 
 
@@ -228,8 +346,13 @@ def calculate_max_pain(
             return None
         calls, puts = option_data
 
+    if "strike" not in calls or "strike" not in puts:
+        return None
+
     # 建玉データがない場合のフォールバック（週末などのyfinance不具合対策）
-    total_oi = calls["openInterest"].sum() + puts["openInterest"].sum()
+    call_oi = calls["openInterest"].fillna(0).sum() if "openInterest" in calls else 0
+    put_oi = puts["openInterest"].fillna(0).sum() if "openInterest" in puts else 0
+    total_oi = call_oi + put_oi
     use_vol = total_oi == 0
     total_vol = 0
     if use_vol and "volume" in calls.columns and "volume" in puts.columns:
@@ -313,6 +436,11 @@ def calculate_atm_iv(
             return None
         calls, puts, current_price, _ = fetched
 
+    if "strike" not in calls or "strike" not in puts:
+        return None
+    if "impliedVolatility" not in calls or "impliedVolatility" not in puts:
+        return None
+
     nearby_calls = calls[
         (calls["strike"] >= current_price * 0.98)
         & (calls["strike"] <= current_price * 1.02)
@@ -358,9 +486,13 @@ def calculate_skew(
         fetched = _fetch_option_data(ticker)
         if fetched is None:
             return None
-        calls, puts, current_price, _ = fetched
+        calls, puts, current_price, _, _ = fetched
 
     if puts.empty or calls.empty:
+        return None
+    if "strike" not in calls or "strike" not in puts:
+        return None
+    if "impliedVolatility" not in calls or "impliedVolatility" not in puts:
         return None
 
     # 10% OTMのストライクを目安に
@@ -439,7 +571,7 @@ def analyze_option_sentiment(ticker: str) -> dict | None:
     fetched = _fetch_option_data(ticker)
     if fetched is None:
         return None
-    calls, puts, current_price, fetched_at = fetched
+    calls, puts, current_price, fetched_at, metadata = fetched
 
     # === 各指標を事前取得済みデータで計算 ===
     pcr = calculate_pcr(ticker, calls=calls, puts=puts)
@@ -447,6 +579,14 @@ def analyze_option_sentiment(ticker: str) -> dict | None:
     iv = calculate_atm_iv(ticker, calls=calls, puts=puts, current_price=current_price)
     max_pain = calculate_max_pain(ticker, calls=calls, puts=puts)
     skew = calculate_skew(ticker, calls=calls, puts=puts, current_price=current_price)
+    quality = assess_option_data_quality(
+        calls,
+        puts,
+        metadata=metadata,
+        gex=gex,
+        iv=iv,
+        max_pain=max_pain,
+    )
 
     # DTE (Days to Expiry) 計算
     dte = 30.0
@@ -491,7 +631,7 @@ def analyze_option_sentiment(ticker: str) -> dict | None:
             analysis.append(f"PCR(Vol) ({vol_pcr:.2f}) は中立水準")
 
         if gex is None:
-            analysis.append("※ OIデータ不足のためGEX分析は省略")
+            analysis.append("※ Greeks/OIデータ不足のためGEX分析は非表示")
 
     if gex:
         if gex["nearby_net_gex"] > 0:
@@ -503,6 +643,8 @@ def analyze_option_sentiment(ticker: str) -> dict | None:
             analysis.append(f"+Wall (${gex['positive_wall']['strike']:.0f}): 上値抵抗")
         if gex["negative_wall"]:
             analysis.append(f"-Wall (${gex['negative_wall']['strike']:.0f}): 下値支持")
+        if gex.get("is_estimated"):
+            analysis.append("※ 一部Gammaは推定値のためGEX信頼度は限定的")
 
     if iv:
         analysis.append(f"ATM IV: {iv:.1%}")
@@ -536,6 +678,10 @@ def analyze_option_sentiment(ticker: str) -> dict | None:
         "max_pain": max_pain,
         "analysis": analysis,
         "fetched_at": fetched_at,
+        "source": metadata.get("source", "yfinance"),
+        "is_stale": bool(metadata.get("is_stale", False)),
+        "data_quality": quality["data_quality"],
+        "quality_warnings": quality["quality_warnings"],
     }
 
 
@@ -557,7 +703,7 @@ def get_major_indices_options(market_type: str = "US") -> list[dict]:
     results = []
     failed_tickers = []
 
-    for i, ticker in enumerate(indices):
+    for ticker in indices:
         try:
             analysis = analyze_option_sentiment(ticker)
             if analysis:
@@ -570,11 +716,6 @@ def get_major_indices_options(market_type: str = "US") -> list[dict]:
         except Exception as e:
             failed_tickers.append(ticker)
             logger.error(f"[OptionAnalyst] Exception analyzing {ticker}: {e}")
-
-        # yfinance Rate Limit対策: 銘柄間に十分な待機時間を確保
-        # 各銘柄で内部的に3期限×option_chain = 約9回のAPIコールが発生するため
-        if i < len(indices) - 1:
-            time.sleep(2.0)
 
     if failed_tickers:
         logger.warning(f"[OptionAnalyst] Failed tickers: {failed_tickers}")
@@ -591,13 +732,17 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
             "status": "not_applicable",
             "failed_tickers": [],
             "error_message": "Option data is not available for JP market monitoring.",
+            "source": "not_applicable",
+            "fetched_at": "",
+            "is_stale": False,
+            "quality_warnings": [],
         }
 
     indices = ["SPY", "QQQ", "IWM"]
     results = []
     failed_tickers = []
 
-    for i, ticker in enumerate(indices):
+    for ticker in indices:
         try:
             analysis = analyze_option_sentiment(ticker)
             if analysis:
@@ -611,16 +756,24 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
             failed_tickers.append(ticker)
             logger.error(f"[OptionAnalyst] Exception analyzing {ticker}: {exc}")
 
-        if i < len(indices) - 1:
-            time.sleep(2.0)
-
     if failed_tickers:
         logger.warning(f"[OptionAnalyst] Failed tickers: {failed_tickers}")
 
+    quality_warnings = _aggregate_quality_warnings(results)
+    non_available = [
+        item.get("ticker", "")
+        for item in results
+        if item.get("data_quality") not in ("available", None)
+    ]
     if results and failed_tickers:
         status = "partial"
         error_message = "Option data partially unavailable: " + ", ".join(
             failed_tickers
+        )
+    elif results and non_available:
+        status = "partial"
+        error_message = "Option data has quality limitations: " + ", ".join(
+            ticker for ticker in non_available if ticker
         )
     elif results:
         status = "available"
@@ -634,4 +787,28 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
         "status": status,
         "failed_tickers": failed_tickers,
         "error_message": error_message,
+        "source": _aggregate_sources(results),
+        "fetched_at": _latest_fetched_at(results),
+        "is_stale": any(bool(item.get("is_stale")) for item in results),
+        "quality_warnings": quality_warnings,
     }
+
+
+def _aggregate_quality_warnings(results: list[dict]) -> list[str]:
+    warnings = []
+    for item in results:
+        for warning in item.get("quality_warnings", []):
+            warnings.append(f"{item.get('ticker', '')}: {warning}")
+    return _unique_warnings(warnings)
+
+
+def _aggregate_sources(results: list[dict]) -> str:
+    sources = sorted({str(item.get("source") or "yfinance") for item in results})
+    return ", ".join(sources) if sources else "yfinance"
+
+
+def _latest_fetched_at(results: list[dict]) -> str:
+    values = [
+        str(item.get("fetched_at") or "") for item in results if item.get("fetched_at")
+    ]
+    return max(values) if values else ""

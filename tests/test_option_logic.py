@@ -3,7 +3,12 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from src.option_analyst import calculate_gex, calculate_pcr
+from src.option_analyst import (
+    analyze_option_sentiment,
+    assess_option_data_quality,
+    calculate_gex,
+    calculate_pcr,
+)
 
 
 class TestOptionAnalyst:
@@ -85,3 +90,54 @@ class TestOptionAnalyst:
         mock_get_chain.return_value = None
         assert calculate_pcr("TEST") is None
         assert calculate_gex("TEST") is None
+
+    def test_gex_hidden_when_gamma_missing(self, mock_option_data):
+        calls, puts = mock_option_data
+        calls = calls.drop(columns=["gamma"])
+        puts = puts.drop(columns=["gamma"])
+
+        gex = calculate_gex("TEST", calls=calls, puts=puts, current_price=100.0)
+
+        assert gex is None
+
+    @patch("src.option_analyst.DataProvider.get_current_price", return_value=100.0)
+    @patch("src.option_analyst.get_option_chain_metadata", return_value={})
+    @patch("src.option_analyst.get_option_chain")
+    def test_analyze_option_sentiment_marks_missing_gamma_partial(
+        self, mock_get_chain, _mock_metadata, _mock_price, mock_option_data
+    ):
+        calls, puts = mock_option_data
+        mock_get_chain.return_value = (
+            calls.drop(columns=["gamma"]),
+            puts.drop(columns=["gamma"]),
+        )
+
+        result = analyze_option_sentiment("TEST")
+
+        assert result is not None
+        assert result["gex"] is None
+        assert result["data_quality"] == "partial"
+        assert any("GEX is hidden" in w for w in result["quality_warnings"])
+
+    def test_assess_option_data_quality_flags_zero_oi(self):
+        calls = pd.DataFrame(
+            {
+                "strike": [100],
+                "volume": [0],
+                "openInterest": [0],
+                "impliedVolatility": [0],
+            }
+        )
+        puts = pd.DataFrame(
+            {
+                "strike": [100],
+                "volume": [0],
+                "openInterest": [0],
+                "impliedVolatility": [0],
+            }
+        )
+
+        quality = assess_option_data_quality(calls, puts)
+
+        assert quality["data_quality"] == "unreliable"
+        assert any("Open interest" in w for w in quality["quality_warnings"])

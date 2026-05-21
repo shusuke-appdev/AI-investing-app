@@ -5,7 +5,12 @@ import reflex as rx
 from pydantic import BaseModel
 
 from src.services.market_analyst_service import generate_market_analysis_report
-from src.services.market_dashboard_service import build_market_context
+from src.services.market_dashboard_service import (
+    build_market_details_context,
+    build_market_options_context,
+    build_market_summary_context,
+    load_cached_market_summary_context,
+)
 
 
 class MarketSignal(BaseModel):
@@ -25,9 +30,12 @@ class OptionSummary(BaseModel):
     pcr_vol_str: str = ""
     net_gex: float = 0.0
     net_gex_str: str = ""
+    net_gex_available: bool = False
     iv: str = "-"
     max_pain: str = "-"
     analysis: list[str] = []
+    data_quality: str = "unavailable"
+    quality_warnings: list[str] = []
 
 
 class MicrostructureData(BaseModel):
@@ -95,6 +103,9 @@ class MarketState(rx.State):
 
     market_type: str = "US"
     is_fetching: bool = False
+    is_fetching_summary: bool = False
+    is_fetching_details: bool = False
+    is_fetching_options: bool = False
     error_msg: str = ""
     option_error_msg: str = ""
     option_status: str = "unavailable"
@@ -113,44 +124,35 @@ class MarketState(rx.State):
 
     ai_recap: str = ""
     is_generating_recap: bool = False
+    ai_recap_error_type: str = ""
     market_context: dict[str, Any] = {}
 
     def set_market_type(self, m_type: str):
         self.market_type = m_type
-        return MarketState.fetch_market_data
+        return MarketState.fetch_market_summary_fast
 
-    async def fetch_market_data(self):
-        self.is_fetching = True
+    async def fetch_market_summary_fast(self):
+        self.is_fetching_summary = True
+        self.is_fetching = not self._has_visible_market_data()
         self.error_msg = ""
         self.option_error_msg = ""
         yield
 
         try:
-            context = await asyncio.to_thread(build_market_context, self.market_type)
-            self.market_context = context.to_dict()
+            cached = await asyncio.to_thread(
+                load_cached_market_summary_context, self.market_type
+            )
+            if cached:
+                self._apply_market_context(cached)
+                self.is_fetching = False
+                self.is_fetching_summary = False
+                yield
+                self.is_fetching_summary = True
 
-            if context.options.error_message:
-                self.option_error_msg = context.options.error_message
-            self.option_status = context.options.status
-            self.option_failed_tickers = list(context.options.failed_tickers)
-
-            self.option_analysis = self._format_options(context.options.items)
-            if not self.option_analysis and not self.option_error_msg:
-                self.option_error_msg = "Option data is currently unavailable."
-
-            self.evaluation = context.evaluation
-            self.market_signals = self._format_signals(context.evaluation)
-
-            micro = self._format_microstructure(context.microstructure)
-            if micro:
-                self.microstructure = MicrostructureData(**micro)
-
-            self.momentum_data = self._format_momentum(context.momentum)
-
-            if context.monitor:
-                self.market_monitor = MarketMonitorData(**context.monitor)
-
-            self._set_market_lists(context.market_data, context.market_config)
+            context = await asyncio.to_thread(
+                build_market_summary_context, self.market_type
+            )
+            self._apply_market_context(context)
         except Exception as exc:
             self.error_msg = f"Failed to fetch market data: {exc}"
             self.indices_data = []
@@ -162,15 +164,59 @@ class MarketState(rx.State):
             self.market_signals = []
         finally:
             self.is_fetching = False
+            self.is_fetching_summary = False
+            yield
+
+    async def refresh_market_details(self):
+        self.is_fetching_details = True
+        self.error_msg = ""
+        yield
+
+        try:
+            context = await asyncio.to_thread(
+                build_market_details_context,
+                self.market_type,
+                self.market_context or None,
+            )
+            self._apply_market_context(context)
+        except Exception as exc:
+            self.error_msg = f"Failed to refresh market details: {exc}"
+        finally:
+            self.is_fetching_details = False
+            yield
+
+    async def refresh_options(self):
+        self.is_fetching_options = True
+        self.error_msg = ""
+        self.option_error_msg = ""
+        yield
+
+        try:
+            context = await asyncio.to_thread(
+                build_market_options_context,
+                self.market_type,
+                self.market_context or None,
+            )
+            self._apply_market_context(context)
+        except Exception as exc:
+            self.option_status = "failed"
+            self.option_error_msg = f"Failed to refresh option data: {exc}"
+        finally:
+            self.is_fetching_options = False
+            yield
+
+    async def fetch_market_data(self):
+        async for _ in self.refresh_market_details():
             yield
 
     def _format_options(self, option_data: list[dict[str, Any]]) -> list[OptionSummary]:
         formatted = []
         for opt in option_data:
             pcr = opt.get("pcr") or {}
-            gex = opt.get("gex") or {}
+            gex = opt.get("gex")
             pcr_val = float(pcr.get("volume_pcr", 0.0))
-            gex_val = float(gex.get("nearby_net_gex", 0.0))
+            has_gex = isinstance(gex, dict) and gex.get("nearby_net_gex") is not None
+            gex_val = float(gex.get("nearby_net_gex", 0.0)) if has_gex else 0.0
             current_price = float(opt.get("current_price") or 0.0)
             iv_val = opt.get("iv")
             max_pain = opt.get("max_pain")
@@ -185,10 +231,13 @@ class MarketState(rx.State):
                     pcr_vol=pcr_val,
                     pcr_vol_str=f"{pcr_val:.2f}",
                     net_gex=gex_val,
-                    net_gex_str=f"{gex_val / 1e6:+.0f}M",
+                    net_gex_str=f"{gex_val / 1e6:+.0f}M" if has_gex else "-",
+                    net_gex_available=has_gex,
                     iv=f"{iv_val * 100:.1f}%" if iv_val is not None else "-",
                     max_pain=f"${max_pain:.0f}" if max_pain is not None else "-",
                     analysis=opt.get("analysis", []),
+                    data_quality=opt.get("data_quality", "unavailable"),
+                    quality_warnings=list(opt.get("quality_warnings") or []),
                 )
             )
         return formatted
@@ -302,6 +351,7 @@ class MarketState(rx.State):
 
     async def generate_ai_recap(self):
         self.is_generating_recap = True
+        self.ai_recap_error_type = ""
         yield
 
         try:
@@ -312,10 +362,60 @@ class MarketState(rx.State):
             )
             if recap:
                 self.ai_recap = recap
+                self.ai_recap_error_type = self._classify_recap_failure(recap)
+                if self.ai_recap_error_type:
+                    self.error_msg = (
+                        "AI recap generation returned a degraded result: "
+                        + self.ai_recap_error_type
+                    )
             else:
+                self.ai_recap_error_type = "unknown"
                 self.error_msg = "Failed to generate market recap."
         except Exception as exc:
+            self.ai_recap_error_type = "exception"
             self.error_msg = f"AI recap generation error: {exc}"
         finally:
             self.is_generating_recap = False
             yield
+
+    def _apply_market_context(self, context) -> None:
+        self.market_context = context.to_dict()
+
+        self.option_error_msg = context.options.error_message
+        self.option_status = context.options.status
+        self.option_failed_tickers = list(context.options.failed_tickers)
+        self.option_analysis = self._format_options(context.options.items)
+        if not self.option_analysis and not self.option_error_msg:
+            self.option_error_msg = "Option data is currently unavailable."
+
+        self.evaluation = context.evaluation
+        self.market_signals = self._format_signals(context.evaluation)
+
+        micro = self._format_microstructure(context.microstructure)
+        self.microstructure = (
+            MicrostructureData(**micro) if micro else MicrostructureData()
+        )
+
+        self.momentum_data = self._format_momentum(context.momentum)
+        self.market_monitor = (
+            MarketMonitorData(**context.monitor)
+            if context.monitor
+            else MarketMonitorData()
+        )
+
+        self._set_market_lists(context.market_data, context.market_config)
+
+        if context.quality_warnings and not self.error_msg:
+            self.error_msg = "; ".join(context.quality_warnings[:3])
+
+    def _has_visible_market_data(self) -> bool:
+        return bool(self.indices_data or self.sectors_data or self.others_data)
+
+    def _classify_recap_failure(self, recap: str) -> str:
+        if "Gemini API" in recap or "APIキー" in recap:
+            return "gemini"
+        if "データ取得" in recap or "data" in recap.lower():
+            return "data"
+        if "レポート生成エラー" in recap:
+            return "generation"
+        return ""

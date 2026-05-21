@@ -68,12 +68,12 @@ UI
 
 ### Market Intelligence
 
-1. `MarketState.fetch_market_data()` がUIロードまたは更新ボタンで実行される
-2. `market_data.get_market_indices()` と `market_config.get_market_config()` を取得
-3. `option_analyst.get_major_indices_options()` で SPY / QQQ / IWM を分析
-4. `advisor.market_environment.evaluate_market_environment()`、`market_microstructure.analyze_market_structure()`、`momentum_monitor.get_momentum_themes()`、`advisor.market_monitor.*` を並行実行
+1. `MarketState.fetch_market_summary_fast()` がUIロードで実行され、`.states/market_context_cache` の最後の軽量サマリーを優先表示する
+2. 軽量サマリーは `market_data.get_market_indices()` と `market_config.get_market_config()` のみを取得し、起動時にオプション取得を行わない
+3. `MarketState.refresh_market_details()` が、既存の `MarketContext` を再利用しながら市場環境、マイクロストラクチャー、テーマ、監視指標を更新する
+4. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、取得結果、キャッシュ鮮度、品質警告を `OptionContext` に保存する
 5. Reflex state に整形済みデータを保存し、画面が再描画される
-6. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡る
+6. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、`MarketContext` とオプション品質情報をプロンプトに含める
 
 ### 個別銘柄
 
@@ -100,6 +100,8 @@ UI
 
 - `src/data_provider.py` は facade と依存性注入の入口を兼ねており、テスト時に外部APIを差し替えられる
 - `src/cache.py` は Streamlit 依存を避けるためのフレームワーク非依存TTLキャッシュ
+- yfinance系の重い取得は、メモリTTLに加えて `.states/market_context_cache` と `.states/option_chain_cache` のJSONキャッシュを使う
+- yfinanceオプションデータはGreeks欠損が多いため、Gammaが取得できない場合はGEXを非表示にし、`data_quality` と `quality_warnings` でUIとAIに明示する
 - Reflex state では `dict[str, Any]` の深いアクセスが壊れやすいため、`pydantic.BaseModel` でUI表示用モデルを定義している
 - 外部APIの失敗はアプリ全体を止めず、機能単位で degraded mode に落とす設計が多い
 

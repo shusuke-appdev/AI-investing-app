@@ -119,3 +119,11 @@ streamlit run legacy_streamlit/app.py
 - Removed stale OpenBB artifacts (`pip_dry_run.txt`, `scripts/test_openbb.py`) and updated docs/requirements/tests to match the yfinance/Finnhub runtime contract.
 - Validation: ruff check passed, ruff format check passed, compileall passed, pytest passed with 65 tests, Reflex frontend export passed, and startup import smoke passed.
 - Release: pushed commit `9fe90d3 Clean startup warnings` to `origin/main`.
+
+# Session update: 2026-05-21 startup/data/options/AI recap hardening
+- Split Market Intelligence loading into lightweight startup summary, explicit detail refresh, and explicit option refresh; root `on_load` no longer runs the full market context or yfinance option chain fetch.
+- Added `.states/market_context_cache` and `.states/option_chain_cache` JSON caches so startup and option refreshes can reuse last successful data before hitting yfinance again.
+- Added `source`, `fetched_at`, `is_stale`, `is_partial`, and `quality_warnings` to `MarketContext` / `OptionContext`, plus option-level `data_quality`.
+- Stopped showing synthetic GEX when yfinance lacks Greeks/Gamma; the UI now displays `-` with quality warnings instead of misleading large values.
+- AI Market Recap now receives option data quality warnings and Gemini model selection can be overridden with `GEMINI_MODEL_NAME` or `GEMINI_MODEL`.
+- Fixed Reflex validation on this Windows/Codex setup by making `rxconfig.py` prefer the runnable Codex runtime Node over the inaccessible WindowsApps `OpenAI.Codex...\node.EXE`; `reflex export --frontend-only --no-zip` now passes.

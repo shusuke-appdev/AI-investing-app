@@ -92,13 +92,28 @@ def test_market_option_summary_formats_price_server_side():
                 "ticker": "SPY",
                 "current_price": 1234.5,
                 "pcr": {"volume_pcr": 0.9},
-                "gex": {"nearby_net_gex": 2_000_000},
+                "gex": None,
                 "iv": 0.2,
                 "max_pain": 1200,
                 "analysis": [],
+                "data_quality": "partial",
+                "quality_warnings": ["Greeks missing"],
             }
         ],
     )
 
     assert formatted[0].current_price == 1234.5
     assert formatted[0].current_price_str == "$1,234.50"
+    assert formatted[0].net_gex_str == "-"
+    assert formatted[0].data_quality == "partial"
+
+
+def test_market_state_classifies_gemini_recap_failure():
+    from frontend.state.market_state import MarketState
+
+    assert (
+        MarketState._classify_recap_failure(
+            MarketState, "Gemini APIが利用できません。APIキーを設定してください。"
+        )
+        == "gemini"
+    )

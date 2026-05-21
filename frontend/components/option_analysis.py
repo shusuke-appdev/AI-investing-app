@@ -12,7 +12,9 @@ def render_ticker_compact(opt) -> rx.Component:
     pcr_color = rx.cond(
         opt.pcr_vol > 1.2, "red", rx.cond(opt.pcr_vol < 0.7, "green", "gray")
     )
-    gex_color = rx.cond(opt.net_gex > 0, "green", "red")
+    gex_color = rx.cond(
+        opt.net_gex_available, rx.cond(opt.net_gex > 0, "green", "red"), "gray"
+    )
 
     return rx.card(
         rx.vstack(
@@ -23,6 +25,11 @@ def render_ticker_compact(opt) -> rx.Component:
                     opt.current_price_str != "",
                     rx.text(opt.current_price_str, weight="bold"),
                     rx.text(""),
+                ),
+                rx.badge(
+                    opt.data_quality,
+                    color_scheme=_quality_color(opt.data_quality),
+                    variant="surface",
                 ),
                 width="100%",
             ),
@@ -73,6 +80,20 @@ def render_ticker_compact(opt) -> rx.Component:
                 ),
                 rx.text("詳細データがありません", size="1", color="gray"),
             ),
+            rx.cond(
+                opt.quality_warnings.length() > 0,
+                rx.vstack(
+                    rx.foreach(
+                        opt.quality_warnings,
+                        lambda item: rx.text(
+                            "※ ", item, size="1", color=rx.color("amber", 11)
+                        ),
+                    ),
+                    align_items="start",
+                    spacing="1",
+                ),
+                rx.fragment(),
+            ),
             width="100%",
             align_items="start",
             spacing="3",
@@ -115,4 +136,20 @@ def option_analysis_component() -> rx.Component:
         width="100%",
         margin_top="2rem",
         margin_bottom="2rem",
+    )
+
+
+def _quality_color(quality) -> rx.Var:
+    return rx.cond(
+        quality == "available",
+        "green",
+        rx.cond(
+            quality == "partial",
+            "amber",
+            rx.cond(
+                quality == "estimated",
+                "amber",
+                rx.cond(quality == "stale_cache", "orange", "red"),
+            ),
+        ),
     )

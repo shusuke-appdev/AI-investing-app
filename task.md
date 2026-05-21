@@ -9,7 +9,7 @@
 - [ ] `frontend/state/market_state.py` の業務ロジックを `src/services/market_dashboard_service.py` へ移す <!-- id: 7 -->
 - [ ] `frontend/state/stock_state.py` の業務ロジックを `src/services/stock_dashboard_service.py` へ移す <!-- id: 8 -->
 - [ ] `frontend/state/portfolio_state.py` の業務ロジックを `src/services/portfolio_dashboard_service.py` へ移す <!-- id: 9 -->
-- [ ] オプション分析を「取得」と「計算」に分離し、取得失敗・推定値・キャッシュ値をUIに表示する <!-- id: 10 -->
+- [x] オプション分析を「取得」と「計算」に分離し、取得失敗・推定値・キャッシュ値をUIに表示する <!-- id: 10 -->
 - [ ] AI分析用の `AnalysisContext` を導入し、欠損データと取得元をプロンプトに明示する <!-- id: 11 -->
 - [ ] local / GAS / Supabase の保存スキーマをPydanticモデルで固定し、保存前後の検証を追加する <!-- id: 12 -->
 - [ ] 参照知識DBに重複排除、鮮度表示、プロンプト注入対策を追加する <!-- id: 13 -->

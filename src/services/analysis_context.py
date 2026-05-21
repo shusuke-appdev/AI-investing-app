@@ -14,6 +14,11 @@ class OptionContext:
     error_message: str = ""
     status: str = "unavailable"
     failed_tickers: list[str] = field(default_factory=list)
+    source: str = ""
+    fetched_at: str = ""
+    is_stale: bool = False
+    is_partial: bool = False
+    quality_warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -32,6 +37,11 @@ class MarketContext:
     momentum: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     monitor: dict[str, Any] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
+    source: str = ""
+    fetched_at: str = ""
+    is_stale: bool = False
+    is_partial: bool = False
+    quality_warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -44,6 +54,11 @@ class MarketContext:
             "momentum": self.momentum,
             "monitor": self.monitor,
             "errors": self.errors,
+            "source": self.source,
+            "fetched_at": self.fetched_at,
+            "is_stale": self.is_stale,
+            "is_partial": self.is_partial,
+            "quality_warnings": self.quality_warnings,
         }
 
     @classmethod
@@ -58,12 +73,22 @@ class MarketContext:
                 error_message=str(options.get("error_message") or ""),
                 status=str(options.get("status") or "unavailable"),
                 failed_tickers=list(options.get("failed_tickers") or []),
+                source=str(options.get("source") or ""),
+                fetched_at=str(options.get("fetched_at") or ""),
+                is_stale=bool(options.get("is_stale", False)),
+                is_partial=bool(options.get("is_partial", False)),
+                quality_warnings=list(options.get("quality_warnings") or []),
             ),
             evaluation=value.get("evaluation") or {},
             microstructure=value.get("microstructure") or {},
             momentum=value.get("momentum") or {},
             monitor=value.get("monitor") or {},
             errors=list(value.get("errors") or []),
+            source=str(value.get("source") or ""),
+            fetched_at=str(value.get("fetched_at") or ""),
+            is_stale=bool(value.get("is_stale", False)),
+            is_partial=bool(value.get("is_partial", False)),
+            quality_warnings=list(value.get("quality_warnings") or []),
         )
 
 

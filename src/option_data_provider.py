@@ -4,11 +4,14 @@ Option Data Provider
 リトライ・タイムアウト・フォールバックキャッシュ機構搭載。
 """
 
+import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import yfinance as yf
@@ -22,11 +25,16 @@ configure_yfinance_cache()
 # フォールバックキャッシュ: 最終成功データを保持（市場閉場時に前回データを返す）
 _fallback_cache: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
 _fallback_lock = threading.Lock()
+_metadata_cache: dict[str, dict[str, Any]] = {}
+_metadata_lock = threading.Lock()
 
 # リトライ設定
-MAX_RETRIES = 3
-FETCH_TIMEOUT = 15  # 秒
+MAX_RETRIES = 1
+FETCH_TIMEOUT = 10  # 秒
 BACKOFF_BASE = 2  # 指数バックオフのベース
+MAX_EXPIRATIONS = 1
+OPTION_CACHE_TTL = 900
+OPTION_STALE_TTL = 86400
 
 
 def _is_market_likely_closed() -> bool:
@@ -53,8 +61,8 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
 
     all_calls = []
     all_puts = []
-    # yfinance API負荷を制御: 最大3期限に制限し、期限間に待機
-    max_expirations = min(3, len(expirations))
+    # yfinance API負荷を制御: 起動時・更新時とも直近期限だけを取得する
+    max_expirations = min(MAX_EXPIRATIONS, len(expirations))
     for i, exp in enumerate(expirations[:max_expirations]):
         try:
             opt = stock.option_chain(exp)
@@ -115,18 +123,20 @@ def _fetch_with_timeout(
     ticker: str, timeout: int = FETCH_TIMEOUT
 ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """タイムアウト付きでオプションデータを取得"""
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(_fetch_option_chain_raw, ticker)
-        try:
-            return future.result(timeout=timeout)
-        except FuturesTimeoutError:
-            logger.warning(
-                f"[OptionProvider] Timeout ({timeout}s) fetching options for {ticker}"
-            )
-            return None
-        except Exception as e:
-            logger.warning(f"[OptionProvider] Error fetching options for {ticker}: {e}")
-            return None
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(_fetch_option_chain_raw, ticker)
+    try:
+        return future.result(timeout=timeout)
+    except FuturesTimeoutError:
+        logger.warning(
+            f"[OptionProvider] Timeout ({timeout}s) fetching options for {ticker}"
+        )
+        return None
+    except Exception as e:
+        logger.warning(f"[OptionProvider] Error fetching options for {ticker}: {e}")
+        return None
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
@@ -142,6 +152,23 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     Returns:
         (calls_df, puts_df) のタプル。取得不可の場合はNone。
     """
+    ticker = ticker.upper()
+    cached_fresh = _load_persistent_cache(ticker, max_age_seconds=OPTION_CACHE_TTL)
+    if cached_fresh is not None:
+        calls, puts, fetched_at = cached_fresh
+        _remember_success(ticker, calls, puts)
+        _set_metadata(
+            ticker,
+            source="persistent_cache",
+            fetched_at=fetched_at,
+            is_stale=False,
+            data_quality="available",
+            quality_warnings=[],
+        )
+        return calls, puts
+
+    cached_stale = _load_persistent_cache(ticker, max_age_seconds=OPTION_STALE_TTL)
+
     # 市場閉場時はフォールバックキャッシュを優先
     if _is_market_likely_closed():
         with _fallback_lock:
@@ -149,7 +176,31 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
                 logger.info(
                     f"[OptionProvider] Market closed, using fallback cache for {ticker}"
                 )
+                _set_metadata(
+                    ticker,
+                    source="memory_fallback",
+                    fetched_at="",
+                    is_stale=True,
+                    data_quality="stale_cache",
+                    quality_warnings=[
+                        "Market is likely closed; using in-memory option cache."
+                    ],
+                )
                 return _fallback_cache[ticker]
+        if cached_stale is not None:
+            calls, puts, fetched_at = cached_stale
+            _remember_success(ticker, calls, puts)
+            _set_metadata(
+                ticker,
+                source="persistent_cache",
+                fetched_at=fetched_at,
+                is_stale=True,
+                data_quality="stale_cache",
+                quality_warnings=[
+                    f"Market is likely closed; using cached option data from {fetched_at}."
+                ],
+            )
+            return calls, puts
 
     # リトライループ
     last_error = None
@@ -158,8 +209,18 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
             result = _fetch_with_timeout(ticker)
             if result is not None:
                 # 成功 → フォールバックキャッシュに保存
-                with _fallback_lock:
-                    _fallback_cache[ticker] = result
+                calls, puts = result
+                _remember_success(ticker, calls, puts)
+                fetched_at = datetime.now(timezone.utc).isoformat()
+                _save_persistent_cache(ticker, calls, puts, fetched_at)
+                _set_metadata(
+                    ticker,
+                    source="yfinance",
+                    fetched_at=fetched_at,
+                    is_stale=False,
+                    data_quality="available",
+                    quality_warnings=[],
+                )
                 return result
         except Exception as e:
             last_error = e
@@ -178,10 +239,147 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
             logger.info(
                 f"[OptionProvider] All retries failed for {ticker}, using fallback cache"
             )
+            _set_metadata(
+                ticker,
+                source="memory_fallback",
+                fetched_at="",
+                is_stale=True,
+                data_quality="stale_cache",
+                quality_warnings=[
+                    "Option refresh failed; using in-memory option cache."
+                ],
+            )
             return _fallback_cache[ticker]
+
+    if cached_stale is not None:
+        calls, puts, fetched_at = cached_stale
+        _remember_success(ticker, calls, puts)
+        _set_metadata(
+            ticker,
+            source="persistent_cache",
+            fetched_at=fetched_at,
+            is_stale=True,
+            data_quality="stale_cache",
+            quality_warnings=[
+                f"Option refresh failed; using cached option data from {fetched_at}."
+            ],
+        )
+        return calls, puts
 
     logger.error(
         f"[OptionProvider] All retries exhausted for {ticker}, no fallback available. "
         f"Last error: {last_error}"
     )
+    _set_metadata(
+        ticker,
+        source="yfinance",
+        fetched_at="",
+        is_stale=False,
+        data_quality="failed",
+        quality_warnings=["Option data unavailable and no cache exists."],
+    )
     return None
+
+
+def get_option_chain_metadata(ticker: str) -> dict[str, Any]:
+    """Return metadata for the most recent option-chain lookup."""
+
+    with _metadata_lock:
+        return dict(_metadata_cache.get(ticker.upper(), {}))
+
+
+def _remember_success(ticker: str, calls: pd.DataFrame, puts: pd.DataFrame) -> None:
+    with _fallback_lock:
+        _fallback_cache[ticker] = (calls, puts)
+
+
+def _set_metadata(
+    ticker: str,
+    *,
+    source: str,
+    fetched_at: str,
+    is_stale: bool,
+    data_quality: str,
+    quality_warnings: list[str],
+) -> None:
+    with _metadata_lock:
+        _metadata_cache[ticker.upper()] = {
+            "source": source,
+            "fetched_at": fetched_at,
+            "is_stale": is_stale,
+            "data_quality": data_quality,
+            "quality_warnings": quality_warnings,
+        }
+
+
+def _cache_file(ticker: str) -> Path:
+    root = Path(__file__).resolve().parents[1] / ".states" / "option_chain_cache"
+    safe_ticker = ticker.replace("/", "_").replace("\\", "_")
+    return root / f"{safe_ticker}.json"
+
+
+def _save_persistent_cache(
+    ticker: str, calls: pd.DataFrame, puts: pd.DataFrame, fetched_at: str
+) -> None:
+    path = _cache_file(ticker)
+    payload = {
+        "ticker": ticker,
+        "fetched_at": fetched_at,
+        "calls": _frame_payload(calls),
+        "puts": _frame_payload(puts),
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        logger.debug(
+            f"[OptionProvider] Failed to write option cache for {ticker}: {exc}"
+        )
+
+
+def _load_persistent_cache(
+    ticker: str, *, max_age_seconds: int
+) -> tuple[pd.DataFrame, pd.DataFrame, str] | None:
+    path = _cache_file(ticker)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    fetched_at = str(payload.get("fetched_at") or "")
+    if not _is_cache_within_age(fetched_at, max_age_seconds):
+        return None
+
+    calls = _frame_from_payload(payload.get("calls") or {})
+    puts = _frame_from_payload(payload.get("puts") or {})
+    if calls.empty or puts.empty:
+        return None
+    return calls, puts, fetched_at
+
+
+def _is_cache_within_age(fetched_at: str, max_age_seconds: int) -> bool:
+    if not fetched_at:
+        return False
+    try:
+        fetched = datetime.fromisoformat(fetched_at)
+    except ValueError:
+        return False
+    if fetched.tzinfo is None:
+        fetched = fetched.replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - fetched).total_seconds()
+    return 0 <= age <= max_age_seconds
+
+
+def _frame_payload(df: pd.DataFrame) -> dict[str, Any]:
+    clean = df.astype(object).where(pd.notna(df), None)
+    return {"records": clean.to_dict("records")}
+
+
+def _frame_from_payload(payload: dict[str, Any]) -> pd.DataFrame:
+    records = payload.get("records") if isinstance(payload, dict) else []
+    return pd.DataFrame(records or [])

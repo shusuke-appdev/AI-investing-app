@@ -11,6 +11,7 @@
 | 変数 | 必須度 | 用途 |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | AI機能には必須 | Gemini による市況・銘柄・ポートフォリオ分析 |
+| `GEMINI_MODEL_NAME` / `GEMINI_MODEL` | 任意 | Geminiモデル名の上書き。未設定時は `gemini-3.5-flash` |
 | `FINNHUB_API_KEY` | 推奨 | 企業ニュース、決算、オプション補完データ |
 | `JQUANTS_API_KEY` | 日本株分析では推奨 | 日本株の価格・財務情報 |
 | `EDINET_API_KEY` | 日本株財務では推奨 | EDINET からの財務情報取得 |
@@ -58,6 +59,8 @@ python -m ruff format --check .
 - ポートフォリオ: `data/portfolios/*.json`
 - 知識DB: `data/knowledge*.json` 系のローカルファイル
 - キャッシュ: `app_cache.sqlite`、`yfinance_cache.sqlite`
+- 市場サマリーキャッシュ: `.states/market_context_cache/*.json`
+- オプションチェーンキャッシュ: `.states/option_chain_cache/*.json`
 
 ### GAS
 
@@ -70,6 +73,8 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 ## 運用上の注意
 
 - 外部APIの制限により、オプション分析とニュース集約は一時的に空になることがあります
+- Market Intelligence の起動時は軽量サマリーのみ自動取得します。詳細分析は「詳細更新」、SPY / QQQ / IWM のオプション取得は「Options」ボタンで明示的に実行します
+- yfinanceオプションデータにGreeks/Gammaがない場合、GEXは非表示になります。UIの `data_quality` バッジと品質警告を確認してください
 - `yfinance` など外部データソースのレスポンススキーマは変更されることがあり、列名の変化に備えたテストが必要です
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
@@ -92,6 +97,8 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 
 `pytest` のキャッシュは、アクセス拒否が発生していた `.pytest_cache` ではなく `.states/pytest_cache` を使うように設定済みです。
 `ruff` のキャッシュも `.states/ruff_cache` を使います。
+
+Reflex のフロントエンド検証では、Codex アプリの WindowsApps 配下にある `node.EXE` が `WinError 5` で実行できないことがあります。`rxconfig.py` は、存在する場合に `C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin` をPATH先頭へ入れ、実行可能な同梱Nodeを優先します。
 
 ```powershell
 Remove-Item -Recurse -Force .venv

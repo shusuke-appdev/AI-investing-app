@@ -18,6 +18,7 @@ def _monitor_payload():
 
 
 def test_build_market_context_collects_monitoring_inputs(monkeypatch):
+    monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)
     monkeypatch.setattr(
         service,
         "get_market_indices",
@@ -74,6 +75,7 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
 
 
 def test_build_market_context_keeps_partial_data_when_options_fail(monkeypatch):
+    monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)
     monkeypatch.setattr(service, "get_market_indices", lambda market_type: {"SPY": {}})
     monkeypatch.setattr(service, "get_market_config", lambda market_type: {})
     monkeypatch.setattr(
@@ -96,8 +98,69 @@ def test_build_market_context_keeps_partial_data_when_options_fail(monkeypatch):
 
     assert context.market_data == {"SPY": {}}
     assert context.options.items == []
-    assert context.options.status == "unavailable"
+    assert context.options.status == "failed"
     assert "Option analysis failed" in context.options.error_message
+
+
+def test_market_summary_context_does_not_fetch_options(monkeypatch):
+    monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)
+    monkeypatch.setattr(
+        service,
+        "get_market_indices",
+        lambda market_type: {"S&P 500": {"ticker": "SPY", "price": 500, "change": 1}},
+    )
+    monkeypatch.setattr(
+        service, "get_market_config", lambda market_type: {"indices": {"SPY": "SPY"}}
+    )
+    monkeypatch.setattr(
+        service,
+        "get_major_indices_option_status",
+        lambda market_type: (_ for _ in ()).throw(AssertionError("should not fetch")),
+    )
+
+    context = service.build_market_summary_context("US")
+
+    assert context.market_data["S&P 500"]["ticker"] == "SPY"
+    assert context.options.items == []
+    assert context.source == "live_summary"
+
+
+def test_market_details_reuses_supplied_context(monkeypatch):
+    base = MarketContext(
+        market_type="US",
+        market_data={"S&P 500": {"ticker": "SPY", "price": 500, "change": 1}},
+        market_config={"indices": {"S&P 500": "SPY"}},
+        options=OptionContext(items=[{"ticker": "SPY", "pcr": {"volume_pcr": 0.9}}]),
+    )
+    monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)
+    monkeypatch.setattr(
+        service,
+        "get_market_indices",
+        lambda market_type: (_ for _ in ()).throw(AssertionError("should reuse data")),
+    )
+    monkeypatch.setattr(
+        service,
+        "get_market_config",
+        lambda market_type: (_ for _ in ()).throw(
+            AssertionError("should reuse config")
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "evaluate_market_environment",
+        lambda market_type, options: {"status": "Neutral", "score": 0, "signals": []},
+    )
+    monkeypatch.setattr(service, "analyze_market_structure", lambda ticker: {})
+    monkeypatch.setattr(service, "get_momentum_themes", lambda market_type: {})
+    monkeypatch.setattr(
+        service, "build_market_monitor_context", lambda options: _monitor_payload()
+    )
+
+    context = service.build_market_details_context("US", base.to_dict())
+
+    assert context.market_data == base.market_data
+    assert context.options.items == base.options.items
+    assert context.monitor["distribution_spy"]["count"] == 2
 
 
 def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
@@ -160,3 +223,11 @@ def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
     assert captured["options"] == [{"ticker": "SPY"}]
     assert captured["market_data"]["S&P 500"]["ticker"] == "SPY"
     assert "Market environment: Bullish" in captured["advanced"]
+
+
+def test_market_ai_report_reports_gemini_unavailable():
+    result = market_analyst_service.generate_market_analysis_report(
+        "US", gemini_configured=False
+    )
+
+    assert result == "Gemini APIが利用できません。APIキーを設定してください。"

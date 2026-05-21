@@ -15,7 +15,7 @@ app.add_page(
     index,
     route="/",
     title="Market Intelligence | AI Investing",
-    on_load=MarketState.fetch_market_data,
+    on_load=MarketState.fetch_market_summary_fast,
 )
 app.add_page(stock_page, route="/stock", title="Stock Analysis | AI Investing")
 app.add_page(

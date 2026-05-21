@@ -53,7 +53,7 @@ def generate_market_analysis_report(
         Markdown string of the analysis report, or None if generation failed.
     """
     if not gemini_configured:
-        return None
+        return "Gemini APIが利用できません。APIキーを設定してください。"
 
     context = _resolve_market_context(
         market_type,
