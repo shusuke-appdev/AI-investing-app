@@ -7,6 +7,21 @@ from typing import Any
 
 
 @dataclass
+class DataResult:
+    """External or derived data retrieval status for UI and AI consumers."""
+
+    name: str
+    source: str = ""
+    fetched_at: str = ""
+    is_stale: bool = False
+    is_partial: bool = False
+    error: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class OptionContext:
     """Option-market analysis inputs and retrieval status."""
 
@@ -36,6 +51,7 @@ class MarketContext:
     microstructure: dict[str, Any] = field(default_factory=dict)
     momentum: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     monitor: dict[str, Any] = field(default_factory=dict)
+    data_status: list[DataResult] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     source: str = ""
     fetched_at: str = ""
@@ -53,6 +69,7 @@ class MarketContext:
             "microstructure": self.microstructure,
             "momentum": self.momentum,
             "monitor": self.monitor,
+            "data_status": [item.to_dict() for item in self.data_status],
             "errors": self.errors,
             "source": self.source,
             "fetched_at": self.fetched_at,
@@ -64,6 +81,18 @@ class MarketContext:
     @classmethod
     def from_mapping(cls, value: dict[str, Any]) -> MarketContext:
         options = value.get("options") or {}
+        data_status = [
+            DataResult(
+                name=str(item.get("name") or ""),
+                source=str(item.get("source") or ""),
+                fetched_at=str(item.get("fetched_at") or ""),
+                is_stale=bool(item.get("is_stale", False)),
+                is_partial=bool(item.get("is_partial", False)),
+                error=str(item.get("error") or ""),
+            )
+            for item in value.get("data_status", [])
+            if isinstance(item, dict)
+        ]
         return cls(
             market_type=value.get("market_type", "US"),
             market_data=value.get("market_data") or {},
@@ -83,6 +112,7 @@ class MarketContext:
             microstructure=value.get("microstructure") or {},
             momentum=value.get("momentum") or {},
             monitor=value.get("monitor") or {},
+            data_status=data_status,
             errors=list(value.get("errors") or []),
             source=str(value.get("source") or ""),
             fetched_at=str(value.get("fetched_at") or ""),
@@ -102,6 +132,7 @@ class StockSignalContext:
     probabilistic_signal: dict[str, Any] = field(default_factory=dict)
     news_source_status: str = ""
     news_error_reason: str = ""
+    data_status: list[DataResult] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

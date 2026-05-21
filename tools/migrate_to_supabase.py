@@ -1,144 +1,262 @@
 """
-Migrate to Supabase Script
-Reads local JSON data and uploads to Supabase tables.
+Migrate local JSON data to Supabase tables.
+
+The default mode is a dry run. Remote writes require ``--execute``. Remote table
+clearing additionally requires ``--confirm-destroy`` and a successful backup.
 """
 
+from __future__ import annotations
+
+import argparse
 import json
 import os
 import sys
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
-# Add project root to path
+# Add project root to path.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.settings_storage import load_settings
 from src.supabase_client import get_supabase_client
 
+TABLES = ("user_settings", "portfolios", "knowledge_items")
+CLEAR_FILTERS = {
+    "user_settings": ("key", "__migration_sentinel__"),
+    "portfolios": ("name", "__migration_sentinel__"),
+    "knowledge_items": ("id", "__migration_sentinel__"),
+}
 
-def load_json_robust(path: Path) -> dict:
-    """Try to load JSON with utf-8, fallback to cp932."""
+
+@dataclass(frozen=True)
+class MigrationOptions:
+    """Supabase migration execution options."""
+
+    dry_run: bool = True
+    confirm_destroy: bool = False
+    tables: tuple[str, ...] = TABLES
+    backup_dir: Path = Path("data/supabase_backups")
+
+
+def parse_args(argv: list[str] | None = None) -> MigrationOptions:
+    """Parse CLI arguments into migration options."""
+
+    parser = argparse.ArgumentParser(description="Migrate local data to Supabase.")
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Write local data to Supabase. Omit for dry-run mode.",
+    )
+    parser.add_argument(
+        "--confirm-destroy",
+        action="store_true",
+        help="Clear selected remote tables before upload. Requires --execute.",
+    )
+    parser.add_argument(
+        "--tables",
+        nargs="+",
+        choices=TABLES,
+        default=list(TABLES),
+        help="Tables to migrate. Defaults to all supported tables.",
+    )
+    parser.add_argument(
+        "--backup-dir",
+        type=Path,
+        default=Path("data/supabase_backups"),
+        help="Directory for pre-destroy Supabase backups.",
+    )
+    args = parser.parse_args(argv)
+    return MigrationOptions(
+        dry_run=not args.execute,
+        confirm_destroy=bool(args.confirm_destroy),
+        tables=tuple(args.tables),
+        backup_dir=args.backup_dir,
+    )
+
+
+def load_json_robust(path: Path) -> Any:
+    """Try to load JSON with utf-8, then cp932 for older local files."""
+
     try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
+        return json.loads(path.read_text(encoding="utf-8"))
     except UnicodeDecodeError:
-        pass
-
-    with open(path, encoding="cp932") as f:
-        return json.load(f)
+        return json.loads(path.read_text(encoding="cp932"))
 
 
-def migrate():
+def migrate(options: MigrationOptions | None = None) -> int:
+    """Run the migration and return a process-style exit code."""
+
+    options = options or parse_args()
     print("=== Supabase Migration Tool ===")
+    print(f"Mode: {'dry-run' if options.dry_run else 'execute'}")
+    print("Tables: " + ", ".join(options.tables))
 
-    # 1. Connect
+    local_payload = collect_local_payload(options.tables)
+    print_migration_plan(local_payload)
+
+    if options.dry_run:
+        print("\nDry run only. Re-run with --execute to write to Supabase.")
+        return 0
+
     client = get_supabase_client()
     if not client:
+        print("Error: Could not connect to Supabase. Check SUPABASE_URL/SUPABASE_KEY.")
+        return 1
+
+    if options.confirm_destroy:
+        if not backup_remote_tables(client, options.tables, options.backup_dir):
+            print("[ERR] Remote backup failed. Aborting destructive clear.")
+            return 1
+        clear_remote_tables(client, options.tables)
+    else:
         print(
-            "Error: Could not connect to Supabase. Check credentials in secrets.toml or .env"
+            "Remote tables will not be cleared. Use --confirm-destroy to replace all."
         )
-        return
 
-    print("[OK] Connected to Supabase")
+    upload_payload(client, local_payload)
+    print("\n=== Migration Complete ===")
+    return 0
 
-    # Clean Slate (Optional but recommended for re-runs)
-    print("\n--- Cleaning existing data ---")
-    try:
-        client.table("portfolios").delete().neq(
-            "id", "00000000-0000-0000-0000-000000000000"
-        ).execute()  # Delete all
-        client.table("user_settings").delete().neq("key", "PLACEHOLDER").execute()
-        client.table("knowledge_items").delete().neq("id", "PLACEHOLDER").execute()
-        print("[OK] Cleared tables")
-    except Exception as e:
-        print(f"[WARN] Failed to clear tables (might be empty or RLS): {e}")
 
-    # 2. Migrate Settings
-    print("\n--- Migrating Settings ---")
-    # settings_storage load_settings already handles fallback logic?
-    # But it returns a dict. We don't know the file path it used.
-    # Let's just use load_settings() as it abstracts the file finding.
-    # But wait, load_settings might not handle encoding if it was hardcoded utf-8.
-    # settings_storage.py uses "utf-8" hardcoded.
-    # If settings.json is cp932, load_settings might fail or return empty.
-    # Let's try to reload it responsibly here if we want to be sure?
-    # Or just trust load_settings for now (it printed success logs in previous attempts).
+def collect_local_payload(tables: tuple[str, ...]) -> dict[str, Any]:
+    """Collect local data for the selected tables."""
 
-    settings = load_settings()
-    if settings:
-        data = [
-            {"key": k, "value": str(v), "updated_at": "now()"}
-            for k, v in settings.items()
+    payload: dict[str, Any] = {}
+    if "user_settings" in tables:
+        payload["user_settings"] = [
+            {"key": key, "value": str(value), "updated_at": "now()"}
+            for key, value in collect_local_settings().items()
         ]
+    if "portfolios" in tables:
+        payload["portfolios"] = collect_portfolio_payloads()
+    if "knowledge_items" in tables:
+        payload["knowledge_items"] = collect_knowledge_payloads()
+    return payload
+
+
+def collect_local_settings() -> dict[str, Any]:
+    """Load local settings without merging from remote Supabase."""
+
+    candidates = [
+        Path(__file__).parent.parent / "data" / "settings.json",
+        Path("data/settings.json").resolve(),
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        data = load_json_robust(path)
+        return data if isinstance(data, dict) else {}
+    return {}
+
+
+def collect_portfolio_payloads() -> list[dict[str, Any]]:
+    """Load local portfolio JSON files as Supabase payloads."""
+
+    portfolio_dir = Path(__file__).parent.parent / "data" / "portfolios"
+    if not portfolio_dir.exists():
+        return []
+
+    payloads = []
+    for portfolio_file in portfolio_dir.glob("*.json"):
         try:
-            client.table("user_settings").upsert(data).execute()
-            print(f"[OK] Uploaded {len(data)} settings.")
-        except Exception as e:
-            print(f"[ERR] Failed to upload settings: {e}")
-    else:
-        print("No local settings found.")
-
-    # 3. Migrate Portfolios
-    print("\n--- Migrating Portfolios ---")
-    PORTFOLIO_DIR = Path(__file__).parent.parent / "data" / "portfolios"
-    if PORTFOLIO_DIR.exists():
-        files = list(PORTFOLIO_DIR.glob("*.json"))
-        print(f"Found {len(files)} local portfolio files.")
-
-        for p_file in files:
-            try:
-                p_data = load_json_robust(p_file)
-
-                # Prepare payload
-                name = p_data["name"]
-
-                payload = {
-                    "name": name,
-                    "holdings": p_data["holdings"],
-                    "created_at": p_data.get("created_at") or "now()",
-                    "updated_at": p_data.get("updated_at") or "now()",
+            data = load_json_robust(portfolio_file)
+            payloads.append(
+                {
+                    "name": data["name"],
+                    "holdings": data["holdings"],
+                    "created_at": data.get("created_at") or "now()",
+                    "updated_at": data.get("updated_at") or "now()",
                 }
+            )
+        except Exception as exc:
+            print(f"[ERR] Error reading {portfolio_file.name}: {exc}")
+    return payloads
 
-                # Upsert by name
-                client.table("portfolios").upsert(payload, on_conflict="name").execute()
-                print(f"Inserted: {name}")
 
-            except Exception as e:
-                print(f"[ERR] Error migrating {p_file.name}: {e}")
-    else:
-        print("No local portfolios directory found.")
+def collect_knowledge_payloads() -> list[dict[str, Any]]:
+    """Load local knowledge JSON as Supabase payloads."""
 
-    # 4. Migrate Knowledge
-    print("\n--- Migrating Knowledge ---")
-    KNOWLEDGE_FILE = (
+    knowledge_file = (
         Path(__file__).parent.parent / "data" / "knowledge" / "knowledge_items.json"
     )
-    if KNOWLEDGE_FILE.exists():
+    if not knowledge_file.exists():
+        return []
+
+    try:
+        data = load_json_robust(knowledge_file)
+    except Exception as exc:
+        print(f"[ERR] Error reading knowledge file: {exc}")
+        return []
+
+    payloads = []
+    for item in data:
+        if isinstance(item, dict):
+            item.setdefault("metadata", {})
+            payloads.append(item)
+    return payloads
+
+
+def print_migration_plan(payload: dict[str, Any]) -> None:
+    """Print the migration plan without exposing row contents."""
+
+    print("\n--- Planned upload ---")
+    for table in TABLES:
+        if table in payload:
+            print(f"- {table}: {len(payload[table])} rows")
+
+
+def backup_remote_tables(
+    client: Any, tables: tuple[str, ...], backup_dir: Path
+) -> bool:
+    """Export selected remote tables before destructive clearing."""
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    for table in tables:
         try:
-            k_data = load_json_robust(KNOWLEDGE_FILE)
+            response = client.table(table).select("*").execute()
+            path = backup_dir / f"{timestamp}_{table}.json"
+            path.write_text(
+                json.dumps(response.data or [], ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[OK] Backed up {table} to {path}")
+        except Exception as exc:
+            print(f"[ERR] Failed to back up {table}: {exc}")
+            return False
+    return True
 
-            print(f"Found {len(k_data)} knowledge items.")
 
-            batch_size = 10
-            for i in range(0, len(k_data), batch_size):
-                batch = k_data[i : i + batch_size]
-                try:
-                    # Ensure metadata is dict
-                    for item in batch:
-                        if "metadata" not in item:
-                            item["metadata"] = {}
+def clear_remote_tables(client: Any, tables: tuple[str, ...]) -> None:
+    """Clear selected remote tables after backup and explicit confirmation."""
 
-                    client.table("knowledge_items").upsert(batch).execute()
-                    print(f"Uploaded batch {i}-{i + len(batch)}")
-                except Exception as e:
-                    print(f"[ERR] Batch upload failed: {e}")
+    print("\n--- Clearing selected remote tables ---")
+    for table in tables:
+        column, sentinel = CLEAR_FILTERS[table]
+        client.table(table).delete().neq(column, sentinel).execute()
+        print(f"[OK] Cleared {table}")
 
-        except Exception as e:
-            print(f"[ERR] Error reading knowledge file: {e}")
-    else:
-        print("No local knowledge file found.")
 
-    print("\n=== Migration Complete ===")
+def upload_payload(client: Any, payload: dict[str, Any]) -> None:
+    """Upload selected payload tables to Supabase."""
+
+    if payload.get("user_settings"):
+        client.table("user_settings").upsert(payload["user_settings"]).execute()
+        print(f"[OK] Uploaded {len(payload['user_settings'])} settings.")
+
+    for portfolio in payload.get("portfolios", []):
+        client.table("portfolios").upsert(portfolio, on_conflict="name").execute()
+    if "portfolios" in payload:
+        print(f"[OK] Uploaded {len(payload['portfolios'])} portfolios.")
+
+    knowledge_items = payload.get("knowledge_items", [])
+    for start in range(0, len(knowledge_items), 10):
+        batch = knowledge_items[start : start + 10]
+        client.table("knowledge_items").upsert(batch).execute()
+    if "knowledge_items" in payload:
+        print(f"[OK] Uploaded {len(knowledge_items)} knowledge items.")
 
 
 if __name__ == "__main__":
-    migrate()
+    raise SystemExit(migrate(parse_args()))

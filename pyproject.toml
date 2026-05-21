@@ -52,4 +52,4 @@ testpaths = ["tests"]
 pythonpath = ["."]
 python_files = "test_*.py"
 cache_dir = ".states/pytest_cache"
-addopts = "--basetemp=tmp"
+addopts = "--basetemp=.states/pytest_tmp"

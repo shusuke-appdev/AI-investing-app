@@ -127,3 +127,13 @@ streamlit run legacy_streamlit/app.py
 - Stopped showing synthetic GEX when yfinance lacks Greeks/Gamma; the UI now displays `-` with quality warnings instead of misleading large values.
 - AI Market Recap now receives option data quality warnings and Gemini model selection can be overridden with `GEMINI_MODEL_NAME` or `GEMINI_MODEL`.
 - Fixed Reflex validation on this Windows/Codex setup by making `rxconfig.py` prefer the runnable Codex runtime Node over the inaccessible WindowsApps `OpenAI.Codex...\node.EXE`; `reflex export --frontend-only --no-zip` now passes.
+
+# Session update: 2026-05-21 review remediation implementation
+- Made `tools/migrate_to_supabase.py` dry-run by default; remote writes require `--execute`, destructive table clearing requires `--confirm-destroy`, and a pre-clear backup must succeed.
+- Fixed the public `calculate_atm_iv(ticker=...)` path so it handles option metadata from `_fetch_option_data()`, with a regression test.
+- Added `DataResult` status metadata to market and stock analysis contexts, moved stock dashboard orchestration and portfolio validation/analysis serialization into service modules, and moved market option presentation formatting out of Reflex state.
+- Hardened Knowledge DB AI context with sanitized `KnowledgeContextItem` blocks, deduplication, source/created-at context, and explicit prompt-injection instructions that treat saved notes as untrusted quoted data.
+- Fixed portfolio holding UX by preserving update ticker names in success messages and rejecting zero/negative shares before save or analysis.
+- Removed tracked local cache/debug artifacts (`app_cache.sqlite`, `yfinance_cache.sqlite`, root debug scripts/results), ignored future local verification artifacts, and moved pytest basetemp under `.states/pytest_tmp`.
+- Added `constraints.txt` and wired local/Docker install docs to use `-c constraints.txt` for reproducible deploy dependency versions.
+- Validation: ruff check passed, ruff format check passed, compileall passed, and pytest passed with 84 tests.

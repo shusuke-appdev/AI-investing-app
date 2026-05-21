@@ -62,7 +62,7 @@ Python 3.12 を推奨します。このワークスペースでは `py -3.12` �
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -c constraints.txt
 ```
 
 `.env.example` を参考に `.env` を作成します。

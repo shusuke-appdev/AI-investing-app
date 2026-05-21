@@ -13,6 +13,7 @@ def analyze_stock(
     historical_data: dict | None = None,
     news_headlines: list[str] | None = None,
     probabilistic_signal: dict | None = None,
+    stock_signal_context: dict | None = None,
 ) -> str:
     """
     銘柄の詳細分析を生成します（テクニカル分析統合版）。
@@ -39,6 +40,7 @@ def analyze_stock(
     # テクニカル分析を取得
     technical_summary = get_technical_summary_for_ai(ticker)
     probabilistic_context = _format_probabilistic_context(probabilistic_signal)
+    data_quality_context = _format_data_quality_context(stock_signal_context)
 
     # SMART基準を評価
     from src.advisor.smart_criteria import evaluate_smart_criteria
@@ -73,6 +75,7 @@ def analyze_stock(
         target_price=target_price,
         technical_summary=technical_summary,
         probabilistic_context=probabilistic_context,
+        data_quality_context=data_quality_context,
         smart_criteria_summary=smart_criteria_summary,
         news_headlines=chr(10).join(news_headlines[:5])
         if news_headlines
@@ -140,3 +143,27 @@ def _format_probabilistic_context(signal: dict | None) -> str:
 - Negative Factors: {"; ".join(negative) if negative else "N/A"}
 - Risk Notes: {"; ".join(risk_notes) if risk_notes else "N/A"}
 """
+
+
+def _format_data_quality_context(stock_signal_context: dict | None) -> str:
+    if not stock_signal_context:
+        return "Data status: unavailable."
+
+    status_items = stock_signal_context.get("data_status") or []
+    if not status_items:
+        return "Data status: no explicit retrieval status was provided."
+
+    lines = []
+    for item in status_items:
+        if not isinstance(item, dict):
+            continue
+        status = "partial" if item.get("is_partial") else "ok"
+        if item.get("is_stale"):
+            status = "stale"
+        error = f", error={item.get('error')}" if item.get("error") else ""
+        lines.append(
+            "- "
+            f"{item.get('name', 'data')}: {status}, "
+            f"source={item.get('source', 'unknown')}{error}"
+        )
+    return "\n".join(lines) if lines else "Data status: unavailable."

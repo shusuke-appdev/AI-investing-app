@@ -1,5 +1,7 @@
 *.db
+*.sqlite
 .states
+tmp/
 assets/external/
 .web
 # Python
@@ -52,6 +54,14 @@ legacy_streamlit/.streamlit/secrets.toml
 data/*.json
 
 data/*.csv
+
+# Local verification artifacts
+opt_res.txt
+finnhub_test_result.txt
+debug_fixes.py
+test_mock.py
+test_vix.py
+test_minervini.py
 
 # OS
 .DS_Store

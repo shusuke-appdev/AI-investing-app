@@ -6,6 +6,7 @@ import pytest
 from src.option_analyst import (
     analyze_option_sentiment,
     assess_option_data_quality,
+    calculate_atm_iv,
     calculate_gex,
     calculate_pcr,
 )
@@ -141,3 +142,15 @@ class TestOptionAnalyst:
 
         assert quality["data_quality"] == "unreliable"
         assert any("Open interest" in w for w in quality["quality_warnings"])
+
+    @patch("src.option_analyst.DataProvider.get_current_price", return_value=100.0)
+    @patch("src.option_analyst.get_option_chain")
+    def test_calculate_atm_iv_fetch_path_unpacks_metadata(
+        self, mock_get_chain, _mock_get_price, mock_option_data
+    ):
+        """The public ticker path should work when _fetch_option_data returns metadata."""
+        mock_get_chain.return_value = mock_option_data
+
+        iv = calculate_atm_iv("TEST")
+
+        assert iv == pytest.approx(0.19)

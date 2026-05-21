@@ -434,7 +434,7 @@ def calculate_atm_iv(
         fetched = _fetch_option_data(ticker)
         if fetched is None:
             return None
-        calls, puts, current_price, _ = fetched
+        calls, puts, current_price, _, _ = fetched
 
     if "strike" not in calls or "strike" not in puts:
         return None

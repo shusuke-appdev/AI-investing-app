@@ -4,6 +4,12 @@ from typing import Any
 import reflex as rx
 from pydantic import BaseModel
 
+from src.services.portfolio_dashboard_service import (
+    holdings_to_payload,
+    run_portfolio_analysis,
+    validate_holding_input,
+)
+
 
 class HoldingItem(BaseModel):
     """ポートフォリオ内の個別銘柄"""
@@ -103,40 +109,38 @@ class PortfolioState(rx.State):
 
     def add_holding(self):
         """銘柄を追加する"""
-        if not self.new_ticker:
-            self.error_msg = "ティッカーを入力してください"
+        validated = validate_holding_input(
+            self.new_ticker, self.new_shares, self.new_cost
+        )
+        if not validated.is_valid:
+            self.error_msg = validated.error
+            self.success_msg = ""
             return
-
-        try:
-            shares = float(self.new_shares) if self.new_shares else 0.0
-        except ValueError:
-            self.error_msg = "株数は数値で入力してください"
-            return
-
-        cost = None
-        if self.new_cost:
-            try:
-                cost = float(self.new_cost)
-            except ValueError:
-                self.error_msg = "取得単価は数値で入力してください"
-                return
 
         # 既存の同一ティッカーがあれば更新
         for i, h in enumerate(self.holdings):
-            if h.ticker == self.new_ticker:
+            if h.ticker == validated.ticker:
                 self.holdings[i] = HoldingItem(
-                    ticker=self.new_ticker, shares=shares, avg_cost=cost
+                    ticker=validated.ticker,
+                    shares=validated.shares,
+                    avg_cost=validated.avg_cost,
                 )
                 self.new_ticker = ""
                 self.new_shares = ""
                 self.new_cost = ""
-                self.success_msg = f"{self.new_ticker} を更新しました"
+                self.error_msg = ""
+                self.success_msg = f"{validated.ticker} を更新しました"
                 return
 
         self.holdings.append(
-            HoldingItem(ticker=self.new_ticker, shares=shares, avg_cost=cost)
+            HoldingItem(
+                ticker=validated.ticker,
+                shares=validated.shares,
+                avg_cost=validated.avg_cost,
+            )
         )
-        self.success_msg = f"{self.new_ticker} を追加しました"
+        self.error_msg = ""
+        self.success_msg = f"{validated.ticker} を追加しました"
         self.new_ticker = ""
         self.new_shares = ""
         self.new_cost = ""
@@ -159,14 +163,10 @@ class PortfolioState(rx.State):
         try:
             from src.portfolio_storage import save_portfolio
 
-            holdings_data = [
-                {
-                    "ticker": h.ticker,
-                    "shares": h.shares,
-                    "avg_cost": h.avg_cost,
-                }
-                for h in self.holdings
-            ]
+            holdings_data = holdings_to_payload(self.holdings)
+            if not holdings_data:
+                self.error_msg = "保存できる保有銘柄がありません"
+                return
             success = await asyncio.to_thread(
                 save_portfolio, name, holdings_data, self.storage_type
             )
@@ -226,39 +226,10 @@ class PortfolioState(rx.State):
         yield
 
         try:
-            from src.portfolio_advisor import PortfolioHolding, analyze_portfolio
-
-            holdings_obj = [
-                PortfolioHolding(
-                    ticker=h.ticker,
-                    shares=h.shares,
-                    avg_cost=h.avg_cost,
-                )
-                for h in self.holdings
-                if h.shares > 0
-            ]
-
-            result = await asyncio.to_thread(analyze_portfolio, holdings_obj)
+            holdings_data = holdings_to_payload(self.holdings)
+            result = await asyncio.to_thread(run_portfolio_analysis, holdings_data)
             if result:
-                # Reflexで扱える形式に変換（TechnicalScoreオブジェクトをdictに）
-                import dataclasses
-
-                safe_result = {}
-                for key, val in result.items():
-                    if key == "holdings":
-                        safe_holdings = []
-                        for hdata in val:
-                            safe_h = {}
-                            for hk, hv in hdata.items():
-                                if hk == "technical" and hv is not None:
-                                    safe_h[hk] = dataclasses.asdict(hv)
-                                else:
-                                    safe_h[hk] = hv
-                            safe_holdings.append(safe_h)
-                        safe_result[key] = safe_holdings
-                    else:
-                        safe_result[key] = val
-                self.analysis_result = safe_result
+                self.analysis_result = result
                 self.submode = "analysis"
             else:
                 self.error_msg = "分析結果を取得できませんでした"

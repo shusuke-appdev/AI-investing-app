@@ -23,7 +23,7 @@
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -c constraints.txt
 reflex run
 ```
 
@@ -79,6 +79,7 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
 - GitHub Actions の Hugging Face Spaces 同期は `main` / `master` への push で force push します。運用前に対象Spaceとブランチ保護を確認してください
+- Supabase移行は既定でdry-runです。実行は `python tools/migrate_to_supabase.py --execute`、既存テーブルを消して入れ替える場合のみ `--confirm-destroy` を追加します。破壊実行時は `data/supabase_backups/` にバックアップが取れない限り中断します。
 
 ## 既知のローカル環境問題
 
@@ -105,7 +106,7 @@ Remove-Item -Recurse -Force .venv
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install --no-cache-dir -r requirements.txt
+python -m pip install --no-cache-dir -r requirements.txt -c constraints.txt
 ```
 
 削除前に、ローカルだけで必要な仮想環境内ファイルがないことを確認してください。

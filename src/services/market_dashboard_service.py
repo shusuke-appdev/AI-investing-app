@@ -19,7 +19,7 @@ from src.market_data import get_market_indices, get_stock_data
 from src.market_microstructure import analyze_market_structure
 from src.momentum_monitor import get_momentum_themes
 from src.option_analyst import get_major_indices_option_status
-from src.services.analysis_context import MarketContext, OptionContext
+from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.stock_data_provider import get_valuation_metrics
 
 MARKET_SUMMARY_FRESH_SECONDS = 300
@@ -49,6 +49,21 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
         market_type=market_type,
         market_data=market_data,
         market_config=market_config,
+        data_status=[
+            DataResult(
+                name="market_indices",
+                source="market_data",
+                fetched_at=_utc_now(),
+                is_partial=bool(errors) or not bool(market_data),
+                error="; ".join(errors) if errors else "",
+            ),
+            DataResult(
+                name="market_config",
+                source="local_config",
+                fetched_at=_utc_now(),
+                is_partial=not bool(market_config),
+            ),
+        ],
         source="live_summary",
         fetched_at=_utc_now(),
         is_partial=bool(errors),
@@ -102,6 +117,16 @@ def build_market_details_context(
         microstructure=results.get("microstructure") or {},
         momentum=results.get("momentum") or {},
         monitor=results.get("monitor") or {},
+        data_status=[
+            *base.data_status,
+            DataResult(
+                name="market_details",
+                source="market_dashboard_service",
+                fetched_at=_utc_now(),
+                is_partial=bool(errors),
+                error="; ".join(errors) if errors else "",
+            ),
+        ],
         errors=errors,
         source="live_details",
         fetched_at=_utc_now(),
@@ -152,6 +177,17 @@ def build_market_options_context(
         microstructure=base.microstructure,
         momentum=base.momentum,
         monitor=results.get("monitor") or base.monitor,
+        data_status=[
+            *base.data_status,
+            DataResult(
+                name="options",
+                source=options.source,
+                fetched_at=options.fetched_at,
+                is_stale=options.is_stale,
+                is_partial=options.is_partial,
+                error=options.error_message,
+            ),
+        ],
         errors=errors,
         source="live_options",
         fetched_at=_utc_now(),
@@ -203,6 +239,17 @@ def format_market_context_for_ai(context: MarketContext) -> str:
     """Create a compact prompt section from already computed monitoring context."""
 
     parts = ["[Advanced Technical / Market Monitoring]"]
+    if context.data_status:
+        status_parts = []
+        for item in context.data_status[:6]:
+            status = "partial" if item.is_partial else "ok"
+            if item.is_stale:
+                status = "stale"
+            error = f", error={item.error}" if item.error else ""
+            status_parts.append(
+                f"{item.name}: {status} from {item.source or 'unknown'}{error}"
+            )
+        parts.append("- Data status: " + "; ".join(status_parts))
     if context.quality_warnings:
         parts.append("- Data quality: " + "; ".join(context.quality_warnings[:6]))
     if context.options.quality_warnings:
