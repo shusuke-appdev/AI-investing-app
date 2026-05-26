@@ -51,6 +51,20 @@ def configure_yfinance_cache(*, force: bool = False) -> Path:
     raise RuntimeError("No writable yfinance cache directory found") from last_error
 
 
+def yfinance_cache_info() -> dict[str, str | bool]:
+    """Return lightweight status for yfinance's configured cache directory."""
+
+    with _cache_lock:
+        configured = _configured_cache_dir
+    cache_dir = configured or default_yfinance_cache_dir()
+    return {
+        "configured": configured is not None,
+        "cache_dir": str(cache_dir),
+        "exists": cache_dir.exists(),
+        "writable": _is_writable_dir(cache_dir),
+    }
+
+
 def _candidate_cache_dirs() -> list[Path]:
     env_dir = os.environ.get("YFINANCE_CACHE_DIR")
     candidates = [Path(env_dir).expanduser()] if env_dir else []
@@ -64,3 +78,11 @@ def _ensure_writable_dir(cache_dir: Path) -> None:
     probe = cache_dir / ".write_probe"
     probe.write_text("ok", encoding="utf-8")
     probe.unlink(missing_ok=True)
+
+
+def _is_writable_dir(cache_dir: Path) -> bool:
+    try:
+        _ensure_writable_dir(cache_dir)
+    except OSError:
+        return False
+    return True

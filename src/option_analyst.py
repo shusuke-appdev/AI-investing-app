@@ -680,6 +680,8 @@ def analyze_option_sentiment(ticker: str) -> dict | None:
         "fetched_at": fetched_at,
         "source": metadata.get("source", "yfinance"),
         "is_stale": bool(metadata.get("is_stale", False)),
+        "cache_status": metadata.get("cache_status", "live"),
+        "cache_age_seconds": metadata.get("cache_age_seconds"),
         "data_quality": quality["data_quality"],
         "quality_warnings": quality["quality_warnings"],
     }
@@ -735,6 +737,8 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
             "source": "not_applicable",
             "fetched_at": "",
             "is_stale": False,
+            "cache_status": "not_applicable",
+            "cache_age_seconds": None,
             "quality_warnings": [],
         }
 
@@ -790,6 +794,8 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
         "source": _aggregate_sources(results),
         "fetched_at": _latest_fetched_at(results),
         "is_stale": any(bool(item.get("is_stale")) for item in results),
+        "cache_status": _aggregate_cache_status(results),
+        "cache_age_seconds": _max_cache_age_seconds(results),
         "quality_warnings": quality_warnings,
     }
 
@@ -812,3 +818,27 @@ def _latest_fetched_at(results: list[dict]) -> str:
         str(item.get("fetched_at") or "") for item in results if item.get("fetched_at")
     ]
     return max(values) if values else ""
+
+
+def _aggregate_cache_status(results: list[dict]) -> str:
+    statuses = {str(item.get("cache_status") or "live") for item in results}
+    if not statuses:
+        return "failed"
+    if "stale_cache" in statuses:
+        return "stale_cache"
+    if "memory_cache" in statuses:
+        return "memory_cache"
+    if "persistent_cache" in statuses:
+        return "persistent_cache"
+    if "failed" in statuses:
+        return "failed"
+    return "live"
+
+
+def _max_cache_age_seconds(results: list[dict]) -> float | None:
+    ages = [
+        float(item["cache_age_seconds"])
+        for item in results
+        if item.get("cache_age_seconds") is not None
+    ]
+    return max(ages) if ages else None

@@ -271,6 +271,7 @@ def _build_data_status(
             source="market_data",
             is_partial=not bool(info) or _is_limited_profile(info),
             error=_profile_warning_message(info),
+            cache_status="live",
         ),
         DataResult(
             name="price_history",
@@ -279,24 +280,28 @@ def _build_data_status(
             error="Price history unavailable."
             if history_df is None or history_df.empty
             else "",
+            cache_status="live",
         ),
         DataResult(
             name="news",
             source=news_source_status,
             is_partial=bool(news_error_reason),
             error=news_error_reason,
+            cache_status="live" if news_source_status == "available" else "failed",
         ),
         DataResult(
             name="technical_analysis",
             source="local_calculation",
             is_partial=not has_technical,
             error="" if has_technical else "Technical analysis unavailable.",
+            cache_status="computed",
         ),
         DataResult(
             name="probabilistic_signal",
             source="local_calculation",
             is_partial=not has_probabilistic,
             error="" if has_probabilistic else "Probabilistic signal unavailable.",
+            cache_status="computed",
         ),
     ]
 

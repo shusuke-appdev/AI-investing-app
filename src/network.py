@@ -1,13 +1,20 @@
 """
-Centralized Networking Module
-Provides a shared session with User-Agent, timeouts, and optional caching.
+Centralized Networking Module.
+
+Provides shared requests sessions with User-Agent, retries, timeouts, and
+repo-local optional HTTP caching.
 """
+
+from __future__ import annotations
+
+from pathlib import Path
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from src.log_config import get_logger
+from src.persistent_cache import safe_cache_key
 
 logger = get_logger(__name__)
 
@@ -21,8 +28,14 @@ RETRY_TOTAL = 3
 RETRY_BACKOFF_FACTOR = 0.5
 RETRY_STATUS_FORCELIST = [429, 500, 502, 503, 504]
 
-# シングルトンのセッションを保持
-_session: requests.Session | None = None
+# 用途別のセッションを保持
+_sessions: dict[tuple[str, int], requests.Session] = {}
+
+
+def default_http_cache_dir() -> Path:
+    """Return the repo-local directory used for requests-cache files."""
+
+    return Path(__file__).resolve().parents[1] / ".states" / "http_cache"
 
 
 def get_session(
@@ -32,16 +45,20 @@ def get_session(
     Returns a configured requests session with automatic retries and exponential backoff.
     Uses requests-cache if available, otherwise falls back to standard requests.Session.
     """
-    global _session
-    if _session is not None:
-        return _session
+    session_key = (cache_name, int(expire_after))
+    if session_key in _sessions:
+        return _sessions[session_key]
 
     session = None
 
     try:
         import requests_cache
 
-        session = requests_cache.CachedSession(cache_name, expire_after=expire_after)
+        cache_path = default_http_cache_dir() / safe_cache_key(cache_name)
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        session = requests_cache.CachedSession(
+            str(cache_path), expire_after=expire_after
+        )
     except ImportError:
         logger.info(
             "[NETWORK_WARN] requests_cache not found. Using standard session without caching."
@@ -64,8 +81,8 @@ def get_session(
     session.mount("http://", adapter)
     session.mount("https://", adapter)
 
-    _session = session
-    return _session
+    _sessions[session_key] = session
+    return session
 
 
 def get_retry_session() -> requests.Session:
@@ -90,3 +107,22 @@ def safe_request(
     except requests.exceptions.RequestException as e:
         logger.error(f"Request failed for {url}: {e}")
         raise e
+
+
+def session_cache_info() -> dict:
+    """Return lightweight status for network session caches."""
+
+    return {
+        "session_count": len(_sessions),
+        "cache_dir": str(default_http_cache_dir()),
+        "sessions": [
+            {"cache_name": cache_name, "expire_after": expire_after}
+            for cache_name, expire_after in _sessions
+        ],
+    }
+
+
+def clear_sessions() -> None:
+    """Clear in-process network session singletons."""
+
+    _sessions.clear()

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -19,11 +17,13 @@ from src.market_data import get_market_indices, get_stock_data
 from src.market_microstructure import analyze_market_structure
 from src.momentum_monitor import get_momentum_themes
 from src.option_analyst import get_major_indices_option_status
+from src.persistent_cache import PersistentJsonCache, repo_state_cache, utc_now_iso
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.stock_data_provider import get_valuation_metrics
 
 MARKET_SUMMARY_FRESH_SECONDS = 300
 MARKET_SUMMARY_STALE_SECONDS = 86400
+MARKET_CONTEXT_CACHE_NAMESPACE = "market_context_cache"
 
 
 def load_cached_market_summary_context(
@@ -56,12 +56,14 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
                 fetched_at=_utc_now(),
                 is_partial=bool(errors) or not bool(market_data),
                 error="; ".join(errors) if errors else "",
+                cache_status="live",
             ),
             DataResult(
                 name="market_config",
                 source="local_config",
                 fetched_at=_utc_now(),
                 is_partial=not bool(market_config),
+                cache_status="live",
             ),
         ],
         source="live_summary",
@@ -69,6 +71,7 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
         is_partial=bool(errors),
         quality_warnings=list(errors),
         errors=errors,
+        cache_status="live",
     )
     if market_data:
         _save_context_cache(context, "summary")
@@ -125,6 +128,7 @@ def build_market_details_context(
                 fetched_at=_utc_now(),
                 is_partial=bool(errors),
                 error="; ".join(errors) if errors else "",
+                cache_status="live",
             ),
         ],
         errors=errors,
@@ -135,6 +139,8 @@ def build_market_details_context(
         quality_warnings=_merge_warnings(
             base.quality_warnings, options.quality_warnings, errors
         ),
+        cache_status="live" if not base.is_stale else base.cache_status,
+        cache_age_seconds=base.cache_age_seconds,
     )
     if context.market_data:
         _save_context_cache(context, "full")
@@ -186,6 +192,8 @@ def build_market_options_context(
                 is_stale=options.is_stale,
                 is_partial=options.is_partial,
                 error=options.error_message,
+                cache_status=options.cache_status,
+                cache_age_seconds=options.cache_age_seconds,
             ),
         ],
         errors=errors,
@@ -196,6 +204,10 @@ def build_market_options_context(
         quality_warnings=_merge_warnings(
             base.quality_warnings, options.quality_warnings, errors
         ),
+        cache_status=options.cache_status
+        if options.cache_status != "live"
+        else base.cache_status,
+        cache_age_seconds=options.cache_age_seconds or base.cache_age_seconds,
     )
     if context.market_data:
         _save_context_cache(context, "full")
@@ -246,8 +258,13 @@ def format_market_context_for_ai(context: MarketContext) -> str:
             if item.is_stale:
                 status = "stale"
             error = f", error={item.error}" if item.error else ""
+            cache = (
+                f", cache={item.cache_status}"
+                if item.cache_status and item.cache_status != "live"
+                else ""
+            )
             status_parts.append(
-                f"{item.name}: {status} from {item.source or 'unknown'}{error}"
+                f"{item.name}: {status} from {item.source or 'unknown'}{cache}{error}"
             )
         parts.append("- Data status: " + "; ".join(status_parts))
     if context.quality_warnings:
@@ -330,6 +347,8 @@ def _build_option_context(market_type: str) -> OptionContext:
             is_stale=bool(result.get("is_stale", False)),
             is_partial=status == "partial" or bool(failed_tickers),
             quality_warnings=list(result.get("quality_warnings") or []),
+            cache_status=str(result.get("cache_status") or "live"),
+            cache_age_seconds=_optional_float(result.get("cache_age_seconds")),
         )
     except Exception as exc:
         return OptionContext(
@@ -338,6 +357,7 @@ def _build_option_context(market_type: str) -> OptionContext:
             source="yfinance",
             is_partial=True,
             quality_warnings=[f"Option analysis failed: {exc}"],
+            cache_status="failed",
         )
 
 
@@ -400,17 +420,17 @@ def _coerce_context(
 
 
 def _context_cache_path(market_type: str, kind: str) -> Path:
-    root = Path(__file__).resolve().parents[2] / ".states" / "market_context_cache"
-    return root / f"{market_type.lower()}_{kind}.json"
+    return _market_context_cache().path_for_key(_context_cache_key(market_type, kind))
 
 
 def _save_context_cache(context: MarketContext, kind: str) -> None:
     path = _context_cache_path(context.market_type, kind)
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(context.to_dict(), ensure_ascii=False, default=str),
-            encoding="utf-8",
+        _market_context_cache().write_path(
+            path,
+            _context_cache_key(context.market_type, kind),
+            context.to_dict(),
+            fetched_at=context.fetched_at or _utc_now(),
         )
     except OSError:
         return
@@ -423,20 +443,27 @@ def _load_context_cache(
     max_age_seconds: int,
     fresh_seconds: int,
 ) -> MarketContext | None:
+    key = _context_cache_key(market_type, kind)
     path = _context_cache_path(market_type, kind)
-    if not path.exists():
-        return None
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    read = _market_context_cache().read_path(
+        path,
+        key,
+        fresh_seconds=fresh_seconds,
+        stale_seconds=max_age_seconds,
+    )
+    if not read.is_available:
         return None
 
-    context = MarketContext.from_mapping(raw)
-    age = _context_age_seconds(context)
-    if age is None or age > max_age_seconds:
-        return None
+    context = MarketContext.from_mapping(read.payload)
+    if read.fetched_at and not context.fetched_at:
+        context.fetched_at = read.fetched_at
     context.source = f"{context.source or kind}_cache"
-    context.is_stale = age > fresh_seconds
+    context.is_stale = read.is_stale
+    context.cache_status = "stale_cache" if read.is_stale else "persistent_cache"
+    context.cache_age_seconds = read.age_seconds
+    for item in context.data_status:
+        item.cache_status = context.cache_status
+        item.cache_age_seconds = read.age_seconds
     if context.is_stale:
         context.quality_warnings = _merge_warnings(
             context.quality_warnings,
@@ -445,20 +472,8 @@ def _load_context_cache(
     return context
 
 
-def _context_age_seconds(context: MarketContext) -> float | None:
-    if not context.fetched_at:
-        return None
-    try:
-        fetched_at = datetime.fromisoformat(context.fetched_at)
-    except ValueError:
-        return None
-    if fetched_at.tzinfo is None:
-        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - fetched_at).total_seconds()
-
-
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return utc_now_iso()
 
 
 def _merge_warnings(*groups: list[str]) -> list[str]:
@@ -471,3 +486,20 @@ def _merge_warnings(*groups: list[str]) -> list[str]:
                 merged.append(text)
                 seen.add(text)
     return merged
+
+
+def _context_cache_key(market_type: str, kind: str) -> str:
+    return f"{market_type.lower()}_{kind}"
+
+
+def _market_context_cache() -> PersistentJsonCache:
+    return repo_state_cache(MARKET_CONTEXT_CACHE_NAMESPACE)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

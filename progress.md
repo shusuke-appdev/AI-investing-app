@@ -144,3 +144,10 @@ streamlit run legacy_streamlit/app.py
 - Reclassified missing company profile details as a partial-data warning when price/technical data is available, instead of showing a fatal red error for the whole stock analysis.
 - Added yfinance `fast_info` fallback for market cap when the full profile endpoint is unavailable.
 - Validation: targeted stock/provider tests passed, ruff check passed, compileall passed, and Reflex frontend export passed.
+
+# Session update: 2026-05-27 cache foundation refresh
+- Rebuilt `src/cache.py` so in-memory TTL entries track `created_at`, `expires_at`, `ttl`, and namespace; long-lived 12h/24h caches are no longer swept by a fixed 30-minute cutoff.
+- Added a shared `.states` JSON persistent cache layer with atomic writes, safe file keys, schema/version wrapping, corrupt-cache ignore behavior, and fresh/stale/expired read results.
+- Moved HTTP `requests-cache` storage under `.states/http_cache`, kept yfinance under `.states/yfinance_cache`, and added lightweight cache status inspection APIs.
+- Propagated `cache_status` and cache age metadata through market/option/stock data status so UI and AI paths can distinguish live, persistent cache, stale cache, memory cache, computed, and failed data.
+- Updated architecture/operations docs with current cache locations and stale-data handling rules.

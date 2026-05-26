@@ -26,3 +26,21 @@ def test_default_yfinance_cache_dir_is_repo_local():
         ".states",
         "yfinance_cache",
     )
+
+
+def test_yfinance_cache_info_reports_configured_path(monkeypatch, tmp_path):
+    cache_dir = tmp_path / "yf-cache"
+    monkeypatch.setenv("YFINANCE_CACHE_DIR", str(cache_dir))
+    monkeypatch.setattr(
+        yfinance_runtime.yf,
+        "set_tz_cache_location",
+        lambda path: None,
+    )
+
+    configured = yfinance_runtime.configure_yfinance_cache(force=True)
+    info = yfinance_runtime.yfinance_cache_info()
+
+    assert configured.exists()
+    assert info["configured"] is True
+    assert info["cache_dir"] == str(configured)
+    assert info["writable"] is True

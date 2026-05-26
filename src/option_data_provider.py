@@ -4,7 +4,6 @@ Option Data Provider
 リトライ・タイムアウト・フォールバックキャッシュ機構搭載。
 """
 
-import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +16,7 @@ import pandas as pd
 import yfinance as yf
 
 from src.log_config import get_logger
+from src.persistent_cache import PersistentJsonCache, repo_state_cache, utc_now_iso
 from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
@@ -35,6 +35,7 @@ BACKOFF_BASE = 2  # 指数バックオフのベース
 MAX_EXPIRATIONS = 1
 OPTION_CACHE_TTL = 900
 OPTION_STALE_TTL = 86400
+OPTION_CACHE_NAMESPACE = "option_chain_cache"
 
 
 def _is_market_likely_closed() -> bool:
@@ -155,7 +156,7 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     ticker = ticker.upper()
     cached_fresh = _load_persistent_cache(ticker, max_age_seconds=OPTION_CACHE_TTL)
     if cached_fresh is not None:
-        calls, puts, fetched_at = cached_fresh
+        calls, puts, fetched_at, cache_status, cache_age_seconds = cached_fresh
         _remember_success(ticker, calls, puts)
         _set_metadata(
             ticker,
@@ -164,10 +165,16 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
             is_stale=False,
             data_quality="available",
             quality_warnings=[],
+            cache_status=cache_status,
+            cache_age_seconds=cache_age_seconds,
         )
         return calls, puts
 
-    cached_stale = _load_persistent_cache(ticker, max_age_seconds=OPTION_STALE_TTL)
+    cached_stale = _load_persistent_cache(
+        ticker,
+        max_age_seconds=OPTION_STALE_TTL,
+        fresh_seconds=OPTION_CACHE_TTL,
+    )
 
     # 市場閉場時はフォールバックキャッシュを優先
     if _is_market_likely_closed():
@@ -185,10 +192,12 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
                     quality_warnings=[
                         "Market is likely closed; using in-memory option cache."
                     ],
+                    cache_status="memory_cache",
+                    cache_age_seconds=None,
                 )
                 return _fallback_cache[ticker]
         if cached_stale is not None:
-            calls, puts, fetched_at = cached_stale
+            calls, puts, fetched_at, cache_status, cache_age_seconds = cached_stale
             _remember_success(ticker, calls, puts)
             _set_metadata(
                 ticker,
@@ -199,6 +208,8 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
                 quality_warnings=[
                     f"Market is likely closed; using cached option data from {fetched_at}."
                 ],
+                cache_status=cache_status,
+                cache_age_seconds=cache_age_seconds,
             )
             return calls, puts
 
@@ -211,7 +222,7 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
                 # 成功 → フォールバックキャッシュに保存
                 calls, puts = result
                 _remember_success(ticker, calls, puts)
-                fetched_at = datetime.now(timezone.utc).isoformat()
+                fetched_at = utc_now_iso()
                 _save_persistent_cache(ticker, calls, puts, fetched_at)
                 _set_metadata(
                     ticker,
@@ -220,6 +231,8 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
                     is_stale=False,
                     data_quality="available",
                     quality_warnings=[],
+                    cache_status="live",
+                    cache_age_seconds=None,
                 )
                 return result
         except Exception as e:
@@ -248,11 +261,13 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
                 quality_warnings=[
                     "Option refresh failed; using in-memory option cache."
                 ],
+                cache_status="memory_cache",
+                cache_age_seconds=None,
             )
             return _fallback_cache[ticker]
 
     if cached_stale is not None:
-        calls, puts, fetched_at = cached_stale
+        calls, puts, fetched_at, cache_status, cache_age_seconds = cached_stale
         _remember_success(ticker, calls, puts)
         _set_metadata(
             ticker,
@@ -263,6 +278,8 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
             quality_warnings=[
                 f"Option refresh failed; using cached option data from {fetched_at}."
             ],
+            cache_status=cache_status,
+            cache_age_seconds=cache_age_seconds,
         )
         return calls, puts
 
@@ -277,6 +294,8 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
         is_stale=False,
         data_quality="failed",
         quality_warnings=["Option data unavailable and no cache exists."],
+        cache_status="failed",
+        cache_age_seconds=None,
     )
     return None
 
@@ -301,6 +320,8 @@ def _set_metadata(
     is_stale: bool,
     data_quality: str,
     quality_warnings: list[str],
+    cache_status: str,
+    cache_age_seconds: float | None,
 ) -> None:
     with _metadata_lock:
         _metadata_cache[ticker.upper()] = {
@@ -309,13 +330,13 @@ def _set_metadata(
             "is_stale": is_stale,
             "data_quality": data_quality,
             "quality_warnings": quality_warnings,
+            "cache_status": cache_status,
+            "cache_age_seconds": cache_age_seconds,
         }
 
 
 def _cache_file(ticker: str) -> Path:
-    root = Path(__file__).resolve().parents[1] / ".states" / "option_chain_cache"
-    safe_ticker = ticker.replace("/", "_").replace("\\", "_")
-    return root / f"{safe_ticker}.json"
+    return _option_cache().path_for_key(ticker)
 
 
 def _save_persistent_cache(
@@ -329,11 +350,7 @@ def _save_persistent_cache(
         "puts": _frame_payload(puts),
     }
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(payload, ensure_ascii=False, default=str),
-            encoding="utf-8",
-        )
+        _option_cache().write_path(path, ticker, payload, fetched_at=fetched_at)
     except OSError as exc:
         logger.debug(
             f"[OptionProvider] Failed to write option cache for {ticker}: {exc}"
@@ -341,38 +358,27 @@ def _save_persistent_cache(
 
 
 def _load_persistent_cache(
-    ticker: str, *, max_age_seconds: int
-) -> tuple[pd.DataFrame, pd.DataFrame, str] | None:
+    ticker: str, *, max_age_seconds: int, fresh_seconds: int | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame, str, str, float | None] | None:
     path = _cache_file(ticker)
-    if not path.exists():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    read = _option_cache().read_path(
+        path,
+        ticker,
+        fresh_seconds=fresh_seconds or max_age_seconds,
+        stale_seconds=max_age_seconds,
+    )
+    if not read.is_available:
         return None
 
-    fetched_at = str(payload.get("fetched_at") or "")
-    if not _is_cache_within_age(fetched_at, max_age_seconds):
-        return None
+    payload = read.payload
+    fetched_at = read.fetched_at
 
     calls = _frame_from_payload(payload.get("calls") or {})
     puts = _frame_from_payload(payload.get("puts") or {})
     if calls.empty or puts.empty:
         return None
-    return calls, puts, fetched_at
-
-
-def _is_cache_within_age(fetched_at: str, max_age_seconds: int) -> bool:
-    if not fetched_at:
-        return False
-    try:
-        fetched = datetime.fromisoformat(fetched_at)
-    except ValueError:
-        return False
-    if fetched.tzinfo is None:
-        fetched = fetched.replace(tzinfo=timezone.utc)
-    age = (datetime.now(timezone.utc) - fetched).total_seconds()
-    return 0 <= age <= max_age_seconds
+    cache_status = "stale_cache" if read.is_stale else "persistent_cache"
+    return calls, puts, fetched_at, cache_status, read.age_seconds
 
 
 def _frame_payload(df: pd.DataFrame) -> dict[str, Any]:
@@ -383,3 +389,7 @@ def _frame_payload(df: pd.DataFrame) -> dict[str, Any]:
 def _frame_from_payload(payload: dict[str, Any]) -> pd.DataFrame:
     records = payload.get("records") if isinstance(payload, dict) else []
     return pd.DataFrame(records or [])
+
+
+def _option_cache() -> PersistentJsonCache:
+    return repo_state_cache(OPTION_CACHE_NAMESPACE)

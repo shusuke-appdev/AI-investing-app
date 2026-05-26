@@ -58,7 +58,8 @@ python -m ruff format --check .
 
 - ポートフォリオ: `data/portfolios/*.json`
 - 知識DB: `data/knowledge*.json` 系のローカルファイル
-- キャッシュ: `app_cache.sqlite`、`yfinance_cache.sqlite`
+- HTTPキャッシュ: `.states/http_cache/app_cache.sqlite` など用途別SQLite
+- yfinanceタイムゾーンキャッシュ: `.states/yfinance_cache/`
 - 市場サマリーキャッシュ: `.states/market_context_cache/*.json`
 - オプションチェーンキャッシュ: `.states/option_chain_cache/*.json`
 
@@ -75,6 +76,7 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 - 外部APIの制限により、オプション分析とニュース集約は一時的に空になることがあります
 - Market Intelligence の起動時は軽量サマリーのみ自動取得します。詳細分析は「詳細更新」、SPY / QQQ / IWM のオプション取得は「Options」ボタンで明示的に実行します
 - yfinanceオプションデータにGreeks/Gammaがない場合、GEXは非表示になります。UIの `data_quality` バッジと品質警告を確認してください
+- キャッシュ由来のデータは `source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` としてUI/AIへ渡します。`stale_cache` 表示がある場合は、外部API失敗時に最後の成功データを使っています
 - `yfinance` など外部データソースのレスポンススキーマは変更されることがあり、列名の変化に備えたテストが必要です
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
@@ -98,6 +100,8 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 
 `pytest` のキャッシュは、アクセス拒否が発生していた `.pytest_cache` ではなく `.states/pytest_cache` を使うように設定済みです。
 `ruff` のキャッシュも `.states/ruff_cache` を使います。
+
+ローカルキャッシュを初期化したい場合は、アプリを停止してから `.states/http_cache`、`.states/yfinance_cache`、`.states/market_context_cache`、`.states/option_chain_cache` を削除してください。`.states` 全体を削除すると pytest/ruff の作業キャッシュも消えますが、次回実行時に再作成されます。
 
 Reflex のフロントエンド検証では、Codex アプリの WindowsApps 配下にある `node.EXE` が `WinError 5` で実行できないことがあります。`rxconfig.py` は、存在する場合に `C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin` をPATH先頭へ入れ、実行可能な同梱Nodeを優先します。
 

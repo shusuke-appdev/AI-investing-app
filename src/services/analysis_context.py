@@ -16,6 +16,8 @@ class DataResult:
     is_stale: bool = False
     is_partial: bool = False
     error: str = ""
+    cache_status: str = "live"
+    cache_age_seconds: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -34,6 +36,8 @@ class OptionContext:
     is_stale: bool = False
     is_partial: bool = False
     quality_warnings: list[str] = field(default_factory=list)
+    cache_status: str = "live"
+    cache_age_seconds: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -58,6 +62,8 @@ class MarketContext:
     is_stale: bool = False
     is_partial: bool = False
     quality_warnings: list[str] = field(default_factory=list)
+    cache_status: str = "live"
+    cache_age_seconds: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -89,6 +95,8 @@ class MarketContext:
                 is_stale=bool(item.get("is_stale", False)),
                 is_partial=bool(item.get("is_partial", False)),
                 error=str(item.get("error") or ""),
+                cache_status=str(item.get("cache_status") or "live"),
+                cache_age_seconds=_optional_float(item.get("cache_age_seconds")),
             )
             for item in value.get("data_status", [])
             if isinstance(item, dict)
@@ -107,6 +115,8 @@ class MarketContext:
                 is_stale=bool(options.get("is_stale", False)),
                 is_partial=bool(options.get("is_partial", False)),
                 quality_warnings=list(options.get("quality_warnings") or []),
+                cache_status=str(options.get("cache_status") or "live"),
+                cache_age_seconds=_optional_float(options.get("cache_age_seconds")),
             ),
             evaluation=value.get("evaluation") or {},
             microstructure=value.get("microstructure") or {},
@@ -119,6 +129,8 @@ class MarketContext:
             is_stale=bool(value.get("is_stale", False)),
             is_partial=bool(value.get("is_partial", False)),
             quality_warnings=list(value.get("quality_warnings") or []),
+            cache_status=str(value.get("cache_status") or "live"),
+            cache_age_seconds=_optional_float(value.get("cache_age_seconds")),
         )
 
 
@@ -136,3 +148,12 @@ class StockSignalContext:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

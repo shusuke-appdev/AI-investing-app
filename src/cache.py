@@ -1,114 +1,215 @@
 """
-汎用TTLキャッシュモジュール
-Streamlitの @st.cache_data を完全に代替する、フレームワーク非依存のキャッシュ機構。
+汎用TTLキャッシュモジュール。
+
+Streamlit の @st.cache_data を代替する、フレームワーク非依存の
+メモリキャッシュ機構。関数単位の公開APIは維持しつつ、エントリ単位で
+created_at / expires_at / ttl を保持する。
 """
+
+from __future__ import annotations
 
 import functools
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
-_cache_store: dict[str, tuple[Any, float]] = {}
+
+@dataclass
+class CacheEntry:
+    """メモリTTLキャッシュの1エントリ。"""
+
+    value: Any
+    created_at: float
+    expires_at: float
+    ttl: int
+    namespace: str
+
+    @property
+    def is_expired(self) -> bool:
+        """現在時刻基準で期限切れならTrue。"""
+
+        return time.time() >= self.expires_at
+
+
+_cache_store: dict[str, CacheEntry] = {}
 _global_lock = threading.Lock()
 _locks: dict[str, threading.Lock] = {}
 
-# 期限切れエントリの掃除間隔（秒）
-_SWEEP_INTERVAL = 300  # 5分
+_SWEEP_INTERVAL = 300
+_DEFAULT_MAX_ENTRIES = 2048
 _last_sweep_time: float = 0.0
 
 
-def _sweep_expired_entries() -> None:
-    """期限切れキャッシュエントリを掃除する（メモリリーク防止）。
-    _global_lock を保持した状態で呼び出すこと。
-    """
-    global _last_sweep_time
-    now = time.time()
-    if now - _last_sweep_time < _SWEEP_INTERVAL:
-        return
-
-    _last_sweep_time = now
-    keys_to_delete = [
-        k for k, (_, ts) in _cache_store.items() if now - ts >= _SWEEP_INTERVAL * 6
-    ]
-    for k in keys_to_delete:
-        del _cache_store[k]
-        _locks.pop(k, None)
-
-    if keys_to_delete:
-        logger.debug(f"[Cache] Swept {len(keys_to_delete)} expired entries")
-
-
-def ttl_cache(ttl: int = 300):
+def ttl_cache(
+    ttl: int = 300,
+    *,
+    namespace: str | None = None,
+    max_entries: int | None = _DEFAULT_MAX_ENTRIES,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     TTL付きキャッシュデコレータ。
 
-    関数の引数をキーとしてキャッシュし、ttl秒経過後に自動的に無効化する。
-    @st.cache_data(ttl=N) の完全な代替として使用する。
-
     Args:
-        ttl: キャッシュの有効期間（秒）。デフォルト300秒（5分）。
+        ttl: キャッシュの有効期間（秒）。
+        namespace: 省略時は関数の完全名を名前空間にする。
+        max_entries: 名前空間ごとの最大エントリ数。Noneなら制限しない。
 
-    Usage:
-        @ttl_cache(ttl=60)
-        def fetch_data(ticker: str) -> dict:
-            ...
+    Returns:
+        `.clear_cache()` と `.cache_info()` を持つラップ済み関数。
     """
 
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            # hashableでない引数はstr変換でキー化
-            try:
-                key = f"{func.__module__}.{func.__qualname__}:{args}:{sorted(kwargs.items())}"
-            except TypeError:
-                key = f"{func.__module__}.{func.__qualname__}:{str(args)}:{str(kwargs)}"
+    ttl_seconds = int(ttl)
+    if ttl_seconds <= 0:
+        raise ValueError("ttl must be a positive integer")
 
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        cache_namespace = namespace or f"{func.__module__}.{func.__qualname__}"
+
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            key = _make_cache_key(cache_namespace, args, kwargs)
             now = time.time()
 
             with _global_lock:
-                if key not in _locks:
-                    _locks[key] = threading.Lock()
-                key_lock = _locks[key]
-                # 低頻度で期限切れエントリを掃除（メモリリーク防止）
-                _sweep_expired_entries()
+                _sweep_expired_entries(now)
+                key_lock = _locks.setdefault(key, threading.Lock())
 
             with key_lock:
-                # Double-checked locking
-                if key in _cache_store:
-                    val, ts = _cache_store[key]
-                    if now - ts < ttl:
-                        return val
+                with _global_lock:
+                    entry = _cache_store.get(key)
+                    if entry and now < entry.expires_at:
+                        return entry.value
+                    if entry:
+                        _cache_store.pop(key, None)
 
-                # キャッシュミス: 関数実行
                 result = func(*args, **kwargs)
-                _cache_store[key] = (result, time.time())
+                created_at = time.time()
+                with _global_lock:
+                    _cache_store[key] = CacheEntry(
+                        value=result,
+                        created_at=created_at,
+                        expires_at=created_at + ttl_seconds,
+                        ttl=ttl_seconds,
+                        namespace=cache_namespace,
+                    )
+                    if max_entries is not None:
+                        _enforce_max_entries(cache_namespace, max_entries)
+                return result
 
-            return result
+        def _clear_cache() -> None:
+            clear_namespace(cache_namespace)
 
-        # キャッシュクリアメソッドを付与（テスト用）
-        def _clear_cache():
-            prefix = f"{func.__module__}.{func.__qualname__}:"
-            with _global_lock:
-                keys_to_delete = [k for k in _cache_store if k.startswith(prefix)]
-                for k in keys_to_delete:
-                    del _cache_store[k]
+        def _cache_info() -> dict[str, Any]:
+            return cache_info(cache_namespace)
 
         wrapper.clear_cache = _clear_cache
+        wrapper.cache_info = _cache_info
         return wrapper
 
     return decorator
 
 
-def clear_all_cache():
+def clear_namespace(namespace: str) -> int:
+    """指定名前空間のキャッシュとロックを削除し、削除件数を返す。"""
+
+    with _global_lock:
+        keys_to_delete = [
+            key for key, entry in _cache_store.items() if entry.namespace == namespace
+        ]
+        for key in keys_to_delete:
+            _cache_store.pop(key, None)
+            _locks.pop(key, None)
+    return len(keys_to_delete)
+
+
+def clear_all_cache() -> None:
     """全キャッシュエントリをクリアする。"""
+
     with _global_lock:
         count = len(_cache_store)
         _cache_store.clear()
         _locks.clear()
     if count > 0:
         logger.info(f"[Cache] Cleared {count} cached entries")
+
+
+def cache_info(namespace: str | None = None) -> dict[str, Any]:
+    """現在のメモリキャッシュ状態を返す。"""
+
+    now = time.time()
+    with _global_lock:
+        entries = [
+            entry
+            for entry in _cache_store.values()
+            if namespace is None or entry.namespace == namespace
+        ]
+        namespace_counts: dict[str, int] = {}
+        for entry in entries:
+            namespace_counts[entry.namespace] = (
+                namespace_counts.get(entry.namespace, 0) + 1
+            )
+        expired = sum(1 for entry in entries if now >= entry.expires_at)
+        next_expiration = min(
+            (entry.expires_at for entry in entries if now < entry.expires_at),
+            default=None,
+        )
+    return {
+        "entries": len(entries),
+        "expired_entries": expired,
+        "namespaces": namespace_counts,
+        "next_expiration": next_expiration,
+    }
+
+
+def _make_cache_key(
+    namespace: str, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> str:
+    try:
+        kwargs_part = tuple(sorted(kwargs.items()))
+        return f"{namespace}:{repr(args)}:{repr(kwargs_part)}"
+    except Exception:
+        return f"{namespace}:{str(args)}:{str(kwargs)}"
+
+
+def _sweep_expired_entries(now: float) -> None:
+    """期限切れエントリを掃除する。_global_lock保持中に呼ぶ。"""
+
+    global _last_sweep_time
+    if now - _last_sweep_time < _SWEEP_INTERVAL:
+        return
+
+    _last_sweep_time = now
+    keys_to_delete = [
+        key for key, entry in _cache_store.items() if now >= entry.expires_at
+    ]
+    for key in keys_to_delete:
+        _cache_store.pop(key, None)
+        _locks.pop(key, None)
+
+    if keys_to_delete:
+        logger.debug(f"[Cache] Swept {len(keys_to_delete)} expired entries")
+
+
+def _enforce_max_entries(namespace: str, max_entries: int) -> None:
+    if max_entries <= 0:
+        return
+
+    namespace_items = [
+        (key, entry)
+        for key, entry in _cache_store.items()
+        if entry.namespace == namespace
+    ]
+    overflow = len(namespace_items) - max_entries
+    if overflow <= 0:
+        return
+
+    namespace_items.sort(key=lambda item: item[1].created_at)
+    for key, _ in namespace_items[:overflow]:
+        _cache_store.pop(key, None)
+        _locks.pop(key, None)

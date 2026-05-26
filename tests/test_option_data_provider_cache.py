@@ -44,3 +44,5 @@ def test_option_provider_uses_stale_persistent_cache_when_refresh_fails(
     assert metadata["source"] == "persistent_cache"
     assert metadata["data_quality"] == "stale_cache"
     assert metadata["is_stale"] is True
+    assert metadata["cache_status"] == "stale_cache"
+    assert metadata["cache_age_seconds"] is not None

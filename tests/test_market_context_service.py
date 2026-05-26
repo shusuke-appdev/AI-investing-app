@@ -1,6 +1,7 @@
+from src.persistent_cache import PersistentJsonCache
 from src.services import market_analyst_service
 from src.services import market_dashboard_service as service
-from src.services.analysis_context import MarketContext, OptionContext
+from src.services.analysis_context import DataResult, MarketContext, OptionContext
 
 
 def _monitor_payload():
@@ -123,6 +124,32 @@ def test_market_summary_context_does_not_fetch_options(monkeypatch):
     assert context.market_data["S&P 500"]["ticker"] == "SPY"
     assert context.options.items == []
     assert context.source == "live_summary"
+
+
+def test_market_context_cache_preserves_stale_metadata(monkeypatch, tmp_path):
+    store = PersistentJsonCache(tmp_path, service.MARKET_CONTEXT_CACHE_NAMESPACE)
+    monkeypatch.setattr(service, "_market_context_cache", lambda: store)
+    context = MarketContext(
+        market_type="US",
+        market_data={"S&P 500": {"ticker": "SPY", "price": 500, "change": 1}},
+        market_config={"indices": {"S&P 500": "SPY"}},
+        source="live_summary",
+        fetched_at="2026-01-01T00:00:00+00:00",
+        data_status=[DataResult(name="market_indices", source="market_data")],
+    )
+
+    service._save_context_cache(context, "summary")
+    loaded = service._load_context_cache(
+        "US",
+        "summary",
+        max_age_seconds=86_400_000,
+        fresh_seconds=1,
+    )
+
+    assert loaded is not None
+    assert loaded.cache_status == "stale_cache"
+    assert loaded.is_stale is True
+    assert loaded.data_status[0].cache_status == "stale_cache"
 
 
 def test_market_details_reuses_supplied_context(monkeypatch):
