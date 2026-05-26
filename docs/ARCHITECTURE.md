@@ -27,6 +27,9 @@ UI
 
 ユースケース調整
   src/services/*
+  src/services/temporal_alignment.py
+  src/services/analysis_run.py
+  src/services/analysis_jobs.py
   src/portfolio_advisor.py
   src/stock_analyst.py
   src/news_analyst.py
@@ -63,6 +66,7 @@ UI
   src/network.py
   src/log_config.py
   src/constants.py
+  src/services/analysis_diagnostics.py
 ```
 
 ## 主要なデータフロー
@@ -107,6 +111,8 @@ UI
 - yfinanceオプションデータはGreeks欠損が多いため、Gammaが取得できない場合はGEXを非表示にし、`data_quality` と `quality_warnings` でUIとAIに明示する
 - Reflex state では `dict[str, Any]` の深いアクセスが壊れやすいため、`pydantic.BaseModel` でUI表示用モデルを定義している
 - 外部APIの失敗はアプリ全体を止めず、機能単位で degraded mode に落とす設計が多い
+- Two Sigma OSSからは依存ではなく設計要素を取り込む。`temporal_alignment.py` は Flint 型の許容時間差付き as-of join を pandas で提供し、`AnalysisRun` は BeakerX 型の再現可能な分析成果物、`analysis_jobs.py` は Cook 型の重い分析ジョブ状態管理、`analysis_diagnostics.py` は Marbles 型の説明的テスト失敗メッセージを担う
+- `.states/analysis_jobs` はローカルジョブ状態の永続化専用で、Kubernetesや外部スケジューラは前提にしない
 
 ## 現在の構造的な弱点
 

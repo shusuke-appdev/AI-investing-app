@@ -151,3 +151,10 @@ streamlit run legacy_streamlit/app.py
 - Moved HTTP `requests-cache` storage under `.states/http_cache`, kept yfinance under `.states/yfinance_cache`, and added lightweight cache status inspection APIs.
 - Propagated `cache_status` and cache age metadata through market/option/stock data status so UI and AI paths can distinguish live, persistent cache, stale cache, memory cache, computed, and failed data.
 - Updated architecture/operations docs with current cache locations and stale-data handling rules.
+
+# Session update: 2026-05-27 Two Sigma OSS design extraction
+- Added a pandas-based temporal as-of alignment service inspired by Flint, with tolerance-aware unmatched-row quality metadata.
+- Added Marbles-style diagnostic assertion helpers for analysis-context pytest failures.
+- Added `AnalysisRun` artifacts for reproducible stock/market analysis exports in Markdown and notebook-style JSON.
+- Added local JSON-backed analysis job lifecycle state for heavy option refresh, walk-forward, backtest, and batch-news style workloads.
+- Added focused regression tests and updated architecture/operations docs for the new service boundaries.

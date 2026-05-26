@@ -62,6 +62,7 @@ python -m ruff format --check .
 - yfinanceタイムゾーンキャッシュ: `.states/yfinance_cache/`
 - 市場サマリーキャッシュ: `.states/market_context_cache/*.json`
 - オプションチェーンキャッシュ: `.states/option_chain_cache/*.json`
+- 分析ジョブ状態: `.states/analysis_jobs/*.json`
 
 ### GAS
 
@@ -77,6 +78,8 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 - Market Intelligence の起動時は軽量サマリーのみ自動取得します。詳細分析は「詳細更新」、SPY / QQQ / IWM のオプション取得は「Options」ボタンで明示的に実行します
 - yfinanceオプションデータにGreeks/Gammaがない場合、GEXは非表示になります。UIの `data_quality` バッジと品質警告を確認してください
 - キャッシュ由来のデータは `source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` としてUI/AIへ渡します。`stale_cache` 表示がある場合は、外部API失敗時に最後の成功データを使っています
+- 時系列データを突合する場合は `src/services/temporal_alignment.py` の as-of join を使い、許容時間差外の未突合行を `DataResult.is_partial` と `quality_warnings` で明示します
+- 重い分析処理は `src/services/analysis_jobs.py` の `queued/running/succeeded/failed/partial/cancelled` 状態で管理し、単一Reflex環境ではローカルJSON永続化を使います
 - `yfinance` など外部データソースのレスポンススキーマは変更されることがあり、列名の変化に備えたテストが必要です
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
@@ -101,7 +104,7 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 `pytest` のキャッシュは、アクセス拒否が発生していた `.pytest_cache` ではなく `.states/pytest_cache` を使うように設定済みです。
 `ruff` のキャッシュも `.states/ruff_cache` を使います。
 
-ローカルキャッシュを初期化したい場合は、アプリを停止してから `.states/http_cache`、`.states/yfinance_cache`、`.states/market_context_cache`、`.states/option_chain_cache` を削除してください。`.states` 全体を削除すると pytest/ruff の作業キャッシュも消えますが、次回実行時に再作成されます。
+ローカルキャッシュを初期化したい場合は、アプリを停止してから `.states/http_cache`、`.states/yfinance_cache`、`.states/market_context_cache`、`.states/option_chain_cache`、`.states/analysis_jobs` を削除してください。`.states` 全体を削除すると pytest/ruff の作業キャッシュも消えますが、次回実行時に再作成されます。
 
 Reflex のフロントエンド検証では、Codex アプリの WindowsApps 配下にある `node.EXE` が `WinError 5` で実行できないことがあります。`rxconfig.py` は、存在する場合に `C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin` をPATH先頭へ入れ、実行可能な同梱Nodeを優先します。
 
