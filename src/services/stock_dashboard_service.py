@@ -16,6 +16,10 @@ from src.advisor.probabilistic_signal import (
 )
 from src.advisor.smart_criteria import evaluate_smart_criteria
 from src.advisor.technical import analyze_technical
+from src.advisor.trend_follow_diagnostics import (
+    generate_trend_follow_diagnostics,
+    trend_follow_to_dict,
+)
 from src.market_data import get_stock_data, get_stock_info, get_stock_news_with_status
 from src.services.analysis_context import DataResult, StockSignalContext
 
@@ -33,6 +37,7 @@ class StockDashboardContext:
     technical_data: dict[str, Any] = field(default_factory=dict)
     smart_criteria: dict[str, Any] = field(default_factory=dict)
     probabilistic_signal: dict[str, Any] = field(default_factory=dict)
+    trend_follow_diagnostics: dict[str, Any] = field(default_factory=dict)
     stock_signal_context: dict[str, Any] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
     profile_warning: str = ""
@@ -64,6 +69,8 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         technical_dict,
     )
     probabilistic_dict = to_plain_value(signal_to_dict(probabilistic))
+    trend_follow = generate_trend_follow_diagnostics(normalized_ticker, "5y", "SPY")
+    trend_follow_dict = to_plain_value(trend_follow_to_dict(trend_follow))
     news_items = news_result.get("items", []) if isinstance(news_result, dict) else []
     news_source_status = (
         str(news_result.get("source_status", ""))
@@ -83,12 +90,14 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         news_error_reason,
         bool(technical_dict),
         bool(probabilistic_dict),
+        trend_follow_dict,
     )
     stock_signal_context = StockSignalContext(
         ticker=normalized_ticker,
         stock_info=info_dict,
         technical_data=technical_dict,
         probabilistic_signal=probabilistic_dict,
+        trend_follow_diagnostics=trend_follow_dict,
         news_source_status=news_source_status,
         news_error_reason=news_error_reason,
         data_status=data_status,
@@ -105,6 +114,7 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         technical_data=technical_dict,
         smart_criteria=to_plain_value(smart_res),
         probabilistic_signal=probabilistic_dict,
+        trend_follow_diagnostics=trend_follow_dict,
         stock_signal_context=stock_signal_context,
         data_status=data_status,
         profile_warning=_profile_warning_message(info_dict),
@@ -264,7 +274,15 @@ def _build_data_status(
     news_error_reason: str,
     has_technical: bool,
     has_probabilistic: bool,
+    trend_follow: dict[str, Any],
 ) -> list[DataResult]:
+    trend_quality = (
+        trend_follow.get("data_quality") if isinstance(trend_follow, dict) else {}
+    )
+    trend_warnings = (
+        trend_follow.get("warnings") if isinstance(trend_follow, dict) else []
+    )
+    trend_ok = trend_quality.get("status") == "ok"
     return [
         DataResult(
             name="stock_profile",
@@ -301,6 +319,15 @@ def _build_data_status(
             source="local_calculation",
             is_partial=not has_probabilistic,
             error="" if has_probabilistic else "Probabilistic signal unavailable.",
+            cache_status="computed",
+        ),
+        DataResult(
+            name="trend_follow_diagnostics",
+            source="local_calculation",
+            is_partial=not trend_ok,
+            error="; ".join(str(item) for item in trend_warnings[:3])
+            if not trend_ok
+            else "",
             cache_status="computed",
         ),
     ]

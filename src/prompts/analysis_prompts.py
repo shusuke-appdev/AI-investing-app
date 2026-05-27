@@ -20,6 +20,8 @@ STOCK_ANALYSIS_PROMPT_TEMPLATE = """あなたはエクイティリサーチア�
 
 {probabilistic_context}
 
+{trend_follow_context}
+
 【データ品質・取得状態】
 {data_quality_context}
 
@@ -40,6 +42,7 @@ STOCK_ANALYSIS_PROMPT_TEMPLATE = """あなたはエクイティリサーチア�
 
 ## 2. テクニカル分析
 - 現在のトレンド評価と1週間先までの相場動向（オプションの予想レンジや需給を考慮）
+- Trend-Follow Diagnosticsは売買推奨ではなく頑健性診断として扱う。OOS、上位勝ちトレード除外、Buy & Hold比較、ランダム方向比較が弱い場合はトレンドフォローのエッジを断定しない
 - エントリーポイント（具体的な価格水準）
 - 逆張り買いゾーンの評価、および下落判定（セリングクライマックス/投げ売りか、ナンピン厳禁のだらだら下落か）
 - 損切りライン（サポート割れなど）

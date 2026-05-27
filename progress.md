@@ -158,3 +158,14 @@ streamlit run legacy_streamlit/app.py
 - Added `AnalysisRun` artifacts for reproducible stock/market analysis exports in Markdown and notebook-style JSON.
 - Added local JSON-backed analysis job lifecycle state for heavy option refresh, walk-forward, backtest, and batch-news style workloads.
 - Added focused regression tests and updated architecture/operations docs for the new service boundaries.
+
+# Session update: 2026-05-27 trend-follow diagnostics layer
+- Added a daily individual-stock trend-follow diagnostics engine that checks 50/200 MA trend participation against Buy & Hold, OOS behavior, cost sensitivity, entry-lag sensitivity, top-trade dependency, random-direction baselines, max drawdown, and time under water.
+- Wired `trend_follow_diagnostics` into `StockSignalContext`, Stock page state/UI, and AI Stock Recap context as a diagnostic lens, not a replacement for existing probabilistic signals or trade recommendations.
+- Added focused tests for no-lookahead execution, tail dependency, deterministic random baselines, dashboard context propagation, and AI context formatting.
+
+# Session update: 2026-05-27 Supabase Data API grant readiness
+- Added `supabase/public_tables.sql` with explicit Data API grants for `user_settings`, `portfolios`, and `knowledge_items`, plus RLS enablement.
+- Updated Supabase connection handling to prefer server-side `SUPABASE_SERVICE_ROLE_KEY` while keeping `SUPABASE_KEY` as a compatibility fallback.
+- Added `tools/migrate_to_supabase.py --print-setup-sql` so the required Supabase setup SQL is part of the documented migration flow.
+- Documented the 2026-05-30 / 2026-10-30 Supabase Data API rollout and the required operator steps in `docs/SUPABASE_DATA_API_GRANTS.md` and `docs/OPERATIONS.md`.

@@ -142,6 +142,7 @@ class StockSignalContext:
     stock_info: dict[str, Any] = field(default_factory=dict)
     technical_data: dict[str, Any] = field(default_factory=dict)
     probabilistic_signal: dict[str, Any] = field(default_factory=dict)
+    trend_follow_diagnostics: dict[str, Any] = field(default_factory=dict)
     news_source_status: str = ""
     news_error_reason: str = ""
     data_status: list[DataResult] = field(default_factory=list)

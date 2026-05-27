@@ -65,6 +65,21 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
             "suggested_action": "Watch",
         },
     )
+    monkeypatch.setattr(
+        service,
+        "generate_trend_follow_diagnostics",
+        lambda *args: object(),
+    )
+    monkeypatch.setattr(
+        service,
+        "trend_follow_to_dict",
+        lambda diagnostics: {
+            "diagnostic_rating": "Unavailable",
+            "rating_display": "Unavailable",
+            "data_quality": {"status": "insufficient_data"},
+            "warnings": ["Insufficient daily price history."],
+        },
+    )
 
     context = service.build_stock_dashboard_context("PLTR")
 
@@ -80,6 +95,11 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
         "summary": "概要情報がありません。",
     }
     assert len(context.chart_data) == 3
+    assert context.trend_follow_diagnostics["diagnostic_rating"] == "Unavailable"
+    trend_status = next(
+        item for item in context.data_status if item.name == "trend_follow_diagnostics"
+    )
+    assert trend_status.is_partial is True
     profile_status = next(
         item for item in context.data_status if item.name == "stock_profile"
     )

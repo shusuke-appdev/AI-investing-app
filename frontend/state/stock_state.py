@@ -69,6 +69,7 @@ class StockState(rx.State):
     ai_analysis: str = ""
     is_generating_analysis: bool = False
     probabilistic_signal: dict[str, Any] = {}
+    trend_follow_diagnostics: dict[str, Any] = {}
     stock_signal_context: dict[str, Any] = {}
     data_status: list[dict[str, Any]] = []
 
@@ -107,6 +108,9 @@ class StockState(rx.State):
             self.smart_criteria = smart_criteria_from_mapping(context.smart_criteria)
             self.technical_data = plain_state_value(context.technical_data)
             self.probabilistic_signal = plain_state_value(context.probabilistic_signal)
+            self.trend_follow_diagnostics = plain_state_value(
+                context.trend_follow_diagnostics
+            )
             self.stock_signal_context = plain_state_value(context.stock_signal_context)
             self.data_status = plain_state_value(context.data_status)
             self.profile_warning = context.profile_warning
@@ -129,6 +133,7 @@ class StockState(rx.State):
             self.news_error_reason = ""
             self.technical_data = {}
             self.probabilistic_signal = {}
+            self.trend_follow_diagnostics = {}
             self.stock_signal_context = {}
             self.data_status = []
             self.smart_criteria = SmartCriteria()

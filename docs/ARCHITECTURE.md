@@ -85,7 +85,9 @@ UI
 1. `StockState.fetch_stock_data()` がティッカー入力後に実行される
 2. `market_data` 経由で企業情報、価格、ニュース、テクニカルを取得
 3. `advisor.smart_criteria.evaluate_smart_criteria()` で成長株観点の条件を評価
-4. AI分析は `stock_analyst.analyze_stock()` がプロンプトを組み立て、Gemini に渡す
+4. `advisor.probabilistic_signal.generate_probabilistic_stock_signal()` が過去の類似局面、forward return、walk-forward検証、サイジング目安を作る
+5. `advisor.trend_follow_diagnostics.generate_trend_follow_diagnostics()` が日足トレンドフォローを診断軸として評価し、OOS、コスト耐性、遅延耐性、右テール依存、Buy & Hold比較を `StockSignalContext` に追加する
+6. AI分析は `stock_analyst.analyze_stock()` がプロンプトを組み立て、Gemini に渡す
 
 ### ポートフォリオ
 
@@ -121,3 +123,11 @@ UI
 - 外部APIエラーが握りつぶされる箇所が多く、ユーザーに「何が古いデータか」「何が取得失敗か」が伝わりにくい
 - 保存先の抽象化はあるが、local / GAS / Supabase のスキーマ契約・移行手順が不足している
 - AIプロンプトへの入力データが一部文字列連結中心で、検証可能な中間データ構造が不足している
+
+## トレンドフォロー診断レイヤー
+
+- 初回実装は個別株の日足専用。新しいデータAPIや発注機能は追加せず、既存の yfinance 経路とキャッシュを使う
+- 主診断は 50/200日移動平均の long-only。補助診断として 20/80日、20/120日、50/150日、50/200日のパラメータ比較を持つ
+- シグナルは当日終値で判定し、翌営業日の Open で約定したものとして評価する。Open欠損時だけ Close を実行価格プロキシにする
+- `diagnostic_rating` は売買推奨ではなく頑健性ラベル。既存の `overall_signal`、`Probabilistic Stock Signal`、SMART基準を置き換えない
+- `StockSignalContext.trend_follow_diagnostics` は StockページUIと AI Stock Recap の共通入力で、AIには「OOSや右テール除外が弱い場合はエッジを断定しない」前提を渡す

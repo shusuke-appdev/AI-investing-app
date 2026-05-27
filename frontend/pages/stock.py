@@ -3,6 +3,9 @@ import reflex as rx
 from frontend.components.metric_card import metric_card
 from frontend.components.probabilistic_signal import probabilistic_signal_panel
 from frontend.components.technical_analysis import technical_analysis
+from frontend.components.trend_follow_diagnostics import (
+    trend_follow_diagnostics_panel,
+)
 from frontend.state.stock_state import StockState
 from frontend.template import template
 
@@ -324,6 +327,7 @@ def stock_page() -> rx.Component:
                     # テクニカル分析
                     technical_analysis(),
                     probabilistic_signal_panel(),
+                    trend_follow_diagnostics_panel(),
                     # AI Recap (Gemini)
                     rx.box(
                         rx.hstack(

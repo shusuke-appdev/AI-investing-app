@@ -40,6 +40,7 @@ def analyze_stock(
     # テクニカル分析を取得
     technical_summary = get_technical_summary_for_ai(ticker)
     probabilistic_context = _format_probabilistic_context(probabilistic_signal)
+    trend_follow_context = _format_trend_follow_context(stock_signal_context)
     data_quality_context = _format_data_quality_context(stock_signal_context)
 
     # SMART基準を評価
@@ -75,6 +76,7 @@ def analyze_stock(
         target_price=target_price,
         technical_summary=technical_summary,
         probabilistic_context=probabilistic_context,
+        trend_follow_context=trend_follow_context,
         data_quality_context=data_quality_context,
         smart_criteria_summary=smart_criteria_summary,
         news_headlines=chr(10).join(news_headlines[:5])
@@ -167,3 +169,26 @@ def _format_data_quality_context(stock_signal_context: dict | None) -> str:
             f"source={item.get('source', 'unknown')}{error}"
         )
     return "\n".join(lines) if lines else "Data status: unavailable."
+
+
+def _format_trend_follow_context(stock_signal_context: dict | None) -> str:
+    if not stock_signal_context:
+        return "Trend-Follow Diagnostics: unavailable."
+
+    diagnostics = stock_signal_context.get("trend_follow_diagnostics") or {}
+    if not isinstance(diagnostics, dict) or not diagnostics:
+        return "Trend-Follow Diagnostics: unavailable."
+
+    warnings = diagnostics.get("warnings") or []
+    return f"""Trend-Follow Diagnostics (daily local calculation; diagnostic only):
+- Rating: {diagnostics.get("rating_display", diagnostics.get("diagnostic_rating", "Unavailable"))}
+- Current State: {diagnostics.get("current_state_display", "N/A")}
+- Strategy Return: {diagnostics.get("strategy_total_return_display", "N/A")}
+- Buy & Hold Return: {diagnostics.get("buy_hold_total_return_display", "N/A")}
+- OOS Alpha vs Buy & Hold: {diagnostics.get("oos_alpha_display", "N/A")}
+- Top 5% Trades Removed: {diagnostics.get("top5_removed_display", "N/A")}
+- Random Direction Percentile: {diagnostics.get("random_percentile_display", "N/A")}
+- Max Drawdown: {diagnostics.get("strategy_max_drawdown_display", "N/A")}
+- Max Time Under Water: {diagnostics.get("strategy_tuw_display", "N/A")}
+- Warnings: {"; ".join(str(item) for item in warnings) if warnings else "N/A"}
+"""
