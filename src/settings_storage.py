@@ -5,6 +5,7 @@ API設定やGAS URLなどをローカルに永続化します。
 
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -95,7 +96,11 @@ def save_settings(settings: dict) -> bool:
             client = get_supabase_client()
             if client:
                 upsert_data = [
-                    {"key": k, "value": str(v), "updated_at": "now()"}
+                    {
+                        "key": k,
+                        "value": str(v),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }
                     for k, v in settings.items()
                 ]
                 client.table("user_settings").upsert(upsert_data).execute()

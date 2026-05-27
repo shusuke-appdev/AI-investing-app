@@ -5,9 +5,8 @@ Provides a singleton instance of the Supabase client.
 
 import os
 
-from supabase import Client, create_client
-
 from src.log_config import get_logger
+from supabase import Client, create_client
 
 logger = get_logger(__name__)
 
@@ -26,7 +25,11 @@ def get_supabase_client() -> Client | None:
 
     try:
         url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
+        key = (
+            os.getenv("SUPABASE_SECRET_KEY")
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_KEY")
+        )
 
         if not url or not key:
             return None

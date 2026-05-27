@@ -73,7 +73,9 @@ FINNHUB_API_KEY=your_finnhub_api_key_here
 JQUANTS_API_KEY=your_jquants_api_key_here
 EDINET_API_KEY=your_edinet_api_key_here
 SUPABASE_URL=your_supabase_url_here
-SUPABASE_KEY=your_supabase_key_here
+SUPABASE_SECRET_KEY=your_supabase_secret_key_here
+# SUPABASE_SERVICE_ROLE_KEY=your_legacy_service_role_key_here
+# SUPABASE_KEY=your_legacy_supabase_key_here
 ```
 
 ## 起動
@@ -111,6 +113,7 @@ python -m ruff format --check .
 
 - [アーキテクチャ概要](docs/ARCHITECTURE.md)
 - [運用・環境設定ガイド](docs/OPERATIONS.md)
+- [Supabase Data API grants 対応](docs/SUPABASE_DATA_API_GRANTS.md)
 - [コード点検結果](docs/CODE_AUDIT.md)
 - [根本改修ロードマップ](docs/REMEDIATION_ROADMAP.md)
 - [実行タスク](task.md)

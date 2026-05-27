@@ -14,7 +14,7 @@
     SBI_USER="あなたのユーザーネーム"
     SBI_PASSWORD="あなたのログインパスワード"
     ```
-    ※ `SUPABASE_URL` と `SUPABASE_KEY` は既に入力済みですので、そのままでOKです。
+    ※ `SUPABASE_URL` と `SUPABASE_SECRET_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、または `SUPABASE_KEY` は既に入力済みですので、そのままでOKです。
 
 ## Step 2: 動作確認（初回実行）
 

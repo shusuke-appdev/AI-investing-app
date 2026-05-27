@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.supabase_client import get_supabase_client
 
 TABLES = ("user_settings", "portfolios", "knowledge_items")
+SETUP_SQL_PATH = Path(__file__).parent.parent / "supabase" / "public_tables.sql"
 CLEAR_FILTERS = {
     "user_settings": ("key", "__migration_sentinel__"),
     "portfolios": ("name", "__migration_sentinel__"),
@@ -37,6 +38,7 @@ class MigrationOptions:
     confirm_destroy: bool = False
     tables: tuple[str, ...] = TABLES
     backup_dir: Path = Path("data/supabase_backups")
+    print_setup_sql: bool = False
 
 
 def parse_args(argv: list[str] | None = None) -> MigrationOptions:
@@ -66,12 +68,18 @@ def parse_args(argv: list[str] | None = None) -> MigrationOptions:
         default=Path("data/supabase_backups"),
         help="Directory for pre-destroy Supabase backups.",
     )
+    parser.add_argument(
+        "--print-setup-sql",
+        action="store_true",
+        help="Print the Supabase table setup SQL with explicit Data API grants.",
+    )
     args = parser.parse_args(argv)
     return MigrationOptions(
         dry_run=not args.execute,
         confirm_destroy=bool(args.confirm_destroy),
         tables=tuple(args.tables),
         backup_dir=args.backup_dir,
+        print_setup_sql=bool(args.print_setup_sql),
     )
 
 
@@ -88,6 +96,10 @@ def migrate(options: MigrationOptions | None = None) -> int:
     """Run the migration and return a process-style exit code."""
 
     options = options or parse_args()
+    if options.print_setup_sql:
+        print(load_setup_sql())
+        return 0
+
     print("=== Supabase Migration Tool ===")
     print(f"Mode: {'dry-run' if options.dry_run else 'execute'}")
     print("Tables: " + ", ".join(options.tables))
@@ -101,7 +113,10 @@ def migrate(options: MigrationOptions | None = None) -> int:
 
     client = get_supabase_client()
     if not client:
-        print("Error: Could not connect to Supabase. Check SUPABASE_URL/SUPABASE_KEY.")
+        print(
+            "Error: Could not connect to Supabase. Check SUPABASE_URL and "
+            "SUPABASE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, or SUPABASE_KEY."
+        )
         return 1
 
     if options.confirm_destroy:
@@ -124,8 +139,9 @@ def collect_local_payload(tables: tuple[str, ...]) -> dict[str, Any]:
 
     payload: dict[str, Any] = {}
     if "user_settings" in tables:
+        updated_at = current_utc_iso()
         payload["user_settings"] = [
-            {"key": key, "value": str(value), "updated_at": "now()"}
+            {"key": key, "value": str(value), "updated_at": updated_at}
             for key, value in collect_local_settings().items()
         ]
     if "portfolios" in tables:
@@ -161,12 +177,13 @@ def collect_portfolio_payloads() -> list[dict[str, Any]]:
     for portfolio_file in portfolio_dir.glob("*.json"):
         try:
             data = load_json_robust(portfolio_file)
+            now = current_utc_iso()
             payloads.append(
                 {
                     "name": data["name"],
                     "holdings": data["holdings"],
-                    "created_at": data.get("created_at") or "now()",
-                    "updated_at": data.get("updated_at") or "now()",
+                    "created_at": data.get("created_at") or now,
+                    "updated_at": data.get("updated_at") or now,
                 }
             )
         except Exception as exc:
@@ -204,6 +221,18 @@ def print_migration_plan(payload: dict[str, Any]) -> None:
     for table in TABLES:
         if table in payload:
             print(f"- {table}: {len(payload[table])} rows")
+
+
+def load_setup_sql() -> str:
+    """Load the Supabase setup SQL that creates tables and explicit grants."""
+
+    return SETUP_SQL_PATH.read_text(encoding="utf-8").strip()
+
+
+def current_utc_iso() -> str:
+    """Return an ISO timestamp accepted by Supabase timestamptz columns."""
+
+    return datetime.now(timezone.utc).isoformat()
 
 
 def backup_remote_tables(

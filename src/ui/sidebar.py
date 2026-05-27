@@ -264,7 +264,8 @@ def _render_settings():
 
             if not get_supabase_client():
                 st.warning(
-                    "⚠️ secrets.toml に SUPABASE_URL と SUPABASE_KEY を設定してください"
+                    "⚠️ secrets.toml に SUPABASE_URL と SUPABASE_SECRET_KEY、"
+                    "SUPABASE_SERVICE_ROLE_KEY、または SUPABASE_KEY を設定してください"
                 )
             else:
                 st.success("✅ Supabase接続OK")

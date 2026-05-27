@@ -45,6 +45,41 @@ def test_parse_args_defaults_to_dry_run():
     assert options.dry_run is True
     assert options.confirm_destroy is False
     assert options.tables == migrate_to_supabase.TABLES
+    assert options.print_setup_sql is False
+
+
+def test_parse_args_can_print_setup_sql():
+    options = migrate_to_supabase.parse_args(["--print-setup-sql"])
+
+    assert options.print_setup_sql is True
+
+
+def test_print_setup_sql_does_not_connect_to_supabase(monkeypatch, capsys):
+    def fail_connect():
+        raise AssertionError("setup SQL print should not connect")
+
+    def fail_collect(tables):
+        raise AssertionError("setup SQL print should not read local payload")
+
+    monkeypatch.setattr(migrate_to_supabase, "get_supabase_client", fail_connect)
+    monkeypatch.setattr(migrate_to_supabase, "collect_local_payload", fail_collect)
+
+    result = migrate_to_supabase.migrate(
+        migrate_to_supabase.MigrationOptions(print_setup_sql=True)
+    )
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "alter table public.portfolios enable row level security;" in output
+    assert (
+        'drop policy if exists "Enable all access for all users" on public.portfolios;'
+        in output
+    )
+    assert (
+        "grant select, insert, update, delete on table public.portfolios to service_role;"
+        in output
+    )
+    assert "alter default privileges for role postgres in schema public" in output
 
 
 def test_dry_run_does_not_connect_to_supabase(monkeypatch):

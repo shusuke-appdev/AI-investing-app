@@ -166,6 +166,13 @@ streamlit run legacy_streamlit/app.py
 
 # Session update: 2026-05-27 Supabase Data API grant readiness
 - Added `supabase/public_tables.sql` with explicit Data API grants for `user_settings`, `portfolios`, and `knowledge_items`, plus RLS enablement.
-- Updated Supabase connection handling to prefer server-side `SUPABASE_SERVICE_ROLE_KEY` while keeping `SUPABASE_KEY` as a compatibility fallback.
+- Updated Supabase connection handling to prefer server-side `SUPABASE_SECRET_KEY`, while keeping `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_KEY` as compatibility fallbacks.
 - Added `tools/migrate_to_supabase.py --print-setup-sql` so the required Supabase setup SQL is part of the documented migration flow.
 - Documented the 2026-05-30 / 2026-10-30 Supabase Data API rollout and the required operator steps in `docs/SUPABASE_DATA_API_GRANTS.md` and `docs/OPERATIONS.md`.
+- Validation: Supabase setup SQL print smoke passed, ruff check passed, ruff format check passed, compileall passed, and pytest passed with 123 tests.
+
+# Session update: 2026-05-28 Supabase live project grant application
+- Restored the inactive Supabase project `pbdwzpktugztklejzvhn` (`AI-investing-app`) and applied live migrations for the three public storage tables.
+- Applied explicit Data API grants to `service_role`, revoked `anon`/`authenticated` table access, enabled RLS, and removed existing permissive `Enable all access for all users` policies.
+- Opted the `postgres` role's future `public` table/function/sequence default privileges into explicit-grant behavior; `supabase_admin` default privileges could not be changed by the connector due to ownership permissions.
+- Verified `service_role` insert/select/delete smoke tests for all three tables, checked migration history, and reran Supabase Security/Performance Advisors.

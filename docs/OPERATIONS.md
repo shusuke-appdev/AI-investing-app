@@ -16,7 +16,9 @@
 | `JQUANTS_API_KEY` | 日本株分析では推奨 | 日本株の価格・財務情報 |
 | `EDINET_API_KEY` | 日本株財務では推奨 | EDINET からの財務情報取得 |
 | `SUPABASE_URL` | Supabase保存時に必須 | ポートフォリオ・知識DB保存先 |
-| `SUPABASE_KEY` | Supabase保存時に必須 | Supabase APIキー |
+| `SUPABASE_SECRET_KEY` | Supabase保存時に推奨 | サーバー側 Supabase Data API 用の secret key。クライアントへ公開しない |
+| `SUPABASE_SERVICE_ROLE_KEY` | 任意 | 旧 service role key との互換用。`SUPABASE_SECRET_KEY` が未設定の場合だけ使う |
+| `SUPABASE_KEY` | 任意 | 旧設定との互換用キー。上記2つが未設定の場合だけ使う |
 
 ## ローカル起動
 
@@ -70,7 +72,15 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 
 ### Supabase
 
-`SUPABASE_URL` と `SUPABASE_KEY` を設定すると Supabase に保存できます。現在のコードは `portfolios`、`knowledge_items`、`user_settings` テーブルを前提にしています。
+`SUPABASE_URL` と `SUPABASE_SECRET_KEY` を設定すると Supabase に保存できます。旧設定との互換のため `SUPABASE_SERVICE_ROLE_KEY` と `SUPABASE_KEY` も読みますが、新規環境では secret key をサーバー環境変数として使います。現在のコードは `portfolios`、`knowledge_items`、`user_settings` テーブルを前提にしています。
+
+Supabase の 2026-05-30 / 2026-10-30 の Data API 既定変更に対応するため、新規 Supabase プロジェクトまたは新規テーブル作成時は、データ移行前に [supabase/public_tables.sql](../supabase/public_tables.sql) を Supabase SQL Editor で実行してください。移行ツールからも同じ SQL を表示できます。この SQL は `postgres` ロールが今後作る `public` オブジェクトの自動 Data API 公開も抑止します。
+
+```powershell
+python tools/migrate_to_supabase.py --print-setup-sql
+```
+
+詳細は [Supabase Data API grants 対応](SUPABASE_DATA_API_GRANTS.md) を参照してください。
 
 ## 運用上の注意
 
@@ -84,7 +94,7 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
 - GitHub Actions の Hugging Face Spaces 同期は `main` / `master` への push で force push します。運用前に対象Spaceとブランチ保護を確認してください
-- Supabase移行は既定でdry-runです。実行は `python tools/migrate_to_supabase.py --execute`、既存テーブルを消して入れ替える場合のみ `--confirm-destroy` を追加します。破壊実行時は `data/supabase_backups/` にバックアップが取れない限り中断します。
+- Supabase移行は既定でdry-runです。実行は `python tools/migrate_to_supabase.py --execute`、既存テーブルを消して入れ替える場合のみ `--confirm-destroy` を追加します。破壊実行時は `data/supabase_backups/` にバックアップが取れない限り中断します。新規テーブル作成が必要な場合は、先に `python tools/migrate_to_supabase.py --print-setup-sql` で表示される SQL を Supabase SQL Editor で実行します。
 
 ## 既知のローカル環境問題
 
