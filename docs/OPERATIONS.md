@@ -15,6 +15,9 @@
 | `FINNHUB_API_KEY` | 推奨 | 企業ニュース、決算、オプション補完データ |
 | `JQUANTS_API_KEY` | 日本株分析では推奨 | 日本株の価格・財務情報 |
 | `EDINET_API_KEY` | 日本株財務では推奨 | EDINET からの財務情報取得 |
+| `NIKKEI_JSF_SHORT_BALANCE_BILLION` | 任意 | 日経6条件の条件1を直接判定するための、日証金合計売り残（億円） |
+| `NIKKEI_LEVERAGE_MARGIN_RATIO` | 任意 | 日経6条件の条件2を直接判定するための、日経レバ1570信用倍率 |
+| `NIKKEI_FOREIGN_INVESTOR_NET_BUY_BILLION` | 任意 | 日経6条件の条件6を直接判定するための、海外投資家買越額（億円） |
 | `SUPABASE_URL` | Supabase保存時に必須 | ポートフォリオ・知識DB保存先 |
 | `SUPABASE_SECRET_KEY` | Supabase保存時に推奨 | サーバー側 Supabase Data API 用の secret key。クライアントへ公開しない |
 | `SUPABASE_SERVICE_ROLE_KEY` | 任意 | 旧 service role key との互換用。`SUPABASE_SECRET_KEY` が未設定の場合だけ使う |
@@ -86,6 +89,9 @@ python tools/migrate_to_supabase.py --print-setup-sql
 
 - 外部APIの制限により、オプション分析とニュース集約は一時的に空になることがあります
 - Market Intelligence の起動時は軽量サマリーのみ自動取得します。詳細分析は「詳細更新」、SPY / QQQ / IWM のオプション取得は「Options」ボタンで明示的に実行します
+- 「詳細更新」では、米国セクターETFと日本テーマバスケットから資金流入セクターを推定し、確信度・継続性・調査判断を表示します。これは売買命令ではなく、市場分析の入力です
+- 日経平均上昇の6条件は、無料で自動取得できるデータを優先し、直接データがない条件は `データ不足` または `代理達成/代理未達` として表示します。上記の任意環境変数を設定すると、一部条件を直接値として評価できます
+- AI Market Recap は米国市場を主軸にし、日本市場は米国市場との相対強弱、日経6条件、ドル円・原油・資金流入の文脈で補助的に扱います
 - yfinanceオプションデータにGreeks/Gammaがない場合、GEXは非表示になります。UIの `data_quality` バッジと品質警告を確認してください
 - キャッシュ由来のデータは `source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` としてUI/AIへ渡します。`stale_cache` 表示がある場合は、外部API失敗時に最後の成功データを使っています
 - 時系列データを突合する場合は `src/services/temporal_alignment.py` の as-of join を使い、許容時間差外の未突合行を `DataResult.is_partial` と `quality_warnings` で明示します

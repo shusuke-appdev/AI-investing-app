@@ -76,9 +76,10 @@ UI
 1. `MarketState.fetch_market_summary_fast()` がUIロードで実行され、`.states/market_context_cache` の最後の軽量サマリーを優先表示する
 2. 軽量サマリーは `market_data.get_market_indices()` と `market_config.get_market_config()` のみを取得し、起動時にオプション取得を行わない
 3. `MarketState.refresh_market_details()` が、既存の `MarketContext` を再利用しながら市場環境、マイクロストラクチャー、テーマ、監視指標を更新する
-4. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、取得結果、キャッシュ鮮度、品質警告を `OptionContext` に保存する
-5. Reflex state に整形済みデータを保存し、画面が再描画される
-6. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、`MarketContext` とオプション品質情報をプロンプトに含める
+4. 詳細更新では `sector_flow_service` が米国セクターETFと日本テーマバスケットから資金流入セクター、確信度、継続性、調査判断を計算し、`japan_market_conditions` が日経平均上昇の6条件を直接データまたは代理指標として評価する
+5. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、取得結果、キャッシュ鮮度、品質警告を `OptionContext` に保存する
+6. Reflex state に整形済みデータを保存し、画面が再描画される
+7. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、`MarketContext`、オプション品質情報、日米セクター流入、日経6条件をプロンプトに含める。レポートは米国市場を主軸にし、日本市場は米国との連動・乖離を読む補助コーナーとして扱う
 
 ### 個別銘柄
 
@@ -109,6 +110,8 @@ UI
 - `src/cache.py` は Streamlit 依存を避けるためのフレームワーク非依存TTLキャッシュ。エントリごとに `created_at`、`expires_at`、`ttl`、`namespace` を持ち、関数単位の `.clear_cache()` と名前空間単位のクリアに対応する
 - `src/persistent_cache.py` は `.states` 配下のJSONキャッシュ共通基盤。schema/version付きの原子的書き込み、破損JSON無視、fresh/stale/expired判定、ファイル名安全化を担う
 - yfinance系の重い取得は、メモリTTLに加えて `.states/market_context_cache` と `.states/option_chain_cache` のJSONキャッシュを使う。`source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` をUIとAIプロンプトへ渡す
+- 日経平均上昇6条件は、日証金売り残、1570信用倍率、海外投資家買越額などの直接データがない場合に `proxy` または `unavailable` として明示する。代理評価は断定ではなく、AIプロンプトにもデータ品質として渡す
+- 資金流入セクター判定は、米国はセクターETF、日本は `JP_THEMES` の代表銘柄バスケットを使う。スコアは相対騰落率、5日/20日継続性、出来高比、上昇参加率から作り、売買指示ではなく「乗る候補」「押し目待ち」「観察」「見送り」の調査支援ラベルに留める
 - HTTPキャッシュは `src/network.py` が `.states/http_cache` 配下で用途別セッションとして管理し、ルート直下にSQLiteを作らない
 - yfinanceオプションデータはGreeks欠損が多いため、Gammaが取得できない場合はGEXを非表示にし、`data_quality` と `quality_warnings` でUIとAIに明示する
 - Reflex state では `dict[str, Any]` の深いアクセスが壊れやすいため、`pydantic.BaseModel` でUI表示用モデルを定義している

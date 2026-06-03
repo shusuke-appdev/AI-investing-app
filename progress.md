@@ -176,3 +176,9 @@ streamlit run legacy_streamlit/app.py
 - Applied explicit Data API grants to `service_role`, revoked `anon`/`authenticated` table access, enabled RLS, and removed existing permissive `Enable all access for all users` policies.
 - Opted the `postgres` role's future `public` table/function/sequence default privileges into explicit-grant behavior; `supabase_admin` default privileges could not be changed by the connector due to ownership permissions.
 - Verified `service_role` insert/select/delete smoke tests for all three tables, checked migration history, and reran Supabase Security/Performance Advisors.
+
+# Session update: 2026-06-03 Japan market / sector flow Market Recap expansion
+- Added US-primary/Japan-supplemental sector flow diagnostics for Market Intelligence, using US sector ETFs and Japanese theme baskets to score inflow strength, confidence, continuation, and research action labels.
+- Added Nikkei upside six-condition diagnostics to `MarketContext`, with direct optional environment inputs for JSF short balance, 1570 margin ratio, and foreign investor net buying, plus proxy/unavailable labeling when free direct data is not available.
+- Wired the new diagnostics into the Reflex Market Intelligence dashboard and AI Market Recap prompt so the recap remains US-main while explicitly discussing Japan as a cross-market corner.
+- Expanded JP market summary fetching so Japan mode also shows configured commodities, FX, crypto, and remaining Yahoo-compatible JP index proxies rather than only Stooq index rows.

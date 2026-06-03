@@ -19,6 +19,11 @@ from src.momentum_monitor import get_momentum_themes
 from src.option_analyst import get_major_indices_option_status
 from src.persistent_cache import PersistentJsonCache, repo_state_cache, utc_now_iso
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
+from src.services.japan_market_conditions import build_japan_conditions_context
+from src.services.sector_flow_service import (
+    build_cross_market_context,
+    build_sector_flow_context,
+)
 from src.stock_data_provider import get_valuation_metrics
 
 MARKET_SUMMARY_FRESH_SECONDS = 300
@@ -100,16 +105,32 @@ def build_market_details_context(
     def monitor_task() -> dict[str, Any]:
         return build_market_monitor_context(options.items)
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    def sector_flow_task() -> dict[str, Any]:
+        return build_sector_flow_context()
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {
             "evaluation": executor.submit(evaluation_task),
             "microstructure": executor.submit(microstructure_task),
             "momentum": executor.submit(momentum_task),
             "monitor": executor.submit(monitor_task),
+            "sector_flow": executor.submit(sector_flow_task),
         }
         results = {
             name: _future_result(future, errors) for name, future in futures.items()
         }
+    japan_conditions = _safe_call(
+        lambda: build_japan_conditions_context(
+            base.market_data, results.get("sector_flow") or {}
+        ),
+        {},
+        errors,
+    )
+    cross_market = _safe_call(
+        lambda: build_cross_market_context(results.get("sector_flow") or {}),
+        {},
+        errors,
+    )
 
     context = MarketContext(
         market_type=market_type,
@@ -120,6 +141,9 @@ def build_market_details_context(
         microstructure=results.get("microstructure") or {},
         momentum=results.get("momentum") or {},
         monitor=results.get("monitor") or {},
+        japan_conditions=japan_conditions,
+        sector_flow=results.get("sector_flow") or {},
+        cross_market=cross_market,
         data_status=[
             *base.data_status,
             DataResult(
@@ -130,6 +154,24 @@ def build_market_details_context(
                 error="; ".join(errors) if errors else "",
                 cache_status="live",
             ),
+            DataResult(
+                name="sector_flow",
+                source="sector_flow_service",
+                fetched_at=_utc_now(),
+                is_partial=not bool(results.get("sector_flow")),
+                cache_status="live",
+            ),
+            DataResult(
+                name="nikkei_conditions",
+                source="japan_market_conditions",
+                fetched_at=_utc_now(),
+                is_partial=not bool(japan_conditions)
+                or bool(japan_conditions.get("unavailable_count", 0)),
+                error="; ".join(japan_conditions.get("quality_warnings", []))
+                if japan_conditions
+                else "",
+                cache_status="live",
+            ),
         ],
         errors=errors,
         source="live_details",
@@ -137,7 +179,11 @@ def build_market_details_context(
         is_stale=base.is_stale,
         is_partial=bool(errors) or base.is_partial or options.is_partial,
         quality_warnings=_merge_warnings(
-            base.quality_warnings, options.quality_warnings, errors
+            base.quality_warnings,
+            options.quality_warnings,
+            (results.get("sector_flow") or {}).get("quality_warnings", []),
+            japan_conditions.get("quality_warnings", []) if japan_conditions else [],
+            errors,
         ),
         cache_status="live" if not base.is_stale else base.cache_status,
         cache_age_seconds=base.cache_age_seconds,
@@ -183,6 +229,9 @@ def build_market_options_context(
         microstructure=base.microstructure,
         momentum=base.momentum,
         monitor=results.get("monitor") or base.monitor,
+        japan_conditions=base.japan_conditions,
+        sector_flow=base.sector_flow,
+        cross_market=base.cross_market,
         data_status=[
             *base.data_status,
             DataResult(
@@ -328,6 +377,44 @@ def format_market_context_for_ai(context: MarketContext) -> str:
                 )
         if leaders:
             parts.append("- Momentum leaders: " + "; ".join(leaders[:4]))
+
+    sector_flow = context.sector_flow or {}
+    if sector_flow:
+        parts.append("[US primary / Japan supplemental sector flow]")
+        if sector_flow.get("summary"):
+            parts.append(f"- Flow summary: {sector_flow['summary']}")
+        for market, payload in (sector_flow.get("markets") or {}).items():
+            leaders = payload.get("leaders") or []
+            if leaders:
+                leader = leaders[0]
+                parts.append(
+                    f"- {market} leading flow: {leader.get('theme')} "
+                    f"(score={float(leader.get('flow_score', 0.0)):.1f}, "
+                    f"confidence={leader.get('confidence')}, "
+                    f"continuation={leader.get('continuation')}, "
+                    f"action={leader.get('action')})"
+                )
+
+    japan = context.japan_conditions or {}
+    if japan:
+        parts.append("[Nikkei upside six conditions]")
+        parts.append(
+            f"- Overall: {japan.get('summary', '')} "
+            f"label={japan.get('score_label', 'unknown')}"
+        )
+        for item in (japan.get("items") or [])[:6]:
+            parts.append(
+                f"  - C{item.get('condition_no')}: {item.get('status_label')} "
+                f"value={item.get('value')} evidence={item.get('evidence')}"
+            )
+
+    cross = context.cross_market or {}
+    if cross:
+        parts.append(
+            "[Cross-market stance] "
+            f"{cross.get('stance', '')} "
+            f"relative_flow={cross.get('relative_flow_score', 0)}"
+        )
 
     return "\n".join(parts)
 

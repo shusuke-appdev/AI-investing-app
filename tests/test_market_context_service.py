@@ -18,7 +18,76 @@ def _monitor_payload():
     }
 
 
+def _sector_flow_payload():
+    return {
+        "summary": "米国: 情報技術(+50.0) / 日本: 半導体製造装置(+30.0)",
+        "markets": {
+            "US": {
+                "leaders": [
+                    {
+                        "theme": "情報技術",
+                        "flow_score": 50.0,
+                        "confidence": "高",
+                        "continuation": "高",
+                        "action": "乗る候補",
+                    }
+                ]
+            },
+            "JP": {
+                "leaders": [
+                    {
+                        "theme": "半導体製造装置",
+                        "flow_score": 30.0,
+                        "confidence": "中",
+                        "continuation": "中",
+                        "action": "押し目待ち",
+                    }
+                ]
+            },
+        },
+        "quality_warnings": [],
+    }
+
+
+def _japan_conditions_payload():
+    return {
+        "summary": "総合 45% / 達成 1件 / 代理 4件 / データ不足 1件",
+        "score": 0.45,
+        "score_label": "中立",
+        "unavailable_count": 1,
+        "quality_warnings": [
+            "Nikkei conditions have 1 unavailable direct data points."
+        ],
+        "items": [
+            {
+                "condition_no": 1,
+                "status_label": "データ不足",
+                "value": "-",
+                "evidence": "missing",
+            }
+        ],
+    }
+
+
+def _patch_new_market_layers(monkeypatch):
+    monkeypatch.setattr(service, "build_sector_flow_context", _sector_flow_payload)
+    monkeypatch.setattr(
+        service,
+        "build_japan_conditions_context",
+        lambda market_data, sector_flow: _japan_conditions_payload(),
+    )
+    monkeypatch.setattr(
+        service,
+        "build_cross_market_context",
+        lambda sector_flow: {
+            "stance": "US flow leadership remains dominant; Japan is supplemental.",
+            "relative_flow_score": -20.0,
+        },
+    )
+
+
 def test_build_market_context_collects_monitoring_inputs(monkeypatch):
+    _patch_new_market_layers(monkeypatch)
     monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)
     monkeypatch.setattr(
         service,
@@ -72,10 +141,16 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     assert context.options.items[0]["ticker"] == "SPY"
     assert context.evaluation["status"] == "Neutral"
     assert context.monitor["distribution_spy"]["count"] == 2
+    assert context.sector_flow["markets"]["US"]["leaders"][0]["theme"] == "情報技術"
+    assert context.japan_conditions["score_label"] == "中立"
     assert "Market environment" in service.format_market_context_for_ai(context)
+    assert "Nikkei upside six conditions" in service.format_market_context_for_ai(
+        context
+    )
 
 
 def test_build_market_context_keeps_partial_data_when_options_fail(monkeypatch):
+    _patch_new_market_layers(monkeypatch)
     monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)
     monkeypatch.setattr(service, "get_market_indices", lambda market_type: {"SPY": {}})
     monkeypatch.setattr(service, "get_market_config", lambda market_type: {})
@@ -153,6 +228,7 @@ def test_market_context_cache_preserves_stale_metadata(monkeypatch, tmp_path):
 
 
 def test_market_details_reuses_supplied_context(monkeypatch):
+    _patch_new_market_layers(monkeypatch)
     base = MarketContext(
         market_type="US",
         market_data={"S&P 500": {"ticker": "SPY", "price": 500, "change": 1}},
@@ -188,6 +264,7 @@ def test_market_details_reuses_supplied_context(monkeypatch):
     assert context.market_data == base.market_data
     assert context.options.items == base.options.items
     assert context.monitor["distribution_spy"]["count"] == 2
+    assert context.cross_market["relative_flow_score"] == -20.0
 
 
 def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
@@ -208,6 +285,12 @@ def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
         },
         momentum={"Short": [{"theme": "AI", "performance": 2.5}]},
         monitor=_monitor_payload(),
+        sector_flow=_sector_flow_payload(),
+        japan_conditions=_japan_conditions_payload(),
+        cross_market={
+            "stance": "US flow leadership remains dominant; Japan is supplemental.",
+            "relative_flow_score": -20.0,
+        },
     )
     captured = {}
 
@@ -250,6 +333,7 @@ def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
     assert captured["options"] == [{"ticker": "SPY"}]
     assert captured["market_data"]["S&P 500"]["ticker"] == "SPY"
     assert "Market environment: Bullish" in captured["advanced"]
+    assert "US primary / Japan supplemental sector flow" in captured["advanced"]
 
 
 def test_market_ai_report_reports_gemini_unavailable():

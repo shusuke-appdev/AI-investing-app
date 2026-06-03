@@ -61,6 +61,41 @@ class MomentumCategory(BaseModel):
     themes: list[MomentumTheme] = []
 
 
+class SectorFlowItem(BaseModel):
+    market: str = ""
+    theme: str = ""
+    flow_score: float = 0.0
+    flow_score_str: str = ""
+    confidence: str = ""
+    continuation: str = ""
+    action: str = ""
+    relative_1d_str: str = ""
+    change_5d_str: str = ""
+    volume_ratio_str: str = ""
+    participation_str: str = ""
+    evidence: str = ""
+
+
+class SectorFlowGroup(BaseModel):
+    market: str = ""
+    market_label: str = ""
+    summary: str = ""
+    leaders: list[SectorFlowItem] = []
+
+
+class JapanConditionDisplay(BaseModel):
+    condition_no: int = 0
+    title: str = ""
+    category: str = ""
+    status: str = ""
+    status_label: str = ""
+    value: str = ""
+    threshold: str = ""
+    score: float = 0.0
+    assessment: str = ""
+    evidence: str = ""
+
+
 class DistributionData(BaseModel):
     count: int = 0
     status: str = ""
@@ -122,6 +157,13 @@ class MarketState(rx.State):
     option_analysis: list[OptionSummary] = []
     momentum_data: list[MomentumCategory] = []
     market_monitor: MarketMonitorData = MarketMonitorData()
+    sector_flow_groups: list[SectorFlowGroup] = []
+    sector_flow_summary: str = ""
+    cross_market_stance: str = ""
+    japan_conditions: list[JapanConditionDisplay] = []
+    japan_conditions_summary: str = ""
+    japan_conditions_score_label: str = ""
+    japan_conditions_score: float = 0.0
 
     ai_recap: str = ""
     is_generating_recap: bool = False
@@ -272,6 +314,61 @@ class MarketState(rx.State):
             )
         return result
 
+    def _format_sector_flow(self, raw: dict[str, Any]) -> list[SectorFlowGroup]:
+        groups = []
+        markets = raw.get("markets", {}) if raw else {}
+        for market in ("US", "JP"):
+            payload = markets.get(market, {})
+            leaders = []
+            for item in payload.get("leaders", []):
+                score = float(item.get("flow_score", 0.0))
+                leaders.append(
+                    SectorFlowItem(
+                        market=market,
+                        theme=item.get("theme", ""),
+                        flow_score=score,
+                        flow_score_str=f"{score:+.1f}",
+                        confidence=item.get("confidence", ""),
+                        continuation=item.get("continuation", ""),
+                        action=item.get("action", ""),
+                        relative_1d_str=f"{float(item.get('relative_1d', 0.0)):+.2f}pt",
+                        change_5d_str=f"{float(item.get('change_5d', 0.0)):+.2f}%",
+                        volume_ratio_str=f"{float(item.get('volume_ratio', 0.0)):.2f}x",
+                        participation_str=f"{float(item.get('participation', 0.0)):.0%}",
+                        evidence=item.get("evidence", ""),
+                    )
+                )
+            groups.append(
+                SectorFlowGroup(
+                    market=market,
+                    market_label="米国" if market == "US" else "日本",
+                    summary=payload.get("summary", ""),
+                    leaders=leaders,
+                )
+            )
+        return groups
+
+    def _format_japan_conditions(
+        self, raw: dict[str, Any]
+    ) -> list[JapanConditionDisplay]:
+        result = []
+        for item in raw.get("items", []) if raw else []:
+            result.append(
+                JapanConditionDisplay(
+                    condition_no=int(item.get("condition_no", 0)),
+                    title=item.get("title", ""),
+                    category=item.get("category", ""),
+                    status=item.get("status", ""),
+                    status_label=item.get("status_label", ""),
+                    value=item.get("value", ""),
+                    threshold=item.get("threshold", ""),
+                    score=float(item.get("score", 0.0)),
+                    assessment=item.get("assessment", ""),
+                    evidence=item.get("evidence", ""),
+                )
+            )
+        return result
+
     def _set_market_lists(
         self, raw_data: dict[str, Any], config: dict[str, Any]
     ) -> None:
@@ -280,6 +377,11 @@ class MarketState(rx.State):
         commodity_tickers = set(config.get("commodities", {}).values())
         crypto_tickers = set(config.get("crypto", {}).values())
         forex_tickers = set(config.get("forex", {}).values())
+        indices_names = set(config.get("indices", {}).keys())
+        sector_names = set(config.get("sectors", {}).keys())
+        commodity_names = set(config.get("commodities", {}).keys())
+        crypto_names = set(config.get("crypto", {}).keys())
+        forex_names = set(config.get("forex", {}).keys())
 
         indices = []
         sectors = []
@@ -289,14 +391,17 @@ class MarketState(rx.State):
                 continue
             item = self._market_item(name, data)
             ticker = data.get("ticker", "")
-            if ticker in indices_tickers:
+            if ticker in indices_tickers or name in indices_names:
                 indices.append(item)
-            elif ticker in sector_tickers:
+            elif ticker in sector_tickers or name in sector_names:
                 sectors.append(item)
             elif (
                 ticker in commodity_tickers
                 or ticker in forex_tickers
                 or ticker in crypto_tickers
+                or name in commodity_names
+                or name in forex_names
+                or name in crypto_names
             ):
                 others.append(item)
 
@@ -373,6 +478,15 @@ class MarketState(rx.State):
             if context.monitor
             else MarketMonitorData()
         )
+        self.sector_flow_groups = self._format_sector_flow(context.sector_flow)
+        self.sector_flow_summary = context.sector_flow.get("summary", "")
+        self.cross_market_stance = context.cross_market.get("stance", "")
+        self.japan_conditions = self._format_japan_conditions(context.japan_conditions)
+        self.japan_conditions_summary = context.japan_conditions.get("summary", "")
+        self.japan_conditions_score_label = context.japan_conditions.get(
+            "score_label", ""
+        )
+        self.japan_conditions_score = float(context.japan_conditions.get("score", 0.0))
 
         self._set_market_lists(context.market_data, context.market_config)
 

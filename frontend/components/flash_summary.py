@@ -108,6 +108,16 @@ def market_monitor() -> rx.Component:
                         _market_monitor_panel(),
                         rx.fragment(),
                     ),
+                    rx.cond(
+                        MarketState.sector_flow_groups.length() > 0,
+                        _sector_flow_panel(),
+                        rx.fragment(),
+                    ),
+                    rx.cond(
+                        MarketState.japan_conditions.length() > 0,
+                        _nikkei_conditions_panel(),
+                        rx.fragment(),
+                    ),
                     width="100%",
                     spacing="3",
                 ),
@@ -228,6 +238,172 @@ def _market_monitor_panel() -> rx.Component:
     )
 
 
+def _sector_flow_panel() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(
+                "資金流入セクター判定",
+                weight="bold",
+                size="2",
+            ),
+            rx.spacer(),
+            rx.text(
+                MarketState.sector_flow_summary,
+                size="1",
+                color=rx.color("gray", 10),
+            ),
+            width="100%",
+            align_items="center",
+        ),
+        rx.cond(
+            MarketState.cross_market_stance != "",
+            rx.text(
+                MarketState.cross_market_stance,
+                size="1",
+                color=rx.color("gray", 10),
+                margin_top="0.25rem",
+            ),
+            rx.fragment(),
+        ),
+        rx.grid(
+            rx.foreach(MarketState.sector_flow_groups, _sector_flow_group),
+            columns=rx.breakpoints(initial="1", md="2"),
+            spacing="2",
+            width="100%",
+            margin_top="0.75rem",
+        ),
+        width="100%",
+        margin_top="1rem",
+        padding="0.75rem",
+        border=f"1px solid {rx.color('gray', 4)}",
+        border_radius="8px",
+    )
+
+
+def _sector_flow_group(group) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.text(group.market_label, weight="bold", size="2"),
+                rx.spacer(),
+                rx.text(group.summary, size="1", color=rx.color("gray", 10)),
+                width="100%",
+                align_items="center",
+            ),
+            rx.cond(
+                group.leaders.length() > 0,
+                rx.vstack(
+                    rx.foreach(group.leaders, _sector_flow_row),
+                    width="100%",
+                    spacing="1",
+                ),
+                rx.text("判定できるデータがありません", size="1", color="gray"),
+            ),
+            width="100%",
+            spacing="2",
+        ),
+        padding="0.75rem",
+    )
+
+
+def _sector_flow_row(item) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(item.theme, weight="medium", size="2"),
+            rx.spacer(),
+            rx.badge(item.flow_score_str, color_scheme=_score_color(item.flow_score)),
+            rx.badge(item.action, color_scheme=_action_color(item.action)),
+            align_items="center",
+            width="100%",
+        ),
+        rx.hstack(
+            rx.text("確信度", size="1", color=rx.color("gray", 10)),
+            rx.badge(item.confidence, color_scheme=_confidence_color(item.confidence)),
+            rx.text("継続性", size="1", color=rx.color("gray", 10)),
+            rx.badge(
+                item.continuation, color_scheme=_confidence_color(item.continuation)
+            ),
+            rx.text("5日", size="1", color=rx.color("gray", 10)),
+            rx.text(item.change_5d_str, size="1", weight="bold"),
+            wrap="wrap",
+            spacing="2",
+            margin_top="0.25rem",
+        ),
+        rx.text(
+            "相対 ",
+            item.relative_1d_str,
+            " / 出来高 ",
+            item.volume_ratio_str,
+            " / 参加率 ",
+            item.participation_str,
+            size="1",
+            color=rx.color("gray", 10),
+            margin_top="0.25rem",
+        ),
+        padding_y="0.4rem",
+        border_bottom=f"1px solid {rx.color('gray', 3)}",
+        width="100%",
+    )
+
+
+def _nikkei_conditions_panel() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text("日経平均上昇の6条件", weight="bold", size="2"),
+            rx.badge(
+                MarketState.japan_conditions_score_label,
+                color_scheme=_nikkei_score_color(MarketState.japan_conditions_score),
+            ),
+            rx.spacer(),
+            rx.text(
+                MarketState.japan_conditions_summary,
+                size="1",
+                color=rx.color("gray", 10),
+            ),
+            width="100%",
+            align_items="center",
+        ),
+        rx.grid(
+            rx.foreach(MarketState.japan_conditions, _nikkei_condition_card),
+            columns=rx.breakpoints(initial="1", md="2", lg="3"),
+            spacing="2",
+            width="100%",
+            margin_top="0.75rem",
+        ),
+        width="100%",
+        margin_top="1rem",
+        padding="0.75rem",
+        border=f"1px solid {rx.color('gray', 4)}",
+        border_radius="8px",
+    )
+
+
+def _nikkei_condition_card(item) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.badge(
+                    rx.text("C", item.condition_no.to_string()),
+                    color_scheme="gray",
+                ),
+                rx.text(item.title, weight="bold", size="1", flex="1"),
+                rx.badge(
+                    item.status_label,
+                    color_scheme=_condition_status_color(item.status),
+                ),
+                width="100%",
+                align_items="center",
+            ),
+            rx.text(item.value, size="2", weight="bold"),
+            rx.text(item.assessment, size="1", color=rx.color("gray", 11)),
+            rx.text(item.evidence, size="1", color=rx.color("gray", 9)),
+            spacing="1",
+            align_items="start",
+        ),
+        padding="0.65rem",
+    )
+
+
 def _distribution_card() -> rx.Component:
     return rx.card(
         rx.vstack(
@@ -330,6 +506,52 @@ def _level_color(level) -> rx.Var:
         level == "green",
         "green",
         rx.cond(level == "yellow", "orange", rx.cond(level == "red", "red", "gray")),
+    )
+
+
+def _score_color(score) -> rx.Var:
+    return rx.cond(
+        score >= 45,
+        "green",
+        rx.cond(score >= 20, "blue", rx.cond(score < 0, "red", "gray")),
+    )
+
+
+def _action_color(action) -> rx.Var:
+    return rx.cond(
+        action == "乗る候補",
+        "green",
+        rx.cond(
+            action == "押し目待ち", "blue", rx.cond(action == "見送り", "red", "gray")
+        ),
+    )
+
+
+def _confidence_color(value) -> rx.Var:
+    return rx.cond(
+        value == "高",
+        "green",
+        rx.cond(value == "中", "orange", rx.cond(value == "低", "gray", "gray")),
+    )
+
+
+def _condition_status_color(status) -> rx.Var:
+    return rx.cond(
+        status == "met",
+        "green",
+        rx.cond(
+            status == "not_met",
+            "orange",
+            rx.cond(status == "unavailable", "gray", "gray"),
+        ),
+    )
+
+
+def _nikkei_score_color(score) -> rx.Var:
+    return rx.cond(
+        score >= 0.65,
+        "green",
+        rx.cond(score >= 0.4, "orange", "gray"),
     )
 
 

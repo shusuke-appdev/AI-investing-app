@@ -25,9 +25,9 @@ configure_yfinance_cache()
 
 # --- 日本市場用 Stooq データ取得 ---
 JP_STOOQ_TICKERS: dict[str, str] = {
-    "日経225": "^NKX",
+    "日経平均": "^NKX",
     "TOPIX": "^TPX",
-    "10年国債": "10YJP.B",
+    "日本10年国債": "10YJP.B",
 }
 
 
@@ -51,6 +51,41 @@ def _get_stooq_data(ticker: str) -> tuple[float, float] | None:
         return None
 
 
+def _fetch_yfinance_market_item(n: str, t: str) -> tuple[str, str, dict]:
+    try:
+        hist = yf.Ticker(t).history(period="5d")
+        if "Close" in hist.columns:
+            hist.dropna(subset=["Close"], inplace=True)
+        else:
+            hist.dropna(inplace=True)
+
+        if not hist.empty and len(hist) >= 1:
+            if "Close" in hist.columns:
+                current = hist["Close"].iloc[-1]
+                prev = hist["Close"].iloc[-2] if len(hist) >= 2 else current
+            else:
+                current = hist.iloc[-1, 0]
+                prev = hist.iloc[-2, 0] if len(hist) >= 2 else current
+
+            if math.isnan(current) or math.isnan(prev):
+                return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
+
+            change = ((current - prev) / prev) * 100 if prev != 0 else 0
+            return (
+                n,
+                t,
+                {
+                    "price": float(current),
+                    "change": float(change),
+                    "ticker": t,
+                },
+            )
+        return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
+    except Exception as e:
+        logger.warning(f"[MarketIndexProvider] Failed to fetch {t}: {e}")
+        return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
+
+
 @ttl_cache(ttl=CACHE_TTL_MEDIUM)
 def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
     """Get major market indices data."""
@@ -62,6 +97,26 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
             data = _get_stooq_data(ticker)
             if data:
                 result[name] = {"price": data[0], "change": data[1], "ticker": ticker}
+        jp_yf_targets = {
+            **{
+                name: ticker
+                for name, ticker in config.get("indices", {}).items()
+                if name not in result
+            },
+            **config.get("sectors", {}),
+            **config.get("commodities", {}),
+            **config.get("crypto", {}),
+            **config.get("forex", {}),
+        }
+        if jp_yf_targets:
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [
+                    executor.submit(_fetch_yfinance_market_item, n, t)
+                    for n, t in jp_yf_targets.items()
+                ]
+                for future in as_completed(futures):
+                    n, t, data = future.result()
+                    result[n] = data
         return result
 
     finnhub_targets = {
@@ -125,40 +180,7 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
         yf_targets.update(finnhub_targets)
 
     def _fetch_yf(n: str, t: str) -> tuple[str, str, dict]:
-        try:
-            hist = yf.Ticker(t).history(period="5d")
-            if "Close" in hist.columns:
-                hist.dropna(subset=["Close"], inplace=True)
-            else:
-                hist.dropna(inplace=True)
-
-            if not hist.empty and len(hist) >= 1:
-                if "Close" in hist.columns:
-                    current = hist["Close"].iloc[-1]
-                    prev = hist["Close"].iloc[-2] if len(hist) >= 2 else current
-                else:
-                    current = hist.iloc[-1, 0]
-                    prev = hist.iloc[-2, 0] if len(hist) >= 2 else current
-
-                # NaN ガード
-                if math.isnan(current) or math.isnan(prev):
-                    return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
-
-                change = ((current - prev) / prev) * 100 if prev != 0 else 0
-                return (
-                    n,
-                    t,
-                    {
-                        "price": float(current),
-                        "change": float(change),
-                        "ticker": t,
-                    },
-                )
-            else:
-                return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
-        except Exception as e:
-            logger.warning(f"[MarketIndexProvider] Failed to fetch {t}: {e}")
-            return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
+        return _fetch_yfinance_market_item(n, t)
 
     if yf_targets:
         try:

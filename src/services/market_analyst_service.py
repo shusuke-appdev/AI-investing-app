@@ -61,6 +61,13 @@ def generate_market_analysis_report(
         option_analysis=option_analysis,
         market_context=market_context,
     )
+    if context is None:
+        try:
+            from src.services.market_dashboard_service import build_market_context
+
+            context = build_market_context(market_type)
+        except Exception as exc:
+            logger.error(f"Market context build error: {exc}")
     config = get_market_config(market_type)
 
     # 0. Prepare Market Data (防御的コピーで呼び出し元のdictを破壊しない)

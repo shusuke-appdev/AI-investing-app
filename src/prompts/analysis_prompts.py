@@ -94,6 +94,13 @@ Synthesize fragmented information into a coherent "Narrative" with deep structur
 5. **Confluence Check**: Do Technicals support Fundamentals? Identify divergences.
 6. **Market Themes**: Identify 2-3 specific, actionable market themes (e.g., policy shifts, AI infrastructure spending patterns, or specific sector rotation flows) that are dictating current overall dynamics.
 
+# US-JAPAN MARKET SCOPE
+- Treat the US market as the primary market regime anchor.
+- Do NOT split the report into separate US and Japan recaps.
+- Discuss Japan only as a supplemental but explicit cross-market corner: relative strength, Nikkei upside conditions, foreign-flow/oil sensitivity, and how Japan themes confirm or diverge from the US narrative.
+- If Japan data is proxy or unavailable, state the data limitation and avoid overconfidence.
+- Sector-flow judgments are research signals, not trade orders. Assess whether the flow is reliable, durable, and worth following as "ride / wait for pullback / observe / avoid".
+
 # CROSS-ASSET LINKAGE FRAMEWORK (CRITICAL - Apply Throughout)
 Do NOT analyze each asset class in isolation. Identify and explain these linkages:
 1. **Risk-On/Off Signals**: VIX↑ + Gold↑ + JPY↑ = Risk-Off. Track divergences.
@@ -168,6 +175,7 @@ Do NOT analyze each asset class in isolation. Identify and explain these linkage
 4. **Smart Money vs Retail**: 機関投資家のポジショニング vs 個人のセンチメント乖離
 5. **Narrative Shifts**: 支配的ナラティブの変化（「週次〜月次のストーリー」として記述）
 6. **Crowding Risk**: 過度に集中したポジション（Magnificent 7偏重等）のリスク評価
+7. **Japan as US-linked satellite**: 日本市場は米国主導レジームとの連動・乖離として評価。日経平均上昇6条件と日本テーマ流入は、米国リスクオン/金利/ドル円/原油との関係で読む。
 
 | テーマ | ステータス | 資金フロー | 備考 |
 |:---|:---|:---|:---|

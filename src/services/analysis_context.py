@@ -55,6 +55,9 @@ class MarketContext:
     microstructure: dict[str, Any] = field(default_factory=dict)
     momentum: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     monitor: dict[str, Any] = field(default_factory=dict)
+    japan_conditions: dict[str, Any] = field(default_factory=dict)
+    sector_flow: dict[str, Any] = field(default_factory=dict)
+    cross_market: dict[str, Any] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     source: str = ""
@@ -75,6 +78,9 @@ class MarketContext:
             "microstructure": self.microstructure,
             "momentum": self.momentum,
             "monitor": self.monitor,
+            "japan_conditions": self.japan_conditions,
+            "sector_flow": self.sector_flow,
+            "cross_market": self.cross_market,
             "data_status": [item.to_dict() for item in self.data_status],
             "errors": self.errors,
             "source": self.source,
@@ -82,6 +88,8 @@ class MarketContext:
             "is_stale": self.is_stale,
             "is_partial": self.is_partial,
             "quality_warnings": self.quality_warnings,
+            "cache_status": self.cache_status,
+            "cache_age_seconds": self.cache_age_seconds,
         }
 
     @classmethod
@@ -122,6 +130,9 @@ class MarketContext:
             microstructure=value.get("microstructure") or {},
             momentum=value.get("momentum") or {},
             monitor=value.get("monitor") or {},
+            japan_conditions=value.get("japan_conditions") or {},
+            sector_flow=value.get("sector_flow") or {},
+            cross_market=value.get("cross_market") or {},
             data_status=data_status,
             errors=list(value.get("errors") or []),
             source=str(value.get("source") or ""),
