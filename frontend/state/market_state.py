@@ -83,6 +83,54 @@ class SectorFlowGroup(BaseModel):
     leaders: list[SectorFlowItem] = []
 
 
+class CreditStressIndicator(BaseModel):
+    series_id: str = ""
+    label: str = ""
+    latest: float = 0.0
+    latest_str: str = ""
+    latest_date: str = ""
+    delta_3m: float = 0.0
+    delta_3m_str: str = ""
+    z_score: float = 0.0
+    z_score_str: str = ""
+    is_hot: bool = False
+    level: str = "gray"
+    warning: str = ""
+
+
+class CreditStressDisplay(BaseModel):
+    status: str = ""
+    status_label: str = ""
+    level: str = "gray"
+    summary: str = ""
+    rapid_stress: bool = False
+    indicators: list[CreditStressIndicator] = []
+    confirmations: list[CreditStressIndicator] = []
+    source: str = ""
+    fetched_at: str = ""
+
+
+class FlowProxyItem(BaseModel):
+    ticker: str = ""
+    label: str = ""
+    leadership_score: float = 0.0
+    leadership_score_str: str = ""
+    flow_pressure_z: float = 0.0
+    flow_pressure_z_str: str = ""
+    relative_return_20d_str: str = ""
+    relative_return_60d_str: str = ""
+    trend_above_ma50: bool = False
+    level: str = "gray"
+
+
+class FlowProxyDisplay(BaseModel):
+    status: str = ""
+    summary: str = ""
+    leaders: list[FlowProxyItem] = []
+    laggards: list[FlowProxyItem] = []
+    source: str = ""
+
+
 class JapanConditionDisplay(BaseModel):
     condition_no: int = 0
     title: str = ""
@@ -160,6 +208,8 @@ class MarketState(rx.State):
     sector_flow_groups: list[SectorFlowGroup] = []
     sector_flow_summary: str = ""
     cross_market_stance: str = ""
+    credit_stress: CreditStressDisplay = CreditStressDisplay()
+    flow_monitor: FlowProxyDisplay = FlowProxyDisplay()
     japan_conditions: list[JapanConditionDisplay] = []
     japan_conditions_summary: str = ""
     japan_conditions_score_label: str = ""
@@ -369,6 +419,81 @@ class MarketState(rx.State):
             )
         return result
 
+    def _format_credit_stress(self, raw: dict[str, Any]) -> CreditStressDisplay:
+        if not raw:
+            return CreditStressDisplay()
+        return CreditStressDisplay(
+            status=raw.get("status", ""),
+            status_label=raw.get("status_label", ""),
+            level=raw.get("level", "gray"),
+            summary=raw.get("summary", ""),
+            rapid_stress=bool(raw.get("rapid_stress", False)),
+            indicators=[
+                self._format_credit_indicator(item)
+                for item in raw.get("indicators", [])
+            ],
+            confirmations=[
+                self._format_credit_indicator(item)
+                for item in raw.get("confirmations", [])[:6]
+            ],
+            source=raw.get("source", ""),
+            fetched_at=raw.get("fetched_at", ""),
+        )
+
+    def _format_credit_indicator(self, item: dict[str, Any]) -> CreditStressIndicator:
+        latest = float(item.get("latest", 0.0))
+        delta = float(item.get("delta_3m", 0.0))
+        z_score = float(item.get("z_score", 0.0))
+        return CreditStressIndicator(
+            series_id=item.get("series_id", ""),
+            label=item.get("label", ""),
+            latest=latest,
+            latest_str=f"{latest:.2f}",
+            latest_date=item.get("latest_date", ""),
+            delta_3m=delta,
+            delta_3m_str=f"{delta:+.2f}",
+            z_score=z_score,
+            z_score_str=f"{z_score:+.2f}",
+            is_hot=bool(item.get("is_hot", False)),
+            level=item.get("level", "gray"),
+            warning=item.get("warning", ""),
+        )
+
+    def _format_flow_monitor(self, raw: dict[str, Any]) -> FlowProxyDisplay:
+        if not raw:
+            return FlowProxyDisplay()
+        return FlowProxyDisplay(
+            status=raw.get("status", ""),
+            summary=raw.get("summary", ""),
+            leaders=[
+                self._format_flow_proxy_item(item) for item in raw.get("leaders", [])
+            ],
+            laggards=[
+                self._format_flow_proxy_item(item) for item in raw.get("laggards", [])
+            ],
+            source=raw.get("source", ""),
+        )
+
+    def _format_flow_proxy_item(self, item: dict[str, Any]) -> FlowProxyItem:
+        score = float(item.get("leadership_score", 0.0))
+        flow_z = float(item.get("flow_pressure_z", 0.0))
+        return FlowProxyItem(
+            ticker=item.get("ticker", ""),
+            label=item.get("label", ""),
+            leadership_score=score,
+            leadership_score_str=f"{score:+.2f}",
+            flow_pressure_z=flow_z,
+            flow_pressure_z_str=f"{flow_z:+.2f}",
+            relative_return_20d_str=(
+                f"{float(item.get('relative_return_20d', 0.0)):+.2f}%"
+            ),
+            relative_return_60d_str=(
+                f"{float(item.get('relative_return_60d', 0.0)):+.2f}%"
+            ),
+            trend_above_ma50=bool(item.get("trend_above_ma50", False)),
+            level=item.get("level", "gray"),
+        )
+
     def _set_market_lists(
         self, raw_data: dict[str, Any], config: dict[str, Any]
     ) -> None:
@@ -481,6 +606,8 @@ class MarketState(rx.State):
         self.sector_flow_groups = self._format_sector_flow(context.sector_flow)
         self.sector_flow_summary = context.sector_flow.get("summary", "")
         self.cross_market_stance = context.cross_market.get("stance", "")
+        self.credit_stress = self._format_credit_stress(context.credit_stress)
+        self.flow_monitor = self._format_flow_monitor(context.flow_monitor)
         self.japan_conditions = self._format_japan_conditions(context.japan_conditions)
         self.japan_conditions_summary = context.japan_conditions.get("summary", "")
         self.japan_conditions_score_label = context.japan_conditions.get(

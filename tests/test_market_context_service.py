@@ -69,8 +69,65 @@ def _japan_conditions_payload():
     }
 
 
+def _credit_stress_payload():
+    return {
+        "status": "equity_adjustment",
+        "status_label": "通常調整寄り",
+        "level": "green",
+        "summary": "信用市場への同時伝染はまだ確認されていません。",
+        "rapid_stress": False,
+        "indicators": [
+            {
+                "series_id": "BAA10Y",
+                "label": "BAA信用スプレッド",
+                "latest": 1.5,
+                "latest_date": "2026-05-01",
+                "delta_3m": 0.1,
+                "z_score": 0.2,
+                "is_hot": False,
+                "level": "green",
+            }
+        ],
+        "confirmations": [],
+        "warnings": [],
+        "source": "test",
+        "fetched_at": "2026-05-01T00:00:00+00:00",
+    }
+
+
+def _flow_monitor_payload():
+    return {
+        "status": "risk_on",
+        "summary": "半導体 (SMH) に資金流入圧力proxyが集中しています。",
+        "leaders": [
+            {
+                "ticker": "SMH",
+                "label": "半導体",
+                "leadership_score": 1.2,
+                "flow_pressure_z": 0.8,
+                "relative_return_20d": 2.0,
+                "relative_return_60d": 4.0,
+                "trend_above_ma50": True,
+                "level": "green",
+            }
+        ],
+        "laggards": [],
+        "source": "test",
+    }
+
+
 def _patch_new_market_layers(monkeypatch):
     monkeypatch.setattr(service, "build_sector_flow_context", _sector_flow_payload)
+    monkeypatch.setattr(
+        service,
+        "build_credit_stress_monitor",
+        lambda market_type: _credit_stress_payload(),
+    )
+    monkeypatch.setattr(
+        service,
+        "build_sector_flow_monitor",
+        lambda market_type: _flow_monitor_payload(),
+    )
     monkeypatch.setattr(
         service,
         "build_japan_conditions_context",
@@ -142,6 +199,8 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     assert context.evaluation["status"] == "Neutral"
     assert context.monitor["distribution_spy"]["count"] == 2
     assert context.sector_flow["markets"]["US"]["leaders"][0]["theme"] == "情報技術"
+    assert context.credit_stress["status"] == "equity_adjustment"
+    assert context.flow_monitor["leaders"][0]["ticker"] == "SMH"
     assert context.japan_conditions["score_label"] == "中立"
     assert "Market environment" in service.format_market_context_for_ai(context)
     assert "Nikkei upside six conditions" in service.format_market_context_for_ai(
@@ -286,6 +345,8 @@ def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
         momentum={"Short": [{"theme": "AI", "performance": 2.5}]},
         monitor=_monitor_payload(),
         sector_flow=_sector_flow_payload(),
+        credit_stress=_credit_stress_payload(),
+        flow_monitor=_flow_monitor_payload(),
         japan_conditions=_japan_conditions_payload(),
         cross_market={
             "stance": "US flow leadership remains dominant; Japan is supplemental.",
@@ -333,6 +394,8 @@ def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
     assert captured["options"] == [{"ticker": "SPY"}]
     assert captured["market_data"]["S&P 500"]["ticker"] == "SPY"
     assert "Market environment: Bullish" in captured["advanced"]
+    assert "Credit stress velocity" in captured["advanced"]
+    assert "Leadership flow-pressure proxy" in captured["advanced"]
     assert "US primary / Japan supplemental sector flow" in captured["advanced"]
 
 

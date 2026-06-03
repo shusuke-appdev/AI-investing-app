@@ -27,6 +27,26 @@ The first integration step keeps paid data APIs and QuantLib out of scope. The
 US market receives the richest monitoring context because index option data is
 available; JP remains monitoring-first until the option data source improves.
 
+## Credit Stress and Flow Proxy
+
+The US Market Intelligence detail refresh also monitors whether an equity selloff
+is spreading into credit and funding stress. The first trigger watches the
+three-month velocity of `BAA10Y` and `KCFSI`; `rapid_stress` requires both
+velocity z-scores to exceed `+0.5`. This is intended to distinguish a sector or
+equity bubble unwind from a GFC-style credit contraction.
+
+FRED data is fetched through bounded FRED graph CSV requests with start/end
+parameters, then falls back to recovered `pandas_datareader` and
+`.states/economic_data_cache` stale data. `setuptools` remains pinned because
+pandas-datareader still imports legacy `distutils` paths, and a repo-local shim
+handles pandas 3 decorator drift before import.
+
+Leadership flow is a free proxy, not issuer-reported ETF fund flow. It uses
+signed dollar volume, relative returns, flow-pressure z-scores, and 50-day trend
+status for liquid US sector, semiconductor, software, credit, and bank ETFs.
+Issuer/ETF.com fund-flow feeds, CDX HY, and FRA-OIS are intentionally out of
+scope for the first free/local implementation.
+
 ## AI Report Behavior
 
 When the UI has already fetched a `MarketContext`, `generate_market_analysis_report`

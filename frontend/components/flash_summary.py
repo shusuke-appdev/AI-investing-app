@@ -109,6 +109,11 @@ def market_monitor() -> rx.Component:
                         rx.fragment(),
                     ),
                     rx.cond(
+                        MarketState.credit_stress.status != "",
+                        _credit_and_flow_panel(),
+                        rx.fragment(),
+                    ),
+                    rx.cond(
                         MarketState.sector_flow_groups.length() > 0,
                         _sector_flow_panel(),
                         rx.fragment(),
@@ -235,6 +240,192 @@ def _market_monitor_panel() -> rx.Component:
         padding="0.75rem",
         border=f"1px solid {rx.color('gray', 4)}",
         border_radius="8px",
+    )
+
+
+def _credit_and_flow_panel() -> rx.Component:
+    return rx.box(
+        rx.text(
+            "信用ストレス速度 / リーディングETFフローproxy",
+            weight="bold",
+            size="2",
+            margin_bottom="0.5rem",
+        ),
+        rx.grid(
+            _credit_stress_card(),
+            _flow_proxy_card(),
+            columns=rx.breakpoints(initial="1", md="2"),
+            spacing="2",
+            width="100%",
+        ),
+        width="100%",
+        margin_top="1rem",
+        padding="0.75rem",
+        border=f"1px solid {rx.color('gray', 4)}",
+        border_radius="8px",
+    )
+
+
+def _credit_stress_card() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text("信用ストレス速度", weight="bold", size="1"),
+            rx.spacer(),
+            rx.badge(
+                MarketState.credit_stress.status_label,
+                color_scheme=_level_color(MarketState.credit_stress.level),
+            ),
+            width="100%",
+            align_items="center",
+        ),
+        rx.text(
+            MarketState.credit_stress.summary,
+            size="1",
+            color=rx.color("gray", 10),
+            margin_top="0.25rem",
+        ),
+        rx.vstack(
+            rx.foreach(
+                MarketState.credit_stress.indicators,
+                _credit_indicator_row,
+            ),
+            width="100%",
+            spacing="1",
+            margin_top="0.5rem",
+        ),
+        rx.cond(
+            MarketState.credit_stress.confirmations.length() > 0,
+            rx.box(
+                rx.text(
+                    "確認指標",
+                    size="1",
+                    weight="bold",
+                    color=rx.color("gray", 10),
+                    margin_top="0.5rem",
+                ),
+                rx.vstack(
+                    rx.foreach(
+                        MarketState.credit_stress.confirmations,
+                        _credit_confirmation_row,
+                    ),
+                    width="100%",
+                    spacing="1",
+                    margin_top="0.25rem",
+                ),
+            ),
+            rx.fragment(),
+        ),
+        width="100%",
+        padding="0.65rem",
+        border=f"1px solid {rx.color('gray', 3)}",
+        border_radius="6px",
+    )
+
+
+def _credit_indicator_row(item) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(item.label, size="2", weight="medium"),
+            rx.spacer(),
+            rx.badge("z " + item.z_score_str, color_scheme=_level_color(item.level)),
+            width="100%",
+            align_items="center",
+        ),
+        rx.text(
+            "水準 ",
+            item.latest_str,
+            " / 3か月 ",
+            item.delta_3m_str,
+            " / ",
+            item.latest_date,
+            size="1",
+            color=rx.color("gray", 10),
+        ),
+        padding_y="0.25rem",
+        border_bottom=f"1px solid {rx.color('gray', 3)}",
+    )
+
+
+def _credit_confirmation_row(item) -> rx.Component:
+    return rx.hstack(
+        rx.text(item.label, size="1", flex="1"),
+        rx.badge(item.delta_3m_str, color_scheme=_level_color(item.level)),
+        width="100%",
+        align_items="center",
+    )
+
+
+def _flow_proxy_card() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text("リーディングETFフローproxy", weight="bold", size="1"),
+            rx.spacer(),
+            rx.badge(MarketState.flow_monitor.status, color_scheme="gray"),
+            width="100%",
+            align_items="center",
+        ),
+        rx.text(
+            MarketState.flow_monitor.summary,
+            size="1",
+            color=rx.color("gray", 10),
+            margin_top="0.25rem",
+        ),
+        rx.grid(
+            rx.box(
+                rx.text("流入proxy上位", size="1", weight="bold"),
+                rx.vstack(
+                    rx.foreach(MarketState.flow_monitor.leaders, _flow_proxy_row),
+                    width="100%",
+                    spacing="1",
+                    margin_top="0.35rem",
+                ),
+            ),
+            rx.box(
+                rx.text("流出proxy上位", size="1", weight="bold"),
+                rx.vstack(
+                    rx.foreach(MarketState.flow_monitor.laggards, _flow_proxy_row),
+                    width="100%",
+                    spacing="1",
+                    margin_top="0.35rem",
+                ),
+            ),
+            columns=rx.breakpoints(initial="1", lg="2"),
+            spacing="2",
+            width="100%",
+            margin_top="0.5rem",
+        ),
+        width="100%",
+        padding="0.65rem",
+        border=f"1px solid {rx.color('gray', 3)}",
+        border_radius="6px",
+    )
+
+
+def _flow_proxy_row(item) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(item.label, size="2", weight="medium", flex="1"),
+            rx.text(item.ticker, size="1", color=rx.color("gray", 10)),
+            rx.badge(
+                item.leadership_score_str,
+                color_scheme=_level_color(item.level),
+            ),
+            width="100%",
+            align_items="center",
+        ),
+        rx.text(
+            "20日相対 ",
+            item.relative_return_20d_str,
+            " / 60日相対 ",
+            item.relative_return_60d_str,
+            " / flow z ",
+            item.flow_pressure_z_str,
+            size="1",
+            color=rx.color("gray", 10),
+        ),
+        padding_y="0.3rem",
+        border_bottom=f"1px solid {rx.color('gray', 3)}",
+        width="100%",
     )
 
 

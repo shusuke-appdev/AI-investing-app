@@ -12,12 +12,14 @@ from src.advisor.market_monitor import (
     evaluate_yield_spread,
     track_distribution_days,
 )
+from src.credit_stress_monitor import build_credit_stress_monitor
 from src.market_config import get_market_config
 from src.market_data import get_market_indices, get_stock_data
 from src.market_microstructure import analyze_market_structure
 from src.momentum_monitor import get_momentum_themes
 from src.option_analyst import get_major_indices_option_status
 from src.persistent_cache import PersistentJsonCache, repo_state_cache, utc_now_iso
+from src.sector_flow_monitor import build_sector_flow_monitor
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.services.japan_market_conditions import build_japan_conditions_context
 from src.services.sector_flow_service import (
@@ -108,13 +110,21 @@ def build_market_details_context(
     def sector_flow_task() -> dict[str, Any]:
         return build_sector_flow_context()
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    def credit_stress_task() -> dict[str, Any]:
+        return build_credit_stress_monitor(market_type)
+
+    def flow_monitor_task() -> dict[str, Any]:
+        return build_sector_flow_monitor(market_type)
+
+    with ThreadPoolExecutor(max_workers=7) as executor:
         futures = {
             "evaluation": executor.submit(evaluation_task),
             "microstructure": executor.submit(microstructure_task),
             "momentum": executor.submit(momentum_task),
             "monitor": executor.submit(monitor_task),
             "sector_flow": executor.submit(sector_flow_task),
+            "credit_stress": executor.submit(credit_stress_task),
+            "flow_monitor": executor.submit(flow_monitor_task),
         }
         results = {
             name: _future_result(future, errors) for name, future in futures.items()
@@ -143,6 +153,8 @@ def build_market_details_context(
         monitor=results.get("monitor") or {},
         japan_conditions=japan_conditions,
         sector_flow=results.get("sector_flow") or {},
+        credit_stress=results.get("credit_stress") or {},
+        flow_monitor=results.get("flow_monitor") or {},
         cross_market=cross_market,
         data_status=[
             *base.data_status,
@@ -159,6 +171,35 @@ def build_market_details_context(
                 source="sector_flow_service",
                 fetched_at=_utc_now(),
                 is_partial=not bool(results.get("sector_flow")),
+                cache_status="live",
+            ),
+            DataResult(
+                name="credit_stress",
+                source=(results.get("credit_stress") or {}).get("source", ""),
+                fetched_at=(results.get("credit_stress") or {}).get("fetched_at", ""),
+                is_partial=bool(
+                    (results.get("credit_stress") or {}).get("is_partial", False)
+                ),
+                error="; ".join(
+                    (results.get("credit_stress") or {}).get("warnings", [])
+                ),
+                cache_status=(results.get("credit_stress") or {}).get(
+                    "cache_status", "live"
+                ),
+                cache_age_seconds=_optional_float(
+                    (results.get("credit_stress") or {}).get("cache_age_seconds")
+                ),
+            ),
+            DataResult(
+                name="flow_monitor",
+                source=(results.get("flow_monitor") or {}).get("source", ""),
+                fetched_at=_utc_now(),
+                is_partial=bool(
+                    (results.get("flow_monitor") or {}).get("is_partial", False)
+                ),
+                error="; ".join(
+                    (results.get("flow_monitor") or {}).get("warnings", [])
+                ),
                 cache_status="live",
             ),
             DataResult(
@@ -182,6 +223,8 @@ def build_market_details_context(
             base.quality_warnings,
             options.quality_warnings,
             (results.get("sector_flow") or {}).get("quality_warnings", []),
+            (results.get("credit_stress") or {}).get("warnings", []),
+            (results.get("flow_monitor") or {}).get("warnings", []),
             japan_conditions.get("quality_warnings", []) if japan_conditions else [],
             errors,
         ),
@@ -231,6 +274,8 @@ def build_market_options_context(
         monitor=results.get("monitor") or base.monitor,
         japan_conditions=base.japan_conditions,
         sector_flow=base.sector_flow,
+        credit_stress=base.credit_stress,
+        flow_monitor=base.flow_monitor,
         cross_market=base.cross_market,
         data_status=[
             *base.data_status,
@@ -377,6 +422,36 @@ def format_market_context_for_ai(context: MarketContext) -> str:
                 )
         if leaders:
             parts.append("- Momentum leaders: " + "; ".join(leaders[:4]))
+
+    credit = context.credit_stress or {}
+    if credit:
+        parts.append("[Credit stress velocity]")
+        parts.append(
+            f"- Status: {credit.get('status_label', credit.get('status', 'unknown'))} "
+            f"({credit.get('summary', '')})"
+        )
+        for item in (credit.get("indicators") or [])[:2]:
+            parts.append(
+                f"  - {item.get('label')}: "
+                f"latest={float(item.get('latest', 0.0)):.2f}, "
+                f"3m_delta={float(item.get('delta_3m', 0.0)):.2f}, "
+                f"z={float(item.get('z_score', 0.0)):.2f}"
+            )
+
+    flow = context.flow_monitor or {}
+    if flow:
+        parts.append("[Leadership flow-pressure proxy]")
+        parts.append(
+            f"- Status: {flow.get('status', 'unknown')} ({flow.get('summary', '')})"
+        )
+        leaders = []
+        for item in (flow.get("leaders") or [])[:3]:
+            leaders.append(
+                f"{item.get('label')} {item.get('ticker')} "
+                f"score={float(item.get('leadership_score', 0.0)):.2f}"
+            )
+        if leaders:
+            parts.append("  - Leaders: " + "; ".join(leaders))
 
     sector_flow = context.sector_flow or {}
     if sector_flow:

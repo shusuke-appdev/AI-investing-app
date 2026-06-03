@@ -177,6 +177,13 @@ streamlit run legacy_streamlit/app.py
 - Opted the `postgres` role's future `public` table/function/sequence default privileges into explicit-grant behavior; `supabase_admin` default privileges could not be changed by the connector due to ownership permissions.
 - Verified `service_role` insert/select/delete smoke tests for all three tables, checked migration history, and reran Supabase Security/Performance Advisors.
 
+# Session update: 2026-06-03 credit stress and leadership flow monitor
+- Recovered `pandas_datareader` on the Python 3.12 / pandas 3 environment by adding pinned `setuptools` and a small decorator compatibility shim before import.
+- Added FRED economic data retrieval with bounded FRED CSV requests first, recovered pandas-datareader fallback, and `.states/economic_data_cache` stale fallback.
+- Added US credit-stress velocity diagnostics using BAA10Y and KCFSI three-month z-score acceleration, with HY/BBB/stress/claims/order and credit/bank ETF confirmation rows.
+- Added a free ETF flow-pressure proxy monitor using signed dollar volume, relative returns, flow z-scores, and 50-day trend status for sector, AI/semiconductor, credit, and bank ETFs.
+- Wired the new diagnostics into `MarketContext`, the Market Intelligence UI, and AI Market Recap context without adding them to lightweight startup summary loading.
+
 # Session update: 2026-06-03 Japan market / sector flow Market Recap expansion
 - Added US-primary/Japan-supplemental sector flow diagnostics for Market Intelligence, using US sector ETFs and Japanese theme baskets to score inflow strength, confidence, continuation, and research action labels.
 - Added Nikkei upside six-condition diagnostics to `MarketContext`, with direct optional environment inputs for JSF short balance, 1570 margin ratio, and foreign investor net buying, plus proxy/unavailable labeling when free direct data is not available.

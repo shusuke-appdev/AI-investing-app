@@ -20,6 +20,7 @@ gnews==0.4.3
 pandas-datareader==0.10.0
 pandas-ta==0.4.71b0
 requests-cache==1.2.1
+setuptools==82.0.1
 supabase==2.30.0
 ruff==0.15.12
 pytest==9.0.3
