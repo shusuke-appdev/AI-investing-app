@@ -70,6 +70,14 @@ class StockState(rx.State):
     is_generating_analysis: bool = False
     probabilistic_signal: dict[str, Any] = {}
     trend_follow_diagnostics: dict[str, Any] = {}
+    sector_theme_context: dict[str, Any] = {}
+    sector_theme_rating: str = ""
+    sector_theme_rationale: str = ""
+    sector_theme_themes: list[str] = []
+    sector_theme_fundamental_score: float = 0.0
+    sector_theme_flow_score: float = 0.0
+    sector_theme_fundamental_advantage: bool = False
+    sector_theme_flow_advantage: bool = False
     stock_signal_context: dict[str, Any] = {}
     data_status: list[dict[str, Any]] = []
 
@@ -111,6 +119,24 @@ class StockState(rx.State):
             self.trend_follow_diagnostics = plain_state_value(
                 context.trend_follow_diagnostics
             )
+            self.sector_theme_context = plain_state_value(context.sector_theme_context)
+            self.sector_theme_rating = self.sector_theme_context.get(
+                "combined_rating", ""
+            )
+            self.sector_theme_rationale = self.sector_theme_context.get("rationale", "")
+            self.sector_theme_themes = list(self.sector_theme_context.get("themes", []))
+            self.sector_theme_fundamental_score = float(
+                self.sector_theme_context.get("stock_fundamental_score", 0.0)
+            )
+            self.sector_theme_flow_score = float(
+                self.sector_theme_context.get("stock_flow_score", 0.0)
+            )
+            self.sector_theme_fundamental_advantage = bool(
+                self.sector_theme_context.get("fundamental_advantage", False)
+            )
+            self.sector_theme_flow_advantage = bool(
+                self.sector_theme_context.get("flow_advantage", False)
+            )
             self.stock_signal_context = plain_state_value(context.stock_signal_context)
             self.data_status = plain_state_value(context.data_status)
             self.profile_warning = context.profile_warning
@@ -134,6 +160,14 @@ class StockState(rx.State):
             self.technical_data = {}
             self.probabilistic_signal = {}
             self.trend_follow_diagnostics = {}
+            self.sector_theme_context = {}
+            self.sector_theme_rating = ""
+            self.sector_theme_rationale = ""
+            self.sector_theme_themes = []
+            self.sector_theme_fundamental_score = 0.0
+            self.sector_theme_flow_score = 0.0
+            self.sector_theme_fundamental_advantage = False
+            self.sector_theme_flow_advantage = False
             self.stock_signal_context = {}
             self.data_status = []
             self.smart_criteria = SmartCriteria()

@@ -52,9 +52,12 @@ class MarketContext:
     market_config: dict[str, Any] = field(default_factory=dict)
     options: OptionContext = field(default_factory=OptionContext)
     evaluation: dict[str, Any] = field(default_factory=dict)
+    ibd_regime: dict[str, Any] = field(default_factory=dict)
+    regime_playbook: dict[str, Any] = field(default_factory=dict)
     microstructure: dict[str, Any] = field(default_factory=dict)
     momentum: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     monitor: dict[str, Any] = field(default_factory=dict)
+    market_distortions: dict[str, Any] = field(default_factory=dict)
     japan_conditions: dict[str, Any] = field(default_factory=dict)
     sector_flow: dict[str, Any] = field(default_factory=dict)
     credit_stress: dict[str, Any] = field(default_factory=dict)
@@ -77,9 +80,12 @@ class MarketContext:
             "market_config": self.market_config,
             "options": self.options.to_dict(),
             "evaluation": self.evaluation,
+            "ibd_regime": self.ibd_regime,
+            "regime_playbook": self.regime_playbook,
             "microstructure": self.microstructure,
             "momentum": self.momentum,
             "monitor": self.monitor,
+            "market_distortions": self.market_distortions,
             "japan_conditions": self.japan_conditions,
             "sector_flow": self.sector_flow,
             "credit_stress": self.credit_stress,
@@ -131,9 +137,12 @@ class MarketContext:
                 cache_age_seconds=_optional_float(options.get("cache_age_seconds")),
             ),
             evaluation=value.get("evaluation") or {},
+            ibd_regime=value.get("ibd_regime") or {},
+            regime_playbook=value.get("regime_playbook") or {},
             microstructure=value.get("microstructure") or {},
             momentum=value.get("momentum") or {},
             monitor=value.get("monitor") or {},
+            market_distortions=value.get("market_distortions") or {},
             japan_conditions=value.get("japan_conditions") or {},
             sector_flow=value.get("sector_flow") or {},
             credit_stress=value.get("credit_stress") or {},
@@ -160,6 +169,7 @@ class StockSignalContext:
     technical_data: dict[str, Any] = field(default_factory=dict)
     probabilistic_signal: dict[str, Any] = field(default_factory=dict)
     trend_follow_diagnostics: dict[str, Any] = field(default_factory=dict)
+    sector_theme_context: dict[str, Any] = field(default_factory=dict)
     news_source_status: str = ""
     news_error_reason: str = ""
     data_status: list[DataResult] = field(default_factory=list)

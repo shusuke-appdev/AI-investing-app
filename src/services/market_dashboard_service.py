@@ -6,12 +6,14 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from src.advisor.ibd_market_regime import classify_ibd_market_regime
 from src.advisor.market_environment import evaluate_market_environment
 from src.advisor.market_monitor import (
     detect_market_climax,
     evaluate_yield_spread,
     track_distribution_days,
 )
+from src.advisor.sector_theme_diagnostics import detect_market_distortions
 from src.credit_stress_monitor import build_credit_stress_monitor
 from src.market_config import get_market_config
 from src.market_data import get_market_indices, get_stock_data
@@ -22,6 +24,7 @@ from src.persistent_cache import PersistentJsonCache, repo_state_cache, utc_now_
 from src.sector_flow_monitor import build_sector_flow_monitor
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.services.japan_market_conditions import build_japan_conditions_context
+from src.services.market_playbook import get_market_playbook
 from src.services.sector_flow_service import (
     build_cross_market_context,
     build_sector_flow_context,
@@ -98,6 +101,14 @@ def build_market_details_context(
     def evaluation_task() -> dict[str, Any]:
         return evaluate_market_environment(market_type, options.items)
 
+    def ibd_task() -> dict[str, Any]:
+        if market_type != "US":
+            return {}
+        return classify_ibd_market_regime(
+            get_stock_data("SPY", "1y"),
+            get_stock_data("^NDX", "1y"),
+        ).to_dict()
+
     def microstructure_task() -> dict[str, Any]:
         return _normalize_microstructure(analyze_market_structure("SPY"))
 
@@ -116,15 +127,22 @@ def build_market_details_context(
     def flow_monitor_task() -> dict[str, Any]:
         return build_sector_flow_monitor(market_type)
 
-    with ThreadPoolExecutor(max_workers=7) as executor:
+    def distortions_task() -> dict[str, Any]:
+        if market_type != "US":
+            return {}
+        return detect_market_distortions(market_type, max_themes=30, top_n=5)
+
+    with ThreadPoolExecutor(max_workers=9) as executor:
         futures = {
             "evaluation": executor.submit(evaluation_task),
+            "ibd_regime": executor.submit(ibd_task),
             "microstructure": executor.submit(microstructure_task),
             "momentum": executor.submit(momentum_task),
             "monitor": executor.submit(monitor_task),
             "sector_flow": executor.submit(sector_flow_task),
             "credit_stress": executor.submit(credit_stress_task),
             "flow_monitor": executor.submit(flow_monitor_task),
+            "market_distortions": executor.submit(distortions_task),
         }
         results = {
             name: _future_result(future, errors) for name, future in futures.items()
@@ -141,16 +159,27 @@ def build_market_details_context(
         {},
         errors,
     )
+    ibd_regime = results.get("ibd_regime") or {}
+    regime_playbook = (
+        get_market_playbook(str(ibd_regime.get("status_key", ""))) if ibd_regime else {}
+    )
+    evaluation = _merge_ibd_signal(
+        results.get("evaluation") or {},
+        ibd_regime,
+    )
 
     context = MarketContext(
         market_type=market_type,
         market_data=base.market_data,
         market_config=base.market_config,
         options=options,
-        evaluation=results.get("evaluation") or {},
+        evaluation=evaluation,
+        ibd_regime=ibd_regime,
+        regime_playbook=regime_playbook,
         microstructure=results.get("microstructure") or {},
         momentum=results.get("momentum") or {},
         monitor=results.get("monitor") or {},
+        market_distortions=results.get("market_distortions") or {},
         japan_conditions=japan_conditions,
         sector_flow=results.get("sector_flow") or {},
         credit_stress=results.get("credit_stress") or {},
@@ -165,6 +194,29 @@ def build_market_details_context(
                 is_partial=bool(errors),
                 error="; ".join(errors) if errors else "",
                 cache_status="live",
+            ),
+            DataResult(
+                name="ibd_market_regime",
+                source="local_ohlcv_classification",
+                fetched_at=_utc_now(),
+                is_partial=not bool(ibd_regime)
+                or bool(ibd_regime.get("quality_warnings", [])),
+                error="; ".join(ibd_regime.get("quality_warnings", []))
+                if ibd_regime
+                else "",
+                cache_status="computed",
+            ),
+            DataResult(
+                name="market_distortions",
+                source="sector_theme_diagnostics",
+                fetched_at=_utc_now(),
+                is_partial=not bool(results.get("market_distortions")),
+                error="; ".join(
+                    (results.get("market_distortions") or {}).get(
+                        "quality_warnings", []
+                    )[:3]
+                ),
+                cache_status="computed",
             ),
             DataResult(
                 name="sector_flow",
@@ -225,6 +277,8 @@ def build_market_details_context(
             (results.get("sector_flow") or {}).get("quality_warnings", []),
             (results.get("credit_stress") or {}).get("warnings", []),
             (results.get("flow_monitor") or {}).get("warnings", []),
+            ibd_regime.get("quality_warnings", []) if ibd_regime else [],
+            (results.get("market_distortions") or {}).get("quality_warnings", []),
             japan_conditions.get("quality_warnings", []) if japan_conditions else [],
             errors,
         ),
@@ -268,10 +322,16 @@ def build_market_options_context(
         market_data=base.market_data,
         market_config=base.market_config,
         options=options,
-        evaluation=results.get("evaluation") or base.evaluation,
+        evaluation=_merge_ibd_signal(
+            results.get("evaluation") or base.evaluation,
+            base.ibd_regime,
+        ),
+        ibd_regime=base.ibd_regime,
+        regime_playbook=base.regime_playbook,
         microstructure=base.microstructure,
         momentum=base.momentum,
         monitor=results.get("monitor") or base.monitor,
+        market_distortions=base.market_distortions,
         japan_conditions=base.japan_conditions,
         sector_flow=base.sector_flow,
         credit_stress=base.credit_stress,
@@ -381,6 +441,26 @@ def format_market_context_for_ai(context: MarketContext) -> str:
                 f"({signal.get('rationale', '')})"
             )
 
+    ibd = context.ibd_regime or {}
+    if ibd:
+        parts.append("[IBD-style market regime]")
+        parts.append(
+            f"- Regime: {ibd.get('label', 'unknown')} "
+            f"(score={float(ibd.get('score', 0.0)):.2f}, "
+            f"exposure={ibd.get('exposure_level', 'unknown')})"
+        )
+        if ibd.get("rationale"):
+            parts.append(f"- Regime rationale: {ibd['rationale']}")
+        playbook = context.regime_playbook or {}
+        if playbook:
+            parts.append(
+                f"- Current stance: {playbook.get('stance', '')} "
+                f"Risk budget={playbook.get('risk_budget', '')}"
+            )
+            think_about = playbook.get("think_about") or []
+            if think_about:
+                parts.append("- Think about: " + "; ".join(think_about[:4]))
+
     micro = context.microstructure or {}
     if micro:
         parts.append(
@@ -422,6 +502,28 @@ def format_market_context_for_ai(context: MarketContext) -> str:
                 )
         if leaders:
             parts.append("- Momentum leaders: " + "; ".join(leaders[:4]))
+
+    distortions = context.market_distortions or {}
+    if distortions:
+        parts.append("[Market distortions: fundamentals vs flows]")
+        bullish = distortions.get("bullish") or []
+        bearish = distortions.get("bearish") or []
+        if bullish:
+            parts.append(
+                "- Bullish distortions: "
+                + "; ".join(
+                    f"{item.get('theme')} gap={float(item.get('distortion_score', 0.0)):.2f}"
+                    for item in bullish[:5]
+                )
+            )
+        if bearish:
+            parts.append(
+                "- Bearish distortions: "
+                + "; ".join(
+                    f"{item.get('theme')} gap={float(item.get('distortion_score', 0.0)):.2f}"
+                    for item in bearish[:5]
+                )
+            )
 
     credit = context.credit_stress or {}
     if credit:
@@ -579,6 +681,53 @@ def _coerce_context(
     if isinstance(value, dict) and value:
         return MarketContext.from_mapping(value)
     return None
+
+
+def _merge_ibd_signal(
+    evaluation: dict[str, Any],
+    ibd_regime: dict[str, Any],
+) -> dict[str, Any]:
+    if not ibd_regime:
+        return evaluation
+
+    signals = list(evaluation.get("signals") or [])
+    signals.append(
+        {
+            "name": "IBD市場状態",
+            "score": float(ibd_regime.get("score", 0.0)),
+            "weight": float(ibd_regime.get("weight", 2.0)),
+            "rationale": str(ibd_regime.get("rationale") or ""),
+        }
+    )
+    total_weight = sum(float(item.get("weight", 0.0)) for item in signals)
+    score = (
+        sum(
+            float(item.get("score", 0.0)) * float(item.get("weight", 0.0))
+            for item in signals
+        )
+        / total_weight
+        if total_weight
+        else float(evaluation.get("score", 0.0))
+    )
+    if score >= 0.3:
+        status = "🟢 強気 (Bullish)"
+        description = "IBD式市場状態を含む複合評価では、リスクを取りやすい環境である。"
+    elif score <= -0.3:
+        status = "🔴 弱気 (Bearish)"
+        description = (
+            "IBD式市場状態を含む複合評価では、資金防衛を優先すべき環境である。"
+        )
+    else:
+        status = "⚪ 中立 (Neutral)"
+        description = "IBD式市場状態を含む複合評価では、強弱が混在し選別が必要である。"
+
+    return {
+        **evaluation,
+        "status": status,
+        "score": score,
+        "description": description,
+        "signals": signals,
+    }
 
 
 def _context_cache_path(market_type: str, kind: str) -> Path:

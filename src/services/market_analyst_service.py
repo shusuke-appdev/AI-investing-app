@@ -39,6 +39,7 @@ def generate_market_analysis_report(
     option_analysis: list[dict] | None = None,
     gemini_configured: bool = True,
     market_context: MarketContext | dict | None = None,
+    custom_focus: str | None = None,
 ) -> str | None:
     """
     Generates a comprehensive AI market analysis report.
@@ -228,6 +229,7 @@ def generate_market_analysis_report(
             option_analysis,
             theme_analysis=theme_analysis_str,
             advanced_tech_analysis=format_market_context_for_ai(context),
+            custom_focus=custom_focus,
         )
 
     # 8.5 Advanced Technical Analysis (Breadth & Volatility)
@@ -367,6 +369,7 @@ def generate_market_analysis_report(
         option_analysis,
         theme_analysis=theme_analysis_str,
         advanced_tech_analysis=advanced_tech_analysis_str,
+        custom_focus=custom_focus,
     )
 
     return recap

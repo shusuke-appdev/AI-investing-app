@@ -81,6 +81,7 @@ def generate_market_recap(
     option_analysis: list[dict],
     theme_analysis: str | None = None,
     advanced_tech_analysis: str | None = None,
+    custom_focus: str | None = None,
 ) -> str:
     """
     Gemini APIを使用してMarket Recap（ナラティブ解説）を生成します。
@@ -167,6 +168,10 @@ def generate_market_recap(
     # 高度なテクニカル・ボラティリティ分析
     if advanced_tech_analysis:
         context_parts.append(f"\n{advanced_tech_analysis}")
+
+    if custom_focus and custom_focus.strip():
+        context_parts.append("\n【ユーザー指定の追加分析項目】")
+        context_parts.append(custom_focus.strip()[:2000])
 
     # ユーザー参照知識
     try:

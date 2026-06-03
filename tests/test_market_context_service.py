@@ -117,6 +117,7 @@ def _flow_monitor_payload():
 
 
 def _patch_new_market_layers(monkeypatch):
+    monkeypatch.setattr(service, "get_stock_data", lambda *args, **kwargs: None)
     monkeypatch.setattr(service, "build_sector_flow_context", _sector_flow_payload)
     monkeypatch.setattr(
         service,
@@ -139,6 +140,34 @@ def _patch_new_market_layers(monkeypatch):
         lambda sector_flow: {
             "stance": "US flow leadership remains dominant; Japan is supplemental.",
             "relative_flow_score": -20.0,
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "classify_ibd_market_regime",
+        lambda spy_df, ndx_df: type(
+            "Regime",
+            (),
+            {
+                "to_dict": lambda self: {
+                    "status_key": "confirmed_uptrend",
+                    "label": "Confirmed Uptrend",
+                    "score": 0.9,
+                    "weight": 2.0,
+                    "exposure_level": "60-100%",
+                    "rationale": "test regime",
+                    "quality_warnings": [],
+                }
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        service,
+        "detect_market_distortions",
+        lambda market_type, max_themes=30, top_n=5: {
+            "bullish": [{"theme": "AI", "distortion_score": 0.3}],
+            "bearish": [{"theme": "Crowded", "distortion_score": -0.4}],
+            "quality_warnings": [],
         },
     )
 
@@ -196,7 +225,9 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
 
     assert context.market_data["S&P 500"]["ticker"] == "SPY"
     assert context.options.items[0]["ticker"] == "SPY"
-    assert context.evaluation["status"] == "Neutral"
+    assert context.evaluation["status"] == "🟢 強気 (Bullish)"
+    assert context.ibd_regime["label"] == "Confirmed Uptrend"
+    assert context.market_distortions["bullish"][0]["theme"] == "AI"
     assert context.monitor["distribution_spy"]["count"] == 2
     assert context.sector_flow["markets"]["US"]["leaders"][0]["theme"] == "情報技術"
     assert context.credit_stress["status"] == "equity_adjustment"

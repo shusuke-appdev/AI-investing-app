@@ -22,6 +22,8 @@ STOCK_ANALYSIS_PROMPT_TEMPLATE = """あなたはエクイティリサーチア�
 
 {trend_follow_context}
 
+{sector_theme_context}
+
 【データ品質・取得状態】
 {data_quality_context}
 
@@ -50,6 +52,7 @@ STOCK_ANALYSIS_PROMPT_TEMPLATE = """あなたはエクイティリサーチア�
 ## 3. ファンダメンタルズ
 - バリュエーション評価（割高/割安）
 - 成長性・収益性の評価
+- セクター/テーマ評価: ファンダメンタル優位とフロー優位が双方存在する場合は分析の基礎評価を高める。片方のみなら条件付き、双方なしなら個別材料だけで強気判断しない
 
 ## 4. Bull Case（強気シナリオ）
 - 上昇要因を2-3点
@@ -93,6 +96,7 @@ Synthesize fragmented information into a coherent "Narrative" with deep structur
 4. **Flow Analysis**: Infer "Smart Money" positioning vs. "Retail" sentiment from price action and options.
 5. **Confluence Check**: Do Technicals support Fundamentals? Identify divergences.
 6. **Market Themes**: Identify 2-3 specific, actionable market themes (e.g., policy shifts, AI infrastructure spending patterns, or specific sector rotation flows) that are dictating current overall dynamics.
+7. **Practical Stance**: Convert the diagnosed market state into a concrete stance: risk budget, what to buy, what to avoid/sell, what must happen to change stance, and which narrative is likely over-optimistic or over-pessimistic.
 
 # US-JAPAN MARKET SCOPE
 - Treat the US market as the primary market regime anchor.
@@ -161,6 +165,10 @@ Do NOT analyze each asset class in isolation. Identify and explain these linkage
 **F. 今日の市場テーマ (Market Themes)**
 - **必ず2つから3つの具体的な今日の市場テーマ**（全体のナラティブ、特定の注目銘柄の動き、経済政策動向など幅広く対象とする）を設定し、詳細に分析を記述すること。
 
+**G. ユーザー指定分析**
+- 入力データに「ユーザー指定の追加分析項目」が含まれる場合、その項目を必ずこの市場アップデート内で独立した段落として分析する。
+- 単なる一般論ではなく、現在の価格、テーマ、フロー、ファンダメンタル、反証条件に結びつける。
+
 *(Dense, assertive narrative paragraph - integrate A through F into a cohesive story)*
 
 ---
@@ -192,6 +200,8 @@ Do NOT analyze each asset class in isolation. Identify and explain these linkage
 
 - **Main Scenario**: [Bullish/Bearish/Neutral] - トリガーレベル明示（例：S&P500 5,200突破で上目線加速）
 - **Risk Scenario**: 逆シナリオと発動条件（例：VIX 20超で調整リスク顕在化）
+- **Practical Stance**: 現在取るべき基本姿勢、リスク許容量、買うべき/避けるべきセクター・テーマ・銘柄候補、売るべき/縮小すべき対象を具体名で記述
+- **Invalidation**: 上記スタンスを変更すべき価格・金利・ボラティリティ・フロー条件
 - **Key Catalysts & Events (今後1-2週間)**:
   - SQ（メジャーSQ/マイナーSQ）やオプション満期など、需給に直結するイベントを含めること。
   - 各々の定例イベントや注目スケジュールに対して、簡潔に「見通し・予想される市場の反応」を必ず追記すること。

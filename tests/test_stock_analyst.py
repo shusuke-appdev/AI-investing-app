@@ -1,4 +1,4 @@
-from src.stock_analyst import _format_trend_follow_context
+from src.stock_analyst import _format_sector_theme_context, _format_trend_follow_context
 
 
 def test_format_trend_follow_context_marks_diagnostics_as_context_only():
@@ -26,3 +26,30 @@ def test_format_trend_follow_context_marks_diagnostics_as_context_only():
 
 def test_format_trend_follow_context_handles_missing_data():
     assert _format_trend_follow_context({}) == "Trend-Follow Diagnostics: unavailable."
+
+
+def test_format_sector_theme_context_includes_advantage_flags():
+    text = _format_sector_theme_context(
+        {
+            "sector_theme_context": {
+                "sector": "Technology",
+                "themes": ["AI"],
+                "fundamental_advantage": True,
+                "flow_advantage": True,
+                "combined_rating": "high",
+                "rationale": "Both advantages exist.",
+                "theme_diagnostics": [
+                    {
+                        "theme": "AI",
+                        "fundamental_score": 0.75,
+                        "flow_score": 0.7,
+                        "classification": "fundamental_and_flow_aligned",
+                    }
+                ],
+            }
+        }
+    )
+
+    assert "Sector/Theme Context" in text
+    assert "Combined Rating: high" in text
+    assert "fundamental=True" in text or "Stock Fundamental Advantage: True" in text

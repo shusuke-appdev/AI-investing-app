@@ -80,6 +80,17 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
             "warnings": ["Insufficient daily price history."],
         },
     )
+    monkeypatch.setattr(
+        service,
+        "evaluate_stock_sector_theme_context",
+        lambda ticker, info, market_type="US": {
+            "combined_rating": "weak",
+            "fundamental_advantage": False,
+            "flow_advantage": False,
+            "themes": ["Technology"],
+            "rationale": "No edge.",
+        },
+    )
 
     context = service.build_stock_dashboard_context("PLTR")
 
@@ -96,6 +107,7 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
     }
     assert len(context.chart_data) == 3
     assert context.trend_follow_diagnostics["diagnostic_rating"] == "Unavailable"
+    assert context.sector_theme_context["combined_rating"] == "weak"
     trend_status = next(
         item for item in context.data_status if item.name == "trend_follow_diagnostics"
     )

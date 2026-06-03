@@ -11,8 +11,8 @@
 - Reflex UI: `frontend/frontend.py`
 - ルート定義:
   - `/`: Market Intelligence
+  - `/market-watch`: 市場監視
   - `/stock`: 個別銘柄分析
-  - `/theme`: テーマ別トレンド
   - `/portfolio`: ポートフォリオ分析
   - `/knowledge`: 参照知識管理
 - 旧Streamlit UI: `legacy_streamlit/app.py` と `src/ui/`
@@ -75,11 +75,18 @@ UI
 
 1. `MarketState.fetch_market_summary_fast()` がUIロードで実行され、`.states/market_context_cache` の最後の軽量サマリーを優先表示する
 2. 軽量サマリーは `market_data.get_market_indices()` と `market_config.get_market_config()` のみを取得し、起動時にオプション取得を行わない
-3. `MarketState.refresh_market_details()` が、既存の `MarketContext` を再利用しながら市場環境、マイクロストラクチャー、テーマ、監視指標を更新する
+3. `MarketState.refresh_market_details()` が、既存の `MarketContext` を再利用しながら市場環境、IBD式市場状態、マイクロストラクチャー、テーマ、監視指標、信用ストレス、セクター/テーマ歪みを更新する
 4. 詳細更新では `sector_flow_service` が米国セクターETFと日本テーマバスケットから資金流入セクター、確信度、継続性、調査判断を計算し、`japan_market_conditions` が日経平均上昇の6条件を直接データまたは代理指標として評価する
 5. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、取得結果、キャッシュ鮮度、品質警告を `OptionContext` に保存する
 6. Reflex state に整形済みデータを保存し、画面が再描画される
-7. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、`MarketContext`、オプション品質情報、日米セクター流入、日経6条件をプロンプトに含める。レポートは米国市場を主軸にし、日本市場は米国との連動・乖離を読む補助コーナーとして扱う
+7. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、`MarketContext`、オプション品質情報、日米セクター流入、日経6条件、ユーザー指定の追加分析項目をプロンプトに含める。レポートは米国市場を主軸にし、日本市場は米国との連動・乖離を読む補助コーナーとして扱う
+
+### 市場監視
+
+- `/market-watch` は、総合市場監視、IBD式市場状態、状態別固定プレイブック、テーマモメンタム、詳細テーマランキング、オプション分析、市場の歪み検知を集約する
+- IBD式市場状態は `advisor.ibd_market_regime.classify_ibd_market_regime()` が SPY / Nasdaq 100 代理データから判定する。分類は `confirmed_uptrend`、`uptrend_under_pressure`、`rally_attempt`、`market_in_correction`
+- `services.market_playbook` は市場状態ごとの「現在考えるべきこと」「今やること」「避けること」を固定データとして返す
+- `advisor.sector_theme_diagnostics.detect_market_distortions()` はテーマごとのファンダメンタルスコアとフロースコアの乖離から、強気/弱気の歪み候補を上位5件ずつ返す
 
 ### 個別銘柄
 
@@ -88,7 +95,8 @@ UI
 3. `advisor.smart_criteria.evaluate_smart_criteria()` で成長株観点の条件を評価
 4. `advisor.probabilistic_signal.generate_probabilistic_stock_signal()` が過去の類似局面、forward return、walk-forward検証、サイジング目安を作る
 5. `advisor.trend_follow_diagnostics.generate_trend_follow_diagnostics()` が日足トレンドフォローを診断軸として評価し、OOS、コスト耐性、遅延耐性、右テール依存、Buy & Hold比較を `StockSignalContext` に追加する
-6. AI分析は `stock_analyst.analyze_stock()` がプロンプトを組み立て、Gemini に渡す
+6. `advisor.sector_theme_diagnostics.evaluate_stock_sector_theme_context()` が対象銘柄のセクター/テーマを、ファンダメンタル優位とフロー優位の両面から評価して `StockSignalContext` に追加する
+7. AI分析は `stock_analyst.analyze_stock()` がプロンプトを組み立て、Gemini に渡す
 
 ### ポートフォリオ
 

@@ -88,7 +88,7 @@ def sidebar_nav() -> rx.Component:
         # ナビゲーションリンク
         rx.vstack(
             nav_item("Market", "globe", "/"),
-            nav_item("Theme", "layers", "/theme"),
+            nav_item("市場監視", "radar", "/market-watch"),
             nav_item("Stock", "trending-up", "/stock"),
             nav_item("Portfolio", "pie-chart", "/portfolio"),
             nav_item("Knowledge", "book-open", "/knowledge"),

@@ -96,6 +96,8 @@ def market_monitor() -> rx.Component:
             rx.cond(
                 eval_data.contains("status"),
                 rx.vstack(
+                    _ibd_regime_panel(),
+                    _playbook_panel(),
                     _environment_header(eval_data),
                     _signal_grid(),
                     rx.cond(
@@ -131,6 +133,174 @@ def market_monitor() -> rx.Component:
             width="100%",
             margin_bottom="2rem",
         ),
+    )
+
+
+def watch_indices_strip() -> rx.Component:
+    """Render closing-price movement for S&P 500 and Nasdaq 100."""
+
+    return rx.box(
+        rx.heading("主要指数 終値ベース", size="5", margin_bottom="1rem"),
+        rx.grid(
+            rx.foreach(MarketState.watch_indices_data, market_item),
+            columns=rx.breakpoints(initial="1", md="2"),
+            spacing="3",
+            width="100%",
+        ),
+        width="100%",
+    )
+
+
+def market_distortion_panel() -> rx.Component:
+    """Render fundamental-vs-flow distortion candidates."""
+
+    return rx.box(
+        rx.heading("市場の歪み検知", size="5", margin_bottom="0.75rem"),
+        rx.text(
+            "ファンダメンタルと資金フローの乖離を検出",
+            size="2",
+            color=rx.color("gray", 10),
+            margin_bottom="1rem",
+        ),
+        rx.grid(
+            _distortion_column(
+                "強気歪み Top 5", MarketState.bullish_distortions, "green"
+            ),
+            _distortion_column(
+                "弱気歪み Top 5", MarketState.bearish_distortions, "red"
+            ),
+            columns=rx.breakpoints(initial="1", md="2"),
+            spacing="4",
+            width="100%",
+        ),
+        width="100%",
+    )
+
+
+def _ibd_regime_panel() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.vstack(
+                rx.text("IBD式市場状態", size="2", weight="bold"),
+                rx.hstack(
+                    rx.badge(
+                        MarketState.ibd_regime.label,
+                        color_scheme=_regime_color(MarketState.ibd_regime.status_key),
+                        size="3",
+                    ),
+                    rx.badge(
+                        "想定リスク: " + MarketState.ibd_regime.exposure_level,
+                        color_scheme="gray",
+                        variant="surface",
+                    ),
+                    spacing="2",
+                    wrap="wrap",
+                ),
+                rx.text(
+                    MarketState.ibd_regime.rationale,
+                    size="2",
+                    color=rx.color("gray", 11),
+                ),
+                align_items="start",
+                spacing="2",
+            ),
+            rx.spacer(),
+            rx.text(
+                "weight "
+                + MarketState.ibd_regime.weight.to_string()
+                + " / score "
+                + MarketState.ibd_regime.score.to_string(),
+                size="2",
+                color=rx.color("gray", 10),
+            ),
+            width="100%",
+            align_items="start",
+        ),
+        width="100%",
+        padding="0.75rem",
+        border=f"1px solid {rx.color('blue', 5)}",
+        border_radius="8px",
+        bg=rx.color("blue", 2),
+    )
+
+
+def _playbook_panel() -> rx.Component:
+    return rx.box(
+        rx.text("現在考えるべきこと / 市場スタンス", weight="bold", size="2"),
+        rx.text(
+            MarketState.regime_playbook.stance,
+            size="2",
+            color=rx.color("gray", 11),
+            margin_top="0.25rem",
+        ),
+        rx.grid(
+            _playbook_list("考えること", MarketState.regime_playbook.think_about),
+            _playbook_list("今やること", MarketState.regime_playbook.do_now),
+            _playbook_list("避けること", MarketState.regime_playbook.avoid),
+            columns=rx.breakpoints(initial="1", md="3"),
+            spacing="3",
+            width="100%",
+            margin_top="0.75rem",
+        ),
+        width="100%",
+        padding="0.75rem",
+        border=f"1px solid {rx.color('gray', 4)}",
+        border_radius="8px",
+    )
+
+
+def _playbook_list(title: str, rows) -> rx.Component:
+    return rx.vstack(
+        rx.text(title, weight="bold", size="1", color=rx.color("gray", 10)),
+        rx.cond(
+            rows.length() > 0,
+            rx.foreach(rows, lambda item: rx.text("- ", item, size="1")),
+            rx.text("-", size="1", color="gray"),
+        ),
+        align_items="start",
+        spacing="1",
+    )
+
+
+def _distortion_column(title: str, rows, color: str) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.text(title, weight="bold", size="3", color=rx.color(color, 10)),
+            rx.cond(
+                rows.length() > 0,
+                rx.vstack(rx.foreach(rows, _distortion_item), width="100%"),
+                rx.text("候補なし", size="2", color="gray"),
+            ),
+            width="100%",
+            align_items="start",
+        ),
+        width="100%",
+    )
+
+
+def _distortion_item(item) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(item.theme, weight="bold", size="2"),
+            rx.spacer(),
+            rx.badge(
+                "gap " + item.distortion_score.to_string(),
+                color_scheme=rx.cond(item.distortion_score >= 0, "green", "red"),
+            ),
+            width="100%",
+        ),
+        rx.text(
+            "Fund "
+            + item.fundamental_score.to_string()
+            + " / Flow "
+            + item.flow_score.to_string(),
+            size="1",
+            color=rx.color("gray", 10),
+        ),
+        rx.text(item.rationale, size="1", color=rx.color("gray", 11)),
+        width="100%",
+        padding_y="0.5rem",
+        border_bottom=f"1px solid {rx.color('gray', 3)}",
     )
 
 
@@ -697,6 +867,18 @@ def _level_color(level) -> rx.Var:
         level == "green",
         "green",
         rx.cond(level == "yellow", "orange", rx.cond(level == "red", "red", "gray")),
+    )
+
+
+def _regime_color(status_key) -> rx.Var:
+    return rx.cond(
+        status_key == "confirmed_uptrend",
+        "green",
+        rx.cond(
+            status_key == "uptrend_under_pressure",
+            "orange",
+            rx.cond(status_key == "rally_attempt", "yellow", "red"),
+        ),
     )
 
 

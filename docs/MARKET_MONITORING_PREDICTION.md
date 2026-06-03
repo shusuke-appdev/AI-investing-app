@@ -3,20 +3,35 @@
 ## Current Ownership
 
 Market Monitoring is the current-state diagnostic layer. It gathers market
-environment scoring, option sentiment, microstructure, momentum themes,
-distribution days, climax warnings, and yield-spread checks into a single
+environment scoring, IBD-style regime classification, option sentiment,
+microstructure, momentum themes, distribution days, climax warnings,
+yield-spread checks, credit stress, and theme distortion checks into a single
 `MarketContext`.
 
 Prediction is the forward-distribution layer. It uses stock features,
 technical context, historical forward outcomes, walk-forward validation,
-regime fit, trend-follow diagnostics, and sizing rules to produce a
-`StockSignalContext`.
+regime fit, trend-follow diagnostics, sector/theme context, and sizing rules to
+produce a `StockSignalContext`.
 
 ## Shared Contexts
 
 - `MarketContext`: shared by the Market Intelligence UI and AI market recap.
 - `OptionContext`: carries option-analysis rows plus retrieval status.
 - `StockSignalContext`: shared by the Stock page and AI stock analysis path.
+
+IBD-style market regime is a free-data approximation, not an official IBD
+Market Pulse clone. The implementation uses SPY and Nasdaq 100 proxy OHLCV,
+distribution days, rally attempts, follow-through days, and key moving-average
+breaks to classify `confirmed_uptrend`, `uptrend_under_pressure`,
+`rally_attempt`, or `market_in_correction`. The classification contributes to
+the same weighted qualitative score as other market signals with a high weight
+because it acts as the base market-state lens.
+
+Theme distortion detection compares a fundamental score with a flow score.
+Bullish distortions are themes with better fundamentals than current flow;
+bearish distortions are themes where flow is materially ahead of fundamentals.
+The UI shows the top five of each and the AI recap receives them as candidates
+for critical narrative evaluation, not as automatic recommendations.
 
 Trend-follow diagnostics are a robustness lens, not a standalone trading
 strategy. The first implementation uses daily individual-stock data and checks
@@ -53,3 +68,8 @@ When the UI has already fetched a `MarketContext`, `generate_market_analysis_rep
 uses it directly instead of recomputing market monitoring, microstructure,
 momentum, and option context. Standalone report calls without a supplied context
 preserve the previous behavior and fetch their own data.
+
+The Market page can pass an optional user-specified focus item to the recap
+prompt. That focus is appended as a separate input block and must be tied back
+to current market state, flow, fundamentals, and invalidation conditions in the
+generated report.

@@ -68,10 +68,12 @@ class ThemeState(rx.State):
         yield
 
         try:
+            from frontend.state.market_state import MarketState
             from src.theme_analyst import get_ranked_themes
             from src.themes_config import get_ticker_name
 
-            market_type = "US"
+            market_state = await self.get_state(MarketState)
+            market_type = market_state.market_type
             themes_data = await asyncio.to_thread(
                 get_ranked_themes, self.selected_period, market_type
             )

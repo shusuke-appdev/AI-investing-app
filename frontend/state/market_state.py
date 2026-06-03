@@ -61,6 +61,51 @@ class MomentumCategory(BaseModel):
     themes: list[MomentumTheme] = []
 
 
+class IbdBenchmarkDisplay(BaseModel):
+    ticker: str = ""
+    close: float = 0.0
+    change_1d: float = 0.0
+    ma50: float | None = None
+    ma200: float | None = None
+    above_ma50: bool = False
+    above_ma200: bool = False
+    distribution_count: int = 0
+    ftd_status: str = ""
+    data_quality: str = "unavailable"
+
+
+class IbdRegimeDisplay(BaseModel):
+    status_key: str = ""
+    label: str = ""
+    score: float = 0.0
+    weight: float = 2.0
+    exposure_level: str = ""
+    rationale: str = ""
+    action_summary: str = ""
+    benchmarks: list[IbdBenchmarkDisplay] = []
+
+
+class RegimePlaybookDisplay(BaseModel):
+    stance: str = ""
+    risk_budget: str = ""
+    think_about: list[str] = []
+    do_now: list[str] = []
+    avoid: list[str] = []
+
+
+class DistortionItem(BaseModel):
+    theme: str = ""
+    tickers: list[str] = []
+    fundamental_score: float = 0.0
+    flow_score: float = 0.0
+    distortion_score: float = 0.0
+    classification: str = ""
+    rating: str = ""
+    rationale: str = ""
+    fundamental_evidence: list[str] = []
+    flow_evidence: list[str] = []
+
+
 class SectorFlowItem(BaseModel):
     market: str = ""
     theme: str = ""
@@ -205,6 +250,11 @@ class MarketState(rx.State):
     option_analysis: list[OptionSummary] = []
     momentum_data: list[MomentumCategory] = []
     market_monitor: MarketMonitorData = MarketMonitorData()
+    ibd_regime: IbdRegimeDisplay = IbdRegimeDisplay()
+    regime_playbook: RegimePlaybookDisplay = RegimePlaybookDisplay()
+    bullish_distortions: list[DistortionItem] = []
+    bearish_distortions: list[DistortionItem] = []
+    watch_indices_data: list[dict[str, Any]] = []
     sector_flow_groups: list[SectorFlowGroup] = []
     sector_flow_summary: str = ""
     cross_market_stance: str = ""
@@ -218,11 +268,19 @@ class MarketState(rx.State):
     ai_recap: str = ""
     is_generating_recap: bool = False
     ai_recap_error_type: str = ""
+    recap_focus_visible: bool = False
+    custom_recap_focus: str = ""
     market_context: dict[str, Any] = {}
 
     def set_market_type(self, m_type: str):
         self.market_type = m_type
         return MarketState.fetch_market_summary_fast
+
+    def toggle_recap_focus(self):
+        self.recap_focus_visible = not self.recap_focus_visible
+
+    def set_custom_recap_focus(self, value: str):
+        self.custom_recap_focus = value
 
     async def fetch_market_summary_fast(self):
         self.is_fetching_summary = True
@@ -363,6 +421,54 @@ class MarketState(rx.State):
                 )
             )
         return result
+
+    def _format_ibd_regime(self, raw: dict[str, Any]) -> IbdRegimeDisplay:
+        if not raw:
+            return IbdRegimeDisplay()
+        benchmarks = []
+        raw_benchmarks = raw.get("benchmarks") or {}
+        for item in raw_benchmarks.values():
+            if isinstance(item, dict):
+                benchmarks.append(IbdBenchmarkDisplay(**item))
+        return IbdRegimeDisplay(
+            status_key=raw.get("status_key", ""),
+            label=raw.get("label", ""),
+            score=float(raw.get("score", 0.0)),
+            weight=float(raw.get("weight", 2.0)),
+            exposure_level=raw.get("exposure_level", ""),
+            rationale=raw.get("rationale", ""),
+            action_summary=raw.get("action_summary", ""),
+            benchmarks=benchmarks,
+        )
+
+    def _format_playbook(self, raw: dict[str, Any]) -> RegimePlaybookDisplay:
+        if not raw:
+            return RegimePlaybookDisplay()
+        return RegimePlaybookDisplay(
+            stance=raw.get("stance", ""),
+            risk_budget=raw.get("risk_budget", ""),
+            think_about=list(raw.get("think_about", [])),
+            do_now=list(raw.get("do_now", [])),
+            avoid=list(raw.get("avoid", [])),
+        )
+
+    def _format_distortions(self, rows: list[dict[str, Any]]) -> list[DistortionItem]:
+        return [
+            DistortionItem(
+                theme=item.get("theme", ""),
+                tickers=list(item.get("tickers", [])),
+                fundamental_score=float(item.get("fundamental_score", 0.0)),
+                flow_score=float(item.get("flow_score", 0.0)),
+                distortion_score=float(item.get("distortion_score", 0.0)),
+                classification=item.get("classification", ""),
+                rating=item.get("rating", ""),
+                rationale=item.get("rationale", ""),
+                fundamental_evidence=list(item.get("fundamental_evidence", [])),
+                flow_evidence=list(item.get("flow_evidence", [])),
+            )
+            for item in rows
+            if isinstance(item, dict)
+        ]
 
     def _format_sector_flow(self, raw: dict[str, Any]) -> list[SectorFlowGroup]:
         groups = []
@@ -560,6 +666,37 @@ class MarketState(rx.State):
                 generate_market_analysis_report,
                 self.market_type,
                 market_context=self.market_context or None,
+                custom_focus=None,
+            )
+            if recap:
+                self.ai_recap = recap
+                self.ai_recap_error_type = self._classify_recap_failure(recap)
+                if self.ai_recap_error_type:
+                    self.error_msg = (
+                        "AI recap generation returned a degraded result: "
+                        + self.ai_recap_error_type
+                    )
+            else:
+                self.ai_recap_error_type = "unknown"
+                self.error_msg = "Failed to generate market recap."
+        except Exception as exc:
+            self.ai_recap_error_type = "exception"
+            self.error_msg = f"AI recap generation error: {exc}"
+        finally:
+            self.is_generating_recap = False
+            yield
+
+    async def generate_ai_recap_with_focus(self):
+        self.is_generating_recap = True
+        self.ai_recap_error_type = ""
+        yield
+
+        try:
+            recap = await asyncio.to_thread(
+                generate_market_analysis_report,
+                self.market_type,
+                market_context=self.market_context or None,
+                custom_focus=self.custom_recap_focus.strip(),
             )
             if recap:
                 self.ai_recap = recap
@@ -603,6 +740,15 @@ class MarketState(rx.State):
             if context.monitor
             else MarketMonitorData()
         )
+        self.ibd_regime = self._format_ibd_regime(context.ibd_regime)
+        self.regime_playbook = self._format_playbook(context.regime_playbook)
+        distortions = context.market_distortions or {}
+        self.bullish_distortions = self._format_distortions(
+            distortions.get("bullish", [])
+        )
+        self.bearish_distortions = self._format_distortions(
+            distortions.get("bearish", [])
+        )
         self.sector_flow_groups = self._format_sector_flow(context.sector_flow)
         self.sector_flow_summary = context.sector_flow.get("summary", "")
         self.cross_market_stance = context.cross_market.get("stance", "")
@@ -616,6 +762,11 @@ class MarketState(rx.State):
         self.japan_conditions_score = float(context.japan_conditions.get("score", 0.0))
 
         self._set_market_lists(context.market_data, context.market_config)
+        self.watch_indices_data = [
+            item
+            for item in self.indices_data
+            if item.get("name") in {"S&P 500", "Nasdaq 100"}
+        ]
 
         if context.quality_warnings and not self.error_msg:
             self.error_msg = "; ".join(context.quality_warnings[:3])

@@ -75,9 +75,9 @@ def _render_theme_item(theme_data: ThemeItem, index: int) -> rx.Component:
     )
 
 
-@template
-def theme_page() -> rx.Component:
-    """テーマ（Theme）別トレンド画面"""
+def theme_ranking_content() -> rx.Component:
+    """詳細版テーマランキングの内容を描画する。"""
+
     return rx.vstack(
         # ヘッダー領域
         rx.hstack(
@@ -169,3 +169,10 @@ def theme_page() -> rx.Component:
         max_width="1200px",
         margin="0 auto",
     )
+
+
+@template
+def theme_page() -> rx.Component:
+    """テーマ（Theme）別トレンド画面"""
+
+    return theme_ranking_content()

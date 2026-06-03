@@ -41,6 +41,7 @@ def analyze_stock(
     technical_summary = get_technical_summary_for_ai(ticker)
     probabilistic_context = _format_probabilistic_context(probabilistic_signal)
     trend_follow_context = _format_trend_follow_context(stock_signal_context)
+    sector_theme_context = _format_sector_theme_context(stock_signal_context)
     data_quality_context = _format_data_quality_context(stock_signal_context)
 
     # SMART基準を評価
@@ -77,6 +78,7 @@ def analyze_stock(
         technical_summary=technical_summary,
         probabilistic_context=probabilistic_context,
         trend_follow_context=trend_follow_context,
+        sector_theme_context=sector_theme_context,
         data_quality_context=data_quality_context,
         smart_criteria_summary=smart_criteria_summary,
         news_headlines=chr(10).join(news_headlines[:5])
@@ -191,4 +193,36 @@ def _format_trend_follow_context(stock_signal_context: dict | None) -> str:
 - Max Drawdown: {diagnostics.get("strategy_max_drawdown_display", "N/A")}
 - Max Time Under Water: {diagnostics.get("strategy_tuw_display", "N/A")}
 - Warnings: {"; ".join(str(item) for item in warnings) if warnings else "N/A"}
+"""
+
+
+def _format_sector_theme_context(stock_signal_context: dict | None) -> str:
+    if not stock_signal_context:
+        return "Sector/Theme Context: unavailable."
+
+    context = stock_signal_context.get("sector_theme_context") or {}
+    if not isinstance(context, dict) or not context:
+        return "Sector/Theme Context: unavailable."
+
+    themes = context.get("themes") or []
+    diagnostics = context.get("theme_diagnostics") or []
+    diagnostic_lines = []
+    for item in diagnostics[:3]:
+        if not isinstance(item, dict):
+            continue
+        diagnostic_lines.append(
+            "- "
+            f"{item.get('theme')}: "
+            f"fundamental={float(item.get('fundamental_score', 0.0)):.2f}, "
+            f"flow={float(item.get('flow_score', 0.0)):.2f}, "
+            f"class={item.get('classification', 'neutral')}"
+        )
+    return f"""Sector/Theme Context (qualitative base layer):
+- Sector: {context.get("sector", "N/A")}
+- Themes: {", ".join(str(item) for item in themes) if themes else "N/A"}
+- Stock Fundamental Advantage: {context.get("fundamental_advantage", False)}
+- Stock Flow Advantage: {context.get("flow_advantage", False)}
+- Combined Rating: {context.get("combined_rating", "unknown")}
+- Rationale: {context.get("rationale", "N/A")}
+{chr(10).join(diagnostic_lines) if diagnostic_lines else "- Theme diagnostics: unavailable"}
 """

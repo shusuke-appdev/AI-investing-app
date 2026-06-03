@@ -324,6 +324,90 @@ def stock_page() -> rx.Component:
                             margin_bottom="2rem",
                         ),
                     ),
+                    rx.cond(
+                        StockState.sector_theme_rating != "",
+                        rx.card(
+                            rx.vstack(
+                                rx.hstack(
+                                    rx.heading("セクター/テーマ評価", size="4"),
+                                    rx.badge(
+                                        StockState.sector_theme_rating,
+                                        color_scheme=rx.cond(
+                                            StockState.sector_theme_rating == "high",
+                                            "green",
+                                            rx.cond(
+                                                StockState.sector_theme_rating
+                                                == "conditional",
+                                                "orange",
+                                                "gray",
+                                            ),
+                                        ),
+                                    ),
+                                    width="100%",
+                                    align_items="center",
+                                ),
+                                rx.hstack(
+                                    rx.badge(
+                                        rx.cond(
+                                            StockState.sector_theme_fundamental_advantage,
+                                            "Fundamental優位",
+                                            "Fundamental未確認",
+                                        ),
+                                        color_scheme=rx.cond(
+                                            StockState.sector_theme_fundamental_advantage,
+                                            "green",
+                                            "gray",
+                                        ),
+                                    ),
+                                    rx.badge(
+                                        rx.cond(
+                                            StockState.sector_theme_flow_advantage,
+                                            "Flow優位",
+                                            "Flow未確認",
+                                        ),
+                                        color_scheme=rx.cond(
+                                            StockState.sector_theme_flow_advantage,
+                                            "green",
+                                            "gray",
+                                        ),
+                                    ),
+                                    rx.text(
+                                        "Fund "
+                                        + StockState.sector_theme_fundamental_score.to_string()
+                                        + " / Flow "
+                                        + StockState.sector_theme_flow_score.to_string(),
+                                        size="2",
+                                        color=rx.color("gray", 10),
+                                    ),
+                                    spacing="2",
+                                    wrap="wrap",
+                                ),
+                                rx.text(
+                                    StockState.sector_theme_rationale,
+                                    size="2",
+                                    color=rx.color("gray", 11),
+                                ),
+                                rx.cond(
+                                    StockState.sector_theme_themes.length() > 0,
+                                    rx.hstack(
+                                        rx.foreach(
+                                            StockState.sector_theme_themes,
+                                            lambda theme: rx.badge(
+                                                theme, variant="surface"
+                                            ),
+                                        ),
+                                        spacing="2",
+                                        wrap="wrap",
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                width="100%",
+                                align_items="start",
+                            ),
+                            width="100%",
+                            margin_bottom="2rem",
+                        ),
+                    ),
                     # テクニカル分析
                     technical_analysis(),
                     probabilistic_signal_panel(),

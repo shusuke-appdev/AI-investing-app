@@ -1,8 +1,6 @@
 import reflex as rx
 
-from frontend.components.flash_summary import flash_summary, market_monitor
-from frontend.components.momentum_display import momentum_monitor_component
-from frontend.components.option_analysis import option_analysis_component
+from frontend.components.flash_summary import flash_summary
 from frontend.state.market_state import MarketState
 from frontend.template import template
 
@@ -15,15 +13,23 @@ def index() -> rx.Component:
         rx.hstack(
             rx.heading("Market Intelligence", size="7"),
             rx.spacer(),
-            # AI Recap ボタン（大きめ）
             rx.button(
                 rx.icon("sparkles", size=18),
-                "AI Market Recap",
+                "レポートを生成",
                 on_click=MarketState.generate_ai_recap,
                 loading=MarketState.is_generating_recap,
                 color_scheme="indigo",
                 size="3",
                 variant="solid",
+            ),
+            rx.tooltip(
+                rx.icon_button(
+                    rx.icon("plus", size=16),
+                    on_click=MarketState.toggle_recap_focus,
+                    size="3",
+                    variant="surface",
+                ),
+                content="任意の分析項目を追加",
             ),
             rx.button(
                 rx.icon("refresh-cw", size=16),
@@ -32,23 +38,39 @@ def index() -> rx.Component:
                 loading=MarketState.is_fetching_summary,
                 variant="surface",
             ),
-            rx.button(
-                rx.icon("activity", size=16),
-                "詳細更新",
-                on_click=MarketState.refresh_market_details,
-                loading=MarketState.is_fetching_details,
-                variant="surface",
-            ),
-            rx.button(
-                rx.icon("chart-no-axes-combined", size=16),
-                "Options",
-                on_click=MarketState.refresh_options,
-                loading=MarketState.is_fetching_options,
-                variant="surface",
-            ),
             width="100%",
             align_items="center",
             margin_bottom="2rem",
+        ),
+        rx.cond(
+            MarketState.recap_focus_visible,
+            rx.card(
+                rx.vstack(
+                    rx.text("追加分析項目", weight="bold", size="2"),
+                    rx.text_area(
+                        value=MarketState.custom_recap_focus,
+                        on_change=MarketState.set_custom_recap_focus,
+                        placeholder="例: SaaS株の売りは構造悪化か、ナラティブ過剰反応かを分析",
+                        width="100%",
+                        min_height="92px",
+                    ),
+                    rx.hstack(
+                        rx.spacer(),
+                        rx.button(
+                            rx.icon("sparkles", size=16),
+                            "追加して生成",
+                            on_click=MarketState.generate_ai_recap_with_focus,
+                            loading=MarketState.is_generating_recap,
+                            color_scheme="indigo",
+                        ),
+                        width="100%",
+                    ),
+                    width="100%",
+                    align_items="start",
+                ),
+                width="100%",
+                margin_bottom="1rem",
+            ),
         ),
         # エラーメッセージ
         rx.cond(
@@ -72,14 +94,8 @@ def index() -> rx.Component:
                 height="300px",
             ),
             rx.vstack(
-                # 総合市場監視
-                market_monitor(),
                 # アセットクラス別概要
                 flash_summary(),
-                # テーマモメンタム監視
-                momentum_monitor_component(),
-                # オプション分析
-                option_analysis_component(),
                 # AI Recap (Gemini)
                 rx.box(
                     rx.heading("AI Market Recap", size="5", margin_bottom="1rem"),

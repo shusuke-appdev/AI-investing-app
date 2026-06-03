@@ -177,6 +177,14 @@ streamlit run legacy_streamlit/app.py
 - Opted the `postgres` role's future `public` table/function/sequence default privileges into explicit-grant behavior; `supabase_admin` default privileges could not be changed by the connector due to ownership permissions.
 - Verified `service_role` insert/select/delete smoke tests for all three tables, checked migration history, and reran Supabase Security/Performance Advisors.
 
+# Session update: 2026-06-04 market watch / IBD regime / recap focus
+- Added a dedicated Reflex `市場監視` route and moved market monitoring, theme momentum, detailed theme ranking, option analysis, and distortion detection out of the top-level Market page.
+- Added IBD-style free-data market regime classification (`confirmed_uptrend`, `uptrend_under_pressure`, `rally_attempt`, `market_in_correction`) and fixed state playbooks for stance, risk budget, what to think about, and what to avoid.
+- Added theme/sector diagnostics that compare fundamental advantage against flow advantage, surfacing bullish and bearish market distortions in MarketContext and AI Market Recap.
+- Added Market Recap custom-focus input via the small plus button next to report generation.
+- Added individual stock sector/theme context so Stock UI and AI Stock Recap evaluate whether both fundamental and flow advantages exist.
+- Validation: compileall passed, ruff check passed, targeted tests passed, and full pytest passed with 137 tests.
+
 # Session update: 2026-06-03 credit stress and leadership flow monitor
 - Recovered `pandas_datareader` on the Python 3.12 / pandas 3 environment by adding pinned `setuptools` and a small decorator compatibility shim before import.
 - Added FRED economic data retrieval with bounded FRED CSV requests first, recovered pandas-datareader fallback, and `.states/economic_data_cache` stale fallback.
