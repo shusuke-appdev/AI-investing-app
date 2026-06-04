@@ -1,3 +1,4 @@
+from src import stock_analyst
 from src.stock_analyst import _format_sector_theme_context, _format_trend_follow_context
 
 
@@ -26,6 +27,66 @@ def test_format_trend_follow_context_marks_diagnostics_as_context_only():
 
 def test_format_trend_follow_context_handles_missing_data():
     assert _format_trend_follow_context({}) == "Trend-Follow Diagnostics: unavailable."
+
+
+def test_analyze_stock_reuses_supplied_context_without_recomputing(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        stock_analyst,
+        "get_technical_summary_for_ai",
+        lambda ticker: (_ for _ in ()).throw(AssertionError("should not recompute")),
+    )
+
+    def fake_generate_content(prompt):
+        captured["prompt"] = prompt
+        return "ok"
+
+    monkeypatch.setattr(stock_analyst, "generate_content", fake_generate_content)
+
+    from src.advisor import smart_criteria
+
+    monkeypatch.setattr(
+        smart_criteria,
+        "evaluate_smart_criteria",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("should not recompute SMART")
+        ),
+    )
+    monkeypatch.setattr(
+        "src.knowledge_storage.get_knowledge_for_ai_context",
+        lambda max_items=5: "",
+    )
+
+    result = stock_analyst.analyze_stock(
+        "TEST",
+        {
+            "name": "Test Co",
+            "sector": "Technology",
+            "industry": "Software",
+            "market_cap": 1_000_000_000,
+            "current_price": 100,
+        },
+        stock_signal_context={
+            "technical_data": {
+                "overall_signal": "Buy",
+                "overall_score": 72,
+                "rsi": 55,
+            },
+            "smart_criteria": {
+                "S": {"met": True, "desc": "Sales", "value": "30%"},
+                "M": {"met": False, "desc": "Margin", "value": "N/A"},
+            },
+            "probabilistic_signal": {"signal_label": "Constructive"},
+            "news_headlines": ["Context headline"],
+        },
+    )
+
+    assert result == "ok"
+    assert "総合シグナル: Buy" in captured["prompt"]
+    assert "S: ✅ Sales" in captured["prompt"]
+    assert "Context headline" in captured["prompt"]
+    assert "Constructive" in captured["prompt"]
 
 
 def test_format_sector_theme_context_includes_advantage_flags():

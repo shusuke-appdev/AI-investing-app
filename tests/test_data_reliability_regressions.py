@@ -83,24 +83,29 @@ def test_theme_download_configures_yfinance_cache(monkeypatch):
 
 
 def test_market_option_summary_formats_price_server_side():
-    from frontend.state.market_state import MarketState
-
-    formatted = MarketState._format_options(
-        MarketState,
-        [
-            {
-                "ticker": "SPY",
-                "current_price": 1234.5,
-                "pcr": {"volume_pcr": 0.9},
-                "gex": None,
-                "iv": 0.2,
-                "max_pain": 1200,
-                "analysis": [],
-                "data_quality": "partial",
-                "quality_warnings": ["Greeks missing"],
-            }
-        ],
+    from src.services.market_presentation_service import (
+        OptionSummary,
+        format_option_summaries,
     )
+
+    formatted = [
+        OptionSummary(**item)
+        for item in format_option_summaries(
+            [
+                {
+                    "ticker": "SPY",
+                    "current_price": 1234.5,
+                    "pcr": {"volume_pcr": 0.9},
+                    "gex": None,
+                    "iv": 0.2,
+                    "max_pain": 1200,
+                    "analysis": [],
+                    "data_quality": "partial",
+                    "quality_warnings": ["Greeks missing"],
+                }
+            ]
+        )
+    ]
 
     assert formatted[0].current_price == 1234.5
     assert formatted[0].current_price_str == "$1,234.50"

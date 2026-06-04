@@ -110,127 +110,27 @@ def generate_market_analysis_report(
     # 3. Merge News
     all_news = merge_with_finnhub_news(gnews_articles, finnhub_news, max_total=60)
 
-    # 4. Market Context (Weekly Performance)
-    weekly_performance = {}
-    cross_asset_tickers = {
-        # Indices
-        "S&P 500": "^GSPC",
-        "Nasdaq 100": "^NDX",
-        "Russell 2000": "^RUT",
-        "Dow Jones": "^DJI",
-        # Bonds
-        "TLT (20Y Bond)": "TLT",
-        "US 10Y Yield": "^TNX",
-        # Commodities
-        "Gold": "GC=F",
-        "WTI Oil": "CL=F",
-        "Silver": "SI=F",
-        # Crypto
-        "Bitcoin": "BTC-USD",
-        "Ethereum": "ETH-USD",
-        # Forex
-        "DXY (Dollar)": "DX-Y.NYB",
-        "USD/JPY": "JPY=X",
-    }
+    if context:
+        theme_analysis_str = _format_theme_analysis_from_context(context)
+        return generate_market_recap(
+            market_data,
+            all_news,
+            option_analysis or context.options.items,
+            theme_analysis=theme_analysis_str,
+            advanced_tech_analysis=format_market_context_for_ai(context),
+            custom_focus=custom_focus,
+        )
 
-    # For JP market, we might want to adjust this, but cross-asset view is global.
-    # Keeping it global is usually fine for macro analysis.
-
-    try:
-        for name, ticker in cross_asset_tickers.items():
-            df = get_stock_data(ticker, period="5d")
-            if not df.empty and len(df) >= 2:
-                start_price = df["Close"].iloc[0]
-                end_price = df["Close"].iloc[-1]
-                change_1w = (end_price - start_price) / start_price * 100
-                weekly_performance[name] = f"{change_1w:+.2f}%"
-    except Exception as e:
-        logger.error(f"Weekly performance fetch error: {e}")
-
-    # 5. Market Context (Monthly Trend)
-    trend_context = {}
-    try:
-        indices = {"S&P 500": "^GSPC", "Nasdaq 100": "^NDX", "Russell 2000": "^RUT"}
-        for name, ticker in indices.items():
-            df = get_stock_data(ticker, period="1mo")
-            if not df.empty and len(df) > 1:
-                start_price = df["Close"].iloc[0]
-                end_price = df["Close"].iloc[-1]
-                change_1mo = (end_price - start_price) / start_price * 100
-
-                trend = (
-                    "上昇"
-                    if change_1mo > 2
-                    else "下落"
-                    if change_1mo < -2
-                    else "横ばい"
-                )
-                trend_context[name] = {
-                    "change_1mo": f"{change_1mo:+.2f}%",
-                    "trend": trend,
-                    "start_date": df.index[0].strftime("%Y-%m-%d"),
-                    "end_date": df.index[-1].strftime("%Y-%m-%d"),
-                }
-    except Exception as e:
-        logger.error(f"Trend fetch error: {e}")
-
-    # 6. Theme Analysis
-    theme_str_parts = ["【テーマ別トレンド分析 (資金循環)】"]
-    try:
-        # Short (5 days)
-        short_themes = get_ranked_themes("5日")
-        if short_themes:
-            top5_s = [
-                f"{t['theme']}({t['performance']:+.1f}%)" for t in short_themes[:5]
-            ]
-            bot5_s = [
-                f"{t['theme']}({t['performance']:+.1f}%)" for t in short_themes[-5:]
-            ]
-            theme_str_parts.append(f"- 短期(5日) Top5: {', '.join(top5_s)}")
-            theme_str_parts.append(f"- 短期(5日) Bottom5: {', '.join(bot5_s)}")
-
-        # Medium (1 month)
-        med_themes = get_ranked_themes("1ヶ月")
-        if med_themes:
-            top5_m = [f"{t['theme']}({t['performance']:+.1f}%)" for t in med_themes[:5]]
-            bot5_m = [
-                f"{t['theme']}({t['performance']:+.1f}%)" for t in med_themes[-5:]
-            ]
-            if top5_m:
-                theme_str_parts.append(f"- 中期(1ヶ月) Top5: {', '.join(top5_m)}")
-            if bot5_m:
-                theme_str_parts.append(f"- 中期(1ヶ月) Bottom5: {', '.join(bot5_m)}")
-
-    except Exception as e:
-        logger.error(f"Theme data fetch error: {e}")
-        theme_str_parts.append("- テーマデータの取得に失敗しました")
-
-    theme_analysis_str = "\n".join(theme_str_parts)
-
-    # 7. Prepare Market Data for Prompt
-    # (Already initialized at step 0)
+    weekly_performance, trend_context = _fetch_legacy_market_trend_context()
+    theme_analysis_str = _fetch_legacy_theme_analysis()
     market_data["trend_1mo"] = trend_context
     market_data["weekly_performance"] = weekly_performance
-
-    # 8. Option Analysis
-    if option_analysis is None and context:
-        option_analysis = context.options.items
 
     if option_analysis is None:
         try:
             option_analysis = get_major_indices_options(market_type)
         except Exception:
             option_analysis = []
-
-    if context:
-        return generate_market_recap(
-            market_data,
-            all_news,
-            option_analysis,
-            theme_analysis=theme_analysis_str,
-            advanced_tech_analysis=format_market_context_for_ai(context),
-            custom_focus=custom_focus,
-        )
 
     # 8.5 Advanced Technical Analysis (Breadth & Volatility)
     advanced_tech_parts = ["【高度テクニカル＆ボラティリティ分析】"]
@@ -373,3 +273,122 @@ def generate_market_analysis_report(
     )
 
     return recap
+
+
+def _format_theme_analysis_from_context(context: MarketContext) -> str:
+    """Format already-computed momentum context for the AI market recap."""
+
+    parts = ["【テーマ別トレンド分析 (資金循環)】"]
+    if not context.momentum:
+        parts.append("- テーマデータはMarketContext内で未取得です")
+        return "\n".join(parts)
+
+    for category, themes in context.momentum.items():
+        if not themes:
+            continue
+        top5 = [
+            f"{item.get('theme')}({float(item.get('performance', 0.0)):+.1f}%)"
+            for item in themes[:5]
+        ]
+        bottom5 = [
+            f"{item.get('theme')}({float(item.get('performance', 0.0)):+.1f}%)"
+            for item in themes[-5:]
+        ]
+        label = str(category)
+        if top5:
+            parts.append(f"- {label} Top5: {', '.join(top5)}")
+        if bottom5:
+            parts.append(f"- {label} Bottom5: {', '.join(bottom5)}")
+
+    return "\n".join(parts)
+
+
+def _fetch_legacy_market_trend_context() -> tuple[dict, dict]:
+    """Fetch legacy weekly and monthly context when MarketContext is unavailable."""
+
+    weekly_performance = {}
+    cross_asset_tickers = {
+        "S&P 500": "^GSPC",
+        "Nasdaq 100": "^NDX",
+        "Russell 2000": "^RUT",
+        "Dow Jones": "^DJI",
+        "TLT (20Y Bond)": "TLT",
+        "US 10Y Yield": "^TNX",
+        "Gold": "GC=F",
+        "WTI Oil": "CL=F",
+        "Silver": "SI=F",
+        "Bitcoin": "BTC-USD",
+        "Ethereum": "ETH-USD",
+        "DXY (Dollar)": "DX-Y.NYB",
+        "USD/JPY": "JPY=X",
+    }
+    try:
+        for name, ticker in cross_asset_tickers.items():
+            df = get_stock_data(ticker, period="5d")
+            if not df.empty and len(df) >= 2:
+                start_price = df["Close"].iloc[0]
+                end_price = df["Close"].iloc[-1]
+                change_1w = (end_price - start_price) / start_price * 100
+                weekly_performance[name] = f"{change_1w:+.2f}%"
+    except Exception as e:
+        logger.error(f"Weekly performance fetch error: {e}")
+
+    trend_context = {}
+    try:
+        indices = {"S&P 500": "^GSPC", "Nasdaq 100": "^NDX", "Russell 2000": "^RUT"}
+        for name, ticker in indices.items():
+            df = get_stock_data(ticker, period="1mo")
+            if not df.empty and len(df) > 1:
+                start_price = df["Close"].iloc[0]
+                end_price = df["Close"].iloc[-1]
+                change_1mo = (end_price - start_price) / start_price * 100
+                trend = (
+                    "上昇"
+                    if change_1mo > 2
+                    else "下落"
+                    if change_1mo < -2
+                    else "横ばい"
+                )
+                trend_context[name] = {
+                    "change_1mo": f"{change_1mo:+.2f}%",
+                    "trend": trend,
+                    "start_date": df.index[0].strftime("%Y-%m-%d"),
+                    "end_date": df.index[-1].strftime("%Y-%m-%d"),
+                }
+    except Exception as e:
+        logger.error(f"Trend fetch error: {e}")
+
+    return weekly_performance, trend_context
+
+
+def _fetch_legacy_theme_analysis() -> str:
+    """Fetch legacy theme rankings only when no MarketContext is available."""
+
+    theme_str_parts = ["【テーマ別トレンド分析 (資金循環)】"]
+    try:
+        short_themes = get_ranked_themes("5日")
+        if short_themes:
+            top5_s = [
+                f"{t['theme']}({t['performance']:+.1f}%)" for t in short_themes[:5]
+            ]
+            bot5_s = [
+                f"{t['theme']}({t['performance']:+.1f}%)" for t in short_themes[-5:]
+            ]
+            theme_str_parts.append(f"- 短期(5日) Top5: {', '.join(top5_s)}")
+            theme_str_parts.append(f"- 短期(5日) Bottom5: {', '.join(bot5_s)}")
+
+        med_themes = get_ranked_themes("1ヶ月")
+        if med_themes:
+            top5_m = [f"{t['theme']}({t['performance']:+.1f}%)" for t in med_themes[:5]]
+            bot5_m = [
+                f"{t['theme']}({t['performance']:+.1f}%)" for t in med_themes[-5:]
+            ]
+            if top5_m:
+                theme_str_parts.append(f"- 中期(1ヶ月) Top5: {', '.join(top5_m)}")
+            if bot5_m:
+                theme_str_parts.append(f"- 中期(1ヶ月) Bottom5: {', '.join(bot5_m)}")
+    except Exception as e:
+        logger.error(f"Theme data fetch error: {e}")
+        theme_str_parts.append("- テーマデータの取得に失敗しました")
+
+    return "\n".join(theme_str_parts)

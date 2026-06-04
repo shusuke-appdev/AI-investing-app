@@ -5,7 +5,8 @@
 
 import reflex as rx
 
-from frontend.state.market_state import MarketState, MomentumCategory, MomentumTheme
+from frontend.state.market_state import MarketState
+from src.services.market_presentation_service import MomentumCategory, MomentumTheme
 
 
 def _momentum_theme_item(theme: MomentumTheme) -> rx.Component:

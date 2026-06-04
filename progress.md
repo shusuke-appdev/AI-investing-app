@@ -197,3 +197,9 @@ streamlit run legacy_streamlit/app.py
 - Added Nikkei upside six-condition diagnostics to `MarketContext`, with direct optional environment inputs for JSF short balance, 1570 margin ratio, and foreign investor net buying, plus proxy/unavailable labeling when free direct data is not available.
 - Wired the new diagnostics into the Reflex Market Intelligence dashboard and AI Market Recap prompt so the recap remains US-main while explicitly discussing Japan as a cross-market corner.
 - Expanded JP market summary fetching so Japan mode also shows configured commodities, FX, crypto, and remaining Yahoo-compatible JP index proxies rather than only Stooq index rows.
+
+# Session update: 2026-06-04 analysis function consolidation
+- Reviewed the data-fetching and analysis surfaces across Market Intelligence, Market Watch, AI Market Recap, and individual stock analysis, then documented the current ownership and remaining roadmap in `docs/DATA_ANALYSIS_REVIEW.md`.
+- Moved MarketContext-to-Reflex display formatting out of `frontend/state/market_state.py` into `src/services/market_presentation_service.py`, so MarketState now focuses on events, loading/error flags, and display model assignment.
+- Changed AI Market Recap to reuse supplied/built `MarketContext` momentum, options, and monitoring data instead of refetching theme and market trend data on the normal path; legacy fallback remains only when context construction fails.
+- Extended `StockSignalContext` with SMART criteria and news headlines, and changed AI Stock Recap to reuse displayed stock context instead of silently dropping displayed news or recomputing technical/SMART inputs.

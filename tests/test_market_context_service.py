@@ -402,7 +402,18 @@ def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
         "merge_with_finnhub_news",
         lambda articles, finnhub_news, max_total: [],
     )
-    monkeypatch.setattr(market_analyst_service, "get_ranked_themes", lambda period: [])
+    monkeypatch.setattr(
+        market_analyst_service,
+        "get_ranked_themes",
+        lambda period: (_ for _ in ()).throw(AssertionError("should reuse momentum")),
+    )
+    monkeypatch.setattr(
+        market_analyst_service,
+        "get_stock_data",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("should reuse market context")
+        ),
+    )
     monkeypatch.setattr(
         market_analyst_service,
         "get_major_indices_options",

@@ -106,9 +106,11 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         ticker=normalized_ticker,
         stock_info=info_dict,
         technical_data=technical_dict,
+        smart_criteria=to_plain_value(smart_res),
         probabilistic_signal=probabilistic_dict,
         trend_follow_diagnostics=trend_follow_dict,
         sector_theme_context=sector_theme_context,
+        news_headlines=_news_headlines(news_items),
         news_source_status=news_source_status,
         news_error_reason=news_error_reason,
         data_status=data_status,
@@ -207,6 +209,17 @@ def _normalize_news_item(item: dict[str, Any]) -> dict[str, Any]:
         "published": str(item.get("published") or ""),
         "summary": str(item.get("summary") or ""),
     }
+
+
+def _news_headlines(items: list[Any]) -> list[str]:
+    headlines = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or item.get("headline") or "").strip()
+        if title:
+            headlines.append(title)
+    return headlines[:5]
 
 
 def _build_display_info(ticker: str, info: dict[str, Any]) -> dict[str, str]:

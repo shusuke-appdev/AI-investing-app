@@ -27,6 +27,7 @@ UI
 
 ユースケース調整
   src/services/*
+  src/services/market_presentation_service.py
   src/services/temporal_alignment.py
   src/services/analysis_run.py
   src/services/analysis_jobs.py
@@ -79,7 +80,8 @@ UI
 4. 詳細更新では `sector_flow_service` が米国セクターETFと日本テーマバスケットから資金流入セクター、確信度、継続性、調査判断を計算し、`japan_market_conditions` が日経平均上昇の6条件を直接データまたは代理指標として評価する
 5. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、取得結果、キャッシュ鮮度、品質警告を `OptionContext` に保存する
 6. Reflex state に整形済みデータを保存し、画面が再描画される
-7. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、`MarketContext`、オプション品質情報、日米セクター流入、日経6条件、ユーザー指定の追加分析項目をプロンプトに含める。レポートは米国市場を主軸にし、日本市場は米国との連動・乖離を読む補助コーナーとして扱う
+7. 表示用の整形は `services.market_presentation_service.build_market_display_context()` が担い、`MarketState` はイベント、loading/error、表示モデル保持に集中する
+8. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、通常経路では既に取得済みの `MarketContext`、オプション品質情報、日米セクター流入、日経6条件、ユーザー指定の追加分析項目をプロンプトに含める。レポートは米国市場を主軸にし、日本市場は米国との連動・乖離を読む補助コーナーとして扱う
 
 ### 市場監視
 
@@ -96,7 +98,7 @@ UI
 4. `advisor.probabilistic_signal.generate_probabilistic_stock_signal()` が過去の類似局面、forward return、walk-forward検証、サイジング目安を作る
 5. `advisor.trend_follow_diagnostics.generate_trend_follow_diagnostics()` が日足トレンドフォローを診断軸として評価し、OOS、コスト耐性、遅延耐性、右テール依存、Buy & Hold比較を `StockSignalContext` に追加する
 6. `advisor.sector_theme_diagnostics.evaluate_stock_sector_theme_context()` が対象銘柄のセクター/テーマを、ファンダメンタル優位とフロー優位の両面から評価して `StockSignalContext` に追加する
-7. AI分析は `stock_analyst.analyze_stock()` がプロンプトを組み立て、Gemini に渡す
+7. `StockSignalContext` は表示済みニュース見出し、SMART基準、テクニカルも保持し、AI分析は `stock_analyst.analyze_stock()` が同じ入力を再利用してプロンプトを組み立てる
 
 ### ポートフォリオ
 
@@ -118,6 +120,8 @@ UI
 - `src/cache.py` は Streamlit 依存を避けるためのフレームワーク非依存TTLキャッシュ。エントリごとに `created_at`、`expires_at`、`ttl`、`namespace` を持ち、関数単位の `.clear_cache()` と名前空間単位のクリアに対応する
 - `src/persistent_cache.py` は `.states` 配下のJSONキャッシュ共通基盤。schema/version付きの原子的書き込み、破損JSON無視、fresh/stale/expired判定、ファイル名安全化を担う
 - yfinance系の重い取得は、メモリTTLに加えて `.states/market_context_cache` と `.states/option_chain_cache` のJSONキャッシュを使う。`source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` をUIとAIプロンプトへ渡す
+- Market AI Recap は `MarketContext` がある場合に市場監視やテーマランキングを再取得せず、context 内の monitoring / momentum / option 情報を優先する。context 構築に失敗した互換パスだけ旧取得ロジックへフォールバックする
+- Stock AI Recap は `StockSignalContext` がある場合に表示済みのテクニカル、SMART基準、ニュース見出し、確率シグナルを使い、UIとAIの材料ズレを避ける
 - 日経平均上昇6条件は、日証金売り残、1570信用倍率、海外投資家買越額などの直接データがない場合に `proxy` または `unavailable` として明示する。代理評価は断定ではなく、AIプロンプトにもデータ品質として渡す
 - 資金流入セクター判定は、米国はセクターETF、日本は `JP_THEMES` の代表銘柄バスケットを使う。スコアは相対騰落率、5日/20日継続性、出来高比、上昇参加率から作り、売買指示ではなく「乗る候補」「押し目待ち」「観察」「見送り」の調査支援ラベルに留める
 - HTTPキャッシュは `src/network.py` が `.states/http_cache` 配下で用途別セッションとして管理し、ルート直下にSQLiteを作らない

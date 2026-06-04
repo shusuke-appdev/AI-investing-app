@@ -115,5 +115,6 @@ python -m ruff format --check .
 - [運用・環境設定ガイド](docs/OPERATIONS.md)
 - [Supabase Data API grants 対応](docs/SUPABASE_DATA_API_GRANTS.md)
 - [コード点検結果](docs/CODE_AUDIT.md)
+- [データ取得・分析機能レビュー](docs/DATA_ANALYSIS_REVIEW.md)
 - [根本改修ロードマップ](docs/REMEDIATION_ROADMAP.md)
 - [実行タスク](task.md)

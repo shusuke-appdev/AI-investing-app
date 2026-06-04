@@ -192,6 +192,7 @@ class StockState(rx.State):
                 plain_state_value(self.info),
                 None,
                 None,
+                self._news_headlines(),
                 plain_state_value(self.probabilistic_signal),
                 plain_state_value(self.stock_signal_context),
             )
@@ -205,3 +206,13 @@ class StockState(rx.State):
         finally:
             self.is_generating_analysis = False
             yield
+
+    def _news_headlines(self) -> list[str]:
+        headlines = []
+        for item in plain_state_value(self.news):
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("headline") or item.get("title") or "").strip()
+            if title:
+                headlines.append(title)
+        return headlines[:5]

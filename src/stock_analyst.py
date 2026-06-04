@@ -37,23 +37,25 @@ def analyze_stock(
     price = stock_info.get("current_price", 0)
     target_price = stock_info.get("target_price", "N/A")
 
-    # テクニカル分析を取得
-    technical_summary = get_technical_summary_for_ai(ticker)
+    context = stock_signal_context or {}
+    technical_summary = _format_technical_context(context)
+    if technical_summary == "":
+        technical_summary = get_technical_summary_for_ai(ticker)
+    if news_headlines is None:
+        news_headlines = _context_news_headlines(context)
+    if probabilistic_signal is None and context:
+        probabilistic_signal = context.get("probabilistic_signal")
     probabilistic_context = _format_probabilistic_context(probabilistic_signal)
-    trend_follow_context = _format_trend_follow_context(stock_signal_context)
-    sector_theme_context = _format_sector_theme_context(stock_signal_context)
-    data_quality_context = _format_data_quality_context(stock_signal_context)
+    trend_follow_context = _format_trend_follow_context(context)
+    sector_theme_context = _format_sector_theme_context(context)
+    data_quality_context = _format_data_quality_context(context)
 
-    # SMART基準を評価
-    from src.advisor.smart_criteria import evaluate_smart_criteria
+    smart_criteria_summary = _format_smart_criteria_context(context)
+    if smart_criteria_summary == "":
+        from src.advisor.smart_criteria import evaluate_smart_criteria
 
-    smart_res = evaluate_smart_criteria(ticker, stock_info)
-    smart_lines = []
-    for k in ["S", "M", "A", "R", "T"]:
-        v = smart_res.get(k, {})
-        mark = "✅" if v.get("met") else "❌"
-        smart_lines.append(f"- {k}: {mark} {v.get('desc')} (現在: {v.get('value')})")
-    smart_criteria_summary = "\n".join(smart_lines)
+        smart_res = evaluate_smart_criteria(ticker, stock_info)
+        smart_criteria_summary = _format_smart_criteria(smart_res)
 
     # ユーザー参照知識を取得
     from src.knowledge_storage import get_knowledge_for_ai_context
@@ -122,6 +124,62 @@ def get_quick_summary(ticker: str, stock_info: dict) -> str:
 
 # 後方互換エイリアス: stock_state.py が参照する関数名
 generate_stock_analysis_report = analyze_stock
+
+
+def _format_technical_context(stock_signal_context: dict | None) -> str:
+    if not stock_signal_context:
+        return ""
+    technical = stock_signal_context.get("technical_data") or {}
+    if not isinstance(technical, dict) or not technical:
+        return ""
+
+    lines = ["【テクニカル分析】"]
+    field_map = [
+        ("overall_signal", "総合シグナル"),
+        ("overall_score", "総合スコア"),
+        ("analysis_mode", "分析モード"),
+        ("entry_signal", "エントリーシグナル"),
+        ("rsi", "RSI"),
+        ("macd_signal", "MACD"),
+        ("ma_trend", "移動平均トレンド"),
+        ("ma_deviation", "MA乖離"),
+        ("bb_position", "ボリンジャーバンド位置"),
+        ("atr", "ATR"),
+        ("support_price", "サポート"),
+        ("resistance_price", "レジスタンス"),
+        ("contrarian_signal", "逆張り判定"),
+    ]
+    for key, label in field_map:
+        if key in technical and technical.get(key) not in {None, ""}:
+            lines.append(f"- {label}: {technical.get(key)}")
+    return "\n".join(lines)
+
+
+def _format_smart_criteria_context(stock_signal_context: dict | None) -> str:
+    if not stock_signal_context:
+        return ""
+    smart = stock_signal_context.get("smart_criteria") or {}
+    if not isinstance(smart, dict) or not smart:
+        return ""
+    return _format_smart_criteria(smart)
+
+
+def _format_smart_criteria(smart_res: dict) -> str:
+    smart_lines = []
+    for k in ["S", "M", "A", "R", "T"]:
+        v = smart_res.get(k, {})
+        mark = "✅" if v.get("met") else "❌"
+        smart_lines.append(f"- {k}: {mark} {v.get('desc')} (現在: {v.get('value')})")
+    return "\n".join(smart_lines)
+
+
+def _context_news_headlines(stock_signal_context: dict | None) -> list[str] | None:
+    if not stock_signal_context:
+        return None
+    headlines = stock_signal_context.get("news_headlines") or []
+    if not isinstance(headlines, list):
+        return None
+    return [str(item) for item in headlines if str(item).strip()]
 
 
 def _format_probabilistic_context(signal: dict | None) -> str:
