@@ -12,6 +12,68 @@ from frontend.state.market_state import MarketState
 from frontend.template import template
 
 
+def _stage_status_strip() -> rx.Component:
+    return rx.grid(
+        rx.foreach(MarketState.detail_stages, _stage_status_card),
+        columns=rx.breakpoints(initial="1", sm="2", lg="4"),
+        spacing="3",
+        width="100%",
+        margin_bottom="1rem",
+    )
+
+
+def _stage_status_card(stage) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.badge(stage.difficulty, color_scheme="gray", variant="surface"),
+                rx.text(stage.label, weight="bold", size="2", flex="1"),
+                rx.badge(
+                    stage.status_label,
+                    color_scheme=_stage_color(stage.status),
+                    variant="surface",
+                ),
+                width="100%",
+                align_items="center",
+            ),
+            rx.text(stage.summary, size="1", color=rx.color("gray", 10)),
+            rx.cond(
+                stage.cache_status != "",
+                rx.text(
+                    "source: " + stage.cache_status,
+                    size="1",
+                    color=rx.color("gray", 9),
+                ),
+                rx.fragment(),
+            ),
+            align_items="start",
+            spacing="1",
+            width="100%",
+        ),
+        padding="0.75rem",
+    )
+
+
+def _stage_color(status) -> rx.Var:
+    return rx.cond(
+        status == "live",
+        "green",
+        rx.cond(
+            status == "loading",
+            "blue",
+            rx.cond(
+                status == "partial",
+                "amber",
+                rx.cond(
+                    (status == "cache") | (status == "stale_cache"),
+                    "orange",
+                    rx.cond(status == "failed", "red", "gray"),
+                ),
+            ),
+        ),
+    )
+
+
 @template
 def market_watch_page() -> rx.Component:
     """市場監視ページ"""
@@ -38,6 +100,7 @@ def market_watch_page() -> rx.Component:
             align_items="center",
             margin_bottom="2rem",
         ),
+        _stage_status_strip(),
         rx.cond(
             MarketState.error_msg != "",
             rx.callout(

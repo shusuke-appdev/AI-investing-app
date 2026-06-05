@@ -171,6 +171,25 @@ class FlowProxyDisplay(BaseModel):
     source: str = ""
 
 
+class FlowAlignmentDisplay(BaseModel):
+    alignment_label: str = ""
+    summary: str = ""
+    etf_role: str = ""
+    sector_role: str = ""
+
+
+class StageStatusDisplay(BaseModel):
+    key: str = ""
+    label: str = ""
+    difficulty: str = ""
+    status: str = "pending"
+    status_label: str = "未取得"
+    cache_status: str = ""
+    fetched_at: str = ""
+    summary: str = ""
+    quality_warnings: list[str] = []
+
+
 class JapanConditionDisplay(BaseModel):
     condition_no: int = 0
     title: str = ""
@@ -238,6 +257,8 @@ class MarketDisplayContext(BaseModel):
     cross_market_stance: str = ""
     credit_stress: CreditStressDisplay = CreditStressDisplay()
     flow_monitor: FlowProxyDisplay = FlowProxyDisplay()
+    flow_alignment: FlowAlignmentDisplay = FlowAlignmentDisplay()
+    detail_stages: list[StageStatusDisplay] = []
     japan_conditions: list[JapanConditionDisplay] = []
     japan_conditions_summary: str = ""
     japan_conditions_score_label: str = ""
@@ -276,6 +297,8 @@ def build_market_display_context(context: MarketContext) -> MarketDisplayContext
         cross_market_stance=context.cross_market.get("stance", ""),
         credit_stress=_format_credit_stress(context.credit_stress),
         flow_monitor=_format_flow_monitor(context.flow_monitor),
+        flow_alignment=_format_flow_alignment(context.flow_alignment),
+        detail_stages=_format_detail_stages(context.detail_stages),
         japan_conditions=_format_japan_conditions(context.japan_conditions),
         japan_conditions_summary=context.japan_conditions.get("summary", ""),
         japan_conditions_score_label=context.japan_conditions.get("score_label", ""),
@@ -543,6 +566,39 @@ def _format_flow_monitor(raw: dict[str, Any]) -> FlowProxyDisplay:
         laggards=[_format_flow_proxy_item(item) for item in raw.get("laggards", [])],
         source=raw.get("source", ""),
     )
+
+
+def _format_flow_alignment(raw: dict[str, Any]) -> FlowAlignmentDisplay:
+    if not raw:
+        return FlowAlignmentDisplay()
+    return FlowAlignmentDisplay(
+        alignment_label=raw.get("alignment_label", ""),
+        summary=raw.get("summary", ""),
+        etf_role=raw.get("etf_role", ""),
+        sector_role=raw.get("sector_role", ""),
+    )
+
+
+def _format_detail_stages(raw: dict[str, dict[str, Any]]) -> list[StageStatusDisplay]:
+    stages = []
+    for key in ("low", "medium", "high", "options"):
+        item = raw.get(key, {}) if raw else {}
+        if not item:
+            continue
+        stages.append(
+            StageStatusDisplay(
+                key=item.get("key", key),
+                label=item.get("label", key),
+                difficulty=item.get("difficulty", ""),
+                status=item.get("status", "pending"),
+                status_label=item.get("status_label", item.get("status", "pending")),
+                cache_status=item.get("cache_status", ""),
+                fetched_at=item.get("fetched_at", ""),
+                summary=item.get("summary", ""),
+                quality_warnings=list(item.get("quality_warnings", [])),
+            )
+        )
+    return stages
 
 
 def _format_flow_proxy_item(item: dict[str, Any]) -> FlowProxyItem:

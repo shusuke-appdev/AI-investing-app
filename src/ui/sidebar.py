@@ -24,7 +24,7 @@ from src.settings_storage import (
 # ナビゲーションメニュー定義
 PAGES = {
     "market": {"icon": "📰", "name": "ニュース"},
-    "theme": {"icon": "🎯", "name": "テーマ別トレンド"},
+    "theme": {"icon": "🎯", "name": "テーマランキング"},
     "stock": {"icon": "🔍", "name": "個別銘柄分析"},
     "portfolio": {"icon": "💼", "name": "ポートフォリオ"},
     "knowledge": {"icon": "📚", "name": "参照知識"},

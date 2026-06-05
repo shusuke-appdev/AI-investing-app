@@ -85,7 +85,8 @@ UI
 
 ### 市場監視
 
-- `/market-watch` は、総合市場監視、IBD式市場状態、状態別固定プレイブック、テーマモメンタム、詳細テーマランキング、オプション分析、市場の歪み検知を集約する
+- `/market-watch` は、総合市場監視、IBD式市場状態、状態別固定プレイブック、テーマモメンタム、テーマランキング、オプション分析、市場の歪み検知を集約する
+- 市場監視の詳細更新は、低難易度のキャッシュ/サマリー、中難易度の市場状態・資金フロー、高難易度のFRED信用ストレス・歪み検知、オプション分析の順に `MarketState` が yield し、各ブロックの `status`、`cache_status`、`fetched_at`、`quality_warnings` を表示モデルへ渡す
 - IBD式市場状態は `advisor.ibd_market_regime.classify_ibd_market_regime()` が SPY / Nasdaq 100 代理データから判定する。分類は `confirmed_uptrend`、`uptrend_under_pressure`、`rally_attempt`、`market_in_correction`
 - `services.market_playbook` は市場状態ごとの「現在考えるべきこと」「今やること」「避けること」を固定データとして返す
 - `advisor.sector_theme_diagnostics.detect_market_distortions()` はテーマごとのファンダメンタルスコアとフロースコアの乖離から、強気/弱気の歪み候補を上位5件ずつ返す
@@ -123,7 +124,7 @@ UI
 - Market AI Recap は `MarketContext` がある場合に市場監視やテーマランキングを再取得せず、context 内の monitoring / momentum / option 情報を優先する。context 構築に失敗した互換パスだけ旧取得ロジックへフォールバックする
 - Stock AI Recap は `StockSignalContext` がある場合に表示済みのテクニカル、SMART基準、ニュース見出し、確率シグナルを使い、UIとAIの材料ズレを避ける
 - 日経平均上昇6条件は、日証金売り残、1570信用倍率、海外投資家買越額などの直接データがない場合に `proxy` または `unavailable` として明示する。代理評価は断定ではなく、AIプロンプトにもデータ品質として渡す
-- 資金流入セクター判定は、米国はセクターETF、日本は `JP_THEMES` の代表銘柄バスケットを使う。スコアは相対騰落率、5日/20日継続性、出来高比、上昇参加率から作り、売買指示ではなく「乗る候補」「押し目待ち」「観察」「見送り」の調査支援ラベルに留める
+- ETFリーダーシップproxyは市場全体のリスクオン/オフ確認に使い、資金流入セクター判定は米国セクターETFと `JP_THEMES` の代表銘柄バスケットから具体候補を出す。スコアは相対騰落率、5日/20日継続性、出来高比、上昇参加率から作り、売買指示ではなく「乗る候補」「押し目待ち」「観察」「見送り」の調査支援ラベルに留める
 - HTTPキャッシュは `src/network.py` が `.states/http_cache` 配下で用途別セッションとして管理し、ルート直下にSQLiteを作らない
 - yfinanceオプションデータはGreeks欠損が多いため、Gammaが取得できない場合はGEXを非表示にし、`data_quality` と `quality_warnings` でUIとAIに明示する
 - Reflex state では `dict[str, Any]` の深いアクセスが壊れやすいため、`pydantic.BaseModel` でUI表示用モデルを定義している

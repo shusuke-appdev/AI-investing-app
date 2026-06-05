@@ -165,8 +165,16 @@ def _patch_new_market_layers(monkeypatch):
         service,
         "detect_market_distortions",
         lambda market_type, max_themes=30, top_n=5: {
-            "bullish": [{"theme": "AI", "distortion_score": 0.3}],
-            "bearish": [{"theme": "Crowded", "distortion_score": -0.4}],
+            "bullish": [
+                {"theme": "AI", "tickers": ["NVDA", "MSFT"], "distortion_score": 0.3}
+            ],
+            "bearish": [
+                {
+                    "theme": "Crowded",
+                    "tickers": ["TSLA", "PLTR"],
+                    "distortion_score": -0.4,
+                }
+            ],
             "quality_warnings": [],
         },
     )
@@ -232,8 +240,15 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     assert context.sector_flow["markets"]["US"]["leaders"][0]["theme"] == "情報技術"
     assert context.credit_stress["status"] == "equity_adjustment"
     assert context.flow_monitor["leaders"][0]["ticker"] == "SMH"
+    assert context.flow_alignment["etf_leader"]["ticker"] == "SMH"
+    assert context.detail_stages["medium"]["status"] == "live"
+    assert context.detail_stages["high"]["status"] == "live"
     assert context.japan_conditions["score_label"] == "中立"
     assert "Market environment" in service.format_market_context_for_ai(context)
+    assert "NVDA, MSFT" in service.format_market_context_for_ai(context)
+    assert "ETF proxy / sector-flow role split" in service.format_market_context_for_ai(
+        context
+    )
     assert "Nikkei upside six conditions" in service.format_market_context_for_ai(
         context
     )
@@ -357,6 +372,37 @@ def test_market_details_reuses_supplied_context(monkeypatch):
     assert context.cross_market["relative_flow_score"] == -20.0
 
 
+def test_market_detail_stages_can_update_sequentially(monkeypatch):
+    _patch_new_market_layers(monkeypatch)
+    base = MarketContext(
+        market_type="US",
+        market_data={"S&P 500": {"ticker": "SPY", "price": 500, "change": 1}},
+        market_config={"indices": {"S&P 500": "SPY"}},
+        options=OptionContext(items=[{"ticker": "SPY", "pcr": {"volume_pcr": 0.9}}]),
+    )
+    monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)
+    monkeypatch.setattr(
+        service,
+        "evaluate_market_environment",
+        lambda market_type, options: {"status": "Neutral", "score": 0, "signals": []},
+    )
+    monkeypatch.setattr(service, "analyze_market_structure", lambda ticker: {})
+    monkeypatch.setattr(service, "get_momentum_themes", lambda market_type: {})
+    monkeypatch.setattr(
+        service, "build_market_monitor_context", lambda options: _monitor_payload()
+    )
+
+    medium = service.build_market_medium_context("US", base.to_dict())
+    high = service.build_market_high_context("US", medium.to_dict())
+
+    assert medium.detail_stages["low"]["status"] == "pending"
+    assert medium.detail_stages["medium"]["status"] == "live"
+    assert medium.detail_stages["high"]["status"] == "pending"
+    assert high.detail_stages["medium"]["status"] == "live"
+    assert high.detail_stages["high"]["status"] == "live"
+    assert high.market_distortions["bullish"][0]["tickers"] == ["NVDA", "MSFT"]
+
+
 def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
     context = MarketContext(
         market_type="US",
@@ -378,6 +424,11 @@ def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
         sector_flow=_sector_flow_payload(),
         credit_stress=_credit_stress_payload(),
         flow_monitor=_flow_monitor_payload(),
+        flow_alignment={
+            "summary": "ETF proxy is risk-on; sector flow points to Technology.",
+            "etf_role": "市場全体の確認",
+            "sector_role": "具体候補",
+        },
         japan_conditions=_japan_conditions_payload(),
         cross_market={
             "stance": "US flow leadership remains dominant; Japan is supplemental.",
@@ -439,6 +490,7 @@ def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
     assert "Credit stress velocity" in captured["advanced"]
     assert "Leadership flow-pressure proxy" in captured["advanced"]
     assert "US primary / Japan supplemental sector flow" in captured["advanced"]
+    assert "ETF proxy / sector-flow role split" in captured["advanced"]
 
 
 def test_market_ai_report_reports_gemini_unavailable():

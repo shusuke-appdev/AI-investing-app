@@ -278,7 +278,7 @@ def generate_market_analysis_report(
 def _format_theme_analysis_from_context(context: MarketContext) -> str:
     """Format already-computed momentum context for the AI market recap."""
 
-    parts = ["【テーマ別トレンド分析 (資金循環)】"]
+    parts = ["【テーマランキング分析 (資金循環)】"]
     if not context.momentum:
         parts.append("- テーマデータはMarketContext内で未取得です")
         return "\n".join(parts)
@@ -364,9 +364,9 @@ def _fetch_legacy_market_trend_context() -> tuple[dict, dict]:
 def _fetch_legacy_theme_analysis() -> str:
     """Fetch legacy theme rankings only when no MarketContext is available."""
 
-    theme_str_parts = ["【テーマ別トレンド分析 (資金循環)】"]
+    theme_str_parts = ["【テーマランキング分析 (資金循環)】"]
     try:
-        short_themes = get_ranked_themes("5日")
+        short_themes = get_ranked_themes("1週間")
         if short_themes:
             top5_s = [
                 f"{t['theme']}({t['performance']:+.1f}%)" for t in short_themes[:5]
@@ -374,8 +374,8 @@ def _fetch_legacy_theme_analysis() -> str:
             bot5_s = [
                 f"{t['theme']}({t['performance']:+.1f}%)" for t in short_themes[-5:]
             ]
-            theme_str_parts.append(f"- 短期(5日) Top5: {', '.join(top5_s)}")
-            theme_str_parts.append(f"- 短期(5日) Bottom5: {', '.join(bot5_s)}")
+            theme_str_parts.append(f"- 短期(1週間) Top5: {', '.join(top5_s)}")
+            theme_str_parts.append(f"- 短期(1週間) Bottom5: {', '.join(bot5_s)}")
 
         med_themes = get_ranked_themes("1ヶ月")
         if med_themes:

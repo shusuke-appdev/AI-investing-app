@@ -19,7 +19,7 @@ def render_theme_tab():
     market_type = st.session_state.get("market_type", "US")
     market_label = "🇯🇵 日本市場" if market_type == "JP" else "🇺🇸 米国市場"
 
-    st.markdown(f"## 🎯 テーマ別トレンド ({market_label})")
+    st.markdown(f"## 🎯 テーマランキング ({market_label})")
 
     # 期間選択（タブ形式）
     period_names = list(PERIODS.keys())

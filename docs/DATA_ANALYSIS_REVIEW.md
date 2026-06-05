@@ -13,11 +13,12 @@
 
 ## 市場分析の配置
 
-通常の市場分析フローは次の3段階に整理されている。
+通常の市場分析フローは次の4段階に整理されている。
 
 1. 軽量概要: `build_market_summary_context()` が指数、セクター、商品、FX、暗号資産などの初期表示に必要な市場データだけを取得する
-2. 詳細監視: `build_market_details_context()` が市場環境評価、IBD式市場状態、マイクロストラクチャー、テーマモメンタム、信用ストレス、ETFフローproxy、日経平均6条件、資金流入セクター判定、市場の歪み検知を追加する
-3. オプション更新: `build_market_options_context()` が SPY / QQQ / IWM のオプション分析を明示操作で更新し、オプション依存の市場環境評価だけを再計算する
+2. 中難易度詳細: `build_market_medium_context()` が市場環境評価、IBD式市場状態、マイクロストラクチャー、テーマモメンタム、総合市場監視、ETFリーダーシップproxy、日経平均6条件、資金流入セクター判定を追加する
+3. 高難易度詳細: `build_market_high_context()` がFRED信用ストレスと市場の歪み検知を追加し、FREDが遅い場合はstale cacheまたは部分成功として扱う
+4. オプション更新: `build_market_options_context()` が SPY / QQQ / IWM のオプション分析を明示操作で更新し、オプション依存の市場環境評価だけを再計算する
 
 今回の整理で、Reflex state 内にあった市場表示用の整形処理を `src/services/market_presentation_service.py` に移し、`frontend/state/market_state.py` はイベント、loading/error、表示モデル保持に集中する形へ寄せた。
 

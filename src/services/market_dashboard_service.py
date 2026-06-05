@@ -33,7 +33,31 @@ from src.stock_data_provider import get_valuation_metrics
 
 MARKET_SUMMARY_FRESH_SECONDS = 300
 MARKET_SUMMARY_STALE_SECONDS = 86400
+MARKET_DETAILS_STALE_SECONDS = 3 * 86400
 MARKET_CONTEXT_CACHE_NAMESPACE = "market_context_cache"
+DETAIL_STAGE_ORDER = ("low", "medium", "high", "options")
+DETAIL_STAGE_DEFAULTS = {
+    "low": {
+        "label": "低: サマリー/キャッシュ",
+        "difficulty": "低",
+        "summary": "主要指数と前回成功した監視結果を先に表示します。",
+    },
+    "medium": {
+        "label": "中: 市場状態/フロー",
+        "difficulty": "中",
+        "summary": "IBD式市場状態、モメンタム、ETF proxy、セクター資金流入を更新します。",
+    },
+    "high": {
+        "label": "高: 信用/FRED/歪み",
+        "difficulty": "高",
+        "summary": "FRED信用ストレスと市場の歪み検知を更新します。",
+    },
+    "options": {
+        "label": "高: オプション",
+        "difficulty": "高",
+        "summary": "主要ETFのオプション分析を更新します。",
+    },
+}
 
 
 def load_cached_market_summary_context(
@@ -45,6 +69,19 @@ def load_cached_market_summary_context(
         market_type,
         "summary",
         max_age_seconds=MARKET_SUMMARY_STALE_SECONDS,
+        fresh_seconds=MARKET_SUMMARY_FRESH_SECONDS,
+    )
+
+
+def load_cached_market_full_context(
+    market_type: str = "US",
+) -> MarketContext | None:
+    """Load the last successful detailed context for immediate watch display."""
+
+    return _load_context_cache(
+        market_type,
+        "full",
+        max_age_seconds=MARKET_DETAILS_STALE_SECONDS,
         fresh_seconds=MARKET_SUMMARY_FRESH_SECONDS,
     )
 
@@ -82,6 +119,14 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
         quality_warnings=list(errors),
         errors=errors,
         cache_status="live",
+        detail_stages=_updated_stage_statuses(
+            {},
+            "low",
+            "live",
+            cache_status="live",
+            fetched_at=_utc_now(),
+            summary="主要指数と市場サマリーを取得しました。",
+        ),
     )
     if market_data:
         _save_context_cache(context, "summary")
@@ -92,7 +137,21 @@ def build_market_details_context(
     market_type: str = "US",
     market_context: MarketContext | dict[str, Any] | None = None,
 ) -> MarketContext:
-    """Build non-option detailed monitoring data for explicit refresh actions."""
+    """Build detailed monitoring data for legacy callers.
+
+    The UI now calls the medium/high builders separately so it can yield after
+    each stage. This wrapper preserves the previous single-call behavior.
+    """
+
+    medium = build_market_medium_context(market_type, market_context)
+    return build_market_high_context(market_type, medium)
+
+
+def build_market_medium_context(
+    market_type: str = "US",
+    market_context: MarketContext | dict[str, Any] | None = None,
+) -> MarketContext:
+    """Build medium-cost market state, momentum, and flow diagnostics."""
 
     base = _coerce_context(market_context) or build_market_summary_context(market_type)
     errors = list(base.errors)
@@ -121,18 +180,10 @@ def build_market_details_context(
     def sector_flow_task() -> dict[str, Any]:
         return build_sector_flow_context()
 
-    def credit_stress_task() -> dict[str, Any]:
-        return build_credit_stress_monitor(market_type)
-
     def flow_monitor_task() -> dict[str, Any]:
         return build_sector_flow_monitor(market_type)
 
-    def distortions_task() -> dict[str, Any]:
-        if market_type != "US":
-            return {}
-        return detect_market_distortions(market_type, max_themes=30, top_n=5)
-
-    with ThreadPoolExecutor(max_workers=9) as executor:
+    with ThreadPoolExecutor(max_workers=7) as executor:
         futures = {
             "evaluation": executor.submit(evaluation_task),
             "ibd_regime": executor.submit(ibd_task),
@@ -140,33 +191,32 @@ def build_market_details_context(
             "momentum": executor.submit(momentum_task),
             "monitor": executor.submit(monitor_task),
             "sector_flow": executor.submit(sector_flow_task),
-            "credit_stress": executor.submit(credit_stress_task),
             "flow_monitor": executor.submit(flow_monitor_task),
-            "market_distortions": executor.submit(distortions_task),
         }
         results = {
             name: _future_result(future, errors) for name, future in futures.items()
         }
+    sector_flow = results.get("sector_flow") or base.sector_flow
+    flow_monitor = results.get("flow_monitor") or base.flow_monitor
     japan_conditions = _safe_call(
-        lambda: build_japan_conditions_context(
-            base.market_data, results.get("sector_flow") or {}
-        ),
-        {},
+        lambda: build_japan_conditions_context(base.market_data, sector_flow),
+        base.japan_conditions,
         errors,
     )
     cross_market = _safe_call(
-        lambda: build_cross_market_context(results.get("sector_flow") or {}),
-        {},
+        lambda: build_cross_market_context(sector_flow),
+        base.cross_market,
         errors,
     )
-    ibd_regime = results.get("ibd_regime") or {}
+    ibd_regime = results.get("ibd_regime") or base.ibd_regime
     regime_playbook = (
         get_market_playbook(str(ibd_regime.get("status_key", ""))) if ibd_regime else {}
     )
     evaluation = _merge_ibd_signal(
-        results.get("evaluation") or {},
+        results.get("evaluation") or base.evaluation,
         ibd_regime,
     )
+    flow_alignment = build_flow_alignment_context(flow_monitor, sector_flow)
 
     context = MarketContext(
         market_type=market_type,
@@ -176,19 +226,20 @@ def build_market_details_context(
         evaluation=evaluation,
         ibd_regime=ibd_regime,
         regime_playbook=regime_playbook,
-        microstructure=results.get("microstructure") or {},
-        momentum=results.get("momentum") or {},
-        monitor=results.get("monitor") or {},
-        market_distortions=results.get("market_distortions") or {},
+        microstructure=results.get("microstructure") or base.microstructure,
+        momentum=results.get("momentum") or base.momentum,
+        monitor=results.get("monitor") or base.monitor,
+        market_distortions=base.market_distortions,
         japan_conditions=japan_conditions,
-        sector_flow=results.get("sector_flow") or {},
-        credit_stress=results.get("credit_stress") or {},
-        flow_monitor=results.get("flow_monitor") or {},
+        sector_flow=sector_flow,
+        credit_stress=base.credit_stress,
+        flow_monitor=flow_monitor,
+        flow_alignment=flow_alignment,
         cross_market=cross_market,
         data_status=[
             *base.data_status,
             DataResult(
-                name="market_details",
+                name="market_details_medium",
                 source="market_dashboard_service",
                 fetched_at=_utc_now(),
                 is_partial=bool(errors),
@@ -207,51 +258,18 @@ def build_market_details_context(
                 cache_status="computed",
             ),
             DataResult(
-                name="market_distortions",
-                source="sector_theme_diagnostics",
-                fetched_at=_utc_now(),
-                is_partial=not bool(results.get("market_distortions")),
-                error="; ".join(
-                    (results.get("market_distortions") or {}).get(
-                        "quality_warnings", []
-                    )[:3]
-                ),
-                cache_status="computed",
-            ),
-            DataResult(
                 name="sector_flow",
                 source="sector_flow_service",
                 fetched_at=_utc_now(),
-                is_partial=not bool(results.get("sector_flow")),
+                is_partial=not bool(sector_flow),
                 cache_status="live",
             ),
             DataResult(
-                name="credit_stress",
-                source=(results.get("credit_stress") or {}).get("source", ""),
-                fetched_at=(results.get("credit_stress") or {}).get("fetched_at", ""),
-                is_partial=bool(
-                    (results.get("credit_stress") or {}).get("is_partial", False)
-                ),
-                error="; ".join(
-                    (results.get("credit_stress") or {}).get("warnings", [])
-                ),
-                cache_status=(results.get("credit_stress") or {}).get(
-                    "cache_status", "live"
-                ),
-                cache_age_seconds=_optional_float(
-                    (results.get("credit_stress") or {}).get("cache_age_seconds")
-                ),
-            ),
-            DataResult(
                 name="flow_monitor",
-                source=(results.get("flow_monitor") or {}).get("source", ""),
+                source=flow_monitor.get("source", ""),
                 fetched_at=_utc_now(),
-                is_partial=bool(
-                    (results.get("flow_monitor") or {}).get("is_partial", False)
-                ),
-                error="; ".join(
-                    (results.get("flow_monitor") or {}).get("warnings", [])
-                ),
+                is_partial=bool(flow_monitor.get("is_partial", False)),
+                error="; ".join(flow_monitor.get("warnings", [])),
                 cache_status="live",
             ),
             DataResult(
@@ -274,16 +292,138 @@ def build_market_details_context(
         quality_warnings=_merge_warnings(
             base.quality_warnings,
             options.quality_warnings,
-            (results.get("sector_flow") or {}).get("quality_warnings", []),
-            (results.get("credit_stress") or {}).get("warnings", []),
-            (results.get("flow_monitor") or {}).get("warnings", []),
+            sector_flow.get("quality_warnings", []),
+            flow_monitor.get("warnings", []),
             ibd_regime.get("quality_warnings", []) if ibd_regime else [],
-            (results.get("market_distortions") or {}).get("quality_warnings", []),
             japan_conditions.get("quality_warnings", []) if japan_conditions else [],
             errors,
         ),
         cache_status="live" if not base.is_stale else base.cache_status,
         cache_age_seconds=base.cache_age_seconds,
+        detail_stages=_updated_stage_statuses(
+            base.detail_stages,
+            "medium",
+            "partial" if errors else "live",
+            cache_status="live",
+            fetched_at=_utc_now(),
+            summary="市場状態、モメンタム、ETF proxy、セクター資金流入を更新しました。",
+            warnings=errors,
+        ),
+    )
+    if context.market_data:
+        _save_context_cache(context, "full")
+    return context
+
+
+def build_market_high_context(
+    market_type: str = "US",
+    market_context: MarketContext | dict[str, Any] | None = None,
+) -> MarketContext:
+    """Build high-cost credit stress and distortion diagnostics."""
+
+    base = _coerce_context(market_context) or build_market_summary_context(market_type)
+    errors = list(base.errors)
+
+    def credit_stress_task() -> dict[str, Any]:
+        return build_credit_stress_monitor(market_type)
+
+    def distortions_task() -> dict[str, Any]:
+        if market_type != "US":
+            return {}
+        return detect_market_distortions(market_type, max_themes=30, top_n=5)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {
+            "credit_stress": executor.submit(credit_stress_task),
+            "market_distortions": executor.submit(distortions_task),
+        }
+        results = {
+            name: _future_result(future, errors) for name, future in futures.items()
+        }
+
+    credit_stress = results.get("credit_stress") or base.credit_stress
+    market_distortions = results.get("market_distortions") or base.market_distortions
+    context = MarketContext(
+        market_type=market_type,
+        market_data=base.market_data,
+        market_config=base.market_config,
+        options=base.options,
+        evaluation=base.evaluation,
+        ibd_regime=base.ibd_regime,
+        regime_playbook=base.regime_playbook,
+        microstructure=base.microstructure,
+        momentum=base.momentum,
+        monitor=base.monitor,
+        market_distortions=market_distortions,
+        japan_conditions=base.japan_conditions,
+        sector_flow=base.sector_flow,
+        credit_stress=credit_stress,
+        flow_monitor=base.flow_monitor,
+        flow_alignment=base.flow_alignment,
+        cross_market=base.cross_market,
+        data_status=[
+            *base.data_status,
+            DataResult(
+                name="market_details_high",
+                source="market_dashboard_service",
+                fetched_at=_utc_now(),
+                is_partial=bool(errors),
+                error="; ".join(errors) if errors else "",
+                cache_status="live",
+            ),
+            DataResult(
+                name="market_distortions",
+                source="sector_theme_diagnostics",
+                fetched_at=_utc_now(),
+                is_partial=not bool(market_distortions),
+                error="; ".join(market_distortions.get("quality_warnings", [])[:3]),
+                cache_status="computed",
+            ),
+            DataResult(
+                name="credit_stress",
+                source=credit_stress.get("source", ""),
+                fetched_at=credit_stress.get("fetched_at", ""),
+                is_stale=bool(credit_stress.get("is_stale", False)),
+                is_partial=bool(credit_stress.get("is_partial", False)),
+                error="; ".join(credit_stress.get("warnings", [])),
+                cache_status=credit_stress.get("cache_status", "live"),
+                cache_age_seconds=_optional_float(
+                    credit_stress.get("cache_age_seconds")
+                ),
+            ),
+        ],
+        errors=errors,
+        source="live_details_high",
+        fetched_at=_utc_now(),
+        is_stale=base.is_stale or bool(credit_stress.get("is_stale", False)),
+        is_partial=bool(errors)
+        or base.is_partial
+        or bool(credit_stress.get("is_partial", False))
+        or not bool(market_distortions),
+        quality_warnings=_merge_warnings(
+            base.quality_warnings,
+            credit_stress.get("warnings", []),
+            market_distortions.get("quality_warnings", []),
+            errors,
+        ),
+        cache_status=credit_stress.get("cache_status", base.cache_status),
+        cache_age_seconds=_optional_float(credit_stress.get("cache_age_seconds"))
+        or base.cache_age_seconds,
+        detail_stages=_updated_stage_statuses(
+            base.detail_stages,
+            "high",
+            "partial"
+            if errors or bool(credit_stress.get("is_partial", False))
+            else "live",
+            cache_status=credit_stress.get("cache_status", "live"),
+            fetched_at=credit_stress.get("fetched_at", "") or _utc_now(),
+            summary="信用ストレスと市場の歪み検知を更新しました。",
+            warnings=_merge_warnings(
+                credit_stress.get("warnings", []),
+                market_distortions.get("quality_warnings", []),
+                errors,
+            ),
+        ),
     )
     if context.market_data:
         _save_context_cache(context, "full")
@@ -336,6 +476,7 @@ def build_market_options_context(
         sector_flow=base.sector_flow,
         credit_stress=base.credit_stress,
         flow_monitor=base.flow_monitor,
+        flow_alignment=base.flow_alignment,
         cross_market=base.cross_market,
         data_status=[
             *base.data_status,
@@ -362,6 +503,16 @@ def build_market_options_context(
         if options.cache_status != "live"
         else base.cache_status,
         cache_age_seconds=options.cache_age_seconds or base.cache_age_seconds,
+        detail_stages=_updated_stage_statuses(
+            base.detail_stages,
+            "options",
+            "partial" if options.is_partial else "live",
+            cache_status=options.cache_status,
+            fetched_at=options.fetched_at or _utc_now(),
+            summary="主要ETFのオプション分析を更新しました。",
+            warnings=options.quality_warnings
+            + ([options.error_message] if options.error_message else []),
+        ),
     )
     if context.market_data:
         _save_context_cache(context, "full")
@@ -401,6 +552,57 @@ def build_market_monitor_context(option_data: list[dict[str, Any]] | None) -> di
     }
 
 
+def build_flow_alignment_context(
+    flow_monitor: dict[str, Any] | None,
+    sector_flow: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Explain how ETF leadership proxy and sector-flow diagnostics should be read."""
+
+    flow = flow_monitor or {}
+    sectors = sector_flow or {}
+    etf_leader = (flow.get("leaders") or [{}])[0]
+    us_leader = ((sectors.get("markets") or {}).get("US", {}).get("leaders") or [{}])[0]
+    jp_leader = ((sectors.get("markets") or {}).get("JP", {}).get("leaders") or [{}])[0]
+    flow_status = str(flow.get("status") or "unavailable")
+    if flow_status == "risk_off":
+        alignment_label = "注意"
+        summary = (
+            "ETFリーダーシップproxyはリスクオフ寄りです。"
+            "セクター/テーマ候補は小さく扱い、信用・銀行系の弱さを優先確認します。"
+        )
+    elif etf_leader and us_leader:
+        alignment_label = "整合"
+        summary = (
+            "ETFリーダーシップproxyで市場全体の資金圧力を確認し、"
+            "セクター/テーマ資金流入判定で具体候補を絞ります。"
+        )
+    else:
+        alignment_label = "未判定"
+        summary = "片方のデータが不足しているため、役割分担だけを表示します。"
+
+    return {
+        "alignment_label": alignment_label,
+        "summary": summary,
+        "etf_role": "市場全体のリスクオン/オフ、信用・銀行・成長株の確認シグナル。",
+        "sector_role": "具体的なセクター/テーマ候補、押し目待ち・観察などの調査ラベル。",
+        "etf_leader": {
+            "ticker": etf_leader.get("ticker", ""),
+            "label": etf_leader.get("label", ""),
+            "score": etf_leader.get("leadership_score", 0.0),
+        },
+        "us_sector_leader": {
+            "theme": us_leader.get("theme", ""),
+            "score": us_leader.get("flow_score", 0.0),
+            "action": us_leader.get("action", ""),
+        },
+        "jp_theme_leader": {
+            "theme": jp_leader.get("theme", ""),
+            "score": jp_leader.get("flow_score", 0.0),
+            "action": jp_leader.get("action", ""),
+        },
+    }
+
+
 def format_market_context_for_ai(context: MarketContext) -> str:
     """Create a compact prompt section from already computed monitoring context."""
 
@@ -423,6 +625,16 @@ def format_market_context_for_ai(context: MarketContext) -> str:
         parts.append("- Data status: " + "; ".join(status_parts))
     if context.quality_warnings:
         parts.append("- Data quality: " + "; ".join(context.quality_warnings[:6]))
+    if context.detail_stages:
+        stage_parts = []
+        for key in DETAIL_STAGE_ORDER:
+            item = context.detail_stages.get(key) or {}
+            if item:
+                stage_parts.append(
+                    f"{item.get('label', key)}={item.get('status_label', item.get('status', 'unknown'))}"
+                )
+        if stage_parts:
+            parts.append("- Detail stages: " + "; ".join(stage_parts))
     if context.options.quality_warnings:
         parts.append(
             "- Options data quality: " + "; ".join(context.options.quality_warnings[:6])
@@ -512,7 +724,8 @@ def format_market_context_for_ai(context: MarketContext) -> str:
             parts.append(
                 "- Bullish distortions: "
                 + "; ".join(
-                    f"{item.get('theme')} gap={float(item.get('distortion_score', 0.0)):.2f}"
+                    f"{item.get('theme')} ({_ticker_list_text(item.get('tickers'))}) "
+                    f"gap={float(item.get('distortion_score', 0.0)):.2f}"
                     for item in bullish[:5]
                 )
             )
@@ -520,7 +733,8 @@ def format_market_context_for_ai(context: MarketContext) -> str:
             parts.append(
                 "- Bearish distortions: "
                 + "; ".join(
-                    f"{item.get('theme')} gap={float(item.get('distortion_score', 0.0)):.2f}"
+                    f"{item.get('theme')} ({_ticker_list_text(item.get('tickers'))}) "
+                    f"gap={float(item.get('distortion_score', 0.0)):.2f}"
                     for item in bearish[:5]
                 )
             )
@@ -571,6 +785,13 @@ def format_market_context_for_ai(context: MarketContext) -> str:
                     f"continuation={leader.get('continuation')}, "
                     f"action={leader.get('action')})"
                 )
+
+    flow_alignment = context.flow_alignment or {}
+    if flow_alignment:
+        parts.append("[ETF proxy / sector-flow role split]")
+        parts.append(f"- {flow_alignment.get('summary', '')}")
+        parts.append(f"- ETF proxy role: {flow_alignment.get('etf_role', '')}")
+        parts.append(f"- Sector/theme role: {flow_alignment.get('sector_role', '')}")
 
     japan = context.japan_conditions or {}
     if japan:
@@ -671,6 +892,14 @@ def _display_percent(value: Any) -> str:
     if isinstance(value, (int, float)):
         return f"{value:.2%}"
     return "unknown"
+
+
+def _ticker_list_text(value: Any) -> str:
+    if not value:
+        return "representative tickers unavailable"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item) for item in value[:5])
+    return str(value)
 
 
 def _coerce_context(
@@ -780,7 +1009,96 @@ def _load_context_cache(
             context.quality_warnings,
             [f"Using cached market summary from {context.fetched_at}."],
         )
+    context.detail_stages = _cached_stage_statuses(
+        context.detail_stages,
+        read.is_stale,
+        context.cache_status,
+        read.fetched_at,
+    )
     return context
+
+
+def _updated_stage_statuses(
+    existing: dict[str, dict[str, Any]] | None,
+    key: str,
+    status: str,
+    *,
+    cache_status: str = "",
+    fetched_at: str = "",
+    summary: str = "",
+    warnings: list[str] | None = None,
+) -> dict[str, dict[str, Any]]:
+    stages = _default_stage_statuses()
+    for stage_key, payload in (existing or {}).items():
+        if isinstance(payload, dict):
+            stages[stage_key] = {**stages.get(stage_key, {}), **payload}
+    default = DETAIL_STAGE_DEFAULTS.get(key, {})
+    stages[key] = {
+        **stages.get(key, {}),
+        "key": key,
+        "label": default.get("label", key),
+        "difficulty": default.get("difficulty", ""),
+        "status": status,
+        "status_label": _stage_status_label(status),
+        "cache_status": cache_status,
+        "fetched_at": fetched_at,
+        "summary": summary or default.get("summary", ""),
+        "quality_warnings": _merge_warnings(warnings or []),
+    }
+    return {stage_key: stages[stage_key] for stage_key in DETAIL_STAGE_ORDER}
+
+
+def _default_stage_statuses() -> dict[str, dict[str, Any]]:
+    return {
+        key: {
+            "key": key,
+            "label": payload["label"],
+            "difficulty": payload["difficulty"],
+            "status": "pending",
+            "status_label": "未取得",
+            "cache_status": "",
+            "fetched_at": "",
+            "summary": payload["summary"],
+            "quality_warnings": [],
+        }
+        for key, payload in DETAIL_STAGE_DEFAULTS.items()
+    }
+
+
+def _cached_stage_statuses(
+    existing: dict[str, dict[str, Any]] | None,
+    is_stale: bool,
+    cache_status: str,
+    fetched_at: str,
+) -> dict[str, dict[str, Any]]:
+    stages = _default_stage_statuses()
+    for key, payload in (existing or {}).items():
+        if not isinstance(payload, dict):
+            continue
+        status = str(payload.get("status") or "pending")
+        if status in {"live", "partial", "cache"}:
+            status = "stale_cache" if is_stale else "cache"
+        stages[key] = {
+            **stages.get(key, {}),
+            **payload,
+            "status": status,
+            "status_label": _stage_status_label(status),
+            "cache_status": cache_status,
+            "fetched_at": fetched_at or payload.get("fetched_at", ""),
+        }
+    return {stage_key: stages[stage_key] for stage_key in DETAIL_STAGE_ORDER}
+
+
+def _stage_status_label(status: str) -> str:
+    return {
+        "pending": "未取得",
+        "loading": "取得中",
+        "live": "最新",
+        "partial": "一部取得",
+        "cache": "キャッシュ",
+        "stale_cache": "古いキャッシュ",
+        "failed": "取得失敗",
+    }.get(status, status)
 
 
 def _utc_now() -> str:

@@ -203,3 +203,9 @@ streamlit run legacy_streamlit/app.py
 - Moved MarketContext-to-Reflex display formatting out of `frontend/state/market_state.py` into `src/services/market_presentation_service.py`, so MarketState now focuses on events, loading/error flags, and display model assignment.
 - Changed AI Market Recap to reuse supplied/built `MarketContext` momentum, options, and monitoring data instead of refetching theme and market trend data on the normal path; legacy fallback remains only when context construction fails.
 - Extended `StockSignalContext` with SMART criteria and news headlines, and changed AI Stock Recap to reuse displayed stock context instead of silently dropping displayed news or recomputing technical/SMART inputs.
+
+# Session update: 2026-06-06 staged market watch / theme ranking / stock route
+- Added staged `/market-watch` detail fetching: low cache/summary, medium market state and flows, high FRED credit stress and distortions, then options, with per-stage status and cache metadata in `MarketContext` and Reflex display state.
+- Hardened FRED credit stress retrieval to prefer stale cache and skip slow pandas-datareader fallback for the market-watch high stage, while keeping proxy warnings instead of blocking the dashboard.
+- Renamed Theme Trend surfaces to Theme Ranking, removed the `5日` and `2週間` selector windows, and replaced the theme list with cards that show rank, performance, and constituent stock rows.
+- Preserved the stock analysis data path while adding `/stock` page-load flag normalization and a wider clickable sidebar link target.

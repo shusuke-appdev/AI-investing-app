@@ -106,7 +106,18 @@ def option_analysis_component() -> rx.Component:
     """Render option analysis section."""
 
     return rx.box(
-        rx.heading("オプション分析", size="5", margin_bottom="1rem"),
+        rx.hstack(
+            rx.heading("オプション分析", size="5"),
+            rx.spacer(),
+            rx.badge(
+                MarketState.option_status,
+                color_scheme=_quality_color(MarketState.option_status),
+                variant="surface",
+            ),
+            width="100%",
+            align_items="center",
+            margin_bottom="1rem",
+        ),
         rx.cond(
             MarketState.market_type == "JP",
             rx.callout(

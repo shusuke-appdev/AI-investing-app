@@ -298,6 +298,23 @@ def _distortion_item(item) -> rx.Component:
             color=rx.color("gray", 10),
         ),
         rx.text(item.rationale, size="1", color=rx.color("gray", 11)),
+        rx.cond(
+            item.tickers.length() > 0,
+            rx.hstack(
+                rx.foreach(
+                    item.tickers,
+                    lambda ticker: rx.badge(
+                        ticker,
+                        variant="surface",
+                        color_scheme="gray",
+                    ),
+                ),
+                spacing="1",
+                wrap="wrap",
+                margin_top="0.35rem",
+            ),
+            rx.fragment(),
+        ),
         width="100%",
         padding_y="0.5rem",
         border_bottom=f"1px solid {rx.color('gray', 3)}",
@@ -416,7 +433,7 @@ def _market_monitor_panel() -> rx.Component:
 def _credit_and_flow_panel() -> rx.Component:
     return rx.box(
         rx.text(
-            "信用ストレス速度 / リーディングETFフローproxy",
+            "信用ストレス速度 / ETFリーダーシップproxy",
             weight="bold",
             size="2",
             margin_bottom="0.5rem",
@@ -528,7 +545,7 @@ def _credit_confirmation_row(item) -> rx.Component:
 def _flow_proxy_card() -> rx.Component:
     return rx.box(
         rx.hstack(
-            rx.text("リーディングETFフローproxy", weight="bold", size="1"),
+            rx.text("ETFリーダーシップproxy", weight="bold", size="1"),
             rx.spacer(),
             rx.badge(MarketState.flow_monitor.status, color_scheme="gray"),
             width="100%",
@@ -603,7 +620,7 @@ def _sector_flow_panel() -> rx.Component:
     return rx.box(
         rx.hstack(
             rx.text(
-                "資金流入セクター判定",
+                "セクター/テーマ資金流入判定",
                 weight="bold",
                 size="2",
             ),
@@ -615,6 +632,37 @@ def _sector_flow_panel() -> rx.Component:
             ),
             width="100%",
             align_items="center",
+        ),
+        rx.cond(
+            MarketState.flow_alignment.summary != "",
+            rx.box(
+                rx.hstack(
+                    rx.badge(
+                        MarketState.flow_alignment.alignment_label,
+                        color_scheme="blue",
+                        variant="surface",
+                    ),
+                    rx.text(
+                        MarketState.flow_alignment.summary,
+                        size="1",
+                        color=rx.color("gray", 10),
+                    ),
+                    width="100%",
+                    align_items="center",
+                    spacing="2",
+                ),
+                rx.text(
+                    "ETF proxy: "
+                    + MarketState.flow_alignment.etf_role
+                    + " / Sector flow: "
+                    + MarketState.flow_alignment.sector_role,
+                    size="1",
+                    color=rx.color("gray", 9),
+                    margin_top="0.2rem",
+                ),
+                margin_top="0.5rem",
+            ),
+            rx.fragment(),
         ),
         rx.cond(
             MarketState.cross_market_stance != "",

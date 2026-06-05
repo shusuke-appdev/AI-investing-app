@@ -5,14 +5,17 @@ import reflex as rx
 
 from src.services.market_analyst_service import generate_market_analysis_report
 from src.services.market_dashboard_service import (
-    build_market_details_context,
+    build_market_high_context,
+    build_market_medium_context,
     build_market_options_context,
     build_market_summary_context,
+    load_cached_market_full_context,
     load_cached_market_summary_context,
 )
 from src.services.market_presentation_service import (
     CreditStressDisplay,
     DistortionItem,
+    FlowAlignmentDisplay,
     FlowProxyDisplay,
     IbdRegimeDisplay,
     JapanConditionDisplay,
@@ -23,6 +26,7 @@ from src.services.market_presentation_service import (
     OptionSummary,
     RegimePlaybookDisplay,
     SectorFlowGroup,
+    StageStatusDisplay,
     build_market_display_context,
 )
 
@@ -60,6 +64,8 @@ class MarketState(rx.State):
     cross_market_stance: str = ""
     credit_stress: CreditStressDisplay = CreditStressDisplay()
     flow_monitor: FlowProxyDisplay = FlowProxyDisplay()
+    flow_alignment: FlowAlignmentDisplay = FlowAlignmentDisplay()
+    detail_stages: list[StageStatusDisplay] = []
     japan_conditions: list[JapanConditionDisplay] = []
     japan_conditions_summary: str = ""
     japan_conditions_score_label: str = ""
@@ -121,17 +127,69 @@ class MarketState(rx.State):
     async def refresh_market_details(self):
         self.is_fetching_details = True
         self.error_msg = ""
+        self._set_stage_status("low", "loading", "前回成功データを確認中...")
         yield
 
+        cached_context = await asyncio.to_thread(
+            load_cached_market_full_context, self.market_type
+        )
+        if cached_context:
+            self._apply_market_context(cached_context)
+            yield
+        else:
+            self._set_stage_status("low", "live", "表示中の市場サマリーを使用します。")
+            yield
+
+        base_context = self.market_context or None
         try:
+            self._set_stage_status(
+                "medium", "loading", "市場状態と資金フローを取得中..."
+            )
+            yield
             context = await asyncio.to_thread(
-                build_market_details_context,
+                build_market_medium_context,
                 self.market_type,
-                self.market_context or None,
+                base_context,
+            )
+            self._apply_market_context(context)
+            base_context = self.market_context or None
+            yield
+        except Exception as exc:
+            self._set_stage_status("medium", "failed", str(exc))
+            self.error_msg = f"Medium stage failed: {exc}"
+            yield
+
+        try:
+            self._set_stage_status(
+                "high", "loading", "信用ストレスと歪み検知を取得中..."
+            )
+            yield
+            context = await asyncio.to_thread(
+                build_market_high_context,
+                self.market_type,
+                base_context,
+            )
+            self._apply_market_context(context)
+            base_context = self.market_context or None
+            yield
+        except Exception as exc:
+            self._set_stage_status("high", "failed", str(exc))
+            self.error_msg = f"High stage failed: {exc}"
+            yield
+
+        try:
+            self._set_stage_status("options", "loading", "オプション分析を取得中...")
+            yield
+            context = await asyncio.to_thread(
+                build_market_options_context,
+                self.market_type,
+                base_context,
             )
             self._apply_market_context(context)
         except Exception as exc:
-            self.error_msg = f"Failed to refresh market details: {exc}"
+            self.option_status = "failed"
+            self.option_error_msg = f"Failed to refresh option data: {exc}"
+            self._set_stage_status("options", "failed", str(exc))
         finally:
             self.is_fetching_details = False
             yield
@@ -140,6 +198,7 @@ class MarketState(rx.State):
         self.is_fetching_options = True
         self.error_msg = ""
         self.option_error_msg = ""
+        self._set_stage_status("options", "loading", "オプション分析を取得中...")
         yield
 
         try:
@@ -152,6 +211,7 @@ class MarketState(rx.State):
         except Exception as exc:
             self.option_status = "failed"
             self.option_error_msg = f"Failed to refresh option data: {exc}"
+            self._set_stage_status("options", "failed", str(exc))
         finally:
             self.is_fetching_options = False
             yield
@@ -245,6 +305,8 @@ class MarketState(rx.State):
         self.cross_market_stance = display.cross_market_stance
         self.credit_stress = display.credit_stress
         self.flow_monitor = display.flow_monitor
+        self.flow_alignment = display.flow_alignment
+        self.detail_stages = display.detail_stages
         self.japan_conditions = display.japan_conditions
         self.japan_conditions_summary = display.japan_conditions_summary
         self.japan_conditions_score_label = display.japan_conditions_score_label
@@ -259,6 +321,57 @@ class MarketState(rx.State):
 
     def _has_visible_market_data(self) -> bool:
         return bool(self.indices_data or self.sectors_data or self.others_data)
+
+    def _set_stage_status(self, key: str, status: str, summary: str = "") -> None:
+        defaults = {
+            "low": ("低: サマリー/キャッシュ", "低"),
+            "medium": ("中: 市場状態/フロー", "中"),
+            "high": ("高: 信用/FRED/歪み", "高"),
+            "options": ("高: オプション", "高"),
+        }
+        existing = {item.key: item for item in self.detail_stages}
+        rows: list[StageStatusDisplay] = []
+        for stage_key in ("low", "medium", "high", "options"):
+            current = existing.get(stage_key)
+            label, difficulty = defaults[stage_key]
+            if current:
+                row = StageStatusDisplay(
+                    key=current.key,
+                    label=current.label,
+                    difficulty=current.difficulty,
+                    status=current.status,
+                    status_label=current.status_label,
+                    cache_status=current.cache_status,
+                    fetched_at=current.fetched_at,
+                    summary=current.summary,
+                    quality_warnings=current.quality_warnings,
+                )
+            else:
+                row = StageStatusDisplay(
+                    key=stage_key,
+                    label=label,
+                    difficulty=difficulty,
+                    status="pending",
+                    status_label="未取得",
+                )
+            if stage_key == key:
+                row.status = status
+                row.status_label = self._stage_status_label(status)
+                row.summary = summary or row.summary
+            rows.append(row)
+        self.detail_stages = rows
+
+    def _stage_status_label(self, status: str) -> str:
+        labels = {
+            "pending": "未取得",
+            "loading": "取得中",
+            "live": "最新",
+            "partial": "一部取得",
+            "cache": "キャッシュ",
+            "stale_cache": "古いキャッシュ",
+            "failed": "取得失敗",
+        }
+        return labels.get(status, status)
 
     def _classify_recap_failure(self, recap: str) -> str:
         if "Gemini API" in recap or "APIキー" in recap:

@@ -161,7 +161,7 @@ def generate_market_recap(
             for a in analysis:
                 context_parts.append(f"  - {a}")
 
-    # テーマ別トレンド
+    # テーマランキング
     if theme_analysis:
         context_parts.append(f"\n{theme_analysis}")
 

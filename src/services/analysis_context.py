@@ -62,7 +62,9 @@ class MarketContext:
     sector_flow: dict[str, Any] = field(default_factory=dict)
     credit_stress: dict[str, Any] = field(default_factory=dict)
     flow_monitor: dict[str, Any] = field(default_factory=dict)
+    flow_alignment: dict[str, Any] = field(default_factory=dict)
     cross_market: dict[str, Any] = field(default_factory=dict)
+    detail_stages: dict[str, dict[str, Any]] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     source: str = ""
@@ -90,7 +92,9 @@ class MarketContext:
             "sector_flow": self.sector_flow,
             "credit_stress": self.credit_stress,
             "flow_monitor": self.flow_monitor,
+            "flow_alignment": self.flow_alignment,
             "cross_market": self.cross_market,
+            "detail_stages": self.detail_stages,
             "data_status": [item.to_dict() for item in self.data_status],
             "errors": self.errors,
             "source": self.source,
@@ -147,7 +151,9 @@ class MarketContext:
             sector_flow=value.get("sector_flow") or {},
             credit_stress=value.get("credit_stress") or {},
             flow_monitor=value.get("flow_monitor") or {},
+            flow_alignment=value.get("flow_alignment") or {},
             cross_market=value.get("cross_market") or {},
+            detail_stages=value.get("detail_stages") or {},
             data_status=data_status,
             errors=list(value.get("errors") or []),
             source=str(value.get("source") or ""),

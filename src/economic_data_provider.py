@@ -18,6 +18,7 @@ ECONOMIC_DATA_CACHE_NAMESPACE = "economic_data_cache"
 FRED_GRAPH_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 DEFAULT_FRESH_SECONDS = 12 * 60 * 60
 DEFAULT_STALE_SECONDS = 14 * 24 * 60 * 60
+DEFAULT_FRED_CSV_TIMEOUT = 12
 
 
 @dataclass
@@ -42,6 +43,9 @@ def fetch_fred_series(
     end: datetime | str | None = None,
     fresh_seconds: int = DEFAULT_FRESH_SECONDS,
     stale_seconds: int = DEFAULT_STALE_SECONDS,
+    prefer_stale_cache: bool = False,
+    csv_timeout: int = DEFAULT_FRED_CSV_TIMEOUT,
+    use_pandas_datareader_fallback: bool = True,
 ) -> EconomicDataResult:
     """Fetch FRED series with fresh-cache reuse and stale fallback."""
 
@@ -54,13 +58,43 @@ def fetch_fred_series(
     cached = cache.read(key, fresh_seconds=fresh_seconds, stale_seconds=stale_seconds)
     if cached.status == "fresh":
         return _result_from_cache(cached)
+    if prefer_stale_cache and cached.is_available:
+        result = _result_from_cache(cached)
+        result.is_partial = True
+        result.warnings = [
+            *result.warnings,
+            "Using cached FRED data before slow live refresh.",
+        ]
+        result.error = "; ".join(result.warnings)
+        return result
 
     warnings: list[str] = []
     try:
-        frame = _fetch_with_fred_csv(ids, start, end)
+        frame = _fetch_with_fred_csv(ids, start, end, timeout=csv_timeout)
         source = "fred_csv"
     except Exception as exc:
         warnings.append(f"FRED CSV failed: {exc}")
+        if cached.is_available and prefer_stale_cache:
+            result = _result_from_cache(cached)
+            result.warnings = [*result.warnings, *warnings]
+            result.error = "; ".join(warnings)
+            result.is_partial = True
+            return result
+        if not use_pandas_datareader_fallback:
+            if cached.is_available:
+                result = _result_from_cache(cached)
+                result.warnings = [*result.warnings, *warnings]
+                result.error = "; ".join(warnings)
+                result.is_partial = True
+                return result
+            return EconomicDataResult(
+                source="failed",
+                fetched_at=utc_now_iso(),
+                is_partial=True,
+                cache_status="failed",
+                warnings=warnings,
+                error="; ".join(warnings),
+            )
         try:
             frame = _fetch_with_pandas_datareader(ids, start, end)
             source = "pandas_datareader"
@@ -115,6 +149,8 @@ def _fetch_with_fred_csv(
     series_ids: list[str],
     start: datetime | str | None,
     end: datetime | str | None,
+    *,
+    timeout: int,
 ) -> pd.DataFrame:
     params = {"id": ",".join(series_ids)}
     start_dt = _coerce_datetime(start)
@@ -127,7 +163,7 @@ def _fetch_with_fred_csv(
         FRED_GRAPH_CSV_URL,
         params=params,
         headers={"User-Agent": "AI-investing-app/1.0"},
-        timeout=45,
+        timeout=timeout,
     )
     response.raise_for_status()
 

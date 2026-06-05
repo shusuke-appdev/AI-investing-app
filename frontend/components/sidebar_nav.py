@@ -30,13 +30,16 @@ def nav_item(text: str, icon: str, url: str) -> rx.Component:
             padding="0.75rem 1rem",
             border_radius="0.5rem",
             width="100%",
+            min_height="44px",
             align_items="center",
             spacing="3",
             transition="all 0.2s ease",
+            cursor="pointer",
         ),
         href=url,
         underline="none",
         width="100%",
+        display="block",
     )
 
 

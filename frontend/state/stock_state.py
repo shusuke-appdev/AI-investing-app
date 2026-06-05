@@ -81,6 +81,14 @@ class StockState(rx.State):
     stock_signal_context: dict[str, Any] = {}
     data_status: list[dict[str, Any]] = []
 
+    def prepare_page(self):
+        """Normalize transient flags before the stock page renders."""
+
+        self.is_fetching = False
+        self.is_generating_analysis = False
+        self.error_msg = ""
+        self.profile_warning = ""
+
     def set_ticker(self, value: str):
         self.ticker = value.upper()
 

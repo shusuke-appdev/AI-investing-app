@@ -142,7 +142,7 @@ def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:
     指定期間での全テーマをパフォーマンス順（降順）で取得します。
 
     Args:
-        period_name: 期間名 ("1日", "5日", etc.)
+        period_name: 期間名 ("1日", "1週間", etc.)
         market_type: "US" または "JP"
 
     Returns:

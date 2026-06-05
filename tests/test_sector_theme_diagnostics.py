@@ -55,7 +55,9 @@ def test_market_distortions_detects_bullish_and_bearish_gaps(monkeypatch):
     result = diagnostics.detect_market_distortions("US", max_themes=2, top_n=5)
 
     assert result["bullish"][0]["theme"] == "Fundamental ignored"
+    assert result["bullish"][0]["tickers"] == ["AAA", "AAB"]
     assert result["bearish"][0]["theme"] == "Flow crowded"
+    assert result["bearish"][0]["tickers"] == ["BBB", "BBC"]
 
 
 def test_stock_sector_theme_context_rates_both_advantages_high(monkeypatch):

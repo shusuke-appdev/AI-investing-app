@@ -45,8 +45,20 @@ def build_credit_stress_monitor(market_type: str = "US") -> dict[str, Any]:
         }
 
     start = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=365 * 10)
-    result = fetch_fred_series(list(TIER1_SERIES), start=start)
-    confirmation_result = fetch_fred_series(list(CONFIRMATION_SERIES), start=start)
+    result = fetch_fred_series(
+        list(TIER1_SERIES),
+        start=start,
+        prefer_stale_cache=True,
+        csv_timeout=8,
+        use_pandas_datareader_fallback=False,
+    )
+    confirmation_result = fetch_fred_series(
+        list(CONFIRMATION_SERIES),
+        start=start,
+        prefer_stale_cache=True,
+        csv_timeout=8,
+        use_pandas_datareader_fallback=False,
+    )
     frame = result.data
     confirmation_frame = confirmation_result.data
     warnings = [*result.warnings, *confirmation_result.warnings]

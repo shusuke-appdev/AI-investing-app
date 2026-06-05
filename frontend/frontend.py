@@ -8,6 +8,7 @@ from frontend.pages.stock import stock_page
 from frontend.state.knowledge_state import KnowledgeState
 from frontend.state.market_state import MarketState
 from frontend.state.portfolio_state import PortfolioState
+from frontend.state.stock_state import StockState
 from frontend.state.theme_state import ThemeState
 
 app = rx.App()
@@ -17,7 +18,12 @@ app.add_page(
     title="Market Intelligence | AI Investing",
     on_load=MarketState.fetch_market_summary_fast,
 )
-app.add_page(stock_page, route="/stock", title="Stock Analysis | AI Investing")
+app.add_page(
+    stock_page,
+    route="/stock",
+    title="Stock Analysis | AI Investing",
+    on_load=StockState.prepare_page,
+)
 app.add_page(
     market_watch_page,
     route="/market-watch",
