@@ -10,6 +10,7 @@ from src.services.trading_plan_service import (
     active_entry_limit_exceeded,
     build_trade_plan,
     display_plan,
+    refresh_confirmation_candidates,
     review_metrics,
 )
 
@@ -133,6 +134,45 @@ class TradingPlanState(rx.State):
 
     async def mark_t3_confirmed(self, plan_id: str):
         await self._set_checkpoint(plan_id, "t3_status", "confirmed")
+
+    async def refresh_checkpoint_candidates(self):
+        """Explicitly fetch daily prices and update T+1/T+3 review candidates."""
+
+        self.is_loading = True
+        self.error_msg = ""
+        self.success_msg = ""
+        yield
+        try:
+            from src.market_data import get_stock_data
+            from src.trading_plan_storage import load_trade_plans, save_trade_plan
+
+            records = await asyncio.to_thread(load_trade_plans)
+            result = await asyncio.to_thread(
+                refresh_confirmation_candidates,
+                records,
+                get_stock_data,
+            )
+            updated_ids = set(result["updated_ids"])
+            for plan in records:
+                if plan.plan_id in updated_ids and not await asyncio.to_thread(
+                    save_trade_plan, plan
+                ):
+                    raise ValueError(
+                        f"{plan.ticker} の確認候補を保存できませんでした。"
+                    )
+            self._assign(records)
+            failures = result["failures"]
+            self.success_msg = (
+                f"T+1/T+3確認候補を{result['updated_count']}件更新しました。"
+            )
+            if failures:
+                failed = ", ".join(sorted(failures))
+                self.error_msg = f"価格取得に失敗した銘柄: {failed}"
+        except Exception as exc:
+            self.error_msg = f"確認候補の更新に失敗しました: {exc}"
+        finally:
+            self.is_loading = False
+            yield
 
     async def add_journal_note(self, plan_id: str):
         self.error_msg = ""

@@ -262,3 +262,8 @@ streamlit run legacy_streamlit/app.py
 - Removed Google Apps Script as a storage backend and deleted the GAS client and Apps Script implementation.
 - Storage selection, Portfolio, Knowledge, Trading Plan, legacy settings UI, documentation, and live smoke now support only local JSON and Supabase.
 - Legacy saved `storage_type=gas` values safely fall back to local storage.
+
+# Session update: 2026-06-13 stock / Trading Plan P1 completion
+- Added memoized `StockAnalysisInputs` so one stock-analysis run shares target and benchmark histories, company information, news, and peer/provider requests across technical, probabilistic, trend, FOMO, Entry Framework, and sector/theme diagnostics.
+- Changed technical multi-timeframe analysis to derive its views from supplied daily history instead of issuing three additional target-ticker requests.
+- Added an explicit Trading Plan T+1/T+3 candidate refresh action that fetches each active ticker once, preserves partial successes, and never performs network work during list rendering.

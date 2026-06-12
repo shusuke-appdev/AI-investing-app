@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from statistics import mean
@@ -284,6 +285,47 @@ def confirmation_stage(entry_date: str, price_df: pd.DataFrame | None) -> str:
     if completed >= 1:
         return "T+1"
     return "T"
+
+
+def refresh_confirmation_candidates(
+    plans: list[TradePlanRecord],
+    history_provider: Callable[[str, str], pd.DataFrame],
+) -> dict[str, Any]:
+    """Mark T+1/T+3 checkpoints eligible using one fetch per active ticker."""
+
+    candidates = [plan for plan in plans if plan.status not in {"closed", "cancelled"}]
+    histories: dict[str, pd.DataFrame] = {}
+    failures: dict[str, str] = {}
+    updated_ids: list[str] = []
+
+    for ticker in dict.fromkeys(plan.ticker for plan in candidates):
+        try:
+            histories[ticker] = history_provider(ticker, "1y")
+        except Exception as exc:
+            failures[ticker] = str(exc)
+
+    for plan in candidates:
+        history = histories.get(plan.ticker)
+        if history is None:
+            continue
+        stage = confirmation_stage(plan.entry_date, history)
+        changed = False
+        if stage in {"T+1", "T+3"} and plan.t1_status == "pending":
+            plan.t1_status = "eligible"
+            changed = True
+        if stage == "T+3" and plan.t3_status == "pending":
+            plan.t3_status = "eligible"
+            changed = True
+        if changed:
+            plan.updated_at = datetime.now().isoformat()
+            updated_ids.append(plan.plan_id)
+
+    return {
+        "updated_ids": updated_ids,
+        "updated_count": len(updated_ids),
+        "fetched_tickers": list(histories),
+        "failures": failures,
+    }
 
 
 def _rule_adherence(plans: list[TradePlanRecord]) -> float:

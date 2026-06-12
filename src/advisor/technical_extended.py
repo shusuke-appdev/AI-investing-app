@@ -164,19 +164,26 @@ def detect_divergence(
     return "none"
 
 
-def analyze_multi_timeframe(ticker: str) -> dict:
+def analyze_multi_timeframe(
+    ticker: str,
+    price_df: pd.DataFrame | None = None,
+) -> dict:
     """
     複数タイムフレームでの分析を実行する。
 
     Returns:
         {"alignment": str, "details": dict}
     """
-    timeframes = {"daily": "1mo", "weekly": "3mo", "monthly": "1y"}
+    timeframes = {"daily": ("1mo", 21), "weekly": ("3mo", 63), "monthly": ("1y", 252)}
     signals: dict[str, str] = {}
 
-    for tf_name, period in timeframes.items():
+    for tf_name, (period, sessions) in timeframes.items():
         try:
-            df = get_stock_data(ticker, period)
+            df = (
+                price_df.tail(sessions)
+                if price_df is not None
+                else get_stock_data(ticker, period)
+            )
             if df.empty or len(df) < 20:
                 signals[tf_name] = "データ不足"
                 continue

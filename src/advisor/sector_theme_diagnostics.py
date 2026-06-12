@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from statistics import mean
 from typing import Any
@@ -134,10 +135,16 @@ def evaluate_stock_sector_theme_context(
     stock_info: dict[str, Any],
     *,
     market_type: str = "US",
+    stock_price_df: pd.DataFrame | None = None,
+    benchmark_price_df: pd.DataFrame | None = None,
+    history_provider: Callable[[str, str], pd.DataFrame] | None = None,
+    info_provider: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build the sector/theme context used by the individual stock page and AI."""
 
     normalized = ticker.strip().upper()
+    history_provider = history_provider or get_stock_data
+    info_provider = info_provider or get_stock_info
     themes = [
         theme
         for theme, tickers in get_themes(market_type).items()
@@ -148,11 +155,28 @@ def evaluate_stock_sector_theme_context(
 
     theme_diagnostics = {
         item.theme: item
-        for item in _evaluate_selected_theme_diagnostics(market_type, themes)
+        for item in _evaluate_selected_theme_diagnostics(
+            market_type,
+            themes,
+            history_provider=history_provider,
+            info_provider=info_provider,
+            benchmark_price_df=benchmark_price_df,
+        )
     }
     stock_fundamental = _fundamental_score(stock_info)
     stock_flow = _flow_score(
-        _safe_history(normalized, "6mo"), _return_profile(_safe_history("SPY", "6mo"))
+        _normalize_history(stock_price_df)
+        if stock_price_df is not None
+        else _safe_history(normalized, "6mo", history_provider),
+        _return_profile(
+            _normalize_history(benchmark_price_df)
+            if benchmark_price_df is not None
+            else _safe_history(
+                "1306.T" if market_type == "JP" else "SPY",
+                "6mo",
+                history_provider,
+            )
+        ),
     )
     fundamentals_are_strong = stock_fundamental >= 0.55
     flows_are_strong = stock_flow >= 0.55
@@ -190,11 +214,21 @@ def evaluate_stock_sector_theme_context(
 def _evaluate_selected_theme_diagnostics(
     market_type: str,
     selected_themes: list[str],
+    *,
+    history_provider: Callable[[str, str], pd.DataFrame] | None = None,
+    info_provider: Callable[..., dict[str, Any]] | None = None,
+    benchmark_price_df: pd.DataFrame | None = None,
 ) -> list[ThemeDiagnostic]:
+    history_provider = history_provider or get_stock_data
+    info_provider = info_provider or get_stock_info
     theme_map = get_themes(market_type)
     diagnostics = []
     benchmark = "SPY" if market_type == "US" else "1306.T"
-    benchmark_returns = _return_profile(_safe_history(benchmark, "6mo"))
+    benchmark_returns = _return_profile(
+        _normalize_history(benchmark_price_df)
+        if benchmark_price_df is not None
+        else _safe_history(benchmark, "6mo", history_provider)
+    )
     for theme in selected_themes:
         tickers = theme_map.get(theme, [])[:THEME_TICKER_LIMIT]
         if not tickers:
@@ -205,13 +239,16 @@ def _evaluate_selected_theme_diagnostics(
         for ticker in tickers:
             try:
                 fundamentals.append(
-                    _fundamental_score(get_stock_info(ticker, include_summary=False))
+                    _fundamental_score(info_provider(ticker, include_summary=False))
                 )
             except Exception as exc:
                 warnings.append(f"{ticker} fundamental data failed: {exc}")
             try:
                 flows.append(
-                    _flow_score(_safe_history(ticker, "6mo"), benchmark_returns)
+                    _flow_score(
+                        _safe_history(ticker, "6mo", history_provider),
+                        benchmark_returns,
+                    )
                 )
             except Exception as exc:
                 warnings.append(f"{ticker} flow data failed: {exc}")
@@ -273,8 +310,17 @@ def _flow_score(frame: pd.DataFrame, benchmark_returns: dict[str, float]) -> flo
     return float(mean(scores)) if scores else 0.0
 
 
-def _safe_history(ticker: str, period: str) -> pd.DataFrame:
-    frame = get_stock_data(ticker, period)
+def _safe_history(
+    ticker: str,
+    period: str,
+    history_provider: Callable[[str, str], pd.DataFrame] | None = None,
+) -> pd.DataFrame:
+    history_provider = history_provider or get_stock_data
+    frame = history_provider(ticker, period)
+    return _normalize_history(frame)
+
+
+def _normalize_history(frame: pd.DataFrame | None) -> pd.DataFrame:
     if frame is None or frame.empty:
         return pd.DataFrame()
     normalized = frame.copy()

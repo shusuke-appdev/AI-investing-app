@@ -120,9 +120,13 @@ def calculate_long_term_ma(close: pd.Series) -> dict:
     return res
 
 
-def analyze_technical(ticker: str, period: str = "5y") -> TechnicalScore | None:
+def analyze_technical(
+    ticker: str,
+    period: str = "5y",
+    price_df: pd.DataFrame | None = None,
+) -> TechnicalScore | None:
     """銘柄の包括的テクニカル分析を実行します。"""
-    df = get_stock_data(ticker, period)
+    df = price_df if price_df is not None else get_stock_data(ticker, period)
     if df.empty or len(df) < 50:
         return None
 
@@ -151,7 +155,7 @@ def analyze_technical(ticker: str, period: str = "5y") -> TechnicalScore | None:
     adx_data = calculate_adx(high, low, close)
     stoch_data = calculate_stochastic_rsi(close)
     fib_data = calculate_fibonacci_levels(high, low)
-    mtf_data = analyze_multi_timeframe(ticker)
+    mtf_data = analyze_multi_timeframe(ticker, df)
 
     # ダイバージェンス
     _gain = close.diff().where(close.diff() > 0, 0).rolling(14).mean()

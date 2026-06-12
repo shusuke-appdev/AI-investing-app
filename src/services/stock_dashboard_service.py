@@ -26,6 +26,7 @@ from src.advisor.trend_follow_diagnostics import (
 from src.market_data import get_stock_data, get_stock_info, get_stock_news_with_status
 from src.services.analysis_context import DataResult, ProvenanceItem, StockSignalContext
 from src.services.provenance_service import stock_provenance
+from src.services.stock_analysis_inputs import StockAnalysisInputs
 
 
 @dataclass
@@ -53,32 +54,60 @@ class StockDashboardContext:
     error_message: str = ""
 
 
-def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
+def build_stock_dashboard_context(
+    ticker: str,
+    inputs: StockAnalysisInputs | None = None,
+) -> StockDashboardContext:
     """Fetch and prepare all non-AI stock dashboard data."""
 
     normalized_ticker = ticker.strip().upper()
+    inputs = inputs or StockAnalysisInputs(
+        normalized_ticker,
+        history_provider=get_stock_data,
+        info_provider=get_stock_info,
+        news_provider=get_stock_news_with_status,
+    )
+    benchmark = inputs.benchmark
     diagnostic_errors: dict[str, str] = {}
     info_data = _safe_analysis(
         "stock_profile",
-        lambda: get_stock_info(normalized_ticker, translate_summary=False),
+        lambda: inputs.info(normalized_ticker),
         {},
+        diagnostic_errors,
+    )
+    long_history_df = _safe_analysis(
+        "long_price_history",
+        lambda: inputs.history(normalized_ticker, "5y"),
+        pd.DataFrame(),
         diagnostic_errors,
     )
     history_df = _safe_analysis(
         "price_history",
-        lambda: get_stock_data(normalized_ticker, "1y"),
+        lambda: inputs.history(normalized_ticker, "1y"),
+        long_history_df,
+        diagnostic_errors,
+    )
+    long_benchmark_df = _safe_analysis(
+        "long_benchmark_history",
+        lambda: inputs.history(benchmark, "5y"),
         pd.DataFrame(),
+        diagnostic_errors,
+    )
+    benchmark_df = _safe_analysis(
+        "benchmark_history",
+        lambda: inputs.history(benchmark, "1y"),
+        long_benchmark_df,
         diagnostic_errors,
     )
     news_result = _safe_analysis(
         "news",
-        lambda: get_stock_news_with_status(normalized_ticker, 5),
+        lambda: inputs.news(normalized_ticker, 5),
         {"items": [], "source_status": "failed", "error_reason": "News unavailable."},
         diagnostic_errors,
     )
     tech_data = _safe_analysis(
         "technical_analysis",
-        lambda: analyze_technical(normalized_ticker, "1y"),
+        lambda: analyze_technical(normalized_ticker, "1y", history_df),
         {},
         diagnostic_errors,
     )
@@ -103,9 +132,11 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
                 generate_probabilistic_stock_signal(
                     normalized_ticker,
                     "5y",
-                    "SPY",
+                    benchmark,
                     info_dict,
                     technical_dict,
+                    long_history_df,
+                    long_benchmark_df,
                 )
             )
         ),
@@ -116,7 +147,12 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         "trend_follow_diagnostics",
         lambda: to_plain_value(
             trend_follow_to_dict(
-                generate_trend_follow_diagnostics(normalized_ticker, "5y", "SPY")
+                generate_trend_follow_diagnostics(
+                    normalized_ticker,
+                    "5y",
+                    benchmark,
+                    long_history_df,
+                )
             )
         ),
         {},
@@ -139,6 +175,8 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
                     info_dict,
                     technical_dict,
                     history_df,
+                    benchmark_df,
+                    inputs.history,
                 )
             )
         ),
@@ -152,6 +190,10 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
                 normalized_ticker,
                 info_dict,
                 market_type="JP" if normalized_ticker.endswith(".T") else "US",
+                stock_price_df=history_df,
+                benchmark_price_df=benchmark_df,
+                history_provider=inputs.history,
+                info_provider=inputs.info,
             )
         ),
         {},
@@ -437,10 +479,10 @@ def _build_data_status(
 ) -> list[DataResult]:
     trend_quality = (
         trend_follow.get("data_quality") if isinstance(trend_follow, dict) else {}
-    )
+    ) or {}
     trend_warnings = (
         trend_follow.get("warnings") if isinstance(trend_follow, dict) else []
-    )
+    ) or []
     trend_ok = trend_quality.get("status") == "ok"
     return [
         DataResult(

@@ -271,17 +271,25 @@ def generate_probabilistic_stock_signal(
     benchmark: str = "SPY",
     stock_info: dict[str, Any] | None = None,
     technical_data: dict[str, Any] | None = None,
+    price_df: pd.DataFrame | None = None,
+    benchmark_df: pd.DataFrame | None = None,
 ) -> ProbabilisticSignal:
     """Generate a complete probabilistic signal from existing free data."""
 
     from src.market_data import get_stock_data, get_stock_info
 
-    price_df = get_stock_data(ticker, period)
+    price_df = price_df if price_df is not None else get_stock_data(ticker, period)
     if price_df is None or price_df.empty or len(price_df) < 80:
         return _fallback_signal(ticker, "Insufficient price history.")
 
-    benchmark_df = get_stock_data(benchmark, period)
-    info = stock_info or get_stock_info(ticker, translate_summary=False)
+    benchmark_df = (
+        benchmark_df if benchmark_df is not None else get_stock_data(benchmark, period)
+    )
+    info = (
+        stock_info
+        if stock_info is not None
+        else get_stock_info(ticker, translate_summary=False)
+    )
     feature_frame = build_stock_feature_frame(
         price_df, benchmark_df, info, technical_data
     )

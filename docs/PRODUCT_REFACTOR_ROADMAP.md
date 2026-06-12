@@ -1,6 +1,6 @@
 # Product Refactor Review and Roadmap
 
-更新日: 2026-06-12
+更新日: 2026-06-13
 
 ## プロダクト契約
 
@@ -29,6 +29,8 @@
 - 市場分析の同名ステータス置換と依存順序を修正した。
 - 個別株の任意診断を部分失敗可能にした。
 - Trading Plan一覧表示から銘柄ごとのネットワーク取得を除去した。
+- `StockAnalysisInputs` を導入し、個別株分析中の価格・企業情報・ニュース・ベンチマーク取得を共有・メモ化した。
+- Trading PlanのT+1/T+3候補更新を一覧描画から分離し、明示操作時のみ銘柄ごと1回取得するようにした。
 - ローカルJSON保存をファイル単位ロックと原子的置換へ統一した。
 - Knowledge URLのSSRF防御、リダイレクト検査、容量・Content-Type・ファイル形式制限を追加した。
 - `.dockerignore`、CIのconstraints適用、Reflex export検証を追加した。
@@ -38,9 +40,7 @@
 
 ### P1: 分析入力の共有と待ち時間削減
 
-- `StockAnalysisInputs` を導入し、価格・企業情報・ニュース・ベンチマークの重複取得を削減する。
 - Portfolio AIへ共有 `MarketContext` を渡し、市場データの再取得とUIとの差異をなくす。
-- Trading PlanのT+1/T+3候補更新は一覧描画ではなく明示更新処理へ分離する。
 
 ### P1: データ品質
 

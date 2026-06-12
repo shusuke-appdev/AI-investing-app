@@ -250,6 +250,24 @@ def trading_plan_page() -> rx.Component:
         ),
         _create_form(),
         _review_panel(),
+        rx.hstack(
+            rx.text(
+                "価格取得はこの操作時のみ実行し、銘柄ごとに1回へ集約します。",
+                size="2",
+                color=rx.color("gray", 10),
+            ),
+            rx.spacer(),
+            rx.button(
+                rx.icon("refresh-cw", size=16),
+                "T+1/T+3候補を更新",
+                on_click=TradingPlanState.refresh_checkpoint_candidates,
+                loading=TradingPlanState.is_loading,
+                variant="outline",
+            ),
+            width="100%",
+            align_items="center",
+            wrap="wrap",
+        ),
         rx.cond(
             TradingPlanState.is_loading & (TradingPlanState.plans.length() == 0),
             loading_state("Trading Planを取得中..."),

@@ -93,7 +93,7 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
     monkeypatch.setattr(
         service,
         "evaluate_stock_sector_theme_context",
-        lambda ticker, info, market_type="US": {
+        lambda ticker, info, market_type="US", **kwargs: {
             "combined_rating": "weak",
             "fundamental_advantage": False,
             "flow_advantage": False,
@@ -203,3 +203,45 @@ def test_stock_dashboard_keeps_partial_results_when_optional_diagnostic_fails(
         item for item in context.data_status if item.name == "probabilistic_signal"
     )
     assert status.cache_status == "failed"
+
+
+def test_stock_dashboard_reuses_shared_target_and_benchmark_history(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    def history(ticker: str, period: str):
+        calls.append((ticker, period))
+        return _price_history()
+
+    monkeypatch.setattr(service, "get_stock_data", history)
+    monkeypatch.setattr(
+        service,
+        "get_stock_info",
+        lambda ticker, translate_summary=False: {"ticker": ticker, "name": "Test"},
+    )
+    monkeypatch.setattr(
+        service,
+        "get_stock_news_with_status",
+        lambda *args: {"items": [], "source_status": "available", "error_reason": ""},
+    )
+    monkeypatch.setattr(service, "analyze_technical", lambda *args: {})
+    monkeypatch.setattr(service, "evaluate_smart_criteria", lambda *args: {})
+    monkeypatch.setattr(
+        service, "generate_probabilistic_stock_signal", lambda *args: {}
+    )
+    monkeypatch.setattr(service, "signal_to_dict", lambda value: value)
+    monkeypatch.setattr(service, "generate_trend_follow_diagnostics", lambda *args: {})
+    monkeypatch.setattr(service, "trend_follow_to_dict", lambda value: value)
+    monkeypatch.setattr(
+        service, "analyze_fomo_volatility_regime", lambda *args, **kwargs: {}
+    )
+    monkeypatch.setattr(service, "evaluate_trade_setup", lambda *args: {})
+    monkeypatch.setattr(service, "trade_setup_to_dict", lambda value: value)
+    monkeypatch.setattr(
+        service, "evaluate_stock_sector_theme_context", lambda *args, **kwargs: {}
+    )
+
+    service.build_stock_dashboard_context("TEST")
+
+    assert calls.count(("TEST", "5y")) == 1
+    assert calls.count(("SPY", "5y")) == 1
+    assert calls == [("TEST", "5y"), ("SPY", "5y")]
