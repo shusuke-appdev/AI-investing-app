@@ -212,9 +212,12 @@ streamlit run legacy_streamlit/app.py
 
 # Session update: 2026-06-12 daily Entry Framework / Trading Plan
 - Added a daily-data Entry Framework to `StockSignalContext` and the Stock UI, covering market/sector relative strength, transparent VARS proxy, VCP/tightness, RVOL, pocket-pivot proxy, ADR%, ATR extension, and declining-200MA hard rules.
+- US sector relative strength uses the mapped sector ETF; JP theme relative strength uses the median return of up to five peers in the configured theme, with 1306.T fallback.
 - Added a dedicated `/trading-plan` surface for R-based sizing, three-stop planning, maximum three new positions per entry date, T+1/T+3 daily-session checks, realized-R review, journal notes, and mistake tags.
+- Exposed the 4x/6x/8x/10x ATR% extension profit-taking guide on both the Stock Entry Framework and Trading Plan cards.
 - Added local JSON and Supabase `trade_plans` persistence; GAS Trading Plan storage remains explicitly unsupported.
 - Kept Market Watch, probabilistic signals, trend-follow diagnostics, and Portfolio responsibilities unchanged.
+- Validation: compileall, ruff check, ruff format check, full pytest (`163 passed`), and Reflex frontend export passed.
 
 # Session update: 2026-06-11 UI総合改善 / 分析データ来歴
 - Product Designブリーフに基づき、現行の青・グレー基調と既存機能を維持したまま、全5画面の共通ヘッダー、読込・空状態、レスポンシブナビを改善。

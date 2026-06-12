@@ -129,16 +129,8 @@ def evaluate_trade_setup(
     prior_volume = float(volume.iloc[-51:-1].mean())
     rvol = float(volume.iloc[-1] / prior_volume) if prior_volume > 0 else 0.0
     market_relative = _relative_returns(close, benchmark_prices["Close"].astype(float))
-    sector_ticker = _sector_benchmark(normalized, market_type, info)
-    sector_prices = (
-        _normalize(get_stock_data(sector_ticker, "1y"))
-        if sector_ticker
-        else pd.DataFrame()
-    )
-    sector_relative = (
-        _relative_returns(close, sector_prices["Close"].astype(float))
-        if not sector_prices.empty
-        else {}
+    sector_label, sector_relative = _sector_relative_returns(
+        normalized, market_type, info, close
     )
     rs_line_high = _rs_line_new_high(close, benchmark_prices["Close"].astype(float))
     vars_proxy = market_relative.get("20d", 0.0) / max(atr_percent, 0.01)
@@ -172,7 +164,7 @@ def evaluate_trade_setup(
             and sector_relative.get("63d", 0.0) > 0,
             8,
             (
-                f"{sector_ticker}: 20日 {sector_relative.get('20d', 0.0):+.1f}% / "
+                f"{sector_label}: 20日 {sector_relative.get('20d', 0.0):+.1f}% / "
                 f"63日 {sector_relative.get('63d', 0.0):+.1f}%"
                 if sector_relative
                 else "N/A"
@@ -377,19 +369,61 @@ def _rs_line_new_high(stock: pd.Series, benchmark: pd.Series) -> bool:
     return bool(not recent.empty and recent.iloc[-1] >= recent.max() * 0.99)
 
 
-def _sector_benchmark(ticker: str, market_type: str, info: dict[str, Any]) -> str:
+def _sector_relative_returns(
+    ticker: str,
+    market_type: str,
+    info: dict[str, Any],
+    stock_close: pd.Series,
+) -> tuple[str, dict[str, float]]:
     if market_type == "US":
         sector = str(info.get("sector") or "").strip().lower()
-        return US_SECTOR_ETFS.get(sector, "")
+        benchmark = US_SECTOR_ETFS.get(sector, "")
+        prices = (
+            _normalize(get_stock_data(benchmark, "1y")) if benchmark else pd.DataFrame()
+        )
+        relative = (
+            _relative_returns(stock_close, prices["Close"].astype(float))
+            if not prices.empty
+            else {}
+        )
+        return benchmark or "N/A", relative
 
-    matching = [
-        item
-        for _, tickers in get_themes("JP").items()
-        if ticker in {value.upper() for value in tickers}
-        for item in tickers
-        if item.upper() != ticker
-    ]
-    return matching[0] if matching else "1306.T"
+    for theme, tickers in get_themes("JP").items():
+        normalized_tickers = [value.upper() for value in tickers]
+        if ticker not in normalized_tickers:
+            continue
+        peer_profiles = []
+        for peer in normalized_tickers:
+            if peer == ticker:
+                continue
+            prices = _normalize(get_stock_data(peer, "1y"))
+            if not prices.empty:
+                peer_profiles.append(_return_profile(prices["Close"].astype(float)))
+            if len(peer_profiles) >= 5:
+                break
+        stock_profile = _return_profile(stock_close)
+        relative = {
+            key: stock_profile[key] - float(pd.Series(values).median())
+            for key in stock_profile
+            if (values := [profile[key] for profile in peer_profiles if key in profile])
+        }
+        return f"{theme}中央値", relative
+
+    fallback = _normalize(get_stock_data("1306.T", "1y"))
+    relative = (
+        _relative_returns(stock_close, fallback["Close"].astype(float))
+        if not fallback.empty
+        else {}
+    )
+    return "1306.T", relative
+
+
+def _return_profile(close: pd.Series) -> dict[str, float]:
+    result = {}
+    for key, window in {"20d": 20, "63d": 63, "126d": 126}.items():
+        if len(close) > window:
+            result[key] = float((close.iloc[-1] / close.iloc[-window - 1] - 1) * 100)
+    return result
 
 
 def _pocket_pivot(prices: pd.DataFrame) -> bool:

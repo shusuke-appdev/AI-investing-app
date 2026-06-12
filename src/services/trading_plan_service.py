@@ -235,6 +235,7 @@ def display_plan(plan: TradePlanRecord) -> dict[str, Any]:
     from src.market_data import get_stock_data
 
     setup = plan.setup_snapshot
+    profit_levels = setup.get("profit_extension_levels") or {}
     return {
         **plan.to_dict(),
         "entry_display": f"{plan.entry_price:,.2f}",
@@ -249,6 +250,12 @@ def display_plan(plan: TradePlanRecord) -> dict[str, Any]:
             f"- {tier.label}: {tier.price:,.2f} / {tier.exit_percent:.0f}%"
             for tier in plan.stops
         ),
+        "profit_levels_display": " / ".join(
+            f"{multiple}: {float(profit_levels[multiple]):,.2f}"
+            for multiple in ("4x", "6x", "8x", "10x")
+            if profit_levels.get(multiple) is not None
+        )
+        or "N/A",
         "session_stage": confirmation_stage(
             plan.entry_date, get_stock_data(plan.ticker, "3mo")
         ),

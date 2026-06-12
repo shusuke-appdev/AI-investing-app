@@ -36,6 +36,7 @@ def _setup_check(item: dict) -> rx.Component:
 
 def trade_setup_panel() -> rx.Component:
     setup = StockState.trade_setup
+    profit_levels = setup["profit_extension_levels"].to(dict[str, float])
     return rx.cond(
         setup.contains("status"),
         rx.box(
@@ -107,6 +108,27 @@ def trade_setup_panel() -> rx.Component:
                 columns=rx.breakpoints(initial="1", md="2"),
                 spacing="3",
                 width="100%",
+            ),
+            rx.card(
+                rx.vstack(
+                    rx.text("ATR% Extension 利確目安", weight="bold", size="2"),
+                    rx.hstack(
+                        rx.badge("4x " + profit_levels["4x"].to(str)),
+                        rx.badge("6x " + profit_levels["6x"].to(str)),
+                        rx.badge("8x " + profit_levels["8x"].to(str)),
+                        rx.badge("10x " + profit_levels["10x"].to(str)),
+                        wrap="wrap",
+                    ),
+                    rx.text(
+                        "強さの中で段階利確するための目安。売買判断は価格行動とストップを優先します。",
+                        size="1",
+                        color=rx.color("gray", 10),
+                    ),
+                    align_items="start",
+                    spacing="2",
+                ),
+                width="100%",
+                margin_top="1rem",
             ),
             rx.callout(
                 rx.markdown(setup["warnings_display"].to(str)),

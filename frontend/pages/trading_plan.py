@@ -30,6 +30,11 @@ def _plan_card(plan: dict) -> rx.Component:
                 width="100%",
             ),
             rx.markdown(plan["stops_display"]),
+            rx.text(
+                "ATR% Extension 利確目安: " + plan["profit_levels_display"].to(str),
+                size="2",
+                color=rx.color("gray", 10),
+            ),
             rx.hstack(
                 rx.badge("T+1 " + plan["t1_status"].to(str), variant="surface"),
                 rx.badge("T+3 " + plan["t3_status"].to(str), variant="surface"),
