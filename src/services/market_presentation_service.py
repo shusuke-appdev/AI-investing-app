@@ -32,6 +32,9 @@ class OptionSummary(BaseModel):
     analysis: list[str] = []
     data_quality: str = "unavailable"
     quality_warnings: list[str] = []
+    source: str = ""
+    data_as_of: str = ""
+    data_mode: str = ""
 
 
 class MicrostructureData(BaseModel):
@@ -346,6 +349,9 @@ def format_option_summaries(option_data: list[dict[str, Any]]) -> list[dict[str,
                 "analysis": opt.get("analysis", []),
                 "data_quality": opt.get("data_quality", "unavailable"),
                 "quality_warnings": list(opt.get("quality_warnings") or []),
+                "source": str(opt.get("source") or ""),
+                "data_as_of": str(opt.get("data_as_of") or ""),
+                "data_mode": str(opt.get("data_mode") or ""),
             }
         )
     return formatted

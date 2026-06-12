@@ -82,7 +82,7 @@ class OptionData(TypedDict, total=False):
     impliedVolatility: float
     inTheMoney: str
     expiration: str
-    # Greeks (Finnhub APIから直接取得)
+    # Greeks (configured option providerから取得)
     delta: float | None
     gamma: float | None
     theta: float | None

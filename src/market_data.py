@@ -14,10 +14,12 @@ def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
     return DataProvider.get_historical_data(ticker, period)
 
 
-def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+def get_option_chain(
+    ticker: str, *, allow_marketdata: bool = False
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """Return option chain data."""
 
-    return DataProvider.get_option_chain(ticker)
+    return DataProvider.get_option_chain(ticker, allow_marketdata=allow_marketdata)
 
 
 def get_market_indices(market_type: str = MARKET_US) -> dict[str, Any]:

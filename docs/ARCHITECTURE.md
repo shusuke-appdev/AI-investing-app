@@ -51,6 +51,8 @@ UI
   src/news_provider.py
   src/news_aggregator.py
   src/finnhub_client.py
+  src/marketdata_client.py
+  src/marketdata_option_provider.py
   src/jquants_client.py
   src/edinet_client.py
 
@@ -136,6 +138,8 @@ UI
 - ETFリーダーシップproxyは市場全体のリスクオン/オフ確認に使い、資金流入セクター判定は米国セクターETFと `JP_THEMES` の代表銘柄バスケットから具体候補を出す。スコアは相対騰落率、5日/20日継続性、出来高比、上昇参加率から作り、売買指示ではなく「乗る候補」「押し目待ち」「観察」「見送り」の調査支援ラベルに留める
 - HTTPキャッシュは `src/network.py` が `.states/http_cache` 配下で用途別セッションとして管理し、ルート直下にSQLiteを作らない
 - yfinanceオプションデータはGreeks欠損が多いため、Gammaが取得できない場合はGEXを非表示にし、`data_quality` と `quality_warnings` でUIとAIに明示する
+- MarketData.appは主要ETFの明示的なオプション更新だけに限定する。`off`ではyfinanceのみ、`shadow`ではyfinance表示を維持しながら比較取得、`preferred`ではMarketData.appを優先して失敗時にyfinanceへフォールバックする。個別株分析や起動時にはMarketData.appを呼ばない
+- MarketData.appの0DTEチェーンは専用キャッシュへ保存し、IV・Greeks・OI・Volumeを直接値として扱う。PCR、Max Pain、GEXはローカル算出であり、GEXのディーラー方向は簡易仮定として来歴へ残す
 - Reflex state では `dict[str, Any]` の深いアクセスが壊れやすいため、`pydantic.BaseModel` でUI表示用モデルを定義している
 - 外部APIの失敗はアプリ全体を止めず、機能単位で degraded mode に落とす設計が多い
 - Two Sigma OSSからは依存ではなく設計要素を取り込む。`temporal_alignment.py` は Flint 型の許容時間差付き as-of join を pandas で提供し、`AnalysisRun` は BeakerX 型の再現可能な分析成果物、`analysis_jobs.py` は Cook 型の重い分析ジョブ状態管理、`analysis_diagnostics.py` は Marbles 型の説明的テスト失敗メッセージを担う

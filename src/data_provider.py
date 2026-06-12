@@ -35,7 +35,7 @@ class DataProviderProtocol(Protocol):
     def get_current_price(self, ticker: str) -> float: ...
     def get_historical_data(self, ticker: str, period: str = "1mo") -> pd.DataFrame: ...
     def get_option_chain(
-        self, ticker: str
+        self, ticker: str, *, allow_marketdata: bool = False
     ) -> tuple[pd.DataFrame, pd.DataFrame] | None: ...
     def get_market_indices(self, market_type: str = "US") -> dict[str, MarketIndex]: ...
     def get_stock_news(self, ticker: str, max_items: int = 10) -> list[NewsItem]: ...
@@ -67,8 +67,10 @@ class DefaultDataProvider:
     def get_historical_data(self, ticker: str, period: str = "1mo") -> pd.DataFrame:
         return get_historical_data(ticker, period)
 
-    def get_option_chain(self, ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
-        return get_option_chain(ticker)
+    def get_option_chain(
+        self, ticker: str, *, allow_marketdata: bool = False
+    ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+        return get_option_chain(ticker, allow_marketdata=allow_marketdata)
 
     def get_market_indices(self, market_type: str = "US") -> dict[str, MarketIndex]:
         return get_market_indices(market_type)
@@ -143,7 +145,11 @@ class DataProvider:
         return _global_provider.get_historical_data(ticker, period)
 
     @staticmethod
-    def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    def get_option_chain(
+        ticker: str, *, allow_marketdata: bool = False
+    ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+        if allow_marketdata:
+            return _global_provider.get_option_chain(ticker, allow_marketdata=True)
         return _global_provider.get_option_chain(ticker)
 
     @staticmethod

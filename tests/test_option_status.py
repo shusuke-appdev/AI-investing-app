@@ -12,7 +12,7 @@ def test_major_indices_option_status_not_applicable_for_jp():
 
 
 def test_major_indices_option_status_reports_partial_failure(monkeypatch):
-    def fake_analysis(ticker):
+    def fake_analysis(ticker, **kwargs):
         if ticker == "SPY":
             return {"ticker": ticker, "data_quality": "available"}
         return None
@@ -29,7 +29,7 @@ def test_major_indices_option_status_reports_partial_failure(monkeypatch):
 
 
 def test_major_indices_option_status_reports_quality_limitations(monkeypatch):
-    def fake_analysis(ticker):
+    def fake_analysis(ticker, **kwargs):
         return {
             "ticker": ticker,
             "data_quality": "partial",
@@ -52,7 +52,9 @@ def test_major_indices_option_status_reports_quality_limitations(monkeypatch):
 
 
 def test_major_indices_option_status_reports_all_failed(monkeypatch):
-    monkeypatch.setattr(option_analyst, "analyze_option_sentiment", lambda ticker: None)
+    monkeypatch.setattr(
+        option_analyst, "analyze_option_sentiment", lambda ticker, **kwargs: None
+    )
 
     result = option_analyst.get_major_indices_option_status("US")
 

@@ -89,6 +89,10 @@ class OptionContext:
     quality_warnings: list[str] = field(default_factory=list)
     cache_status: str = "live"
     cache_age_seconds: float | None = None
+    data_as_of: str = ""
+    data_mode: str = ""
+    credits_consumed: int | None = None
+    credits_remaining: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -200,6 +204,10 @@ class MarketContext:
                 quality_warnings=list(options.get("quality_warnings") or []),
                 cache_status=str(options.get("cache_status") or "live"),
                 cache_age_seconds=_optional_float(options.get("cache_age_seconds")),
+                data_as_of=str(options.get("data_as_of") or ""),
+                data_mode=str(options.get("data_mode") or ""),
+                credits_consumed=_optional_int(options.get("credits_consumed")),
+                credits_remaining=_optional_int(options.get("credits_remaining")),
             ),
             evaluation=value.get("evaluation") or {},
             ibd_regime=value.get("ibd_regime") or {},
@@ -266,5 +274,14 @@ def _optional_float(value: Any) -> float | None:
         return None
     try:
         return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return None

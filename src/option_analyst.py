@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 
 def _fetch_option_data(
-    ticker: str,
+    ticker: str, *, allow_marketdata: bool = False
 ) -> tuple[pd.DataFrame, pd.DataFrame, float, str, dict[str, Any]] | None:
     """
     オプションチェーンと現在価格を1回で取得する内部ヘルパー。
@@ -31,7 +31,7 @@ def _fetch_option_data(
     Returns:
         (calls_df, puts_df, current_price, fetched_at, metadata) のタプル、またはNone
     """
-    option_data = get_option_chain(ticker)
+    option_data = get_option_chain(ticker, allow_marketdata=allow_marketdata)
     if option_data is None:
         return None
 
@@ -42,8 +42,11 @@ def _fetch_option_data(
         logger.warning(f"[OptionAnalyst] {ticker}: Empty option chain data")
         return None
 
-    # 現在価格取得（DataProvider経由: Finnhub→yfinanceフォールバック内蔵）
-    current_price = DataProvider.get_current_price(ticker)
+    metadata = get_option_chain_metadata(ticker)
+    current_price = _option_underlying_price(calls, puts)
+    if current_price is None:
+        # MarketData.app以外の既存経路では従来どおりquoteを取得する。
+        current_price = DataProvider.get_current_price(ticker)
 
     JST = timezone(timedelta(hours=9), "JST")
     now_utc = datetime.now(timezone.utc)
@@ -52,8 +55,6 @@ def _fetch_option_data(
 
     if not current_price:
         return None
-
-    metadata = get_option_chain_metadata(ticker)
 
     return calls, puts, current_price, now_str, metadata
 
@@ -153,10 +154,17 @@ def assess_option_data_quality(
 
     if _real_gamma_count(calls, puts) == 0:
         quality = _worse_quality(quality, "partial")
-        warnings.append("Greeks/Gamma are missing from yfinance; GEX is hidden.")
+        warnings.append(
+            "Greeks/Gamma are missing from the option provider; GEX is hidden."
+        )
     elif gex and gex.get("is_estimated"):
         quality = _worse_quality(quality, "estimated")
         warnings.append("Some Gamma values were estimated; GEX reliability is limited.")
+    elif gex and gex.get("is_partial"):
+        quality = _worse_quality(quality, "partial")
+        warnings.append(
+            "Some contracts lacked direct Gamma and were excluded from GEX."
+        )
 
     if iv is None:
         quality = _worse_quality(quality, "partial")
@@ -225,6 +233,7 @@ def calculate_gex(
     calls: pd.DataFrame | None = None,
     puts: pd.DataFrame | None = None,
     current_price: float = 0.0,
+    allow_gamma_estimation: bool = True,
 ) -> dict | None:
     """
     Gamma Exposure (GEX) を計算します。
@@ -262,6 +271,7 @@ def calculate_gex(
 
     gex_data = []
     estimated_gamma_count = 0
+    missing_gamma_count = 0
 
     # Callsの処理
     for _, row in calls.iterrows():
@@ -272,6 +282,9 @@ def calculate_gex(
         gamma = row.get("gamma", 0)
 
         if pd.isna(gamma) or gamma == 0:
+            if not allow_gamma_estimation:
+                missing_gamma_count += 1
+                continue
             estimated_gamma_count += 1
             moneyness = (
                 abs(strike - current_price) / current_price if current_price > 0 else 1
@@ -290,6 +303,9 @@ def calculate_gex(
         gamma = row.get("gamma", 0)
 
         if pd.isna(gamma) or gamma == 0:
+            if not allow_gamma_estimation:
+                missing_gamma_count += 1
+                continue
             estimated_gamma_count += 1
             moneyness = (
                 abs(strike - current_price) / current_price if current_price > 0 else 1
@@ -328,6 +344,8 @@ def calculate_gex(
         "total_gex": strike_gex["gex"].sum(),
         "is_estimated": estimated_gamma_count > 0,
         "estimated_gamma_count": estimated_gamma_count,
+        "is_partial": missing_gamma_count > 0,
+        "missing_gamma_count": missing_gamma_count,
     }
 
 
@@ -556,7 +574,9 @@ def estimate_price_range(
 # ============================================================
 
 
-def analyze_option_sentiment(ticker: str) -> dict | None:
+def analyze_option_sentiment(
+    ticker: str, *, allow_marketdata: bool = False
+) -> dict | None:
     """
     オプションセンチメント分析を行います。
     option_chain と quote を1回だけ取得し、全計算に共有します。
@@ -568,14 +588,22 @@ def analyze_option_sentiment(ticker: str) -> dict | None:
         センチメント分析結果
     """
     # === データ取得（1回のみ） ===
-    fetched = _fetch_option_data(ticker)
+    fetched = _fetch_option_data(ticker, allow_marketdata=allow_marketdata)
     if fetched is None:
         return None
     calls, puts, current_price, fetched_at, metadata = fetched
 
     # === 各指標を事前取得済みデータで計算 ===
     pcr = calculate_pcr(ticker, calls=calls, puts=puts)
-    gex = calculate_gex(ticker, calls=calls, puts=puts, current_price=current_price)
+    gex = calculate_gex(
+        ticker,
+        calls=calls,
+        puts=puts,
+        current_price=current_price,
+        allow_gamma_estimation=not str(metadata.get("source") or "").startswith(
+            "marketdata.app"
+        ),
+    )
     iv = calculate_atm_iv(ticker, calls=calls, puts=puts, current_price=current_price)
     max_pain = calculate_max_pain(ticker, calls=calls, puts=puts)
     skew = calculate_skew(ticker, calls=calls, puts=puts, current_price=current_price)
@@ -678,6 +706,18 @@ def analyze_option_sentiment(ticker: str) -> dict | None:
         "max_pain": max_pain,
         "analysis": analysis,
         "fetched_at": fetched_at,
+        "data_as_of": str(metadata.get("data_as_of") or ""),
+        "data_mode": str(metadata.get("data_mode") or ""),
+        "marketdata_options_mode": str(
+            metadata.get("marketdata_options_mode") or "off"
+        ),
+        "credits_consumed": metadata.get("credits_consumed"),
+        "credits_remaining": metadata.get("credits_remaining"),
+        "shadow_source": str(metadata.get("shadow_source") or ""),
+        "shadow_data_as_of": str(metadata.get("shadow_data_as_of") or ""),
+        "shadow_data_mode": str(metadata.get("shadow_data_mode") or ""),
+        "shadow_credits_consumed": metadata.get("shadow_credits_consumed"),
+        "shadow_credits_remaining": metadata.get("shadow_credits_remaining"),
         "source": metadata.get("source", "yfinance"),
         "is_stale": bool(metadata.get("is_stale", False)),
         "cache_status": metadata.get("cache_status", "live"),
@@ -748,7 +788,7 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
 
     for ticker in indices:
         try:
-            analysis = analyze_option_sentiment(ticker)
+            analysis = analyze_option_sentiment(ticker, allow_marketdata=True)
             if analysis:
                 results.append(analysis)
             else:
@@ -797,6 +837,10 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
         "cache_status": _aggregate_cache_status(results),
         "cache_age_seconds": _max_cache_age_seconds(results),
         "quality_warnings": quality_warnings,
+        "data_as_of": _latest_value(results, "data_as_of"),
+        "data_mode": _aggregate_data_modes(results),
+        "credits_consumed": _sum_optional_values(results, "credits_consumed"),
+        "credits_remaining": _min_optional_values(results, "credits_remaining"),
     }
 
 
@@ -818,6 +862,28 @@ def _latest_fetched_at(results: list[dict]) -> str:
         str(item.get("fetched_at") or "") for item in results if item.get("fetched_at")
     ]
     return max(values) if values else ""
+
+
+def _latest_value(results: list[dict], key: str) -> str:
+    values = [str(item.get(key) or "") for item in results if item.get(key)]
+    return max(values) if values else ""
+
+
+def _aggregate_data_modes(results: list[dict]) -> str:
+    modes = sorted(
+        {str(item.get("data_mode") or "") for item in results if item.get("data_mode")}
+    )
+    return ", ".join(modes)
+
+
+def _sum_optional_values(results: list[dict], key: str) -> int | None:
+    values = [int(item[key]) for item in results if item.get(key) is not None]
+    return sum(values) if values else None
+
+
+def _min_optional_values(results: list[dict], key: str) -> int | None:
+    values = [int(item[key]) for item in results if item.get(key) is not None]
+    return min(values) if values else None
 
 
 def _aggregate_cache_status(results: list[dict]) -> str:
@@ -842,3 +908,16 @@ def _max_cache_age_seconds(results: list[dict]) -> float | None:
         if item.get("cache_age_seconds") is not None
     ]
     return max(ages) if ages else None
+
+
+def _option_underlying_price(calls: pd.DataFrame, puts: pd.DataFrame) -> float | None:
+    """Use the chain's own underlying price when the provider supplies it."""
+
+    for frame in (calls, puts):
+        if "underlyingPrice" not in frame.columns:
+            continue
+        values = pd.to_numeric(frame["underlyingPrice"], errors="coerce").dropna()
+        values = values[values > 0]
+        if not values.empty:
+            return float(values.iloc[0])
+    return None

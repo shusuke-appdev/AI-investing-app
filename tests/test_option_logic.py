@@ -101,6 +101,25 @@ class TestOptionAnalyst:
 
         assert gex is None
 
+    def test_marketdata_gex_excludes_missing_gamma_without_estimation(
+        self, mock_option_data
+    ):
+        calls, puts = mock_option_data
+        calls.loc[0, "gamma"] = None
+
+        gex = calculate_gex(
+            "TEST",
+            calls=calls,
+            puts=puts,
+            current_price=100.0,
+            allow_gamma_estimation=False,
+        )
+
+        assert gex is not None
+        assert gex["is_estimated"] is False
+        assert gex["is_partial"] is True
+        assert gex["missing_gamma_count"] == 1
+
     @patch("src.option_analyst.DataProvider.get_current_price", return_value=100.0)
     @patch("src.option_analyst.get_option_chain_metadata", return_value={})
     @patch("src.option_analyst.get_option_chain")

@@ -13,6 +13,8 @@ python -m pytest tests/ --cov=src --cov-report=html
 
 - `test_option_analyst.py`: PCR、GEX、Max Pain、IV、Skew などの計算
 - `test_option_analyst_logic.py`: オプション分析の境界値
+- `test_marketdata_client.py`: MarketData.app認証、HTTP 203/204、APIエラー
+- `test_marketdata_option_provider.py`: MarketData.app列正規化、0DTE・取得量制限
 - `test_data_provider.py`: データプロバイダの差し替え
 - `test_news_aggregator.py`: ニュース統合・重複排除
 - `test_jquants_client.py`: J-Quants クライアント

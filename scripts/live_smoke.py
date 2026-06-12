@@ -84,6 +84,20 @@ def _finnhub_check() -> str:
     return f"status={status}, items={len(result.get('items') or [])}"
 
 
+def _marketdata_options_check() -> str:
+    if not os.getenv("MARKETDATA_TOKEN"):
+        return "SKIP: MARKETDATA_TOKEN is not configured"
+    from src.marketdata_option_provider import fetch_marketdata_option_chain
+
+    result = fetch_marketdata_option_chain("SPY", allow_stale=False, force_refresh=True)
+    if result is None:
+        raise RuntimeError("MarketData.app SPY 0DTE option chain is empty")
+    return (
+        f"source={result.source}, calls={len(result.calls)}, puts={len(result.puts)}, "
+        f"as_of={result.data_as_of or 'unknown'}, credits={result.credits_consumed}"
+    )
+
+
 def _public_readonly_check() -> str:
     from src.app_mode import require_writes_enabled
 
@@ -134,6 +148,7 @@ def main() -> int:
         _run("external_market", _external_market_check),
         _run("fred", _fred_check),
         _run("finnhub", _finnhub_check),
+        _run("marketdata_options", _marketdata_options_check),
         _run("public_readonly", _public_readonly_check),
         _run("supabase", _supabase_check),
     ]

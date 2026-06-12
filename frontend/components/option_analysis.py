@@ -34,6 +34,26 @@ def render_ticker_compact(opt) -> rx.Component:
                 width="100%",
             ),
             rx.divider(),
+            rx.cond(
+                opt.source != "",
+                rx.text(
+                    "取得元: ",
+                    opt.source,
+                    rx.cond(
+                        opt.data_mode != "",
+                        " / mode=" + opt.data_mode,
+                        "",
+                    ),
+                    rx.cond(
+                        opt.data_as_of != "",
+                        " / 基準時刻=" + opt.data_as_of,
+                        "",
+                    ),
+                    size="1",
+                    color="gray",
+                ),
+                rx.fragment(),
+            ),
             rx.grid(
                 rx.vstack(
                     rx.text("PCR (Vol)", size="1", color="gray"),

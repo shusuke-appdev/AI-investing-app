@@ -4,6 +4,7 @@ Option Data Provider
 リトライ・タイムアウト・フォールバックキャッシュ機構搭載。
 """
 
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -36,6 +37,8 @@ MAX_EXPIRATIONS = 1
 OPTION_CACHE_TTL = 900
 OPTION_STALE_TTL = 86400
 OPTION_CACHE_NAMESPACE = "option_chain_cache"
+MARKETDATA_OPTION_TICKERS = {"SPY", "QQQ", "IWM"}
+MARKETDATA_OPTIONS_MODES = {"off", "shadow", "preferred"}
 
 
 def _is_market_likely_closed() -> bool:
@@ -140,7 +143,9 @@ def _fetch_with_timeout(
         executor.shutdown(wait=False, cancel_futures=True)
 
 
-def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+def get_option_chain(
+    ticker: str, *, allow_marketdata: bool = False
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """
     オプションチェーンデータを取得する。
 
@@ -154,6 +159,69 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
         (calls_df, puts_df) のタプル。取得不可の場合はNone。
     """
     ticker = ticker.upper()
+    mode = _marketdata_options_mode() if allow_marketdata else "off"
+    if ticker not in MARKETDATA_OPTION_TICKERS:
+        mode = "off"
+
+    if mode == "preferred":
+        marketdata_result = _fetch_marketdata_chain(ticker)
+        if marketdata_result is not None:
+            calls, puts, metadata = marketdata_result
+            _set_metadata(ticker, **metadata)
+            return calls, puts
+
+    yfinance_result = _get_yfinance_option_chain(ticker)
+
+    if mode == "preferred":
+        metadata = get_option_chain_metadata(ticker)
+        warnings = list(metadata.get("quality_warnings") or [])
+        warnings.append(
+            "MarketData.app preferred fetch unavailable; yfinance fallback is active."
+        )
+        metadata["quality_warnings"] = warnings
+        metadata["marketdata_options_mode"] = mode
+        _replace_metadata(ticker, metadata)
+
+    if mode == "shadow":
+        marketdata_result = _fetch_marketdata_chain(ticker)
+        metadata = get_option_chain_metadata(ticker)
+        warnings = list(metadata.get("quality_warnings") or [])
+        if marketdata_result is None:
+            warnings.append(
+                "MarketData.app shadow comparison unavailable; yfinance result retained."
+            )
+        else:
+            _, _, shadow_metadata = marketdata_result
+            warnings.append(
+                "MarketData.app 0DTE shadow comparison succeeded; "
+                "yfinance nearest-expiry result retained. "
+                f"as_of={shadow_metadata.get('data_as_of') or 'unknown'}, "
+                f"mode={shadow_metadata.get('data_mode') or 'unknown'}, "
+                f"credits={shadow_metadata.get('credits_consumed')}."
+            )
+            metadata.update(
+                {
+                    "shadow_source": shadow_metadata.get("source", "marketdata.app"),
+                    "shadow_data_as_of": shadow_metadata.get("data_as_of", ""),
+                    "shadow_data_mode": shadow_metadata.get("data_mode", ""),
+                    "shadow_credits_consumed": shadow_metadata.get("credits_consumed"),
+                    "shadow_credits_remaining": shadow_metadata.get(
+                        "credits_remaining"
+                    ),
+                }
+            )
+        metadata["quality_warnings"] = warnings
+        metadata["marketdata_options_mode"] = mode
+        _replace_metadata(ticker, metadata)
+
+    return yfinance_result
+
+
+def _get_yfinance_option_chain(
+    ticker: str,
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    """Return the existing yfinance/cache option path."""
+
     cached_fresh = _load_persistent_cache(ticker, max_age_seconds=OPTION_CACHE_TTL)
     if cached_fresh is not None:
         calls, puts, fetched_at, cache_status, cache_age_seconds = cached_fresh
@@ -300,6 +368,28 @@ def get_option_chain(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     return None
 
 
+def _marketdata_options_mode() -> str:
+    mode = os.getenv("MARKETDATA_OPTIONS_MODE", "off").strip().lower()
+    return mode if mode in MARKETDATA_OPTIONS_MODES else "off"
+
+
+def _fetch_marketdata_chain(
+    ticker: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]] | None:
+    try:
+        from src.marketdata_option_provider import fetch_marketdata_option_chain
+
+        result = fetch_marketdata_option_chain(ticker)
+    except Exception as exc:
+        logger.warning(f"[OptionProvider] MarketData.app failed for {ticker}: {exc}")
+        return None
+    if result is None:
+        return None
+    metadata = result.metadata()
+    metadata["marketdata_options_mode"] = _marketdata_options_mode()
+    return result.calls, result.puts, metadata
+
+
 def get_option_chain_metadata(ticker: str) -> dict[str, Any]:
     """Return metadata for the most recent option-chain lookup."""
 
@@ -322,6 +412,7 @@ def _set_metadata(
     quality_warnings: list[str],
     cache_status: str,
     cache_age_seconds: float | None,
+    **extra: Any,
 ) -> None:
     with _metadata_lock:
         _metadata_cache[ticker.upper()] = {
@@ -332,7 +423,13 @@ def _set_metadata(
             "quality_warnings": quality_warnings,
             "cache_status": cache_status,
             "cache_age_seconds": cache_age_seconds,
+            **extra,
         }
+
+
+def _replace_metadata(ticker: str, metadata: dict[str, Any]) -> None:
+    with _metadata_lock:
+        _metadata_cache[ticker.upper()] = dict(metadata)
 
 
 def _cache_file(ticker: str) -> Path:

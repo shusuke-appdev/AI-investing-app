@@ -1018,6 +1018,10 @@ def _build_option_context(market_type: str) -> OptionContext:
             quality_warnings=list(result.get("quality_warnings") or []),
             cache_status=str(result.get("cache_status") or "live"),
             cache_age_seconds=_optional_float(result.get("cache_age_seconds")),
+            data_as_of=str(result.get("data_as_of") or ""),
+            data_mode=str(result.get("data_mode") or ""),
+            credits_consumed=_optional_int(result.get("credits_consumed")),
+            credits_remaining=_optional_int(result.get("credits_remaining")),
         )
     except Exception as exc:
         return OptionContext(
@@ -1378,6 +1382,15 @@ def _optional_float(value: Any) -> float | None:
         return None
     try:
         return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return None
 

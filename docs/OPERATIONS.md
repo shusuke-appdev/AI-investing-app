@@ -13,6 +13,8 @@
 | `GEMINI_API_KEY` | AI機能には必須 | Gemini による市況・銘柄・ポートフォリオ分析 |
 | `GEMINI_MODEL_NAME` / `GEMINI_MODEL` | 任意 | Geminiモデル名の上書き。未設定時は `gemini-3.5-flash` |
 | `FINNHUB_API_KEY` | 推奨 | 企業ニュース、決算、オプション補完データ |
+| `MARKETDATA_TOKEN` | 米国オプション補完時に必須 | MarketData.appのSPY / QQQ / IWMオプションチェーン、IV、Greeks、OI、Volume |
+| `MARKETDATA_OPTIONS_MODE` | 任意 | `off` / `shadow` / `preferred`。未設定時は`off` |
 | `JQUANTS_API_KEY` | 日本株分析では推奨 | 日本株の価格・財務情報 |
 | `EDINET_API_KEY` | 日本株財務では推奨 | EDINET からの財務情報取得 |
 | `NIKKEI_JSF_SHORT_BALANCE_BILLION` | 任意 | 日経6条件の条件1を直接判定するための、日証金合計売り残（億円） |
@@ -68,6 +70,7 @@ python -m ruff format --check .
 - yfinanceタイムゾーンキャッシュ: `.states/yfinance_cache/`
 - 市場サマリーキャッシュ: `.states/market_context_cache/*.json`
 - オプションチェーンキャッシュ: `.states/option_chain_cache/*.json`
+- MarketData.appオプションチェーンキャッシュ: `.states/marketdata_option_chain_cache/*.json`
 - 分析ジョブ状態: `.states/analysis_jobs/*.json`
 - Reflexセッション状態: `.reflex_states/`。アプリのデータキャッシュ `.states/` とは分離する
 
@@ -110,6 +113,11 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - 日経平均上昇の6条件は、無料で自動取得できるデータを優先し、直接データがない条件は `データ不足` または `代理達成/代理未達` として表示します。上記の任意環境変数を設定すると、一部条件を直接値として評価できます
 - AI Market Recap は米国市場を主軸にし、日本市場は米国市場との相対強弱、日経6条件、ドル円・原油・資金流入の文脈で補助的に扱います
 - yfinanceオプションデータにGreeks/Gammaがない場合、GEXは非表示になります。UIの `data_quality` バッジと品質警告を確認してください
+- MarketData.appは `/market-watch` の明示的なSPY / QQQ / IWMオプション更新時だけ利用します。個別株分析、起動時、市場マイクロストラクチャー更新からは呼び出さず、APIクレジット消費を抑えます
+- Free/Trial導入時は `MARKETDATA_OPTIONS_MODE=shadow` を使います。画面表示と分析は従来のyfinance結果を維持し、MarketData.appの取得可否・基準時刻・契約既定mode・クレジット情報を品質警告へ記録します
+- `MARKETDATA_OPTIONS_MODE=preferred` は、MarketData.appを優先し、データなし・認証失敗・必須列不足時にyfinanceへ戻します。Free/Trialの遅延データを確認せずに切り替えないでください
+- MarketData.app経路では0DTE、`strikeLimit=100`、標準契約、必要列だけを取得します。GEXのCall正・Put負は実ディーラー建玉を直接観測したものではなく、簡易な符号仮定です
+- MarketData.appの鮮度modeはAPIへ強制指定せず、アカウント契約の既定値を使います。リアルタイムとは断定せず、各カードの`updated`由来の基準時刻を確認してください
 - キャッシュ由来のデータは `source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` としてUI/AIへ渡します。`stale_cache` 表示がある場合は、外部API失敗時に最後の成功データを使っています
 - 時系列データを突合する場合は `src/services/temporal_alignment.py` の as-of join を使い、許容時間差外の未突合行を `DataResult.is_partial` と `quality_warnings` で明示します
 - 重い分析処理は `src/services/analysis_jobs.py` の `queued/running/succeeded/failed/partial/cancelled` 状態で管理し、単一Reflex環境ではローカルJSON永続化を使います
@@ -139,7 +147,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 `pytest` のキャッシュは、アクセス拒否が発生していた `.pytest_cache` ではなく `.states/pytest_cache` を使うように設定済みです。
 `ruff` のキャッシュも `.states/ruff_cache` を使います。
 
-ローカルキャッシュを初期化したい場合は、アプリを停止してから `.states/http_cache`、`.states/yfinance_cache`、`.states/market_context_cache`、`.states/option_chain_cache`、`.states/analysis_jobs` を削除してください。`.states` 全体を削除すると pytest/ruff の作業キャッシュも消えますが、次回実行時に再作成されます。Reflexセッション状態だけを初期化する場合は `.reflex_states/` を削除します。
+ローカルキャッシュを初期化したい場合は、アプリを停止してから `.states/http_cache`、`.states/yfinance_cache`、`.states/market_context_cache`、`.states/option_chain_cache`、`.states/marketdata_option_chain_cache`、`.states/analysis_jobs` を削除してください。`.states` 全体を削除すると pytest/ruff の作業キャッシュも消えますが、次回実行時に再作成されます。Reflexセッション状態だけを初期化する場合は `.reflex_states/` を削除します。
 
 Reflex のフロントエンド検証では、Codex アプリの WindowsApps 配下にある `node.EXE` が `WinError 5` で実行できないことがあります。`rxconfig.py` は、存在する場合に `C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin` をPATH先頭へ入れ、実行可能な同梱Nodeを優先します。
 

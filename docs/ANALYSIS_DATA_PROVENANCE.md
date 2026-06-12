@@ -34,7 +34,8 @@
 | Market Watch / AI Recap | ショートカバー発生 | proxy | 日経急反発と出来高増 | ショート残高直接データなし | 日経6条件内で代理表示 | 実際の買い戻しと誤認 | 日証金・貸借データを直接取得 | 高 | 既存表示あり |
 | Market Watch / AI Recap | 日経理論値上方修正 | proxy | 日経20日・60日価格トレンド | EPS/PER改定データなし | 日経6条件内で代理表示 | 業績上方修正と誤認 | 指数EPS、予想PER、業績改定幅を取得 | 高 | 既存表示あり |
 | Market Watch / AI Recap | 海外投資家買い | proxy | 原油安、日本テーマflow | 手入力の海外投資家買越額なし | 日経6条件内で代理表示 | 海外投資家の直接買越と誤認 | 投資部門別売買状況を自動取得 | 高 | 既存表示あり |
-| Market Watch | GEX | estimated / computed | オプションOI、Gamma、株価 | 一部Gamma欠損時に推定。全Gamma欠損時は非表示 | quality warning表示 | 実測GammaだけのGEXと誤認 | 直接Greeks取得の安定化 | 高 | 一部表示対応済み |
+| Market Watch | GEX | estimated / computed | オプションOI、Gamma、株価 | yfinanceは一部Gamma欠損時に推定、全欠損時は非表示。MarketData.appは直接Gammaを使用 | quality warning表示 | 直接GammaでもCall正・Put負はディーラー方向の簡易仮定 | MarketData.app shadow比較後にpreferredへ昇格 | 高 | MarketData.app補完実装済み |
+| Market Watch | オプションIV・Greeks・OI・Volume | direct / stale_cache | MarketData.app 0DTE限定チェーン、またはyfinance | `shadow`ではyfinanceを維持、`preferred`ではMarketData.app失敗時にyfinanceへフォールバック | 取得元・基準時刻・mode・品質警告を表示 | Free/Trial遅延値を現在値と誤認 | updated時刻と契約プランを確認してpreferredへ移行 | 高 | 2026-06-13 実装済み |
 | Market Watch | IV想定価格帯 | estimated | 現在価格、IV、満期日数 | オプションデータ取得時 | オプション分析内 | 予測レンジと誤認 | 想定変動幅として明示し実績比較を追加 | 中 | 台帳化済み |
 | Market Watch | Max Pain | computed | オプションOIと権利行使価格 | オプションチェーン取得時 | オプション分析内 | 価格目標と誤認 | 算出定義と制約を個別表示 | 中 | 台帳化済み |
 | Market Watch / AI Recap | PCR欠損時 `0.8` | fixed_fallback | なし | オプション欠損時 | 旧実装では中立値として内部利用 | データ取得成功と誤認 | 欠損時は利用不可にする | 最優先 | 2026-06-11 廃止 |

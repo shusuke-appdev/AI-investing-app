@@ -148,6 +148,7 @@ def option_provenance(
     *, fetched_at: str, source: str, status: str, items: list[dict[str, Any]]
 ) -> list[ProvenanceItem]:
     qualities = {str(item.get("data_quality") or "") for item in items}
+    has_marketdata = "marketdata.app" in source
     kind = (
         ProvenanceKind.ESTIMATED
         if "estimated" in qualities
@@ -162,10 +163,17 @@ def option_provenance(
             kind,
             source=source,
             as_of=fetched_at,
-            method="PCR, IV, Max Pain and GEX computed from available option chains.",
+            method=(
+                "IV and Greeks are direct MarketData.app fields; PCR, Max Pain and GEX "
+                "are computed from the bounded option chain."
+                if has_marketdata
+                else "PCR, IV, Max Pain and GEX computed from available option chains."
+            ),
             limitation=(
                 "欠損Gammaを推定したGEXを含む場合がある。"
                 if kind == ProvenanceKind.ESTIMATED
+                else "GEXのCall正・Put負は簡易なディーラー建玉方向仮定。"
+                if has_marketdata
                 else "Greeks欠損時はGEXを非表示にする。"
             ),
             risk_level="high" if kind == ProvenanceKind.ESTIMATED else "medium",

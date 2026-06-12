@@ -1,5 +1,12 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-06-13 MarketData.app options complement
+- Added an optional MarketData.app REST path for explicit SPY / QQQ / IWM option refreshes, with Bearer authentication, HTTP 203/204 handling, bounded 0DTE requests, direct IV/Greeks/OI/Volume normalization, and provider-specific persistent cache.
+- Added `MARKETDATA_OPTIONS_MODE=off|shadow|preferred`; `shadow` keeps yfinance output while recording MarketData.app comparison metadata, and `preferred` falls back to yfinance on failure.
+- Kept startup, individual-stock option analysis, and market-microstructure option calls on the existing yfinance path to cap API-credit usage.
+- Propagated option source, data timestamp, data mode, and credit metadata through OptionContext/UI/provenance, and added a MarketData.app live smoke check.
+- Validation: compileall, ruff check, ruff format check, full pytest (`198 passed`), Reflex frontend export, and live smoke passed; MarketData.app live smoke was skipped because `MARKETDATA_TOKEN` is not configured.
+
 ## 最終セッション: 2026-05-13 (市場データ取得の高速化)
 - [x] UIフリーズの解消: `market_state.py` 内のバックエンド処理の遅延インポートをモジュールレベルへ移動し、イベントループのブロックを防止
 - [x] バックエンド処理の非同期並行化: `asyncio.gather` を使用し、各種分析（環境、マイクロストラクチャー、モメンタム、市場監視）を同時実行化
