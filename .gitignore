@@ -1,6 +1,7 @@
 *.db
 *.sqlite
 .states
+.reflex_states/
 tmp/
 assets/external/
 .web
@@ -50,8 +51,10 @@ secrets/
 **/.streamlit/secrets.toml
 legacy_streamlit/.streamlit/secrets.toml
 
-# Data files
+# Personal/local data files
 data/*.json
+data/knowledge/
+data/portfolios/
 
 data/*.csv
 

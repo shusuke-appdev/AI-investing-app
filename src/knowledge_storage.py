@@ -4,7 +4,6 @@
 （Strategyパターンによるリファクタリング適用済）
 """
 
-import json
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -12,9 +11,10 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from src.gas_client import get_gas_client
+from src.app_mode import require_writes_enabled
 from src.log_config import get_logger
 from src.settings_storage import get_storage_type
+from src.storage.atomic_json import read_json, update_json
 from src.storage.base import BaseStorage
 from src.supabase_client import get_supabase_client
 
@@ -97,20 +97,21 @@ def _get_storage_path() -> Path:
 
 class LocalKnowledgeStorage(BaseStorage):
     def save(self, id: str, data: Any) -> bool:
-        items = self.list_all()
-        # Ensure data is dict or KnowledgeItem
         item_dict = data if isinstance(data, dict) else data.to_dict()
 
-        # update or insert
-        existing_idx = next((i for i, x in enumerate(items) if x.get("id") == id), None)
-        if existing_idx is not None:
-            items[existing_idx] = item_dict
-        else:
-            items.append(item_dict)
-
         storage_path = _get_storage_path()
-        with open(storage_path, "w", encoding="utf-8") as f:
-            json.dump(items, f, ensure_ascii=False, indent=2)
+
+        def upsert(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            existing_idx = next(
+                (i for i, item in enumerate(items) if item.get("id") == id), None
+            )
+            if existing_idx is not None:
+                items[existing_idx] = item_dict
+            else:
+                items.append(item_dict)
+            return items
+
+        update_json(storage_path, [], upsert)
         return True
 
     def load(self, id: str) -> Any | None:
@@ -122,56 +123,25 @@ class LocalKnowledgeStorage(BaseStorage):
         if not storage_path.exists():
             return []
         try:
-            with open(storage_path, encoding="utf-8") as f:
-                data = json.load(f)
+            data = read_json(storage_path, [])
             # sort by created_at DESC
             data.sort(key=lambda x: x.get("created_at", ""), reverse=True)
             return data
-        except (json.JSONDecodeError, KeyError) as e:
+        except (ValueError, OSError, KeyError) as e:
             logger.error(f"Knowledge storage read error: {e}")
             return []
 
     def delete(self, id: str) -> bool:
-        items = self.list_all()
-        original_len = len(items)
-        items = [x for x in items if x.get("id") != id]
-        if len(items) < original_len:
-            storage_path = _get_storage_path()
-            with open(storage_path, "w", encoding="utf-8") as f:
-                json.dump(items, f, ensure_ascii=False, indent=2)
-            return True
-        return False
+        deleted = False
 
+        def remove(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            nonlocal deleted
+            updated = [item for item in items if item.get("id") != id]
+            deleted = len(updated) < len(items)
+            return updated
 
-class GasKnowledgeStorage(BaseStorage):
-    def save(self, id: str, data: Any) -> bool:
-        client = get_gas_client()
-        if client:
-            item_dict = data if isinstance(data, dict) else data.to_dict()
-            client.save_knowledge_item(item_dict)
-            return True
-        return False
-
-    def load(self, id: str) -> Any | None:
-        items = self.list_all()
-        return next((x for x in items if x.get("id") == id), None)
-
-    def list_all(self) -> list[Any]:
-        client = get_gas_client()
-        if client:
-            try:
-                data_list = client.get_all_knowledge()
-                data_list.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-                return data_list
-            except Exception as e:
-                logger.error(f"GAS load error: {e}")
-        return []
-
-    def delete(self, id: str) -> bool:
-        client = get_gas_client()
-        if client:
-            return client.delete_knowledge_item(id)
-        return False
+        update_json(_get_storage_path(), [], remove)
+        return deleted
 
 
 class SupabaseKnowledgeStorage(BaseStorage):
@@ -219,9 +189,7 @@ class KnowledgeStorageFactory:
     @staticmethod
     def get_storage() -> BaseStorage:
         storage_type = get_storage_type()
-        if storage_type == "gas":
-            return GasKnowledgeStorage()
-        elif storage_type == "supabase":
+        if storage_type == "supabase":
             return SupabaseKnowledgeStorage()
         return LocalKnowledgeStorage()
 
@@ -229,9 +197,10 @@ class KnowledgeStorageFactory:
 # 統合インターフェース
 
 
-def save_knowledge(item: KnowledgeItem) -> None:
+def save_knowledge(item: KnowledgeItem) -> bool:
+    require_writes_enabled()
     storage = KnowledgeStorageFactory.get_storage()
-    storage.save(item.id, item)
+    return storage.save(item.id, item)
 
 
 def load_all_knowledge() -> list[KnowledgeItem]:
@@ -255,6 +224,7 @@ def get_knowledge_by_id(item_id: str) -> KnowledgeItem | None:
 
 
 def delete_knowledge(item_id: str) -> bool:
+    require_writes_enabled()
     storage = KnowledgeStorageFactory.get_storage()
     return storage.delete(item_id)
 
@@ -270,8 +240,7 @@ def update_knowledge(item_id: str, updates: dict) -> KnowledgeItem | None:
             setattr(item, key, value)
 
     item.updated_at = datetime.now().isoformat()
-    save_knowledge(item)
-    return item
+    return item if save_knowledge(item) else None
 
 
 def get_knowledge_for_ai_context(max_items: int = 10) -> str:

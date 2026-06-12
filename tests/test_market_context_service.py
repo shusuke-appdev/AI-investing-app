@@ -182,6 +182,25 @@ def _patch_new_market_layers(monkeypatch):
     )
 
 
+def test_data_status_replaces_previous_feature_status():
+    previous = DataResult(
+        name="market_details_medium",
+        is_partial=True,
+        error="old failure",
+        cache_status="failed",
+    )
+    current = DataResult(
+        name="market_details_medium",
+        is_partial=False,
+        error="",
+        cache_status="live",
+    )
+
+    statuses = service._replace_data_status([previous], current)
+
+    assert statuses == [current]
+
+
 def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     _patch_new_market_layers(monkeypatch)
     monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)

@@ -49,6 +49,7 @@ class StockDashboardContext:
     data_status: list[DataResult] = field(default_factory=list)
     provenance: list[ProvenanceItem] = field(default_factory=list)
     profile_warning: str = ""
+    quality_warnings: list[str] = field(default_factory=list)
     error_message: str = ""
 
 
@@ -56,45 +57,105 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
     """Fetch and prepare all non-AI stock dashboard data."""
 
     normalized_ticker = ticker.strip().upper()
-    info_data = get_stock_info(normalized_ticker, translate_summary=False)
-    history_df = get_stock_data(normalized_ticker, "1y")
-    news_result = get_stock_news_with_status(normalized_ticker, 5)
-    tech_data = analyze_technical(normalized_ticker, "1y")
+    diagnostic_errors: dict[str, str] = {}
+    info_data = _safe_analysis(
+        "stock_profile",
+        lambda: get_stock_info(normalized_ticker, translate_summary=False),
+        {},
+        diagnostic_errors,
+    )
+    history_df = _safe_analysis(
+        "price_history",
+        lambda: get_stock_data(normalized_ticker, "1y"),
+        pd.DataFrame(),
+        diagnostic_errors,
+    )
+    news_result = _safe_analysis(
+        "news",
+        lambda: get_stock_news_with_status(normalized_ticker, 5),
+        {"items": [], "source_status": "failed", "error_reason": "News unavailable."},
+        diagnostic_errors,
+    )
+    tech_data = _safe_analysis(
+        "technical_analysis",
+        lambda: analyze_technical(normalized_ticker, "1y"),
+        {},
+        diagnostic_errors,
+    )
 
     info_dict = to_plain_value(info_data) if info_data else {}
     technical_dict = _technical_to_dict(tech_data)
-    smart_res = evaluate_smart_criteria(
-        normalized_ticker,
-        dict(info_dict) if info_dict else {},
-        "Unknown",
+    smart_res = _safe_analysis(
+        "smart_criteria",
+        lambda: evaluate_smart_criteria(
+            normalized_ticker,
+            dict(info_dict) if info_dict else {},
+            "Unknown",
+        ),
+        {},
+        diagnostic_errors,
     )
 
-    probabilistic = generate_probabilistic_stock_signal(
-        normalized_ticker,
-        "5y",
-        "SPY",
-        info_dict,
-        technical_dict,
+    probabilistic_dict = _safe_analysis(
+        "probabilistic_signal",
+        lambda: to_plain_value(
+            signal_to_dict(
+                generate_probabilistic_stock_signal(
+                    normalized_ticker,
+                    "5y",
+                    "SPY",
+                    info_dict,
+                    technical_dict,
+                )
+            )
+        ),
+        {},
+        diagnostic_errors,
     )
-    probabilistic_dict = to_plain_value(signal_to_dict(probabilistic))
-    trend_follow = generate_trend_follow_diagnostics(normalized_ticker, "5y", "SPY")
-    trend_follow_dict = to_plain_value(trend_follow_to_dict(trend_follow))
-    fomo_regime = to_plain_value(
-        analyze_fomo_volatility_regime(history_df, ticker=normalized_ticker)
+    trend_follow_dict = _safe_analysis(
+        "trend_follow_diagnostics",
+        lambda: to_plain_value(
+            trend_follow_to_dict(
+                generate_trend_follow_diagnostics(normalized_ticker, "5y", "SPY")
+            )
+        ),
+        {},
+        diagnostic_errors,
     )
-    trade_setup = evaluate_trade_setup(
-        normalized_ticker,
-        info_dict,
-        technical_dict,
-        history_df,
+    fomo_regime = _safe_analysis(
+        "fomo_regime",
+        lambda: to_plain_value(
+            analyze_fomo_volatility_regime(history_df, ticker=normalized_ticker)
+        ),
+        {},
+        diagnostic_errors,
     )
-    trade_setup_dict = to_plain_value(trade_setup_to_dict(trade_setup))
-    sector_theme_context = to_plain_value(
-        evaluate_stock_sector_theme_context(
-            normalized_ticker,
-            info_dict,
-            market_type="JP" if normalized_ticker.endswith(".T") else "US",
-        )
+    trade_setup_dict = _safe_analysis(
+        "trade_setup",
+        lambda: to_plain_value(
+            trade_setup_to_dict(
+                evaluate_trade_setup(
+                    normalized_ticker,
+                    info_dict,
+                    technical_dict,
+                    history_df,
+                )
+            )
+        ),
+        {},
+        diagnostic_errors,
+    )
+    sector_theme_context = _safe_analysis(
+        "sector_theme_context",
+        lambda: to_plain_value(
+            evaluate_stock_sector_theme_context(
+                normalized_ticker,
+                info_dict,
+                market_type="JP" if normalized_ticker.endswith(".T") else "US",
+            )
+        ),
+        {},
+        diagnostic_errors,
     )
     news_items = news_result.get("items", []) if isinstance(news_result, dict) else []
     news_source_status = (
@@ -119,6 +180,7 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         trade_setup_dict,
         sector_theme_context,
     )
+    _apply_diagnostic_errors(data_status, diagnostic_errors)
     provenance = stock_provenance(
         ticker=normalized_ticker,
         has_profile=bool(info_dict) and not _is_limited_profile(info_dict),
@@ -166,6 +228,7 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         data_status=data_status,
         provenance=provenance,
         profile_warning=_profile_warning_message(info_dict),
+        quality_warnings=list(diagnostic_errors.values()),
         error_message=_dashboard_error_message(info_dict, history_df),
     )
 
@@ -184,6 +247,41 @@ def to_plain_value(value: Any) -> Any:
     if isinstance(value, tuple):
         return [to_plain_value(item) for item in value]
     return value
+
+
+def _safe_analysis(
+    name: str,
+    callback,
+    fallback: Any,
+    errors: dict[str, str],
+) -> Any:
+    try:
+        return callback()
+    except Exception as exc:
+        errors[name] = f"{name} failed: {exc}"
+        return fallback
+
+
+def _apply_diagnostic_errors(
+    statuses: list[DataResult], errors: dict[str, str]
+) -> None:
+    by_name = {item.name: item for item in statuses}
+    for name, error in errors.items():
+        status = by_name.get(name)
+        if status is None:
+            statuses.append(
+                DataResult(
+                    name=name,
+                    source="local_calculation",
+                    is_partial=True,
+                    error=error,
+                    cache_status="failed",
+                )
+            )
+            continue
+        status.is_partial = True
+        status.error = error
+        status.cache_status = "failed"
 
 
 def _technical_to_dict(tech_data: Any) -> dict[str, Any]:

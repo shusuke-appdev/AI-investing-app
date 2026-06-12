@@ -3,13 +3,24 @@
 テキスト、ファイル、URL、YouTubeからコンテンツを抽出し、要約を生成します。
 """
 
+import ipaddress
 import re
+import socket
 from pathlib import Path
+from urllib.parse import urlparse
 
 from src.gemini_client import generate_content
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_URL_RESPONSE_BYTES = 2 * 1024 * 1024
+SUPPORTED_FILE_EXTENSIONS = {".txt", ".pdf", ".md", ".csv", ".json"}
+SUPPORTED_URL_CONTENT_TYPES = {
+    "text/html",
+    "application/xhtml+xml",
+    "text/plain",
+}
 
 
 def extract_from_text(text: str) -> str:
@@ -39,6 +50,10 @@ def extract_from_file(file_content: bytes, file_name: str) -> str:
         抽出されたテキスト
     """
     ext = Path(file_name).suffix.lower()
+    if len(file_content) > MAX_UPLOAD_BYTES:
+        return f"[ファイルサイズ上限は{MAX_UPLOAD_BYTES // (1024 * 1024)}MBです]"
+    if ext not in SUPPORTED_FILE_EXTENSIONS:
+        return f"[未対応のファイル形式: {ext}]"
 
     if ext == ".txt":
         # テキストファイル
@@ -71,8 +86,38 @@ def extract_from_file(file_content: bytes, file_name: str) -> str:
         except UnicodeDecodeError:
             return file_content.decode("cp932", errors="ignore")
 
-    else:
-        return f"[未対応のファイル形式: {ext}]"
+    return f"[未対応のファイル形式: {ext}]"
+
+
+def _validate_public_http_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("http または https の公開URLを指定してください")
+    if parsed.username or parsed.password:
+        raise ValueError("認証情報を含むURLは使用できません")
+    hostname = parsed.hostname.rstrip(".").lower()
+    if hostname == "localhost" or hostname.endswith(".local"):
+        raise ValueError("ローカルネットワークのURLは使用できません")
+
+    try:
+        addresses = [ipaddress.ip_address(hostname)]
+    except ValueError:
+        addresses = [
+            ipaddress.ip_address(item[4][0])
+            for item in socket.getaddrinfo(hostname, None)
+        ]
+    if not addresses:
+        raise ValueError("URLの接続先を解決できません")
+    if any(
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_multicast
+        or address.is_reserved
+        or address.is_unspecified
+        for address in addresses
+    ):
+        raise ValueError("ローカルまたは非公開ネットワークのURLは使用できません")
 
 
 def extract_from_youtube(video_url: str) -> str:
@@ -153,10 +198,34 @@ def extract_from_url(url: str) -> str:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
 
-        response = requests.get(url, headers=headers, timeout=15)
+        _validate_public_http_url(url)
+        response = requests.get(
+            url,
+            headers=headers,
+            timeout=15,
+            allow_redirects=True,
+            stream=True,
+        )
         response.raise_for_status()
+        for redirect in [*response.history, response]:
+            _validate_public_http_url(redirect.url)
 
-        soup = BeautifulSoup(response.content, "html.parser")
+        content_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
+        if content_type and content_type not in SUPPORTED_URL_CONTENT_TYPES:
+            return f"[未対応のContent-Type: {content_type}]"
+        content_length = int(response.headers.get("Content-Length", "0") or 0)
+        if content_length > MAX_URL_RESPONSE_BYTES:
+            return "[URL取得エラー: ページサイズが上限を超えています]"
+        chunks = []
+        total = 0
+        for chunk in response.iter_content(chunk_size=65536):
+            total += len(chunk)
+            if total > MAX_URL_RESPONSE_BYTES:
+                return "[URL取得エラー: ページサイズが上限を超えています]"
+            chunks.append(chunk)
+        content = b"".join(chunks)
+
+        soup = BeautifulSoup(content, "html.parser")
 
         # 不要な要素を削除
         for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):

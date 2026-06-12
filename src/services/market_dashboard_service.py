@@ -174,7 +174,7 @@ def build_market_medium_context(
     """Build medium-cost market state, momentum, and flow diagnostics."""
 
     base = _coerce_context(market_context) or build_market_summary_context(market_type)
-    errors = list(base.errors)
+    errors: list[str] = []
     options = base.options
 
     def evaluation_task() -> dict[str, Any]:
@@ -203,31 +203,7 @@ def build_market_medium_context(
     def flow_monitor_task() -> dict[str, Any]:
         return build_sector_flow_monitor(market_type)
 
-    def volatility_sentiment_task() -> dict[str, Any]:
-        if market_type != "US":
-            return {}
-        spy = get_stock_data("SPY", "5y")
-        if spy is None or spy.empty:
-            return {}
-        tlt = get_stock_data("TLT", "1y")
-        cboe = fetch_cboe_indices()
-        return {
-            "volatility_regime": build_market_volatility_regime(
-                spy,
-                cboe_result=cboe,
-                credit_stress=base.credit_stress,
-                cnn_reference=fetch_cnn_fear_greed(),
-                ibd_regime=base.ibd_regime,
-            ),
-            "sentiment": build_local_sentiment_composite(
-                spy,
-                tlt,
-                cboe_result=cboe,
-                credit_stress=base.credit_stress,
-            ),
-        }
-
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=7) as executor:
         futures = {
             "evaluation": executor.submit(evaluation_task),
             "ibd_regime": executor.submit(ibd_task),
@@ -236,7 +212,6 @@ def build_market_medium_context(
             "monitor": executor.submit(monitor_task),
             "sector_flow": executor.submit(sector_flow_task),
             "flow_monitor": executor.submit(flow_monitor_task),
-            "volatility_sentiment": executor.submit(volatility_sentiment_task),
         }
         results = {
             name: _future_result(future, errors) for name, future in futures.items()
@@ -262,7 +237,15 @@ def build_market_medium_context(
         ibd_regime,
     )
     flow_alignment = build_flow_alignment_context(flow_monitor, sector_flow)
-    volatility_sentiment = results.get("volatility_sentiment") or {}
+    volatility_sentiment = _safe_call(
+        lambda: _build_volatility_sentiment_context(
+            market_type,
+            ibd_regime=ibd_regime,
+            credit_stress=base.credit_stress,
+        ),
+        {},
+        errors,
+    )
     volatility_regime = (
         volatility_sentiment.get("volatility_regime") or base.volatility_regime
     )
@@ -290,8 +273,8 @@ def build_market_medium_context(
         sentiment=sentiment,
         top_risk_signposts=base.top_risk_signposts,
         fomo_scan=base.fomo_scan,
-        data_status=[
-            *base.data_status,
+        data_status=_replace_data_status(
+            base.data_status,
             DataResult(
                 name="market_details_medium",
                 source="market_dashboard_service",
@@ -347,7 +330,7 @@ def build_market_medium_context(
                 error="; ".join(volatility_regime.get("warnings", [])),
                 cache_status="computed",
             ),
-        ],
+        ),
         provenance=_merge_provenance(
             base.provenance,
             market_medium_provenance(
@@ -398,7 +381,7 @@ def build_market_high_context(
     """Build high-cost credit stress and distortion diagnostics."""
 
     base = _coerce_context(market_context) or build_market_summary_context(market_type)
-    errors = list(base.errors)
+    errors: list[str] = []
 
     def credit_stress_task() -> dict[str, Any]:
         return build_credit_stress_monitor(market_type)
@@ -419,17 +402,19 @@ def build_market_high_context(
 
     credit_stress = results.get("credit_stress") or base.credit_stress
     market_distortions = results.get("market_distortions") or base.market_distortions
-    sentiment = base.sentiment
-    if market_type == "US":
-        sentiment = _safe_call(
-            lambda: build_local_sentiment_composite(
-                get_stock_data("SPY", "1y"),
-                get_stock_data("TLT", "1y"),
-                credit_stress=credit_stress,
-            ),
-            base.sentiment,
-            errors,
-        )
+    volatility_sentiment = _safe_call(
+        lambda: _build_volatility_sentiment_context(
+            market_type,
+            ibd_regime=base.ibd_regime,
+            credit_stress=credit_stress,
+        ),
+        {},
+        errors,
+    )
+    volatility_regime = (
+        volatility_sentiment.get("volatility_regime") or base.volatility_regime
+    )
+    sentiment = volatility_sentiment.get("sentiment") or base.sentiment
     top_risk_signposts = (
         _safe_call(
             lambda: build_top_risk_signposts(
@@ -461,12 +446,12 @@ def build_market_high_context(
         flow_monitor=base.flow_monitor,
         flow_alignment=base.flow_alignment,
         cross_market=base.cross_market,
-        volatility_regime=base.volatility_regime,
+        volatility_regime=volatility_regime,
         sentiment=sentiment,
         top_risk_signposts=top_risk_signposts,
         fomo_scan=base.fomo_scan,
-        data_status=[
-            *base.data_status,
+        data_status=_replace_data_status(
+            base.data_status,
             DataResult(
                 name="market_details_high",
                 source="market_dashboard_service",
@@ -503,7 +488,7 @@ def build_market_high_context(
                 error="; ".join(top_risk_signposts.get("quality_warnings", [])),
                 cache_status="computed",
             ),
-        ],
+        ),
         provenance=_merge_provenance(
             base.provenance,
             market_high_provenance(
@@ -563,7 +548,7 @@ def build_market_options_context(
     """Refresh option data and option-dependent monitoring without reloading all data."""
 
     base = _coerce_context(market_context) or build_market_summary_context(market_type)
-    errors = list(base.errors)
+    errors: list[str] = []
     options = _build_option_context(market_type)
     if options.error_message:
         errors.append(options.error_message)
@@ -608,8 +593,8 @@ def build_market_options_context(
         sentiment=base.sentiment,
         top_risk_signposts=base.top_risk_signposts,
         fomo_scan=base.fomo_scan,
-        data_status=[
-            *base.data_status,
+        data_status=_replace_data_status(
+            base.data_status,
             DataResult(
                 name="options",
                 source=options.source,
@@ -620,7 +605,7 @@ def build_market_options_context(
                 cache_status=options.cache_status,
                 cache_age_seconds=options.cache_age_seconds,
             ),
-        ],
+        ),
         provenance=_merge_provenance(
             base.provenance,
             option_provenance(
@@ -1059,6 +1044,49 @@ def _future_result(future, errors: list[str]):
     except Exception as exc:
         errors.append(str(exc))
         return None
+
+
+def _build_volatility_sentiment_context(
+    market_type: str,
+    *,
+    ibd_regime: dict[str, Any],
+    credit_stress: dict[str, Any],
+) -> dict[str, Any]:
+    """Build dependent volatility/sentiment outputs after their inputs are current."""
+
+    if market_type != "US":
+        return {}
+    spy = get_stock_data("SPY", "5y")
+    if spy is None or spy.empty:
+        return {}
+    tlt = get_stock_data("TLT", "1y")
+    cboe = fetch_cboe_indices()
+    return {
+        "volatility_regime": build_market_volatility_regime(
+            spy,
+            cboe_result=cboe,
+            credit_stress=credit_stress,
+            cnn_reference=fetch_cnn_fear_greed(),
+            ibd_regime=ibd_regime,
+        ),
+        "sentiment": build_local_sentiment_composite(
+            spy,
+            tlt,
+            cboe_result=cboe,
+            credit_stress=credit_stress,
+        ),
+    }
+
+
+def _replace_data_status(
+    existing: list[DataResult], *updates: DataResult
+) -> list[DataResult]:
+    """Keep one current status row per analysis feature."""
+
+    by_name = {item.name: item for item in existing}
+    for item in updates:
+        by_name[item.name] = item
+    return list(by_name.values())
 
 
 def _normalize_microstructure(data: dict | None) -> dict[str, Any]:

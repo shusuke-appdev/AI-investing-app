@@ -33,6 +33,16 @@ def analyze_fomo_volatility_regime(
 ) -> dict[str, Any]:
     """Classify the latest high-volatility stock state from daily OHLCV."""
 
+    available_columns = (
+        {str(column).lower() for column in price_df.columns}
+        if price_df is not None
+        else set()
+    )
+    synthesized_fields = [
+        name
+        for name in ("open", "high", "low", "volume")
+        if name not in available_columns
+    ]
     frame = _prepare_frame(price_df)
     if len(frame) < 60:
         return {
@@ -46,7 +56,11 @@ def analyze_fomo_volatility_regime(
             "coexisting_flags": [],
             "profile": {},
             "metrics": {},
-            "data_quality": {"status": "insufficient_data", "rows": len(frame)},
+            "data_quality": {
+                "status": "insufficient_data",
+                "rows": len(frame),
+                "synthesized_fields": synthesized_fields,
+            },
         }
 
     profile = _profile(len(frame))
@@ -167,8 +181,17 @@ def analyze_fomo_volatility_regime(
             "close_location": _round(latest["close_location"], 2),
         },
         "data_quality": {
-            "status": "ok",
+            "status": "proxy" if synthesized_fields else "ok",
             "rows": len(frame),
+            "synthesized_fields": synthesized_fields,
+            "warnings": (
+                [
+                    "Missing OHLCV fields were synthesized: "
+                    + ", ".join(synthesized_fields)
+                ]
+                if synthesized_fields
+                else []
+            ),
             "as_of": str(frame.index[-1].date())
             if hasattr(frame.index[-1], "date")
             else str(frame.index[-1]),
@@ -220,15 +243,17 @@ def _prepare_frame(price_df: pd.DataFrame | None) -> pd.DataFrame:
     frame = price_df.copy().sort_index()
     lookup = {str(column).lower(): column for column in frame.columns}
     normalized = pd.DataFrame(index=frame.index)
-    for name in ("open", "high", "low", "close", "volume"):
+    close_source = lookup.get("close")
+    if close_source is None:
+        return pd.DataFrame()
+    normalized["close"] = pd.to_numeric(frame[close_source], errors="coerce")
+    for name in ("open", "high", "low", "volume"):
         source = lookup.get(name)
         if source is None:
             if name == "volume":
                 normalized[name] = 0.0
-            elif "close" in normalized:
-                normalized[name] = normalized["close"]
             else:
-                return pd.DataFrame()
+                normalized[name] = normalized["close"]
         else:
             normalized[name] = pd.to_numeric(frame[source], errors="coerce")
     return normalized.dropna(subset=["close"])

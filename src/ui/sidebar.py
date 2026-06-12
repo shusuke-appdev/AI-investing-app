@@ -7,17 +7,14 @@ from datetime import datetime
 
 import streamlit as st
 
-from src.gas_client import configure_gas
 from src.market_data import get_market_indices
 from src.news_analyst import configure_gemini, generate_market_recap
 from src.option_analyst import get_major_indices_options
 from src.portfolio_storage import set_storage_type
 from src.settings_storage import (
     get_finnhub_api_key,
-    get_gas_url,
     get_gemini_api_key,
     get_storage_type,
-    set_gas_url,
     set_storage_type_setting,
 )
 
@@ -157,12 +154,6 @@ def _load_saved_settings():
         st.session_state.gemini_api_key = saved_api_key
         configure_gemini(saved_api_key)
 
-    # GAS URL
-    saved_gas_url = get_gas_url()
-    if saved_gas_url and st.session_state.get("gas_url") != saved_gas_url:
-        st.session_state.gas_url = saved_gas_url
-        configure_gas(saved_gas_url)
-
     # Storage Type
     saved_storage = get_storage_type()
     if saved_storage:
@@ -220,7 +211,7 @@ def _render_settings():
 
         saved_storage = get_storage_type()
 
-        storage_options = ["local", "gas", "supabase"]
+        storage_options = ["local", "supabase"]
         try:
             default_index = storage_options.index(saved_storage)
         except ValueError:
@@ -231,7 +222,6 @@ def _render_settings():
             storage_options,
             format_func=lambda x: {
                 "local": "ローカル",
-                "gas": "Google Apps Script",
                 "supabase": "Supabase",
             }.get(x, x),
             index=default_index,
@@ -242,22 +232,6 @@ def _render_settings():
             set_storage_type(storage)
             set_storage_type_setting(storage)
             st.rerun()
-
-        if storage == "gas":
-            saved_gas_url = get_gas_url()
-            gas_url = st.text_input(
-                "GAS Web App URL",
-                value=saved_gas_url if saved_gas_url else "",
-                placeholder="https://script.google.com/macros/s/xxx/exec",
-            )
-
-            if gas_url and gas_url != saved_gas_url:
-                st.session_state.gas_url = gas_url
-                configure_gas(gas_url)
-                set_gas_url(gas_url)
-                st.success("✅ GAS設定完了（保存済み）")
-            elif saved_gas_url:
-                st.caption("✅ 設定済み")
 
         if storage == "supabase":
             from src.supabase_client import get_supabase_client

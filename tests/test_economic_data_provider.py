@@ -1,3 +1,4 @@
+import warnings
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -46,9 +47,16 @@ def test_fetch_fred_series_uses_csv_and_cache(monkeypatch, tmp_path: Path):
 
 
 def test_pandas_datareader_compat_imports_data_module():
-    pdr_data = provider.import_pandas_datareader_data()
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+        pdr_data = provider.import_pandas_datareader_data()
 
     assert hasattr(pdr_data, "DataReader")
+    assert not [
+        warning
+        for warning in captured
+        if "distutils Version classes are deprecated" in str(warning.message)
+    ]
 
 
 def test_fetch_fred_series_returns_stale_cache_immediately_when_preferred(

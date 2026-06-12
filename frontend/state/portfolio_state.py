@@ -204,9 +204,11 @@ class PortfolioState(rx.State):
         try:
             from src.portfolio_storage import delete_portfolio
 
-            await asyncio.to_thread(
+            deleted = await asyncio.to_thread(
                 delete_portfolio, self.current_portfolio_name, self.storage_type
             )
+            if not deleted:
+                raise ValueError("削除対象が存在しないか、削除に失敗しました")
             self.holdings = []
             self.current_portfolio_name = "新規ポートフォリオ"
             self.success_msg = "ポートフォリオを削除しました"

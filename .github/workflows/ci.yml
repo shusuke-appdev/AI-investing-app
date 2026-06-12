@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -r requirements.txt
+          python -m pip install -r requirements.txt -c constraints.txt
 
       - name: Lint
         run: python -m ruff check .
@@ -35,3 +35,6 @@ jobs:
 
       - name: Test
         run: python -m pytest -q
+
+      - name: Reflex frontend export
+        run: reflex export --frontend-only --no-zip

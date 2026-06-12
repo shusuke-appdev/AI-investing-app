@@ -392,7 +392,7 @@ def _format_momentum(raw: dict[str, list[dict[str, Any]]]) -> list[MomentumCateg
     result = []
     for category, themes in raw.items():
         theme_list = []
-        for item in themes:
+        for item in themes[:3]:
             perf = float(item.get("performance", 0.0))
             theme_list.append(
                 MomentumTheme(

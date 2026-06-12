@@ -69,10 +69,23 @@ python -m ruff format --check .
 - 市場サマリーキャッシュ: `.states/market_context_cache/*.json`
 - オプションチェーンキャッシュ: `.states/option_chain_cache/*.json`
 - 分析ジョブ状態: `.states/analysis_jobs/*.json`
+- Reflexセッション状態: `.reflex_states/`。アプリのデータキャッシュ `.states/` とは分離する
 
-### GAS
+### Live smoke
 
-Google Apps Script の Web App URL を設定すると、GAS 経由でポートフォリオと知識を保存できます。設定手順は `GAS_SETUP.md` を参照してください。
+外部API、公開読み取り専用ガード、設定済みのSupabaseを実データで確認します。作成したSupabase検証行は削除されます。
+
+```powershell
+.\.venv\Scripts\python.exe scripts\live_smoke.py
+```
+
+任意保存先が未設定の場合も失敗にするには `--require-optional` を付けます。
+
+2026-06-12時点の本番確認:
+
+- SPY/yfinance、AAPL/Finnhub、`APP_MODE=public_readonly` の書き込み防止とHTTP 200本番起動は実スモーク通過
+- FRED公式CSVは一時的な504/タイムアウト時もあり、その場合は信用ストレス分析がキャッシュ・代替経路で継続することを確認
+- Supabase本番プロジェクトは4テーブルのinsert/select/update/deleteをロールバック付きで通過
 
 ### Supabase
 
@@ -125,7 +138,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 `pytest` のキャッシュは、アクセス拒否が発生していた `.pytest_cache` ではなく `.states/pytest_cache` を使うように設定済みです。
 `ruff` のキャッシュも `.states/ruff_cache` を使います。
 
-ローカルキャッシュを初期化したい場合は、アプリを停止してから `.states/http_cache`、`.states/yfinance_cache`、`.states/market_context_cache`、`.states/option_chain_cache`、`.states/analysis_jobs` を削除してください。`.states` 全体を削除すると pytest/ruff の作業キャッシュも消えますが、次回実行時に再作成されます。
+ローカルキャッシュを初期化したい場合は、アプリを停止してから `.states/http_cache`、`.states/yfinance_cache`、`.states/market_context_cache`、`.states/option_chain_cache`、`.states/analysis_jobs` を削除してください。`.states` 全体を削除すると pytest/ruff の作業キャッシュも消えますが、次回実行時に再作成されます。Reflexセッション状態だけを初期化する場合は `.reflex_states/` を削除します。
 
 Reflex のフロントエンド検証では、Codex アプリの WindowsApps 配下にある `node.EXE` が `WinError 5` で実行できないことがあります。`rxconfig.py` は、存在する場合に `C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin` をPATH先頭へ入れ、実行可能な同梱Nodeを優先します。
 

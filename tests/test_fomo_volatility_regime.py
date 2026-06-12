@@ -58,6 +58,18 @@ def test_fomo_regime_requires_minimum_history():
     assert result["state"] == "insufficient_data"
 
 
+def test_fomo_regime_marks_synthesized_ohlcv_as_proxy():
+    result = analyze_fomo_volatility_regime(_prices()[["Close"]], ticker="PROXY")
+
+    assert result["data_quality"]["status"] == "proxy"
+    assert result["data_quality"]["synthesized_fields"] == [
+        "open",
+        "high",
+        "low",
+        "volume",
+    ]
+
+
 def test_fomo_scan_preserves_partial_success():
     def fetcher(ticker: str, period: str) -> pd.DataFrame:
         if ticker == "FAIL":

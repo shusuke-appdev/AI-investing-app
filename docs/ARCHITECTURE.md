@@ -60,7 +60,6 @@ UI
   src/knowledge_storage.py
   src/settings_storage.py
   src/supabase_client.py
-  src/gas_client.py
 
 横断関心
   src/cache.py
@@ -107,13 +106,13 @@ UI
 
 1. `/stock` のEntry Frameworkは銘柄のセットアップ品質と禁止条件を評価する
 2. `/trading-plan` はEntry価格、最終ストップ、口座金額、許容リスク率から推奨株数と3段階ストップを作る
-3. `trading_plan_storage` はローカルJSONまたはSupabaseへEntry時点の分析スナップショットを保存する。GAS保存は未対応
+3. `trading_plan_storage` はローカルJSONまたはSupabaseへEntry時点の分析スナップショットを保存する
 4. T+1/T+3は取得済み日足セッションから判定し、ジャーナル、実現R、ミスタグをProcess Reviewへ集計する
 
 ### ポートフォリオ
 
 1. UI入力を `PortfolioState.holdings` に保持
-2. `portfolio_storage` が local / GAS / Supabase の保存先を抽象化
+2. `portfolio_storage` が local / Supabase の保存先を抽象化
 3. `portfolio_advisor.analyze_portfolio()` が銘柄別情報、評価額、テーマ露出、リスク要素を集計
 4. `portfolio_advisor.generate_portfolio_advice()` がAIアドバイスを生成
 
@@ -121,7 +120,7 @@ UI
 
 1. `KnowledgeState` がテキスト、URL、YouTube、ファイルアップロードを受け取る
 2. `knowledge_extractor` が本文抽出・要約・タイトル生成を行う
-3. `knowledge_storage` が local / GAS / Supabase に保存する
+3. `knowledge_storage` が local / Supabase に保存する
 4. `knowledge_storage.get_knowledge_for_ai_context()` が銘柄分析プロンプトに注入される
 
 ## 重要な設計判断
@@ -147,7 +146,7 @@ UI
 - Reflex UI と Streamlit UI が同居し、どちらが正本か判断しづらい
 - データ取得、分析、UI整形が `frontend/state/*` と `src/services/*` にまたがって重複している
 - 外部APIエラーが握りつぶされる箇所が多く、ユーザーに「何が古いデータか」「何が取得失敗か」が伝わりにくい
-- 保存先の抽象化はあるが、local / GAS / Supabase のスキーマ契約・移行手順が不足している
+- 保存先の抽象化はあるが、local / Supabase のスキーマ契約・移行手順が不足している
 - AIプロンプトへの入力データが一部文字列連結中心で、検証可能な中間データ構造が不足している
 
 ## トレンドフォロー診断レイヤー

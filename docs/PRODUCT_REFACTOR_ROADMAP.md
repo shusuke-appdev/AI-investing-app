@@ -1,0 +1,62 @@
+# Product Refactor Review and Roadmap
+
+更新日: 2026-06-12
+
+## プロダクト契約
+
+- 本アプリは個人用の投資調査ダッシュボードであり、売買助言・投資一任を目的としない。
+- 主UIと新規開発の正本は `frontend/` のReflexアプリとする。
+- `APP_MODE=private` は個人データの保存・更新・削除を許可する。
+- 公開配置では `APP_MODE=public_readonly` を設定し、Portfolio、Knowledge、Trading Planの書き込みを禁止する。
+- 保存先の既定値はローカルJSONとし、Supabaseは明示選択時のみ使用する。
+
+## 分析機能の責務マップ
+
+| 機能 | 主な責務 | 主な出力・連携先 |
+| --- | --- | --- |
+| Market Summary | 指数・市場設定の軽量取得 | `MarketContext`、Market UI |
+| Market Watch | IBD、需給、モメンタム、資金フロー、信用、歪み、ボラティリティ | `MarketContext`、Market Watch、Market AI |
+| Options | SPY/QQQ/IWMのPCR、IV、Max Pain、Skew等 | `OptionContext`、市場環境評価 |
+| Theme Ranking | テーマと構成銘柄の期間別順位 | Market Watch、Market AI、個別株テーマ評価 |
+| Stock Analysis | 企業情報、価格、ニュース、テクニカル、確率・トレンド・FOMO・Entry診断 | `StockSignalContext`、Stock UI、Stock AI |
+| Trading Plan | R基準の計画、確認、実績、ジャーナル | 手動の実行管理。予測責務を持たない |
+| Portfolio | 保有比率、損益、集中度、調査レポート | Portfolio UI、Portfolio AI |
+| Knowledge DB | ユーザー資料の保存と安全な引用 | Stock AI、Portfolio AI |
+
+## 2026-06-12 実施済み
+
+- Portfolio AIの入力契約とTheme Bottom5誤表示を修正した。
+- 市場分析の同名ステータス置換と依存順序を修正した。
+- 個別株の任意診断を部分失敗可能にした。
+- Trading Plan一覧表示から銘柄ごとのネットワーク取得を除去した。
+- ローカルJSON保存をファイル単位ロックと原子的置換へ統一した。
+- Knowledge URLのSSRF防御、リダイレクト検査、容量・Content-Type・ファイル形式制限を追加した。
+- `.dockerignore`、CIのconstraints適用、Reflex export検証を追加した。
+- 個人ポートフォリオJSONをGit追跡から外した。
+
+## 次期ロードマップ
+
+### P1: 分析入力の共有と待ち時間削減
+
+- `StockAnalysisInputs` を導入し、価格・企業情報・ニュース・ベンチマークの重複取得を削減する。
+- Portfolio AIへ共有 `MarketContext` を渡し、市場データの再取得とUIとの差異をなくす。
+- Trading PlanのT+1/T+3候補更新は一覧描画ではなく明示更新処理へ分離する。
+
+### P1: データ品質
+
+- Theme Rankingへ要求期間、実測期間、構成銘柄取得率、最低取得数を追加する。
+- `MarketContext` と `StockSignalContext` の主要な `dict[str, Any]` を型付きサブコンテキストへ移行する。
+- provider層の曖昧な空値を、出所と失敗理由を持つ結果型へ移行する。
+
+### P2: 責務分割
+
+- `market_dashboard_service.py` をステージ実行、依存分析、コンテキスト統合へ分割する。
+- `option_analyst.py` と大型UIコンポーネントを計算・整形・表示へ分割する。
+- `legacy_streamlit/` と `src/ui/` は履歴保持ブランチへ退避後、mainから削除する。
+
+## 受入基準
+
+- 一部の外部API・任意診断が失敗しても、取得済み分析と品質警告を表示できる。
+- UIとAIが同一コンテキストを再利用し、同一更新内で結論が矛盾しない。
+- 公開読み取り専用モードでは個人データを書き込めない。
+- pytest、ruff、format check、compileall、Reflex frontend exportがCIで通る。

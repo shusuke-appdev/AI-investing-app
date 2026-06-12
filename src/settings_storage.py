@@ -1,6 +1,6 @@
 """
 Settings Storage Module
-API設定やGAS URLなどをローカルに永続化します。
+API設定や保存先設定をローカルに永続化します。
 """
 
 import json
@@ -157,23 +157,16 @@ def set_gemini_api_key(api_key: str) -> bool:
     return False
 
 
-def get_gas_url() -> str:
-    """GAS Web App URLを取得"""
-    return get_setting("gas_url", "")
-
-
-def set_gas_url(url: str) -> bool:
-    """GAS Web App URLを保存"""
-    return set_setting("gas_url", url)
-
-
 def get_storage_type() -> str:
-    """ストレージタイプを取得（local/gas/supabase）"""
-    return get_setting("storage_type", "supabase")
+    """ストレージタイプを取得（local/supabase）。旧GAS設定はlocalへ移行する。"""
+    value = get_setting("storage_type", "local")
+    return value if value in {"local", "supabase"} else "local"
 
 
 def set_storage_type_setting(storage_type: str) -> bool:
     """ストレージタイプを保存"""
+    if storage_type not in {"local", "supabase"}:
+        raise ValueError("storage_type must be 'local' or 'supabase'.")
     return set_setting("storage_type", storage_type)
 
 

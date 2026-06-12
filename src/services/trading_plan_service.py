@@ -232,8 +232,6 @@ def review_metrics(plans: list[TradePlanRecord]) -> dict[str, Any]:
 
 
 def display_plan(plan: TradePlanRecord) -> dict[str, Any]:
-    from src.market_data import get_stock_data
-
     setup = plan.setup_snapshot
     profit_levels = setup.get("profit_extension_levels") or {}
     return {
@@ -256,10 +254,18 @@ def display_plan(plan: TradePlanRecord) -> dict[str, Any]:
             if profit_levels.get(multiple) is not None
         )
         or "N/A",
-        "session_stage": confirmation_stage(
-            plan.entry_date, get_stock_data(plan.ticker, "3mo")
-        ),
+        "session_stage": _stored_confirmation_stage(plan),
     }
+
+
+def _stored_confirmation_stage(plan: TradePlanRecord) -> str:
+    """Return the persisted review stage without network work during rendering."""
+
+    if plan.t3_status == "confirmed":
+        return "T+3"
+    if plan.t1_status == "confirmed":
+        return "T+1"
+    return "T"
 
 
 def confirmation_stage(entry_date: str, price_df: pd.DataFrame | None) -> str:

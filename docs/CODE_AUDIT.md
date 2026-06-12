@@ -59,7 +59,7 @@
 ### Major: 保存層の抽象化はあるがスキーマ契約が不足
 
 - 該当: `src/storage/base.py`、`src/portfolio_storage.py`、`src/knowledge_storage.py`
-- 影響: local / GAS / Supabase 間でデータ形状がずれたときに検出しづらい
+- 影響: local / Supabase 間でデータ形状がずれたときに検出しづらい
 - 対応方針: PydanticモデルまたはTypedDictを保存契約として定義し、保存前後のバリデーションを追加する
 
 ### Resolved: CI が品質確認を実行してからデプロイ同期する構成へ更新
@@ -78,7 +78,7 @@
 ### Minor: 環境変数テンプレートが不足していた
 
 - 旧状態: `.env.example` は Gemini と J-Quants のみ
-- 実コード: Finnhub、EDINET、Supabase、GASも利用
+- 実コード: Finnhub、EDINET、Supabaseも利用
 - 対応: `.env.example` を更新済み
 
 ## 機能面のリスク
@@ -87,7 +87,7 @@
 - オプション分析は yfinance / Finnhub の制限に強く依存するため、レート制限時の再試行・バックオフ・部分表示が重要
 - 日本株分析は J-Quants / EDINET / yfinance / Stooq の補完関係が複雑で、取得元優先順位の仕様化が必要
 - 参照知識はAI品質に直結するため、重複、古い情報、プロンプト注入への対策が必要
-- ポートフォリオ保存はローカルJSONでは扱いやすいが、Supabase/GAS移行時にスキーマ差異が見えにくい
+- ポートフォリオ保存はローカルJSONでは扱いやすいが、Supabase移行時にスキーマ差異が見えにくい
 
 ## 検証結果
 

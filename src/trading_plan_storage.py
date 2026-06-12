@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from src.app_mode import require_writes_enabled
 from src.log_config import get_logger
 from src.services.trading_plan_service import TradePlanRecord
 from src.settings_storage import get_storage_type
+from src.storage.atomic_json import read_json, update_json, write_json
 from src.supabase_client import get_supabase_client
 
 logger = get_logger(__name__)
@@ -16,9 +17,8 @@ DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "trading_plans.json"
 
 
 def save_trade_plan(plan: TradePlanRecord) -> bool:
+    require_writes_enabled()
     storage_type = get_storage_type()
-    if storage_type == "gas":
-        raise ValueError("Trading PlanのGAS保存は初回実装では未対応です。")
     if storage_type == "supabase":
         return _save_supabase(plan)
     return _save_local(plan)
@@ -26,8 +26,6 @@ def save_trade_plan(plan: TradePlanRecord) -> bool:
 
 def load_trade_plans() -> list[TradePlanRecord]:
     storage_type = get_storage_type()
-    if storage_type == "gas":
-        raise ValueError("Trading PlanのGAS保存は初回実装では未対応です。")
     raw = _load_supabase() if storage_type == "supabase" else _load_local()
     plans = [
         TradePlanRecord.from_mapping(item) for item in raw if isinstance(item, dict)
@@ -40,29 +38,44 @@ def get_trade_plan(plan_id: str) -> TradePlanRecord | None:
 
 
 def delete_trade_plan(plan_id: str) -> bool:
+    require_writes_enabled()
     if get_storage_type() == "supabase":
         client = get_supabase_client()
         if not client:
             return False
         client.table("trade_plans").delete().eq("id", plan_id).execute()
         return True
-    plans = [plan for plan in _load_local() if plan.get("plan_id") != plan_id]
-    _write_local(plans)
-    return True
+    deleted = False
+
+    def remove(plans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        nonlocal deleted
+        updated = [plan for plan in plans if plan.get("plan_id") != plan_id]
+        deleted = len(updated) < len(plans)
+        return updated
+
+    update_json(DATA_PATH, [], remove)
+    return deleted
 
 
 def _save_local(plan: TradePlanRecord) -> bool:
-    plans = _load_local()
     payload = plan.to_dict()
-    index = next(
-        (idx for idx, item in enumerate(plans) if item.get("plan_id") == plan.plan_id),
-        None,
-    )
-    if index is None:
-        plans.append(payload)
-    else:
-        plans[index] = payload
-    _write_local(plans)
+
+    def upsert(plans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        index = next(
+            (
+                idx
+                for idx, item in enumerate(plans)
+                if item.get("plan_id") == plan.plan_id
+            ),
+            None,
+        )
+        if index is None:
+            plans.append(payload)
+        else:
+            plans[index] = payload
+        return plans
+
+    update_json(DATA_PATH, [], upsert)
     return True
 
 
@@ -70,19 +83,15 @@ def _load_local() -> list[dict[str, Any]]:
     if not DATA_PATH.exists():
         return []
     try:
-        value = json.loads(DATA_PATH.read_text(encoding="utf-8"))
+        value = read_json(DATA_PATH, [])
         return value if isinstance(value, list) else []
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         logger.error("Trading plan local load failed: %s", exc)
         return []
 
 
 def _write_local(plans: list[dict[str, Any]]) -> None:
-    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DATA_PATH.write_text(
-        json.dumps(plans, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json(DATA_PATH, plans)
 
 
 def _save_supabase(plan: TradePlanRecord) -> bool:

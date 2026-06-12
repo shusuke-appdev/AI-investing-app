@@ -238,3 +238,27 @@ streamlit run legacy_streamlit/app.py
 - Added the FOMO Volatility Regime to individual-stock context/UI and an explicit bounded `/market-watch` scan for high-volatility semiconductor names.
 - Preserved the existing probabilistic stock signal and staged MarketContext loading; new diagnostics are parallel context, not replacement trade signals.
 - Validation: full pytest passed, live Cboe/FRED/SPY/NVDA smoke passed, and target Stock/Market Watch page imports passed. Reflex export remains blocked by the pre-existing uncommitted `frontend/pages/trading_plan.py` string/ObjectItemOperation type error.
+
+# Session update: 2026-06-12 product refactor P0/P1
+- Fixed the Portfolio AI serialized-technical contract and reframed its output as investment research rather than direct order instructions.
+- Fixed Market AI theme laggards, market-stage status replacement, and volatility/sentiment dependency order.
+- Made optional stock diagnostics preserve partial dashboard results instead of failing the whole stock analysis.
+- Removed per-plan market fetches from Trading Plan list rendering.
+- Added atomic locked local JSON writes, public-readonly write guards, Knowledge SSRF/upload defenses, and Docker exclusions.
+- Changed the default storage policy to local-first and removed the tracked personal portfolio JSON while keeping the local file.
+- Added CI constraints and Reflex export checks, plus `docs/PRODUCT_REFACTOR_ROADMAP.md` as the current responsibility map and remaining roadmap.
+
+# Session update: 2026-06-12 live integration verification
+- Suppressed the four known `pandas_datareader.compat` distutils deprecation warnings only at the third-party import boundary and added a warning regression test.
+- Added `scripts/live_smoke.py` for real SPY, FRED, Finnhub, public-readonly, Supabase, and GAS checks with explicit PASS/FAIL/SKIP boundaries.
+- Restored the inactive AI-investing-app Supabase project for live CRUD verification.
+- Added the missing live `trade_plans` table and verified rollback-cleaned CRUD across `user_settings`, `portfolios`, `knowledge_items`, and `trade_plans`.
+- Verified the production frontend build with `APP_MODE=public_readonly`; the first sandboxed Node build hit `spawn EPERM`, while the approved execution surface passed.
+- Separated Reflex disk session state into `.reflex_states/` so production startup no longer attempts to delete application cache directories under `.states/`.
+- Verified `APP_MODE=public_readonly` production startup and HTTP 200 on port 8765 after the state-directory split.
+- Live smoke now reports FRED provider outages as `DEGRADED` when the app's credit-stress recovery path remains usable.
+
+# Session update: 2026-06-12 GAS removal
+- Removed Google Apps Script as a storage backend and deleted the GAS client and Apps Script implementation.
+- Storage selection, Portfolio, Knowledge, Trading Plan, legacy settings UI, documentation, and live smoke now support only local JSON and Supabase.
+- Legacy saved `storage_type=gas` values safely fall back to local storage.

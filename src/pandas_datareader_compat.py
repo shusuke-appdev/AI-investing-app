@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import warnings
 from typing import Any
 
 
@@ -31,6 +32,13 @@ def import_pandas_datareader_data() -> Any:
 
         _decorators.deprecate_kwarg = compat_deprecate_kwarg
 
-    from pandas_datareader import data as pdr_data
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="distutils Version classes are deprecated.*",
+            category=DeprecationWarning,
+            module=r"pandas_datareader\.compat",
+        )
+        from pandas_datareader import data as pdr_data
 
     return pdr_data

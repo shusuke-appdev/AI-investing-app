@@ -23,7 +23,10 @@ def get_momentum_themes(
     market_type: str = "US", top_n: int = 5
 ) -> dict[str, list[dict]]:
     """
-    4カテゴリ×上位Nテーマのモメンタムランキングを取得する。
+    4カテゴリ×上位N・下位Nテーマのモメンタムランキングを取得する。
+
+    リスト先頭は上位、末尾は下位になる。表示層は先頭だけを表示し、
+    AIレポートは両端を使ってleaders/laggardsを区別する。
 
     Args:
         market_type: "US" または "JP"
@@ -37,16 +40,24 @@ def get_momentum_themes(
     for cat_name, period_name in MOMENTUM_CATEGORIES.items():
         try:
             ranked = get_ranked_themes(period_name, market_type)
-            top_themes = []
-            for t in ranked[:top_n]:
-                top_themes.append(
+            selected = ranked[:top_n]
+            if len(ranked) > top_n:
+                selected += ranked[-top_n:]
+            themes = []
+            seen: set[str] = set()
+            for t in selected:
+                theme_name = str(t["theme"])
+                if theme_name in seen:
+                    continue
+                seen.add(theme_name)
+                themes.append(
                     {
-                        "theme": t["theme"],
+                        "theme": theme_name,
                         "performance": round(t["performance"], 1),
                         "period": period_name,
                     }
                 )
-            result[cat_name] = top_themes
+            result[cat_name] = themes
         except Exception as e:
             logger.warning(
                 f"[MomentumMonitor] Failed to get themes for {cat_name}: {e}"

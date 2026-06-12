@@ -55,3 +55,50 @@ def test_portfolio_analysis_excludes_missing_prices(monkeypatch):
     assert result["num_holdings"] == 1
     assert result["excluded_holdings"][0]["ticker"] == "MISSING"
     assert result["provenance"][0]["kind"] == "direct"
+
+
+def test_portfolio_ai_accepts_serialized_technical_analysis(monkeypatch):
+    from src.advisor import llm
+
+    monkeypatch.setattr(llm, "get_macro_context", lambda: {})
+    monkeypatch.setattr(llm, "analyze_market_technicals", lambda: {})
+    monkeypatch.setattr(llm, "get_sector_performance", lambda: {})
+    monkeypatch.setattr(llm, "get_theme_exposure_analysis", lambda holdings: {})
+    monkeypatch.setattr(llm, "get_holdings_news", lambda holdings: [])
+    monkeypatch.setattr(llm, "generate_content", lambda prompt: prompt)
+    monkeypatch.setattr(
+        "src.knowledge_storage.get_knowledge_for_ai_context", lambda max_items: ""
+    )
+    analysis = {
+        "total_value": 200.0,
+        "num_holdings": 1,
+        "holdings": [
+            {
+                "ticker": "AAPL",
+                "name": "Apple",
+                "current_price": 100.0,
+                "shares": 2.0,
+                "value": 200.0,
+                "weight": 100.0,
+                "pnl_pct": 10.0,
+                "technical": {
+                    "overall_signal": "Buy",
+                    "overall_score": 3,
+                    "rsi": 55.0,
+                    "rsi_signal": "Neutral",
+                    "macd_signal": "Bullish",
+                    "contrarian_signal": "Wait",
+                    "contrarian_buy_zone": [90.0, 95.0],
+                    "support_price": 88.0,
+                },
+            }
+        ],
+    }
+
+    prompt = llm.generate_portfolio_advice(
+        analysis, include_macro=False, include_news=False
+    )
+
+    assert "テクニカル: Buy" in prompt
+    assert "売買数量や注文を指示しない" in prompt
+    assert "未信頼の引用データ" in prompt

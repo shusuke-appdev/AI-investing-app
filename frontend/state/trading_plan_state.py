@@ -103,7 +103,8 @@ class TradingPlanState(rx.State):
                 shares=float(self.shares) if self.shares else None,
                 setup_snapshot=dashboard.trade_setup,
             )
-            await asyncio.to_thread(save_trade_plan, plan)
+            if not await asyncio.to_thread(save_trade_plan, plan):
+                raise ValueError("Trading Planの保存に失敗しました。")
             self.success_msg = f"{plan.ticker} のTrading Planを作成しました。"
             self.ticker = ""
             self.entry_price = ""
@@ -160,7 +161,8 @@ class TradingPlanState(rx.State):
             ):
                 plan.mistake_tags.append(self.mistake_tag.strip())
             plan.updated_at = datetime.now().isoformat()
-            await asyncio.to_thread(save_trade_plan, plan)
+            if not await asyncio.to_thread(save_trade_plan, plan):
+                raise ValueError("Trading Planの保存に失敗しました。")
             self.journal_note = ""
             self.mistake_tag = ""
             self._assign(await asyncio.to_thread(load_trade_plans))
@@ -172,7 +174,8 @@ class TradingPlanState(rx.State):
         try:
             from src.trading_plan_storage import delete_trade_plan, load_trade_plans
 
-            await asyncio.to_thread(delete_trade_plan, plan_id)
+            if not await asyncio.to_thread(delete_trade_plan, plan_id):
+                raise ValueError("削除対象が存在しないか、削除に失敗しました。")
             self._assign(await asyncio.to_thread(load_trade_plans))
             self.success_msg = "Trading Planを削除しました。"
         except Exception as exc:
@@ -197,7 +200,8 @@ class TradingPlanState(rx.State):
                 raise ValueError("同一Entry日の新規ポジションは最大3件です。")
             plan.status = status
             plan.updated_at = datetime.now().isoformat()
-            await asyncio.to_thread(save_trade_plan, plan)
+            if not await asyncio.to_thread(save_trade_plan, plan):
+                raise ValueError("Trading Planの保存に失敗しました。")
             self._assign(await asyncio.to_thread(load_trade_plans))
             self.success_msg = f"{plan.ticker} を {status} に更新しました。"
         except Exception as exc:
@@ -217,7 +221,8 @@ class TradingPlanState(rx.State):
                 raise ValueError("対象のTrading Planがありません。")
             setattr(plan, field_name, value)
             plan.updated_at = datetime.now().isoformat()
-            await asyncio.to_thread(save_trade_plan, plan)
+            if not await asyncio.to_thread(save_trade_plan, plan):
+                raise ValueError("Trading Planの保存に失敗しました。")
             self._assign(await asyncio.to_thread(load_trade_plans))
         except Exception as exc:
             self.error_msg = f"確認状態の更新に失敗しました: {exc}"
@@ -250,7 +255,8 @@ class TradingPlanState(rx.State):
             ):
                 plan.mistake_tags.append(self.mistake_tag.strip())
             plan.updated_at = datetime.now().isoformat()
-            await asyncio.to_thread(save_trade_plan, plan)
+            if not await asyncio.to_thread(save_trade_plan, plan):
+                raise ValueError("Trading Planの保存に失敗しました。")
             self.realized_r = ""
             self.journal_note = ""
             self.mistake_tag = ""

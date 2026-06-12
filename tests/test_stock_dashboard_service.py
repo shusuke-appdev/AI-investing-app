@@ -151,3 +151,55 @@ def test_stock_dashboard_display_info_formats_core_metrics():
     assert display["market_cap"] == "$328.79B"
     assert display["pe_ratio"] == "154.10"
     assert display["dividend_yield"] == "0.42%"
+
+
+def test_stock_dashboard_keeps_partial_results_when_optional_diagnostic_fails(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        service,
+        "get_stock_info",
+        lambda ticker, translate_summary=False: {"ticker": ticker, "name": "Test"},
+    )
+    monkeypatch.setattr(service, "get_stock_data", lambda *args: _price_history())
+    monkeypatch.setattr(
+        service,
+        "get_stock_news_with_status",
+        lambda *args: {"items": [], "source_status": "available", "error_reason": ""},
+    )
+    monkeypatch.setattr(service, "analyze_technical", lambda *args: {"score": 1})
+    monkeypatch.setattr(service, "evaluate_smart_criteria", lambda *args: {})
+    monkeypatch.setattr(
+        service,
+        "generate_probabilistic_stock_signal",
+        lambda *args: (_ for _ in ()).throw(RuntimeError("model unavailable")),
+    )
+    monkeypatch.setattr(
+        service, "generate_trend_follow_diagnostics", lambda *args: object()
+    )
+    monkeypatch.setattr(
+        service,
+        "trend_follow_to_dict",
+        lambda value: {"data_quality": {"status": "ok"}, "warnings": []},
+    )
+    monkeypatch.setattr(
+        service, "analyze_fomo_volatility_regime", lambda *args, **kwargs: {}
+    )
+    monkeypatch.setattr(service, "evaluate_trade_setup", lambda *args: object())
+    monkeypatch.setattr(
+        service, "trade_setup_to_dict", lambda value: {"status": "wait", "warnings": []}
+    )
+    monkeypatch.setattr(
+        service, "evaluate_stock_sector_theme_context", lambda *args, **kwargs: {}
+    )
+
+    context = service.build_stock_dashboard_context("TEST")
+
+    assert context.info["ticker"] == "TEST"
+    assert context.chart_data
+    assert context.probabilistic_signal == {}
+    assert any("model unavailable" in warning for warning in context.quality_warnings)
+    status = next(
+        item for item in context.data_status if item.name == "probabilistic_signal"
+    )
+    assert status.cache_status == "failed"

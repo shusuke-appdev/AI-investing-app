@@ -78,7 +78,9 @@ class KnowledgeState(rx.State):
         try:
             from src.knowledge_storage import delete_knowledge
 
-            await asyncio.to_thread(delete_knowledge, item_id)
+            deleted = await asyncio.to_thread(delete_knowledge, item_id)
+            if not deleted:
+                raise ValueError("削除対象が存在しないか、削除に失敗しました")
             return KnowledgeState.load_items
         except Exception as e:
             print(f"Error deleting: {e}")
@@ -160,7 +162,9 @@ class KnowledgeState(rx.State):
                 summary=summary,
                 metadata=metadata,
             )
-            await asyncio.to_thread(save_knowledge, item)
+            saved = await asyncio.to_thread(save_knowledge, item)
+            if not saved:
+                raise ValueError("参照知識の保存に失敗しました")
 
             self.mode = "list"
             yield KnowledgeState.load_items
@@ -176,11 +180,24 @@ class KnowledgeState(rx.State):
         yield
 
         try:
-            from src.knowledge_extractor import extract_from_file
+            from pathlib import Path
+
+            from src.knowledge_extractor import (
+                MAX_UPLOAD_BYTES,
+                SUPPORTED_FILE_EXTENSIONS,
+                extract_from_file,
+            )
 
             if files:
                 file = files[0]
-                upload_data = await file.read()
+                extension = Path(file.filename or "").suffix.lower()
+                if extension not in SUPPORTED_FILE_EXTENSIONS:
+                    self.extracted_content = f"[未対応のファイル形式: {extension}]"
+                    return
+                upload_data = await file.read(MAX_UPLOAD_BYTES + 1)
+                if len(upload_data) > MAX_UPLOAD_BYTES:
+                    self.extracted_content = f"[ファイルサイズ上限は{MAX_UPLOAD_BYTES // (1024 * 1024)}MBです]"
+                    return
                 self.extracted_content = await asyncio.to_thread(
                     extract_from_file, upload_data, file.filename
                 )

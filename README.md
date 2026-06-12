@@ -34,7 +34,7 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 - 旧UI: Streamlit
 - データ取得: yfinance、Finnhub、J-Quants、EDINET、Google News
 - AI: Google Gemini API
-- 保存先: ローカルJSON、Google Apps Script、Supabase
+- 保存先: ローカルJSON、Supabase
 - グラフ・数値処理: pandas、numpy、scipy、plotly、statsmodels、arch
 - 品質確認: pytest、ruff
 
@@ -52,7 +52,6 @@ AI-investing-app/
   docs/                    設計・運用・点検・改修計画
   scripts/                 検証・デバッグ用スクリプト
   legacy_streamlit/        旧Streamlitアプリ
-  gas/                     Google Apps Script 連携コード
 ```
 
 ## セットアップ
@@ -69,6 +68,7 @@ python -m pip install -r requirements.txt -c constraints.txt
 `.env.example` を参考に `.env` を作成します。
 
 ```env
+APP_MODE=private
 GEMINI_API_KEY=your_gemini_api_key_here
 FINNHUB_API_KEY=your_finnhub_api_key_here
 JQUANTS_API_KEY=your_jquants_api_key_here
@@ -78,6 +78,10 @@ SUPABASE_SECRET_KEY=your_supabase_secret_key_here
 # SUPABASE_SERVICE_ROLE_KEY=your_legacy_service_role_key_here
 # SUPABASE_KEY=your_legacy_supabase_key_here
 ```
+
+`APP_MODE=private` は個人利用向けで、Portfolio・Knowledge・Trading Planの書き込みを許可します。
+公開配置では `APP_MODE=public_readonly` を設定し、個人データの保存・更新・削除を禁止してください。
+保存先の既定値はローカルJSONです。
 
 ## 起動
 
@@ -112,6 +116,7 @@ python -m ruff format --check .
 
 ## 必読資料
 
+- [総合リファクタリング・分析責務マップ](docs/PRODUCT_REFACTOR_ROADMAP.md)
 - [アーキテクチャ概要](docs/ARCHITECTURE.md)
 - [運用・環境設定ガイド](docs/OPERATIONS.md)
 - [Supabase Data API grants 対応](docs/SUPABASE_DATA_API_GRANTS.md)

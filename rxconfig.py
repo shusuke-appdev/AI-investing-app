@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+os.environ.setdefault("REFLEX_STATES_WORKDIR", ".reflex_states")
+
 import reflex as rx
 
 
