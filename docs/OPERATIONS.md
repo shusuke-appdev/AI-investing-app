@@ -62,6 +62,7 @@ python -m ruff format --check .
 ### ローカル
 
 - ポートフォリオ: `data/portfolios/*.json`
+- Trading Plan: `data/trading_plans.json`
 - 知識DB: `data/knowledge*.json` 系のローカルファイル
 - HTTPキャッシュ: `.states/http_cache/app_cache.sqlite` など用途別SQLite
 - yfinanceタイムゾーンキャッシュ: `.states/yfinance_cache/`
@@ -75,7 +76,7 @@ Google Apps Script の Web App URL を設定すると、GAS 経由でポート�
 
 ### Supabase
 
-`SUPABASE_URL` と `SUPABASE_SECRET_KEY` を設定すると Supabase に保存できます。旧設定との互換のため `SUPABASE_SERVICE_ROLE_KEY` と `SUPABASE_KEY` も読みますが、新規環境では secret key をサーバー環境変数として使います。現在のコードは `portfolios`、`knowledge_items`、`user_settings` テーブルを前提にしています。
+`SUPABASE_URL` と `SUPABASE_SECRET_KEY` を設定すると Supabase に保存できます。旧設定との互換のため `SUPABASE_SERVICE_ROLE_KEY` と `SUPABASE_KEY` も読みますが、新規環境では secret key をサーバー環境変数として使います。現在のコードは `portfolios`、`knowledge_items`、`user_settings`、`trade_plans` テーブルを前提にしています。
 
 Supabase の 2026-05-30 / 2026-10-30 の Data API 既定変更に対応するため、新規 Supabase プロジェクトまたは新規テーブル作成時は、データ移行前に [supabase/public_tables.sql](../supabase/public_tables.sql) を Supabase SQL Editor で実行してください。移行ツールからも同じ SQL を表示できます。この SQL は `postgres` ロールが今後作る `public` オブジェクトの自動 Data API 公開も抑止します。
 
@@ -101,6 +102,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - 重い分析処理は `src/services/analysis_jobs.py` の `queued/running/succeeded/failed/partial/cancelled` 状態で管理し、単一Reflex環境ではローカルJSON永続化を使います
 - `yfinance` など外部データソースのレスポンススキーマは変更されることがあり、列名の変化に備えたテストが必要です
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
+- Entry Frameworkは日足データによるproxyです。LoD、ORH、寄付き後30分、1-2時間確認、即時ギャップ抵抗は判定しません。Trading PlanのGAS保存も初回実装では未対応です
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
 - GitHub Actions の Hugging Face Spaces 同期は `main` / `master` への push で force push します。運用前に対象Spaceとブランチ保護を確認してください
 - Supabase移行は既定でdry-runです。実行は `python tools/migrate_to_supabase.py --execute`、既存テーブルを消して入れ替える場合のみ `--confirm-destroy` を追加します。破壊実行時は `data/supabase_backups/` にバックアップが取れない限り中断します。新規テーブル作成が必要な場合は、先に `python tools/migrate_to_supabase.py --print-setup-sql` で表示される SQL を Supabase SQL Editor で実行します。

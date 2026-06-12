@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from src.advisor.volatility import compute_volatility
 from src.advisor.volatility_clustering import detect_clustering, generate_signals
 
 
@@ -69,3 +70,13 @@ def test_generate_signals_entry():
     # If vol < hist_mean - 0.5 * hist_std, it's ENTRY.
     # We might not guarantee it in random data without explicit crafting, but it should not be EXIT.
     assert signals["signal"] in ["ENTRY", "HOLD"]
+
+
+def test_compute_volatility_prepares_log_returns_from_market_ohlcv():
+    frame = pd.DataFrame({"Close": np.linspace(100, 120, 80)})
+
+    result = compute_volatility(frame)
+
+    assert "log_return" in result.columns
+    assert "vol" in result.columns
+    assert result["vol"].notna().any()

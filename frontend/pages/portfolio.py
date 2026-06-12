@@ -1,5 +1,7 @@
 import reflex as rx
 
+from frontend.components.data_provenance import provenance_panel
+from frontend.components.ui_primitives import empty_state, page_header, section_heading
 from frontend.state.portfolio_state import HoldingItem, PortfolioState
 from frontend.template import template
 
@@ -21,6 +23,7 @@ def _render_holding_row(holding: HoldingItem) -> rx.Component:
             variant="ghost",
             color_scheme="red",
             size="1",
+            aria_label=holding.ticker + "を削除",
         ),
         align_items="center",
         width="100%",
@@ -38,7 +41,8 @@ def _render_input_section() -> rx.Component:
             rx.heading(PortfolioState.current_portfolio_name, size="5"),
             rx.spacer(),
             rx.button(
-                "＋ 新規",
+                rx.icon("plus", size=15),
+                "新規",
                 on_click=PortfolioState.new_portfolio,
                 variant="outline",
                 size="2",
@@ -46,7 +50,8 @@ def _render_input_section() -> rx.Component:
             rx.cond(
                 PortfolioState.current_portfolio_name != "新規ポートフォリオ",
                 rx.button(
-                    "🗑️ 削除",
+                    rx.icon("trash-2", size=15),
+                    "削除",
                     on_click=PortfolioState.delete_current_portfolio,
                     color_scheme="red",
                     variant="outline",
@@ -95,20 +100,20 @@ def _render_input_section() -> rx.Component:
                         placeholder="ティッカー (例: AAPL)",
                         value=PortfolioState.new_ticker,
                         on_change=PortfolioState.set_new_ticker,
-                        width="150px",
+                        width=rx.breakpoints(initial="100%", sm="150px"),
                     ),
                     rx.input(
                         placeholder="株数",
                         value=PortfolioState.new_shares,
                         on_change=PortfolioState.set_new_shares,
-                        width="120px",
+                        width=rx.breakpoints(initial="100%", sm="120px"),
                         type="number",
                     ),
                     rx.input(
                         placeholder="取得単価 (任意)",
                         value=PortfolioState.new_cost,
                         on_change=PortfolioState.set_new_cost,
-                        width="150px",
+                        width=rx.breakpoints(initial="100%", sm="150px"),
                         type="number",
                     ),
                     rx.button(
@@ -156,13 +161,15 @@ def _render_input_section() -> rx.Component:
                         width="250px",
                     ),
                     rx.button(
-                        "💾 保存",
+                        rx.icon("save", size=15),
+                        "保存",
                         on_click=PortfolioState.save_portfolio,
                         loading=PortfolioState.is_loading,
                         color_scheme="green",
                     ),
                     rx.button(
-                        "📊 分析する",
+                        rx.icon("chart-no-axes-combined", size=15),
+                        "分析する",
                         on_click=PortfolioState.run_analysis,
                         loading=PortfolioState.is_analyzing,
                         color_scheme="blue",
@@ -173,10 +180,10 @@ def _render_input_section() -> rx.Component:
                 ),
                 width="100%",
             ),
-            rx.center(
-                rx.text("銘柄を追加してポートフォリオを構築してください", color="gray"),
-                height="100px",
-                width="100%",
+            empty_state(
+                "保有銘柄がありません",
+                "銘柄コード、株数、必要に応じて取得単価を入力してください。",
+                "briefcase-business",
             ),
         ),
         width="100%",
@@ -187,19 +194,34 @@ def _render_analysis_section() -> rx.Component:
     """分析結果の表示"""
     result = PortfolioState.analysis_result
     return rx.vstack(
-        rx.hstack(
-            rx.heading("📊 ポートフォリオ分析", size="5"),
-            rx.spacer(),
+        section_heading(
+            "ポートフォリオ分析",
+            "価格を取得できた銘柄だけで時価と構成比を計算します。",
             rx.button(
-                "← 管理画面に戻る",
+                rx.icon("arrow-left", size=15),
+                "管理画面に戻る",
                 on_click=PortfolioState.set_submode("input"),
                 variant="outline",
                 size="2",
             ),
-            width="100%",
-            align_items="center",
-            margin_bottom="1.5rem",
         ),
+        rx.cond(
+            PortfolioState.analysis_warnings.length() > 0,
+            rx.callout(
+                rx.vstack(
+                    rx.foreach(
+                        PortfolioState.analysis_warnings,
+                        lambda item: rx.text(item, size="2"),
+                    ),
+                    align_items="start",
+                    spacing="1",
+                ),
+                icon="triangle-alert",
+                color_scheme="amber",
+                width="100%",
+            ),
+        ),
+        provenance_panel(PortfolioState.provenance),
         # サマリーカード
         rx.cond(
             result.contains("total_value"),
@@ -237,10 +259,11 @@ def _render_analysis_section() -> rx.Component:
         rx.card(
             rx.vstack(
                 rx.hstack(
-                    rx.heading("🤖 AIアドバイス", size="4"),
+                    rx.heading("AIアドバイス", size="4"),
                     rx.spacer(),
                     rx.button(
-                        "📝 AIアドバイスを生成",
+                        rx.icon("sparkles", size=15),
+                        "AIアドバイスを生成",
                         on_click=PortfolioState.generate_advice,
                         loading=PortfolioState.is_generating_advice,
                         color_scheme="indigo",
@@ -270,7 +293,10 @@ def _render_analysis_section() -> rx.Component:
 def portfolio_page() -> rx.Component:
     """ポートフォリオ管理ページ"""
     return rx.vstack(
-        rx.heading("💼 ポートフォリオアドバイザー", size="7", margin_bottom="1.5rem"),
+        page_header(
+            "ポートフォリオアドバイザー",
+            "保有銘柄を管理し、取得可能な価格と分析結果を基に構成を確認します。",
+        ),
         # 成功メッセージ
         rx.cond(
             PortfolioState.success_msg != "",

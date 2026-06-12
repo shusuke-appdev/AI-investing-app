@@ -1,11 +1,15 @@
 import reflex as rx
 
+from frontend.components.data_provenance import provenance_panel
+from frontend.components.fomo_volatility import fomo_volatility_panel
 from frontend.components.metric_card import metric_card
 from frontend.components.probabilistic_signal import probabilistic_signal_panel
 from frontend.components.technical_analysis import technical_analysis
+from frontend.components.trade_setup import trade_setup_panel
 from frontend.components.trend_follow_diagnostics import (
     trend_follow_diagnostics_panel,
 )
+from frontend.components.ui_primitives import empty_state, loading_state, page_header
 from frontend.state.stock_state import StockState
 from frontend.template import template
 
@@ -14,31 +18,30 @@ from frontend.template import template
 def stock_page() -> rx.Component:
     """個別銘柄分析画面 (Stock)"""
     return rx.vstack(
-        # ヘッダー部分
-        rx.hstack(
-            rx.heading("個別銘柄分析", size="7"),
-            rx.spacer(),
-            width="100%",
-            align_items="center",
-            margin_bottom="1rem",
+        page_header(
+            "個別銘柄分析",
+            "企業概要、株価、テクニカル、モデル出力とデータ制約をまとめて確認します。",
         ),
         # ティッカー入力と取得ボタン
         rx.card(
-            rx.hstack(
-                rx.text("銘柄コード:", weight="bold"),
+            rx.flex(
+                rx.text("銘柄コード", weight="bold"),
                 rx.input(
                     placeholder="例: AAPL",
                     value=StockState.ticker,
                     on_change=StockState.set_ticker,
-                    width="200px",
+                    width=rx.breakpoints(initial="100%", sm="220px"),
                 ),
                 rx.button(
+                    rx.icon("search", size=16),
                     "データ取得",
                     on_click=StockState.fetch_stock_data,
                     loading=StockState.is_fetching,
                     color_scheme="blue",
                 ),
-                align_items="center",
+                align="center",
+                direction=rx.breakpoints(initial="column", sm="row"),
+                gap="0.75rem",
                 width="100%",
             ),
             width="100%",
@@ -68,13 +71,7 @@ def stock_page() -> rx.Component:
         # ローディングスピナー（全体）
         rx.cond(
             StockState.is_fetching,
-            rx.center(
-                rx.spinner(size="3"),
-                rx.text("企業データを取得中...", margin_top="1rem", color="gray"),
-                direction="column",
-                width="100%",
-                height="300px",
-            ),
+            loading_state("企業データを取得中..."),
             # データ表示領域
             rx.cond(
                 StockState.display_name != "",
@@ -100,6 +97,7 @@ def stock_page() -> rx.Component:
                         width="100%",
                         margin_bottom="1rem",
                     ),
+                    provenance_panel(StockState.provenance),
                     # 総合評価・モードバッジ
                     rx.cond(
                         StockState.technical_data.contains("overall_signal"),
@@ -157,7 +155,7 @@ def stock_page() -> rx.Component:
                             StockState.display_dividend_yield,
                             "",
                         ),
-                        columns="3",
+                        columns=rx.breakpoints(initial="1", sm="3"),
                         spacing="4",
                         width="100%",
                         margin_bottom="2rem",
@@ -254,7 +252,9 @@ def stock_page() -> rx.Component:
                             ),
                             width="100%",
                         ),
-                        grid_template_columns="2fr 1fr",
+                        grid_template_columns=rx.breakpoints(
+                            initial="1fr", lg="2fr 1fr"
+                        ),
                         spacing="4",
                         width="100%",
                         margin_bottom="2rem",
@@ -410,7 +410,9 @@ def stock_page() -> rx.Component:
                     ),
                     # テクニカル分析
                     technical_analysis(),
+                    trade_setup_panel(),
                     probabilistic_signal_panel(),
+                    fomo_volatility_panel(),
                     trend_follow_diagnostics_panel(),
                     # AI Recap (Gemini)
                     rx.box(
@@ -420,7 +422,8 @@ def stock_page() -> rx.Component:
                             ),
                             rx.spacer(),
                             rx.button(
-                                "✨ AI銘柄分析生成",
+                                rx.icon("sparkles", size=16),
+                                "AI銘柄分析生成",
                                 on_click=StockState.generate_ai_analysis,
                                 loading=StockState.is_generating_analysis,
                                 color_scheme="indigo",
@@ -478,7 +481,7 @@ def stock_page() -> rx.Component:
                                     width="100%",
                                 ),
                             ),
-                            columns="2",
+                            columns=rx.breakpoints(initial="1", md="2"),
                             spacing="4",
                             width="100%",
                         ),
@@ -487,12 +490,10 @@ def stock_page() -> rx.Component:
                     width="100%",
                 ),
                 # 初期状態またはデータなし
-                rx.center(
-                    rx.text(
-                        "銘柄コードを入力し、データを取得してください。", color="gray"
-                    ),
-                    height="200px",
-                    width="100%",
+                empty_state(
+                    "銘柄分析を開始",
+                    "銘柄コードを入力し、データ取得を実行してください。",
+                    "search",
                 ),
             ),
         ),

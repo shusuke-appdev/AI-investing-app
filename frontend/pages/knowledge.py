@@ -1,5 +1,6 @@
 import reflex as rx
 
+from frontend.components.ui_primitives import empty_state, loading_state, page_header
 from frontend.state.knowledge_state import KnowledgeState
 from frontend.template import template
 
@@ -21,7 +22,7 @@ def render_knowledge_item(item: dict) -> rx.Component:
     )
 
     return rx.card(
-        rx.hstack(
+        rx.flex(
             rx.vstack(
                 rx.icon(tag=icon_name, size=24, color=rx.color("indigo", 9)),
                 rx.text(item["source_type"], size="1", color="gray"),
@@ -65,7 +66,8 @@ def render_knowledge_item(item: dict) -> rx.Component:
                 spacing="2",
             ),
             width="100%",
-            align_items="center",
+            align=rx.breakpoints(initial="start", md="center"),
+            direction=rx.breakpoints(initial="column", md="row"),
             spacing="4",
         ),
         width="100%",
@@ -91,7 +93,7 @@ def render_list_mode() -> rx.Component:
         ),
         rx.cond(
             KnowledgeState.is_loading,
-            rx.center(rx.spinner(), width="100%", padding="2rem"),
+            loading_state("保存済み知識を取得中..."),
             rx.cond(
                 KnowledgeState.items.length() > 0,
                 rx.vstack(
@@ -104,13 +106,10 @@ def render_list_mode() -> rx.Component:
                     rx.foreach(KnowledgeState.items, render_knowledge_item),
                     width="100%",
                 ),
-                rx.center(
-                    rx.text(
-                        "まだ知識が追加されていません。「追加」ボタンから情報を登録してください。",
-                        color="gray",
-                    ),
-                    padding="3rem",
-                    width="100%",
+                empty_state(
+                    "参照知識がありません",
+                    "新しい知識を追加すると、AI分析の参照コンテキストとして利用できます。",
+                    "book-open",
                 ),
             ),
         ),
@@ -121,7 +120,7 @@ def render_list_mode() -> rx.Component:
 def render_add_mode() -> rx.Component:
     """追加モード"""
     return rx.vstack(
-        rx.heading("📥 知識を追加", size="5", margin_bottom="1rem"),
+        rx.heading("知識を追加", size="5", margin_bottom="1rem"),
         rx.text("入力方式", weight="bold", size="2"),
         rx.radio(
             ["text", "file", "youtube", "url"],
@@ -223,7 +222,8 @@ def render_add_mode() -> rx.Component:
         rx.divider(margin_top="2rem", margin_bottom="1rem"),
         rx.hstack(
             rx.button(
-                "💾 保存してAIに学習させる",
+                rx.icon("database-zap", size=15),
+                "AI参照に追加",
                 color_scheme="indigo",
                 on_click=KnowledgeState.save_new_knowledge,
                 loading=KnowledgeState.is_saving,
@@ -244,7 +244,7 @@ def render_add_mode() -> rx.Component:
 def render_edit_mode() -> rx.Component:
     """編集モード"""
     return rx.vstack(
-        rx.heading("✏️ 知識を編集", size="5", margin_bottom="1rem"),
+        rx.heading("知識を編集", size="5", margin_bottom="1rem"),
         rx.text("タイトル", weight="bold", size="2"),
         rx.input(
             value=KnowledgeState.edit_title,
@@ -270,7 +270,8 @@ def render_edit_mode() -> rx.Component:
         ),
         rx.hstack(
             rx.button(
-                "💾 更新を保存",
+                rx.icon("save", size=15),
+                "更新を保存",
                 color_scheme="indigo",
                 on_click=KnowledgeState.save_edit,
             ),
@@ -290,11 +291,9 @@ def render_edit_mode() -> rx.Component:
 def knowledge() -> rx.Component:
     """Knowledge DB ページ"""
     return rx.vstack(
-        rx.heading("📚 参照知識管理", size="7", margin_bottom="0.5rem"),
-        rx.text(
-            "AIチャットが参照する知識ソースを管理します。",
-            color="gray",
-            margin_bottom="2rem",
+        page_header(
+            "参照知識管理",
+            "AI分析が参照する知識ソースを追加・編集・削除します。",
         ),
         rx.cond(
             KnowledgeState.mode == "list",

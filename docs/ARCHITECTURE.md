@@ -13,6 +13,7 @@
   - `/`: Market Intelligence
   - `/market-watch`: 市場監視
   - `/stock`: 個別銘柄分析
+  - `/trading-plan`: 売買計画・実行品質管理
   - `/portfolio`: ポートフォリオ分析
   - `/knowledge`: 参照知識管理
 - 旧Streamlit UI: `legacy_streamlit/app.py` と `src/ui/`
@@ -99,7 +100,15 @@ UI
 4. `advisor.probabilistic_signal.generate_probabilistic_stock_signal()` が過去の類似局面、forward return、walk-forward検証、サイジング目安を作る
 5. `advisor.trend_follow_diagnostics.generate_trend_follow_diagnostics()` が日足トレンドフォローを診断軸として評価し、OOS、コスト耐性、遅延耐性、右テール依存、Buy & Hold比較を `StockSignalContext` に追加する
 6. `advisor.sector_theme_diagnostics.evaluate_stock_sector_theme_context()` が対象銘柄のセクター/テーマを、ファンダメンタル優位とフロー優位の両面から評価して `StockSignalContext` に追加する
-7. `StockSignalContext` は表示済みニュース見出し、SMART基準、テクニカルも保持し、AI分析は `stock_analyst.analyze_stock()` が同じ入力を再利用してプロンプトを組み立てる
+7. `advisor.trade_setup.evaluate_trade_setup()` が市場/セクター相対強度、VCP、RVOL、ATR拡張、200MAトレンドを日足Entry Frameworkとして評価し、`StockSignalContext.trade_setup` に追加する
+8. `StockSignalContext` は表示済みニュース見出し、SMART基準、テクニカル、Entry Frameworkも保持し、AI分析は `stock_analyst.analyze_stock()` が同じ入力を再利用してプロンプトを組み立てる
+
+### Trading Plan
+
+1. `/stock` のEntry Frameworkは銘柄のセットアップ品質と禁止条件を評価する
+2. `/trading-plan` はEntry価格、最終ストップ、口座金額、許容リスク率から推奨株数と3段階ストップを作る
+3. `trading_plan_storage` はローカルJSONまたはSupabaseへEntry時点の分析スナップショットを保存する。GAS保存は未対応
+4. T+1/T+3は取得済み日足セッションから判定し、ジャーナル、実現R、ミスタグをProcess Reviewへ集計する
 
 ### ポートフォリオ
 
@@ -123,6 +132,7 @@ UI
 - yfinance系の重い取得は、メモリTTLに加えて `.states/market_context_cache` と `.states/option_chain_cache` のJSONキャッシュを使う。`source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` をUIとAIプロンプトへ渡す
 - Market AI Recap は `MarketContext` がある場合に市場監視やテーマランキングを再取得せず、context 内の monitoring / momentum / option 情報を優先する。context 構築に失敗した互換パスだけ旧取得ロジックへフォールバックする
 - Stock AI Recap は `StockSignalContext` がある場合に表示済みのテクニカル、SMART基準、ニュース見出し、確率シグナルを使い、UIとAIの材料ズレを避ける
+- Entry Frameworkは日足専用で、LoD、ORH、寄付き後30分、1-2時間確認などの分足依存ルールを成立済みと仮定しない。`blocked`判定はAIが上書きしない
 - 日経平均上昇6条件は、日証金売り残、1570信用倍率、海外投資家買越額などの直接データがない場合に `proxy` または `unavailable` として明示する。代理評価は断定ではなく、AIプロンプトにもデータ品質として渡す
 - ETFリーダーシップproxyは市場全体のリスクオン/オフ確認に使い、資金流入セクター判定は米国セクターETFと `JP_THEMES` の代表銘柄バスケットから具体候補を出す。スコアは相対騰落率、5日/20日継続性、出来高比、上昇参加率から作り、売買指示ではなく「乗る候補」「押し目待ち」「観察」「見送り」の調査支援ラベルに留める
 - HTTPキャッシュは `src/network.py` が `.states/http_cache` 配下で用途別セッションとして管理し、ルート直下にSQLiteを作らない

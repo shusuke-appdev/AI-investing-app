@@ -21,12 +21,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.supabase_client import get_supabase_client
 
-TABLES = ("user_settings", "portfolios", "knowledge_items")
+TABLES = ("user_settings", "portfolios", "knowledge_items", "trade_plans")
 SETUP_SQL_PATH = Path(__file__).parent.parent / "supabase" / "public_tables.sql"
 CLEAR_FILTERS = {
     "user_settings": ("key", "__migration_sentinel__"),
     "portfolios": ("name", "__migration_sentinel__"),
     "knowledge_items": ("id", "__migration_sentinel__"),
+    "trade_plans": ("id", "__migration_sentinel__"),
 }
 
 
@@ -148,6 +149,8 @@ def collect_local_payload(tables: tuple[str, ...]) -> dict[str, Any]:
         payload["portfolios"] = collect_portfolio_payloads()
     if "knowledge_items" in tables:
         payload["knowledge_items"] = collect_knowledge_payloads()
+    if "trade_plans" in tables:
+        payload["trade_plans"] = collect_trade_plan_payloads()
     return payload
 
 
@@ -211,6 +214,37 @@ def collect_knowledge_payloads() -> list[dict[str, Any]]:
         if isinstance(item, dict):
             item.setdefault("metadata", {})
             payloads.append(item)
+    return payloads
+
+
+def collect_trade_plan_payloads() -> list[dict[str, Any]]:
+    """Load local manual trading plans as Supabase payloads."""
+
+    path = Path(__file__).parent.parent / "data" / "trading_plans.json"
+    if not path.exists():
+        return []
+    try:
+        plans = load_json_robust(path)
+    except Exception as exc:
+        print(f"[ERR] Error reading trading plans: {exc}")
+        return []
+
+    payloads = []
+    for plan in plans if isinstance(plans, list) else []:
+        if not isinstance(plan, dict) or not plan.get("plan_id"):
+            continue
+        now = current_utc_iso()
+        payloads.append(
+            {
+                "id": plan["plan_id"],
+                "ticker": plan.get("ticker", ""),
+                "status": plan.get("status", "draft"),
+                "entry_date": plan.get("entry_date"),
+                "payload": plan,
+                "created_at": plan.get("created_at") or now,
+                "updated_at": plan.get("updated_at") or now,
+            }
+        )
     return payloads
 
 
@@ -285,6 +319,11 @@ def upload_payload(client: Any, payload: dict[str, Any]) -> None:
         client.table("knowledge_items").upsert(batch).execute()
     if "knowledge_items" in payload:
         print(f"[OK] Uploaded {len(knowledge_items)} knowledge items.")
+
+    for plan in payload.get("trade_plans", []):
+        client.table("trade_plans").upsert(plan, on_conflict="id").execute()
+    if "trade_plans" in payload:
+        print(f"[OK] Uploaded {len(payload['trade_plans'])} trading plans.")
 
 
 if __name__ == "__main__":

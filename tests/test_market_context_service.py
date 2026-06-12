@@ -1,3 +1,5 @@
+import pandas as pd
+
 from src.persistent_cache import PersistentJsonCache
 from src.services import market_analyst_service
 from src.services import market_dashboard_service as service
@@ -252,6 +254,8 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     assert "Nikkei upside six conditions" in service.format_market_context_for_ai(
         context
     )
+    assert "[Data provenance]" in service.format_market_context_for_ai(context)
+    assert "kind=proxy" in service.format_market_context_for_ai(context)
 
 
 def test_build_market_context_keeps_partial_data_when_options_fail(monkeypatch):
@@ -304,6 +308,25 @@ def test_market_summary_context_does_not_fetch_options(monkeypatch):
     assert context.market_data["S&P 500"]["ticker"] == "SPY"
     assert context.options.items == []
     assert context.source == "live_summary"
+    assert context.provenance[0].kind.value == "direct"
+
+
+def test_market_monitor_does_not_invent_missing_yield_or_valuation(monkeypatch):
+    monkeypatch.setattr(
+        service, "get_stock_data", lambda ticker, period: pd.DataFrame()
+    )
+    monkeypatch.setattr(service, "get_valuation_metrics", lambda ticker: {})
+
+    monitor = service.build_market_monitor_context([])
+
+    assert monitor["yield_spread"]["available"] is False
+    assert monitor["yield_spread"]["yield_10y"] is None
+    assert monitor["yield_spread"]["spreads"] == {}
+    assert service._extract_spy_pcr([]) is None
+    assert service._extract_pe({}) is None
+    assert "10Y=unavailable" in service.format_market_context_for_ai(
+        MarketContext(market_type="US", monitor=monitor)
+    )
 
 
 def test_market_context_cache_preserves_stale_metadata(monkeypatch, tmp_path):
@@ -330,6 +353,7 @@ def test_market_context_cache_preserves_stale_metadata(monkeypatch, tmp_path):
     assert loaded.cache_status == "stale_cache"
     assert loaded.is_stale is True
     assert loaded.data_status[0].cache_status == "stale_cache"
+    assert any(item.kind.value == "stale_cache" for item in loaded.provenance)
 
 
 def test_market_details_reuses_supplied_context(monkeypatch):

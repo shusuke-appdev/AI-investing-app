@@ -43,11 +43,11 @@ def nav_item(text: str, icon: str, url: str) -> rx.Component:
     )
 
 
-def _market_button(label: str, market_value: str, emoji: str) -> rx.Component:
+def _market_button(label: str, market_value: str) -> rx.Component:
     """市場切り替え用の個別ボタン"""
     is_active = MarketState.market_type == market_value
     return rx.button(
-        rx.text(f"{emoji} {label}", size="2", weight="medium"),
+        rx.text(label, size="2", weight="medium"),
         on_click=MarketState.set_market_type(market_value),
         variant=rx.cond(is_active, "solid", "ghost"),
         color_scheme=rx.cond(is_active, "blue", "gray"),
@@ -61,8 +61,8 @@ def market_switcher() -> rx.Component:
     """市場切り替えセグメントコントロール"""
     return rx.box(
         rx.hstack(
-            _market_button("US", "US", "🇺🇸"),
-            _market_button("JP", "JP", "🇯🇵"),
+            _market_button("米国 US", "US"),
+            _market_button("日本 JP", "JP"),
             width="100%",
             spacing="2",
         ),
@@ -93,6 +93,7 @@ def sidebar_nav() -> rx.Component:
             nav_item("Market", "globe", "/"),
             nav_item("市場監視", "radar", "/market-watch"),
             nav_item("Stock", "trending-up", "/stock"),
+            nav_item("Trading Plan", "clipboard-list", "/trading-plan"),
             nav_item("Portfolio", "pie-chart", "/portfolio"),
             nav_item("Knowledge", "book-open", "/knowledge"),
             width="100%",
@@ -113,4 +114,95 @@ def sidebar_nav() -> rx.Component:
         bg=rx.color("gray", 1),
         position="sticky",
         top="0",
+        display=rx.breakpoints(initial="none", lg="flex"),
+    )
+
+
+def mobile_nav() -> rx.Component:
+    """Drawer navigation used when the fixed sidebar is hidden."""
+
+    return rx.vstack(
+        rx.hstack(
+            rx.drawer.root(
+                rx.drawer.trigger(
+                    rx.button(
+                        rx.icon("menu", size=18),
+                        "メニュー",
+                        variant="surface",
+                        aria_label="メインメニューを開く",
+                    )
+                ),
+                rx.drawer.portal(
+                    rx.drawer.overlay(),
+                    rx.drawer.content(
+                        rx.vstack(
+                            rx.hstack(
+                                rx.drawer.title("AI Investing"),
+                                rx.spacer(),
+                                rx.drawer.close(
+                                    rx.icon_button(
+                                        rx.icon("x", size=18),
+                                        variant="ghost",
+                                        aria_label="メインメニューを閉じる",
+                                    )
+                                ),
+                                width="100%",
+                                align_items="center",
+                            ),
+                            rx.drawer.description(
+                                "分析画面と管理画面を移動します。",
+                                color=rx.color("gray", 10),
+                            ),
+                            rx.vstack(
+                                rx.drawer.close(nav_item("Market", "globe", "/")),
+                                rx.drawer.close(
+                                    nav_item("市場監視", "radar", "/market-watch")
+                                ),
+                                rx.drawer.close(
+                                    nav_item("Stock", "trending-up", "/stock")
+                                ),
+                                rx.drawer.close(
+                                    nav_item(
+                                        "Trading Plan",
+                                        "clipboard-list",
+                                        "/trading-plan",
+                                    )
+                                ),
+                                rx.drawer.close(
+                                    nav_item("Portfolio", "pie-chart", "/portfolio")
+                                ),
+                                rx.drawer.close(
+                                    nav_item("Knowledge", "book-open", "/knowledge")
+                                ),
+                                width="100%",
+                                spacing="2",
+                            ),
+                            width="100%",
+                            height="100%",
+                            padding="1.25rem",
+                            align_items="start",
+                            spacing="3",
+                            bg=rx.color("gray", 1),
+                        ),
+                        width="min(82vw, 320px)",
+                        right="auto",
+                        border_right=f"1px solid {rx.color('gray', 4)}",
+                    ),
+                ),
+                direction="left",
+            ),
+            rx.text("画面ナビゲーション", size="2", color=rx.color("gray", 10)),
+            rx.spacer(),
+            width="100%",
+            min_height="44px",
+            align_items="center",
+            justify="between",
+        ),
+        market_switcher(),
+        display=rx.breakpoints(initial="flex", lg="none"),
+        width="100%",
+        padding="0.75rem 1rem 0",
+        border_bottom=f"1px solid {rx.color('gray', 4)}",
+        bg=rx.color("gray", 1),
+        spacing="2",
     )

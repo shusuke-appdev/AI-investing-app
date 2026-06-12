@@ -71,7 +71,7 @@ def track_distribution_days(df: pd.DataFrame) -> dict:
 
 
 def detect_market_climax(
-    spy_df: pd.DataFrame, ndx_df: pd.DataFrame, opt_pcr: float
+    spy_df: pd.DataFrame, ndx_df: pd.DataFrame, opt_pcr: float | None
 ) -> dict:
     """
     市場天井（ファイナルクライマックス）の複合検知を行います。
@@ -106,7 +106,7 @@ def detect_market_climax(
         )
 
     # 3. PCR悪化
-    if opt_pcr >= 1.0:
+    if opt_pcr is not None and opt_pcr >= 1.0:
         warnings.append(f"プット・コールレシオ悪化 (PCR: {opt_pcr:.2f})")
 
     # リーディング銘柄変調はここでは個別データがないためモック
@@ -121,7 +121,9 @@ def detect_market_climax(
     }
 
 
-def evaluate_yield_spread(yield_10y: float, index_pe_dict: dict[str, float]) -> dict:
+def evaluate_yield_spread(
+    yield_10y: float | None, index_pe_dict: dict[str, float | None]
+) -> dict:
     """
     株式益回りと債券利回りのイールドスプレッドを評価します。
     """
@@ -129,8 +131,22 @@ def evaluate_yield_spread(yield_10y: float, index_pe_dict: dict[str, float]) -> 
     overall_status = "neutral"
     warnings = []
 
+    if yield_10y is None:
+        return {
+            "yield_10y": None,
+            "spreads": {},
+            "overall_status": "unavailable",
+            "available": False,
+            "warnings": [
+                "US 10Y yield is unavailable; yield spread was not calculated."
+            ],
+        }
+
     for idx, pe in index_pe_dict.items():
-        if pe <= 0:
+        if pe is None or pe <= 0:
+            warnings.append(
+                f"{idx} PE is unavailable; yield spread was not calculated."
+            )
             continue
 
         earnings_yield = (1 / pe) * 100
@@ -169,6 +185,7 @@ def evaluate_yield_spread(yield_10y: float, index_pe_dict: dict[str, float]) -> 
     return {
         "yield_10y": yield_10y,
         "spreads": results,
-        "overall_status": overall_status,
+        "overall_status": overall_status if results else "unavailable",
+        "available": bool(results),
         "warnings": warnings,
     }

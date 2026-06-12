@@ -96,14 +96,23 @@ def compute_volatility(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
     """
     Step 2: ボラティリティ観測・計算モジュール
     """
-    if df is None or df.empty or "log_return" not in df.columns:
+    if df is None or df.empty:
         return df
 
     df = df.copy()
+    if "log_return" not in df.columns:
+        close_column = next(
+            (column for column in df.columns if str(column).lower() == "close"),
+            None,
+        )
+        if close_column is None:
+            return df
+        close = pd.to_numeric(df[close_column], errors="coerce")
+        df["log_return"] = np.log(close / close.shift(1))
 
     # 実現ボラティリティ: 20日ローリング標準偏差 * √(252)
     # NaN処理: 前方埋め (ffill) なしでもrolling().std()は一定データ揃えば算出されるが要件指示通りに
-    df["log_return"].ffill(inplace=True)
+    df["log_return"] = df["log_return"].ffill()
 
     df["vol"] = df["log_return"].rolling(window=window).std() * np.sqrt(252)
 

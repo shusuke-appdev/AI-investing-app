@@ -1,0 +1,263 @@
+[
+  {
+    "route": "/",
+    "view": "desktop",
+    "bodyScrollWidth": 1440,
+    "buttons": 9,
+    "connectionError": false,
+    "documentScrollWidth": 1440,
+    "headings": [
+      "AI Investing",
+      "Market Intelligence",
+      "AI Market Recap",
+      "アセットクラス別概要"
+    ],
+    "innerWidth": 1440,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 64758
+  },
+  {
+    "route": "/market-watch",
+    "view": "desktop",
+    "bodyScrollWidth": 1440,
+    "buttons": 14,
+    "connectionError": false,
+    "documentScrollWidth": 1440,
+    "headings": [
+      "AI Investing",
+      "市場監視",
+      "主要指数 終値ベース",
+      "総合市場監視",
+      "市場の歪み検知"
+    ],
+    "innerWidth": 1440,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 102464
+  },
+  {
+    "route": "/stock",
+    "view": "desktop",
+    "bodyScrollWidth": 1440,
+    "buttons": 7,
+    "connectionError": false,
+    "documentScrollWidth": 1440,
+    "headings": [
+      "AI Investing",
+      "個別銘柄分析"
+    ],
+    "innerWidth": 1440,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 39722
+  },
+  {
+    "route": "/portfolio",
+    "view": "desktop",
+    "bodyScrollWidth": 1440,
+    "buttons": 8,
+    "connectionError": false,
+    "documentScrollWidth": 1440,
+    "headings": [
+      "AI Investing",
+      "ポートフォリオアドバイザー",
+      "新規ポートフォリオ"
+    ],
+    "innerWidth": 1440,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 45086
+  },
+  {
+    "route": "/knowledge",
+    "view": "desktop",
+    "bodyScrollWidth": 1440,
+    "buttons": 7,
+    "connectionError": false,
+    "documentScrollWidth": 1440,
+    "headings": [
+      "AI Investing",
+      "参照知識管理",
+      "保存済み知識"
+    ],
+    "innerWidth": 1440,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 39945
+  },
+  {
+    "route": "/",
+    "view": "tablet",
+    "bodyScrollWidth": 834,
+    "buttons": 9,
+    "connectionError": false,
+    "documentScrollWidth": 834,
+    "headings": [
+      "AI Investing",
+      "Market Intelligence",
+      "AI Market Recap",
+      "アセットクラス別概要"
+    ],
+    "innerWidth": 834,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 139927
+  },
+  {
+    "route": "/market-watch",
+    "view": "tablet",
+    "bodyScrollWidth": 834,
+    "buttons": 14,
+    "connectionError": false,
+    "documentScrollWidth": 834,
+    "headings": [
+      "AI Investing",
+      "市場監視",
+      "主要指数 終値ベース",
+      "総合市場監視",
+      "市場の歪み検知"
+    ],
+    "innerWidth": 834,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 82982
+  },
+  {
+    "route": "/stock",
+    "view": "tablet",
+    "bodyScrollWidth": 834,
+    "buttons": 7,
+    "connectionError": false,
+    "documentScrollWidth": 834,
+    "headings": [
+      "AI Investing",
+      "個別銘柄分析"
+    ],
+    "innerWidth": 834,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 30340
+  },
+  {
+    "route": "/portfolio",
+    "view": "tablet",
+    "bodyScrollWidth": 834,
+    "buttons": 8,
+    "connectionError": false,
+    "documentScrollWidth": 834,
+    "headings": [
+      "AI Investing",
+      "ポートフォリオアドバイザー",
+      "新規ポートフォリオ"
+    ],
+    "innerWidth": 834,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 37364
+  },
+  {
+    "route": "/knowledge",
+    "view": "tablet",
+    "bodyScrollWidth": 834,
+    "buttons": 7,
+    "connectionError": false,
+    "documentScrollWidth": 834,
+    "headings": [
+      "AI Investing",
+      "参照知識管理",
+      "保存済み知識"
+    ],
+    "innerWidth": 834,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 30266
+  },
+  {
+    "route": "/",
+    "view": "mobile",
+    "bodyScrollWidth": 390,
+    "buttons": 9,
+    "connectionError": false,
+    "documentScrollWidth": 390,
+    "headings": [
+      "AI Investing",
+      "Market Intelligence",
+      "AI Market Recap",
+      "アセットクラス別概要"
+    ],
+    "innerWidth": 390,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 115432
+  },
+  {
+    "route": "/market-watch",
+    "view": "mobile",
+    "bodyScrollWidth": 390,
+    "buttons": 14,
+    "connectionError": false,
+    "documentScrollWidth": 390,
+    "headings": [
+      "AI Investing",
+      "市場監視",
+      "主要指数 終値ベース",
+      "総合市場監視",
+      "市場の歪み検知"
+    ],
+    "innerWidth": 390,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 72216
+  },
+  {
+    "route": "/stock",
+    "view": "mobile",
+    "bodyScrollWidth": 390,
+    "buttons": 7,
+    "connectionError": false,
+    "documentScrollWidth": 390,
+    "headings": [
+      "AI Investing",
+      "個別銘柄分析"
+    ],
+    "innerWidth": 390,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 23841
+  },
+  {
+    "route": "/portfolio",
+    "view": "mobile",
+    "bodyScrollWidth": 390,
+    "buttons": 9,
+    "connectionError": false,
+    "documentScrollWidth": 390,
+    "headings": [
+      "AI Investing",
+      "ポートフォリオアドバイザー",
+      "新規ポートフォリオ"
+    ],
+    "innerWidth": 390,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 31829
+  },
+  {
+    "route": "/knowledge",
+    "view": "mobile",
+    "bodyScrollWidth": 390,
+    "buttons": 7,
+    "connectionError": false,
+    "documentScrollWidth": 390,
+    "headings": [
+      "AI Investing",
+      "参照知識管理",
+      "保存済み知識"
+    ],
+    "innerWidth": 390,
+    "links": 6,
+    "unlabeledButtons": 0,
+    "screenshotBytes": 24538
+  }
+]

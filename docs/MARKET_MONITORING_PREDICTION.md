@@ -19,6 +19,16 @@ produce a `StockSignalContext`.
 - `OptionContext`: carries option-analysis rows plus retrieval status.
 - `StockSignalContext`: shared by the Stock page and AI stock analysis path.
 
+The daily Entry Framework is an execution-quality gate inside
+`StockSignalContext.trade_setup`. It reuses existing technical and daily OHLCV
+data to evaluate relative strength, contraction, volume confirmation, ATR
+extension, and hard-rule violations. It does not replace probabilistic signals
+or trend-follow diagnostics, and it does not infer intraday-only LoD/ORH rules.
+
+Trading Plan is a separate manual execution-management surface. It stores an
+entry-time setup snapshot, R-based sizing, three stop tiers, T+1/T+3 checks,
+realized R, and journal notes. Portfolio remains the asset-allocation surface.
+
 IBD-style market regime is a free-data approximation, not an official IBD
 Market Pulse clone. The implementation uses SPY and Nasdaq 100 proxy OHLCV,
 distribution days, rally attempts, follow-through days, and key moving-average

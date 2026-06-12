@@ -79,6 +79,7 @@ def test_print_setup_sql_does_not_connect_to_supabase(monkeypatch, capsys):
         "grant select, insert, update, delete on table public.portfolios to service_role;"
         in output
     )
+    assert "alter table public.trade_plans enable row level security;" in output
     assert "alter default privileges for role postgres in schema public" in output
 
 

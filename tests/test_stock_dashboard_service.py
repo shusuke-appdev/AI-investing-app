@@ -80,6 +80,16 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
             "warnings": ["Insufficient daily price history."],
         },
     )
+    monkeypatch.setattr(service, "evaluate_trade_setup", lambda *args: object())
+    monkeypatch.setattr(
+        service,
+        "trade_setup_to_dict",
+        lambda setup: {
+            "status": "wait",
+            "grade": "B",
+            "warnings": [],
+        },
+    )
     monkeypatch.setattr(
         service,
         "evaluate_stock_sector_theme_context",
@@ -107,9 +117,12 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
     }
     assert len(context.chart_data) == 3
     assert context.trend_follow_diagnostics["diagnostic_rating"] == "Unavailable"
+    assert context.trade_setup["status"] == "wait"
     assert context.sector_theme_context["combined_rating"] == "weak"
     assert context.stock_signal_context["smart_criteria"]["all_met"] is False
     assert context.stock_signal_context["news_headlines"] == []
+    assert context.stock_signal_context["provenance"]
+    assert any(item.kind.value == "proxy" for item in context.provenance)
     trend_status = next(
         item for item in context.data_status if item.name == "trend_follow_diagnostics"
     )

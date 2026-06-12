@@ -3,7 +3,58 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Any
+
+
+class ProvenanceKind(str, Enum):
+    """How a displayed or AI-consumed value was produced."""
+
+    DIRECT = "direct"
+    COMPUTED = "computed"
+    PROXY = "proxy"
+    ESTIMATED = "estimated"
+    MODEL_OUTPUT = "model_output"
+    FIXED_FALLBACK = "fixed_fallback"
+    STALE_CACHE = "stale_cache"
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass
+class ProvenanceItem:
+    """Auditable provenance for one user-visible analysis value."""
+
+    item_id: str
+    label: str
+    kind: ProvenanceKind = ProvenanceKind.UNAVAILABLE
+    source: str = ""
+    as_of: str = ""
+    method: str = ""
+    limitation: str = ""
+    risk_level: str = "low"
+
+    def to_dict(self) -> dict[str, Any]:
+        value = asdict(self)
+        value["kind"] = self.kind.value
+        return value
+
+    @classmethod
+    def from_mapping(cls, value: dict[str, Any]) -> ProvenanceItem:
+        raw_kind = str(value.get("kind") or ProvenanceKind.UNAVAILABLE.value)
+        try:
+            kind = ProvenanceKind(raw_kind)
+        except ValueError:
+            kind = ProvenanceKind.UNAVAILABLE
+        return cls(
+            item_id=str(value.get("item_id") or ""),
+            label=str(value.get("label") or ""),
+            kind=kind,
+            source=str(value.get("source") or ""),
+            as_of=str(value.get("as_of") or ""),
+            method=str(value.get("method") or ""),
+            limitation=str(value.get("limitation") or ""),
+            risk_level=str(value.get("risk_level") or "low"),
+        )
 
 
 @dataclass
@@ -64,8 +115,13 @@ class MarketContext:
     flow_monitor: dict[str, Any] = field(default_factory=dict)
     flow_alignment: dict[str, Any] = field(default_factory=dict)
     cross_market: dict[str, Any] = field(default_factory=dict)
+    volatility_regime: dict[str, Any] = field(default_factory=dict)
+    sentiment: dict[str, Any] = field(default_factory=dict)
+    top_risk_signposts: dict[str, Any] = field(default_factory=dict)
+    fomo_scan: dict[str, Any] = field(default_factory=dict)
     detail_stages: dict[str, dict[str, Any]] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
+    provenance: list[ProvenanceItem] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     source: str = ""
     fetched_at: str = ""
@@ -94,8 +150,13 @@ class MarketContext:
             "flow_monitor": self.flow_monitor,
             "flow_alignment": self.flow_alignment,
             "cross_market": self.cross_market,
+            "volatility_regime": self.volatility_regime,
+            "sentiment": self.sentiment,
+            "top_risk_signposts": self.top_risk_signposts,
+            "fomo_scan": self.fomo_scan,
             "detail_stages": self.detail_stages,
             "data_status": [item.to_dict() for item in self.data_status],
+            "provenance": [item.to_dict() for item in self.provenance],
             "errors": self.errors,
             "source": self.source,
             "fetched_at": self.fetched_at,
@@ -153,8 +214,17 @@ class MarketContext:
             flow_monitor=value.get("flow_monitor") or {},
             flow_alignment=value.get("flow_alignment") or {},
             cross_market=value.get("cross_market") or {},
+            volatility_regime=value.get("volatility_regime") or {},
+            sentiment=value.get("sentiment") or {},
+            top_risk_signposts=value.get("top_risk_signposts") or {},
+            fomo_scan=value.get("fomo_scan") or {},
             detail_stages=value.get("detail_stages") or {},
             data_status=data_status,
+            provenance=[
+                ProvenanceItem.from_mapping(item)
+                for item in value.get("provenance", [])
+                if isinstance(item, dict)
+            ],
             errors=list(value.get("errors") or []),
             source=str(value.get("source") or ""),
             fetched_at=str(value.get("fetched_at") or ""),
@@ -176,14 +246,19 @@ class StockSignalContext:
     smart_criteria: dict[str, Any] = field(default_factory=dict)
     probabilistic_signal: dict[str, Any] = field(default_factory=dict)
     trend_follow_diagnostics: dict[str, Any] = field(default_factory=dict)
+    fomo_regime: dict[str, Any] = field(default_factory=dict)
+    trade_setup: dict[str, Any] = field(default_factory=dict)
     sector_theme_context: dict[str, Any] = field(default_factory=dict)
     news_headlines: list[str] = field(default_factory=list)
     news_source_status: str = ""
     news_error_reason: str = ""
     data_status: list[DataResult] = field(default_factory=list)
+    provenance: list[ProvenanceItem] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        value = asdict(self)
+        value["provenance"] = [item.to_dict() for item in self.provenance]
+        return value
 
 
 def _optional_float(value: Any) -> float | None:

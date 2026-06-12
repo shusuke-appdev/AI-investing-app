@@ -1,6 +1,12 @@
 import reflex as rx
 
+from frontend.components.data_provenance import provenance_panel
 from frontend.components.flash_summary import flash_summary
+from frontend.components.ui_primitives import (
+    loading_state,
+    page_header,
+    section_heading,
+)
 from frontend.state.market_state import MarketState
 from frontend.template import template
 
@@ -9,10 +15,9 @@ from frontend.template import template
 def index() -> rx.Component:
     """メインダッシュボード画面 (Market Intelligence)"""
     return rx.vstack(
-        # ヘッダー部分
-        rx.hstack(
-            rx.heading("Market Intelligence", size="7"),
-            rx.spacer(),
+        page_header(
+            "Market Intelligence",
+            "主要資産の変化、データ鮮度、AI市況整理を一つの画面で確認します。",
             rx.button(
                 rx.icon("sparkles", size=18),
                 "レポートを生成",
@@ -28,6 +33,7 @@ def index() -> rx.Component:
                     on_click=MarketState.toggle_recap_focus,
                     size="3",
                     variant="surface",
+                    aria_label="任意の分析項目を追加",
                 ),
                 content="任意の分析項目を追加",
             ),
@@ -38,9 +44,6 @@ def index() -> rx.Component:
                 loading=MarketState.is_fetching_summary,
                 variant="surface",
             ),
-            width="100%",
-            align_items="center",
-            margin_bottom="2rem",
         ),
         rx.cond(
             MarketState.recap_focus_visible,
@@ -86,19 +89,14 @@ def index() -> rx.Component:
         # ローディングスピナー（全体）
         rx.cond(
             MarketState.is_fetching,
-            rx.center(
-                rx.spinner(size="3"),
-                rx.text("市場データを取得中...", margin_top="1rem", color="gray"),
-                direction="column",
-                width="100%",
-                height="300px",
-            ),
+            loading_state("市場データを取得中..."),
             rx.vstack(
-                # アセットクラス別概要
-                flash_summary(),
-                # AI Recap (Gemini)
+                provenance_panel(MarketState.provenance),
                 rx.box(
-                    rx.heading("AI Market Recap", size="5", margin_bottom="1rem"),
+                    section_heading(
+                        "AI Market Recap",
+                        "表示済みの市場コンテキストを再利用して市況を整理します。",
+                    ),
                     rx.card(
                         rx.cond(
                             MarketState.ai_recap != "",
@@ -115,8 +113,8 @@ def index() -> rx.Component:
                         padding="1.5rem",
                     ),
                     width="100%",
-                    margin_top="1rem",
                 ),
+                flash_summary(),
                 width="100%",
                 spacing="4",
             ),

@@ -47,8 +47,12 @@ def analyze_stock(
         probabilistic_signal = context.get("probabilistic_signal")
     probabilistic_context = _format_probabilistic_context(probabilistic_signal)
     trend_follow_context = _format_trend_follow_context(context)
+    trade_setup_context = _format_trade_setup_context(context)
     sector_theme_context = _format_sector_theme_context(context)
     data_quality_context = _format_data_quality_context(context)
+    provenance_context = _format_provenance_context(context)
+    if provenance_context:
+        data_quality_context = f"{data_quality_context}\n\n{provenance_context}"
 
     smart_criteria_summary = _format_smart_criteria_context(context)
     if smart_criteria_summary == "":
@@ -80,6 +84,7 @@ def analyze_stock(
         technical_summary=technical_summary,
         probabilistic_context=probabilistic_context,
         trend_follow_context=trend_follow_context,
+        trade_setup_context=trade_setup_context,
         sector_theme_context=sector_theme_context,
         data_quality_context=data_quality_context,
         smart_criteria_summary=smart_criteria_summary,
@@ -231,6 +236,36 @@ def _format_data_quality_context(stock_signal_context: dict | None) -> str:
     return "\n".join(lines) if lines else "Data status: unavailable."
 
 
+def _format_provenance_context(stock_signal_context: dict | None) -> str:
+    if not stock_signal_context:
+        return ""
+
+    provenance_items = stock_signal_context.get("provenance") or []
+    if not isinstance(provenance_items, list) or not provenance_items:
+        return ""
+
+    lines = ["Data provenance:"]
+    for item in provenance_items[:12]:
+        if not isinstance(item, dict):
+            continue
+        details = [
+            f"kind={item.get('kind', 'unavailable')}",
+            f"source={item.get('source') or 'unknown'}",
+        ]
+        if item.get("as_of"):
+            details.append(f"as_of={item['as_of']}")
+        if item.get("method"):
+            details.append(f"method={item['method']}")
+        if item.get("limitation"):
+            details.append(f"limitation={item['limitation']}")
+        details.append(f"risk={item.get('risk_level', 'low')}")
+        lines.append(
+            f"- {item.get('label') or item.get('item_id', 'value')}: "
+            + ", ".join(details)
+        )
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 def _format_trend_follow_context(stock_signal_context: dict | None) -> str:
     if not stock_signal_context:
         return "Trend-Follow Diagnostics: unavailable."
@@ -251,6 +286,30 @@ def _format_trend_follow_context(stock_signal_context: dict | None) -> str:
 - Max Drawdown: {diagnostics.get("strategy_max_drawdown_display", "N/A")}
 - Max Time Under Water: {diagnostics.get("strategy_tuw_display", "N/A")}
 - Warnings: {"; ".join(str(item) for item in warnings) if warnings else "N/A"}
+"""
+
+
+def _format_trade_setup_context(stock_signal_context: dict | None) -> str:
+    if not stock_signal_context:
+        return "Entry Framework: unavailable."
+
+    setup = stock_signal_context.get("trade_setup") or {}
+    if not isinstance(setup, dict) or not setup:
+        return "Entry Framework: unavailable."
+
+    blocked = setup.get("blocked_reasons") or []
+    warnings = setup.get("warnings") or []
+    return f"""Entry Framework (daily-data execution-quality gate):
+- Status: {setup.get("status", "insufficient_data")}
+- Grade / Score: {setup.get("grade", "D")} / {setup.get("score_display", "N/A")}
+- Summary: {setup.get("summary", "N/A")}
+- RVOL: {setup.get("rvol_display", "N/A")}
+- ADR%: {setup.get("adr_display", "N/A")}
+- VARS proxy: {setup.get("vars_display", "N/A")}
+- 50MA Extension: {setup.get("ma50_extension_display", "N/A")}
+- Blocked Reasons: {"; ".join(str(item) for item in blocked) if blocked else "None"}
+- Limitations: {"; ".join(str(item) for item in warnings) if warnings else "N/A"}
+Do not override a blocked status. Treat unknown or intraday-only rules as unverified.
 """
 
 

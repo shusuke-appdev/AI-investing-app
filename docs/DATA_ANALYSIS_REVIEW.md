@@ -8,6 +8,7 @@
 
 - 市場分析: `MarketContext` を中心に、Market Intelligence UI、`/market-watch`、AI Market Recap が同じ市場監視データを共有する
 - 個別銘柄分析: `StockSignalContext` を中心に、Stock UI と AI Stock Recap が同じ銘柄データ、テクニカル、確率シグナル、トレンド診断、セクター/テーマ評価を共有する
+- 実行品質: `StockSignalContext.trade_setup` が日足Entry Gateを共有し、専用Trading PlanがR基準の手動実行管理を担う
 - データ取得: yfinance、Finnhub、FRED、J-Quants、EDINET、Google News を無料・公開データ優先で使う
 - キャッシュ: `.states` 配下の persistent cache と TTL cache で、重い取得や失敗時の stale fallback を扱う
 
@@ -29,6 +30,7 @@
 - 企業概要、株価履歴、ニュース、テクニカル、SMART基準を取得・計算する
 - `probabilistic_signal` は類似局面、forward return、walk-forward、サイジング目安を返す
 - `trend_follow_diagnostics` は日足トレンドフォローの頑健性診断であり、売買推奨ではない
+- `trade_setup` は日足で判定可能な相対強度、VCP、RVOL、ATR拡張、200MAトレンドをEntry Gateとして整理する
 - `sector_theme_context` は対象銘柄のファンダメンタル優位とフロー優位を評価する
 - AI Stock Recap は、表示済みニュース見出し、テクニカル、SMART基準、確率シグナル、トレンド診断、セクター/テーマ文脈を再利用する
 
@@ -57,3 +59,10 @@
 
 5. 運用時の観測性  
    stale cache、partial data、provider failure をユーザーに見せるだけでなく、機能別に最後の成功時刻と失敗理由を一覧できる診断ビューを追加する。
+
+## 2026-06-11 来歴契約とUI改善
+
+- `ProvenanceKind` と `ProvenanceItem` を追加し、Market、Stock、PortfolioのUIとAI共有contextで、直接値・算出値・proxy・推定値・モデル出力・stale cache・利用不可を追跡できるようにした
+- PCR `0.8`、米10年債利回り `4.0%`、SPY PER `22`、NDX PER `30` の固定フォールバックを廃止し、必要データ不足時は利用不可として扱うようにした
+- ポートフォリオでは価格未取得銘柄をゼロ時価で集計せず、警告付きで分析対象から除外するようにした
+- 詳細な正本は [分析データ来歴台帳](ANALYSIS_DATA_PROVENANCE.md)、UI方針は [UI総合改善計画](UI_IMPROVEMENT_PLAN.md) を参照

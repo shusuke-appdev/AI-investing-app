@@ -6,6 +6,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
+from src.advisor.fomo_volatility_regime import DEFAULT_FOMO_UNIVERSE, scan_fomo_universe
 from src.advisor.ibd_market_regime import classify_ibd_market_regime
 from src.advisor.market_environment import evaluate_market_environment
 from src.advisor.market_monitor import (
@@ -18,6 +21,13 @@ from src.credit_stress_monitor import build_credit_stress_monitor
 from src.market_config import get_market_config
 from src.market_data import get_market_indices, get_stock_data
 from src.market_microstructure import analyze_market_structure
+from src.market_volatility_intelligence import (
+    build_local_sentiment_composite,
+    build_market_volatility_regime,
+    build_top_risk_signposts,
+    fetch_cboe_indices,
+    fetch_cnn_fear_greed,
+)
 from src.momentum_monitor import get_momentum_themes
 from src.option_analyst import get_major_indices_option_status
 from src.persistent_cache import PersistentJsonCache, repo_state_cache, utc_now_iso
@@ -25,6 +35,13 @@ from src.sector_flow_monitor import build_sector_flow_monitor
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.services.japan_market_conditions import build_japan_conditions_context
 from src.services.market_playbook import get_market_playbook
+from src.services.provenance_service import (
+    market_high_provenance,
+    market_medium_provenance,
+    market_summary_provenance,
+    option_provenance,
+    stale_cache_provenance,
+)
 from src.services.sector_flow_service import (
     build_cross_market_context,
     build_sector_flow_context,
@@ -113,6 +130,9 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
                 cache_status="live",
             ),
         ],
+        provenance=market_summary_provenance(
+            fetched_at=_utc_now(), has_market_data=bool(market_data)
+        ),
         source="live_summary",
         fetched_at=_utc_now(),
         is_partial=bool(errors),
@@ -183,7 +203,31 @@ def build_market_medium_context(
     def flow_monitor_task() -> dict[str, Any]:
         return build_sector_flow_monitor(market_type)
 
-    with ThreadPoolExecutor(max_workers=7) as executor:
+    def volatility_sentiment_task() -> dict[str, Any]:
+        if market_type != "US":
+            return {}
+        spy = get_stock_data("SPY", "5y")
+        if spy is None or spy.empty:
+            return {}
+        tlt = get_stock_data("TLT", "1y")
+        cboe = fetch_cboe_indices()
+        return {
+            "volatility_regime": build_market_volatility_regime(
+                spy,
+                cboe_result=cboe,
+                credit_stress=base.credit_stress,
+                cnn_reference=fetch_cnn_fear_greed(),
+                ibd_regime=base.ibd_regime,
+            ),
+            "sentiment": build_local_sentiment_composite(
+                spy,
+                tlt,
+                cboe_result=cboe,
+                credit_stress=base.credit_stress,
+            ),
+        }
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {
             "evaluation": executor.submit(evaluation_task),
             "ibd_regime": executor.submit(ibd_task),
@@ -192,6 +236,7 @@ def build_market_medium_context(
             "monitor": executor.submit(monitor_task),
             "sector_flow": executor.submit(sector_flow_task),
             "flow_monitor": executor.submit(flow_monitor_task),
+            "volatility_sentiment": executor.submit(volatility_sentiment_task),
         }
         results = {
             name: _future_result(future, errors) for name, future in futures.items()
@@ -217,6 +262,11 @@ def build_market_medium_context(
         ibd_regime,
     )
     flow_alignment = build_flow_alignment_context(flow_monitor, sector_flow)
+    volatility_sentiment = results.get("volatility_sentiment") or {}
+    volatility_regime = (
+        volatility_sentiment.get("volatility_regime") or base.volatility_regime
+    )
+    sentiment = volatility_sentiment.get("sentiment") or base.sentiment
 
     context = MarketContext(
         market_type=market_type,
@@ -236,6 +286,10 @@ def build_market_medium_context(
         flow_monitor=flow_monitor,
         flow_alignment=flow_alignment,
         cross_market=cross_market,
+        volatility_regime=volatility_regime,
+        sentiment=sentiment,
+        top_risk_signposts=base.top_risk_signposts,
+        fomo_scan=base.fomo_scan,
         data_status=[
             *base.data_status,
             DataResult(
@@ -283,7 +337,29 @@ def build_market_medium_context(
                 else "",
                 cache_status="live",
             ),
+            DataResult(
+                name="market_volatility_regime",
+                source=volatility_regime.get("source", ""),
+                fetched_at=_utc_now(),
+                is_stale=bool(volatility_regime.get("is_stale", False)),
+                is_partial=not bool(volatility_regime)
+                or volatility_regime.get("regime") == "unavailable",
+                error="; ".join(volatility_regime.get("warnings", [])),
+                cache_status="computed",
+            ),
         ],
+        provenance=_merge_provenance(
+            base.provenance,
+            market_medium_provenance(
+                fetched_at=_utc_now(),
+                monitor=results.get("monitor") or base.monitor,
+                ibd_regime=ibd_regime,
+                microstructure=results.get("microstructure") or base.microstructure,
+                sector_flow=sector_flow,
+                flow_monitor=flow_monitor,
+                japan_conditions=japan_conditions,
+            ),
+        ),
         errors=errors,
         source="live_details",
         fetched_at=_utc_now(),
@@ -343,6 +419,30 @@ def build_market_high_context(
 
     credit_stress = results.get("credit_stress") or base.credit_stress
     market_distortions = results.get("market_distortions") or base.market_distortions
+    sentiment = base.sentiment
+    if market_type == "US":
+        sentiment = _safe_call(
+            lambda: build_local_sentiment_composite(
+                get_stock_data("SPY", "1y"),
+                get_stock_data("TLT", "1y"),
+                credit_stress=credit_stress,
+            ),
+            base.sentiment,
+            errors,
+        )
+    top_risk_signposts = (
+        _safe_call(
+            lambda: build_top_risk_signposts(
+                sentiment=sentiment,
+                credit_stress=credit_stress,
+                low_pe_relative_6m=_low_pe_relative_return_6m(),
+            ),
+            base.top_risk_signposts,
+            errors,
+        )
+        if market_type == "US"
+        else {}
+    )
     context = MarketContext(
         market_type=market_type,
         market_data=base.market_data,
@@ -361,6 +461,10 @@ def build_market_high_context(
         flow_monitor=base.flow_monitor,
         flow_alignment=base.flow_alignment,
         cross_market=base.cross_market,
+        volatility_regime=base.volatility_regime,
+        sentiment=sentiment,
+        top_risk_signposts=top_risk_signposts,
+        fomo_scan=base.fomo_scan,
         data_status=[
             *base.data_status,
             DataResult(
@@ -391,7 +495,23 @@ def build_market_high_context(
                     credit_stress.get("cache_age_seconds")
                 ),
             ),
+            DataResult(
+                name="top_risk_signposts",
+                source=top_risk_signposts.get("source", ""),
+                fetched_at=_utc_now(),
+                is_partial=not bool(top_risk_signposts),
+                error="; ".join(top_risk_signposts.get("quality_warnings", [])),
+                cache_status="computed",
+            ),
         ],
+        provenance=_merge_provenance(
+            base.provenance,
+            market_high_provenance(
+                fetched_at=_utc_now(),
+                credit_stress=credit_stress,
+                distortions=market_distortions,
+            ),
+        ),
         errors=errors,
         source="live_details_high",
         fetched_at=_utc_now(),
@@ -428,6 +548,12 @@ def build_market_high_context(
     if context.market_data:
         _save_context_cache(context, "full")
     return context
+
+
+def build_fomo_scan_context(tickers: list[str] | None = None) -> dict[str, Any]:
+    """Run the explicit, bounded high-volatility watchlist scan."""
+
+    return scan_fomo_universe(get_stock_data, tickers or DEFAULT_FOMO_UNIVERSE)
 
 
 def build_market_options_context(
@@ -478,6 +604,10 @@ def build_market_options_context(
         flow_monitor=base.flow_monitor,
         flow_alignment=base.flow_alignment,
         cross_market=base.cross_market,
+        volatility_regime=base.volatility_regime,
+        sentiment=base.sentiment,
+        top_risk_signposts=base.top_risk_signposts,
+        fomo_scan=base.fomo_scan,
         data_status=[
             *base.data_status,
             DataResult(
@@ -491,6 +621,15 @@ def build_market_options_context(
                 cache_age_seconds=options.cache_age_seconds,
             ),
         ],
+        provenance=_merge_provenance(
+            base.provenance,
+            option_provenance(
+                fetched_at=options.fetched_at or _utc_now(),
+                source=options.source,
+                status=options.status,
+                items=options.items,
+            ),
+        ),
         errors=errors,
         source="live_options",
         fetched_at=_utc_now(),
@@ -538,10 +677,14 @@ def build_market_monitor_context(option_data: list[dict[str, Any]] | None) -> di
     climax = detect_market_climax(spy_df, ndx_df, _extract_spy_pcr(option_data))
 
     tnx_df = get_stock_data("^TNX", "5d")
-    tnx_yield = float(tnx_df["Close"].iloc[-1]) / 10.0 if not tnx_df.empty else 4.0
+    tnx_yield = (
+        float(tnx_df["Close"].iloc[-1]) / 10.0
+        if tnx_df is not None and not tnx_df.empty
+        else None
+    )
 
-    spy_pe = _extract_pe(get_valuation_metrics("SPY"), 22.0)
-    ndx_pe = _extract_pe(get_valuation_metrics("QQQ"), 30.0)
+    spy_pe = _extract_pe(get_valuation_metrics("SPY"))
+    ndx_pe = _extract_pe(get_valuation_metrics("QQQ"))
     spread = evaluate_yield_spread(tnx_yield, {"SPY": spy_pe, "NDX": ndx_pe})
 
     return {
@@ -625,6 +768,21 @@ def format_market_context_for_ai(context: MarketContext) -> str:
         parts.append("- Data status: " + "; ".join(status_parts))
     if context.quality_warnings:
         parts.append("- Data quality: " + "; ".join(context.quality_warnings[:6]))
+    if context.provenance:
+        parts.append("[Data provenance]")
+        for item in context.provenance[:12]:
+            details = [
+                f"kind={item.kind.value}",
+                f"source={item.source or 'unknown'}",
+            ]
+            if item.as_of:
+                details.append(f"as_of={item.as_of}")
+            if item.method:
+                details.append(f"method={item.method}")
+            if item.limitation:
+                details.append(f"limitation={item.limitation}")
+            details.append(f"risk={item.risk_level}")
+            parts.append(f"- {item.label}: " + ", ".join(details))
     if context.detail_stages:
         stage_parts = []
         for key in DETAIL_STAGE_ORDER:
@@ -639,6 +797,44 @@ def format_market_context_for_ai(context: MarketContext) -> str:
         parts.append(
             "- Options data quality: " + "; ".join(context.options.quality_warnings[:6])
         )
+    if context.volatility_regime:
+        volatility = context.volatility_regime
+        parts.append("[Market volatility regime]")
+        parts.append(
+            f"- {volatility.get('summary', '')}; "
+            f"confidence={volatility.get('confidence', 'low')}"
+        )
+        outcomes = volatility.get("forward_outcomes", {}).get("20d", {})
+        if outcomes:
+            parts.append(
+                "- Historical analog 20d: "
+                f"mean={_display_percent(outcomes.get('mean_return'))}, "
+                f"probability_up={_display_percent(outcomes.get('probability_up'))}"
+            )
+    if context.sentiment:
+        parts.append(
+            "[Local sentiment composite] "
+            f"{context.sentiment.get('summary', '')}; "
+            f"coverage={context.sentiment.get('coverage', '')}"
+        )
+        cnn = context.sentiment.get("cnn_reference") or {}
+        if cnn:
+            parts.append(
+                "- CNN external reference only: "
+                f"status={cnn.get('status', 'unavailable')}, "
+                f"score={cnn.get('score')}, rating={cnn.get('rating', '')}"
+            )
+    if context.top_risk_signposts:
+        signposts = context.top_risk_signposts
+        parts.append(
+            "[BofA-inspired top-risk subset, not official BofA] "
+            f"{signposts.get('summary', '')}"
+        )
+        for item in (signposts.get("items") or [])[:7]:
+            parts.append(
+                f"- {item.get('label', '')}: {item.get('status', 'unknown')} "
+                f"({item.get('kind', 'proxy')})"
+            )
 
     evaluation = context.evaluation or {}
     if evaluation:
@@ -698,10 +894,13 @@ def format_market_context_for_ai(context: MarketContext) -> str:
         )
         if climax.get("warnings"):
             parts.append("- Market climax warnings: " + "; ".join(climax["warnings"]))
+        yield_10y = spread.get("yield_10y")
+        yield_display = (
+            f"{float(yield_10y):.2f}%" if yield_10y is not None else "unavailable"
+        )
         parts.append(
             "- Yield spread: "
-            f"{spread.get('overall_status', 'unknown')} "
-            f"(10Y={float(spread.get('yield_10y', 0.0)):.2f}%)"
+            f"{spread.get('overall_status', 'unknown')} (10Y={yield_display})"
         )
 
     if context.momentum:
@@ -866,21 +1065,25 @@ def _normalize_microstructure(data: dict | None) -> dict[str, Any]:
     return data or {}
 
 
-def _extract_spy_pcr(option_data: list[dict[str, Any]] | None) -> float:
+def _extract_spy_pcr(option_data: list[dict[str, Any]] | None) -> float | None:
     if not option_data:
-        return 0.8
-    first = option_data[0]
+        return None
+    first = next(
+        (item for item in option_data if item.get("ticker") == "SPY"),
+        option_data[0],
+    )
     pcr = first.get("pcr", {})
     if isinstance(pcr, dict):
-        return float(pcr.get("volume_pcr", 0.8))
+        value = pcr.get("volume_pcr")
+        return float(value) if isinstance(value, (int, float)) else None
     if isinstance(pcr, (int, float)):
         return float(pcr)
-    return 0.8
+    return None
 
 
-def _extract_pe(info: dict[str, Any] | None, fallback: float) -> float:
+def _extract_pe(info: dict[str, Any] | None) -> float | None:
     value = info.get("pe_ratio") if info else None
-    return float(value) if isinstance(value, (int, float)) else fallback
+    return float(value) if isinstance(value, (int, float)) else None
 
 
 def _nested(source: dict[str, Any], parent: str, child: str) -> str:
@@ -1009,6 +1212,15 @@ def _load_context_cache(
             context.quality_warnings,
             [f"Using cached market summary from {context.fetched_at}."],
         )
+        context.provenance = _merge_provenance(
+            context.provenance,
+            [
+                stale_cache_provenance(
+                    fetched_at=context.fetched_at,
+                    source=context.source,
+                )
+            ],
+        )
     context.detail_stages = _cached_stage_statuses(
         context.detail_stages,
         read.is_stale,
@@ -1117,6 +1329,14 @@ def _merge_warnings(*groups: list[str]) -> list[str]:
     return merged
 
 
+def _merge_provenance(*groups):
+    merged = {}
+    for group in groups:
+        for item in group or []:
+            merged[item.item_id] = item
+    return list(merged.values())
+
+
 def _context_cache_key(market_type: str, kind: str) -> str:
     return f"{market_type.lower()}_{kind}"
 
@@ -1132,3 +1352,22 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _low_pe_relative_return_6m() -> float | None:
+    """Return growth-minus-value six-month performance as the public proxy."""
+
+    growth = get_stock_data("RPG", "1y")
+    value = get_stock_data("RPV", "1y")
+    if growth is None or value is None or growth.empty or value.empty:
+        return None
+    joined = pd.concat(
+        [growth["Close"].rename("growth"), value["Close"].rename("value")],
+        axis=1,
+    ).dropna()
+    if len(joined) < 126:
+        return None
+    return float(
+        joined["growth"].iloc[-1] / joined["growth"].iloc[-126]
+        - joined["value"].iloc[-1] / joined["value"].iloc[-126]
+    )

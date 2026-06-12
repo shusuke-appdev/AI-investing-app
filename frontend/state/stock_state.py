@@ -5,6 +5,10 @@ from typing import Any
 import reflex as rx
 from pydantic import BaseModel
 
+from frontend.components.data_provenance import (
+    ProvenanceDisplay,
+    provenance_display_items,
+)
 from src.services.stock_dashboard_service import (
     build_stock_dashboard_context,
     to_plain_value,
@@ -70,6 +74,13 @@ class StockState(rx.State):
     is_generating_analysis: bool = False
     probabilistic_signal: dict[str, Any] = {}
     trend_follow_diagnostics: dict[str, Any] = {}
+    fomo_regime: dict[str, Any] = {}
+    fomo_label: str = ""
+    fomo_risk_level: str = ""
+    fomo_evidence: list[str] = []
+    fomo_confirmation: str = ""
+    fomo_invalidation: str = ""
+    trade_setup: dict[str, Any] = {}
     sector_theme_context: dict[str, Any] = {}
     sector_theme_rating: str = ""
     sector_theme_rationale: str = ""
@@ -80,6 +91,7 @@ class StockState(rx.State):
     sector_theme_flow_advantage: bool = False
     stock_signal_context: dict[str, Any] = {}
     data_status: list[dict[str, Any]] = []
+    provenance: list[ProvenanceDisplay] = []
 
     def prepare_page(self):
         """Normalize transient flags before the stock page renders."""
@@ -127,6 +139,13 @@ class StockState(rx.State):
             self.trend_follow_diagnostics = plain_state_value(
                 context.trend_follow_diagnostics
             )
+            self.fomo_regime = plain_state_value(context.fomo_regime)
+            self.fomo_label = str(self.fomo_regime.get("label", ""))
+            self.fomo_risk_level = str(self.fomo_regime.get("risk_level", ""))
+            self.fomo_evidence = list(self.fomo_regime.get("evidence", []))
+            self.fomo_confirmation = str(self.fomo_regime.get("confirmation", ""))
+            self.fomo_invalidation = str(self.fomo_regime.get("invalidation", ""))
+            self.trade_setup = plain_state_value(context.trade_setup)
             self.sector_theme_context = plain_state_value(context.sector_theme_context)
             self.sector_theme_rating = self.sector_theme_context.get(
                 "combined_rating", ""
@@ -147,6 +166,7 @@ class StockState(rx.State):
             )
             self.stock_signal_context = plain_state_value(context.stock_signal_context)
             self.data_status = plain_state_value(context.data_status)
+            self.provenance = provenance_display_items(context.provenance)
             self.profile_warning = context.profile_warning
             if context.error_message:
                 self.error_msg = context.error_message
@@ -168,6 +188,13 @@ class StockState(rx.State):
             self.technical_data = {}
             self.probabilistic_signal = {}
             self.trend_follow_diagnostics = {}
+            self.fomo_regime = {}
+            self.fomo_label = ""
+            self.fomo_risk_level = ""
+            self.fomo_evidence = []
+            self.fomo_confirmation = ""
+            self.fomo_invalidation = ""
+            self.trade_setup = {}
             self.sector_theme_context = {}
             self.sector_theme_rating = ""
             self.sector_theme_rationale = ""
@@ -178,6 +205,7 @@ class StockState(rx.State):
             self.sector_theme_flow_advantage = False
             self.stock_signal_context = {}
             self.data_status = []
+            self.provenance = []
             self.smart_criteria = SmartCriteria()
         finally:
             self.is_fetching = False

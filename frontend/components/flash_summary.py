@@ -848,7 +848,7 @@ def _yield_spread_card() -> rx.Component:
         rx.vstack(
             rx.text("イールドスプレッド", weight="bold", size="1"),
             rx.cond(
-                MarketState.market_monitor.yield_spread.overall_status != "",
+                MarketState.market_monitor.yield_spread.available,
                 rx.vstack(
                     _spread_row(
                         "SPY",
@@ -863,7 +863,7 @@ def _yield_spread_card() -> rx.Component:
                     spacing="1",
                     align_items="start",
                 ),
-                rx.text("-", size="2"),
+                rx.badge("利用不可", color_scheme="gray", variant="surface"),
             ),
             align_items="start",
         ),

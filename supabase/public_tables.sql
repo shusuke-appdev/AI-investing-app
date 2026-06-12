@@ -35,21 +35,35 @@ create table if not exists public.knowledge_items (
   metadata jsonb not null default '{}'::jsonb
 );
 
+create table if not exists public.trade_plans (
+  id text primary key,
+  ticker text not null,
+  status text not null,
+  entry_date date not null,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.user_settings enable row level security;
 alter table public.portfolios enable row level security;
 alter table public.knowledge_items enable row level security;
+alter table public.trade_plans enable row level security;
 
 drop policy if exists "Enable all access for all users" on public.user_settings;
 drop policy if exists "Enable all access for all users" on public.portfolios;
 drop policy if exists "Enable all access for all users" on public.knowledge_items;
+drop policy if exists "Enable all access for all users" on public.trade_plans;
 
 revoke all on table public.user_settings from anon, authenticated;
 revoke all on table public.portfolios from anon, authenticated;
 revoke all on table public.knowledge_items from anon, authenticated;
+revoke all on table public.trade_plans from anon, authenticated;
 
 grant select, insert, update, delete on table public.user_settings to service_role;
 grant select, insert, update, delete on table public.portfolios to service_role;
 grant select, insert, update, delete on table public.knowledge_items to service_role;
+grant select, insert, update, delete on table public.trade_plans to service_role;
 
 -- Opt existing projects into the upcoming explicit-grant behavior for new
 -- public objects created by the postgres role. Supabase-managed internal roles

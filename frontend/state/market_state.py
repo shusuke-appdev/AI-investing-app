@@ -2,9 +2,15 @@ import asyncio
 from typing import Any
 
 import reflex as rx
+from pydantic import BaseModel
 
+from frontend.components.data_provenance import (
+    ProvenanceDisplay,
+    provenance_display_items,
+)
 from src.services.market_analyst_service import generate_market_analysis_report
 from src.services.market_dashboard_service import (
+    build_fomo_scan_context,
     build_market_high_context,
     build_market_medium_context,
     build_market_options_context,
@@ -31,6 +37,13 @@ from src.services.market_presentation_service import (
 )
 
 
+class FomoScanDisplay(BaseModel):
+    ticker: str = ""
+    label: str = ""
+    risk_level: str = ""
+    rank_score: float = 0.0
+
+
 class MarketState(rx.State):
     """State for the Market Intelligence page."""
 
@@ -39,6 +52,7 @@ class MarketState(rx.State):
     is_fetching_summary: bool = False
     is_fetching_details: bool = False
     is_fetching_options: bool = False
+    is_scanning_fomo: bool = False
     error_msg: str = ""
     option_error_msg: str = ""
     option_status: str = "unavailable"
@@ -70,6 +84,13 @@ class MarketState(rx.State):
     japan_conditions_summary: str = ""
     japan_conditions_score_label: str = ""
     japan_conditions_score: float = 0.0
+    volatility_summary: str = ""
+    volatility_posture: str = ""
+    sentiment_summary: str = ""
+    sentiment_coverage: str = ""
+    top_risk_summary: str = ""
+    fomo_scan_summary: str = ""
+    fomo_scan_items: list[FomoScanDisplay] = []
 
     ai_recap: str = ""
     is_generating_recap: bool = False
@@ -77,6 +98,7 @@ class MarketState(rx.State):
     recap_focus_visible: bool = False
     custom_recap_focus: str = ""
     market_context: dict[str, Any] = {}
+    provenance: list[ProvenanceDisplay] = []
 
     def set_market_type(self, m_type: str):
         self.market_type = m_type
@@ -216,6 +238,29 @@ class MarketState(rx.State):
             self.is_fetching_options = False
             yield
 
+    async def refresh_fomo_scan(self):
+        self.is_scanning_fomo = True
+        yield
+        try:
+            result = await asyncio.to_thread(build_fomo_scan_context)
+            self.fomo_scan_summary = str(result.get("summary", ""))
+            self.fomo_scan_items = [
+                FomoScanDisplay(
+                    ticker=str(item.get("ticker", "")),
+                    label=str(item.get("label", "")),
+                    risk_level=str(item.get("risk_level", "")),
+                    rank_score=float(item.get("rank_score", 0.0)),
+                )
+                for item in result.get("items", [])
+            ]
+            if result.get("errors"):
+                self.error_msg = "; ".join(result["errors"][:3])
+        except Exception as exc:
+            self.error_msg = f"FOMO scan failed: {exc}"
+        finally:
+            self.is_scanning_fomo = False
+            yield
+
     async def fetch_market_data(self):
         async for _ in self.refresh_market_details():
             yield
@@ -311,10 +356,16 @@ class MarketState(rx.State):
         self.japan_conditions_summary = display.japan_conditions_summary
         self.japan_conditions_score_label = display.japan_conditions_score_label
         self.japan_conditions_score = display.japan_conditions_score
+        self.volatility_summary = str(context.volatility_regime.get("summary", ""))
+        self.volatility_posture = str(context.volatility_regime.get("posture", ""))
+        self.sentiment_summary = str(context.sentiment.get("summary", ""))
+        self.sentiment_coverage = str(context.sentiment.get("coverage", ""))
+        self.top_risk_summary = str(context.top_risk_signposts.get("summary", ""))
         self.indices_data = display.indices_data
         self.sectors_data = display.sectors_data
         self.others_data = display.others_data
         self.watch_indices_data = display.watch_indices_data
+        self.provenance = provenance_display_items(context.provenance)
 
         if context.quality_warnings and not self.error_msg:
             self.error_msg = "; ".join(context.quality_warnings[:3])

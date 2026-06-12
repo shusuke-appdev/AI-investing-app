@@ -4,6 +4,10 @@ from typing import Any
 import reflex as rx
 from pydantic import BaseModel
 
+from frontend.components.data_provenance import (
+    ProvenanceDisplay,
+    provenance_display_items,
+)
 from src.services.portfolio_dashboard_service import (
     holdings_to_payload,
     run_portfolio_analysis,
@@ -37,6 +41,8 @@ class PortfolioState(rx.State):
 
     # 分析結果
     analysis_result: dict[str, Any] = {}
+    provenance: list[ProvenanceDisplay] = []
+    analysis_warnings: list[str] = []
     ai_advice: str = ""
 
     # UI状態
@@ -230,6 +236,8 @@ class PortfolioState(rx.State):
             result = await asyncio.to_thread(run_portfolio_analysis, holdings_data)
             if result:
                 self.analysis_result = result
+                self.provenance = provenance_display_items(result.get("provenance", []))
+                self.analysis_warnings = list(result.get("quality_warnings", []))
                 self.submode = "analysis"
             else:
                 self.error_msg = "分析結果を取得できませんでした"
@@ -270,5 +278,7 @@ class PortfolioState(rx.State):
         self.holdings = []
         self.current_portfolio_name = "新規ポートフォリオ"
         self.analysis_result = {}
+        self.provenance = []
+        self.analysis_warnings = []
         self.ai_advice = ""
         self.submode = "input"

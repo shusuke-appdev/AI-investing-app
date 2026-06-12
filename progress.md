@@ -209,3 +209,20 @@ streamlit run legacy_streamlit/app.py
 - Hardened FRED credit stress retrieval to prefer stale cache and skip slow pandas-datareader fallback for the market-watch high stage, while keeping proxy warnings instead of blocking the dashboard.
 - Renamed Theme Trend surfaces to Theme Ranking, removed the `5日` and `2週間` selector windows, and replaced the theme list with cards that show rank, performance, and constituent stock rows.
 - Preserved the stock analysis data path while adding `/stock` page-load flag normalization and a wider clickable sidebar link target.
+
+# Session update: 2026-06-12 daily Entry Framework / Trading Plan
+- Added a daily-data Entry Framework to `StockSignalContext` and the Stock UI, covering market/sector relative strength, transparent VARS proxy, VCP/tightness, RVOL, pocket-pivot proxy, ADR%, ATR extension, and declining-200MA hard rules.
+- Added a dedicated `/trading-plan` surface for R-based sizing, three-stop planning, maximum three new positions per entry date, T+1/T+3 daily-session checks, realized-R review, journal notes, and mistake tags.
+- Added local JSON and Supabase `trade_plans` persistence; GAS Trading Plan storage remains explicitly unsupported.
+- Kept Market Watch, probabilistic signals, trend-follow diagnostics, and Portfolio responsibilities unchanged.
+
+# Session update: 2026-06-11 UI総合改善 / 分析データ来歴
+- Product Designブリーフに基づき、現行の青・グレー基調と既存機能を維持したまま、全5画面の共通ヘッダー、読込・空状態、レスポンシブナビを改善。
+- `ProvenanceKind` / `ProvenanceItem` を追加し、Market、Market Watch、Stock、Portfolioへ「データの来歴・信頼性」表示を追加。
+- PCR `0.8`、米10年債利回り `4.0%`、SPY PER `22`、NDX PER `30` の固定フォールバックを廃止し、欠損時は利用不可として扱うように変更。
+- ポートフォリオの価格未取得銘柄をゼロ時価で集計せず、警告付きで分析対象から除外。
+- UI改善の正本を `docs/UI_IMPROVEMENT_PLAN.md`、proxy・推定・モデル出力・stale cache等の正本を `docs/ANALYSIS_DATA_PROVENANCE.md` に保存。
+- MarketContextとStockSignalContextの来歴をAI入力にも再利用し、proxy・推定・欠損制約をAI判断へ伝播。
+- Product Design / Browser監査で全5ルートをdesktop・tablet・mobile幅で確認し、モバイルナビを左ドロワー化。監査証跡を `docs/ui-audit/2026-06-11/` に保存。
+- 検証結果: compileall、ruff check、ruff format check、全pytest `146 passed`、Reflex frontend export、Browser監査通過。
+- その後に並行追加されたTrading Plan関連コードを含む最終ワークツリーでは、`frontend/pages/trading_plan.py` の未型付け文字列連結によりReflex exportが停止。UI・来歴変更範囲のruffは通過し、全pytestは引き続き `146 passed`。

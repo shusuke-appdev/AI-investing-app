@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 from pydantic import BaseModel
 
+from src.advisor.fomo_volatility_regime import analyze_fomo_volatility_regime
 from src.advisor.probabilistic_signal import (
     generate_probabilistic_stock_signal,
     signal_to_dict,
@@ -17,12 +18,14 @@ from src.advisor.probabilistic_signal import (
 from src.advisor.sector_theme_diagnostics import evaluate_stock_sector_theme_context
 from src.advisor.smart_criteria import evaluate_smart_criteria
 from src.advisor.technical import analyze_technical
+from src.advisor.trade_setup import evaluate_trade_setup, trade_setup_to_dict
 from src.advisor.trend_follow_diagnostics import (
     generate_trend_follow_diagnostics,
     trend_follow_to_dict,
 )
 from src.market_data import get_stock_data, get_stock_info, get_stock_news_with_status
-from src.services.analysis_context import DataResult, StockSignalContext
+from src.services.analysis_context import DataResult, ProvenanceItem, StockSignalContext
+from src.services.provenance_service import stock_provenance
 
 
 @dataclass
@@ -39,9 +42,12 @@ class StockDashboardContext:
     smart_criteria: dict[str, Any] = field(default_factory=dict)
     probabilistic_signal: dict[str, Any] = field(default_factory=dict)
     trend_follow_diagnostics: dict[str, Any] = field(default_factory=dict)
+    fomo_regime: dict[str, Any] = field(default_factory=dict)
+    trade_setup: dict[str, Any] = field(default_factory=dict)
     sector_theme_context: dict[str, Any] = field(default_factory=dict)
     stock_signal_context: dict[str, Any] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
+    provenance: list[ProvenanceItem] = field(default_factory=list)
     profile_warning: str = ""
     error_message: str = ""
 
@@ -73,6 +79,16 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
     probabilistic_dict = to_plain_value(signal_to_dict(probabilistic))
     trend_follow = generate_trend_follow_diagnostics(normalized_ticker, "5y", "SPY")
     trend_follow_dict = to_plain_value(trend_follow_to_dict(trend_follow))
+    fomo_regime = to_plain_value(
+        analyze_fomo_volatility_regime(history_df, ticker=normalized_ticker)
+    )
+    trade_setup = evaluate_trade_setup(
+        normalized_ticker,
+        info_dict,
+        technical_dict,
+        history_df,
+    )
+    trade_setup_dict = to_plain_value(trade_setup_to_dict(trade_setup))
     sector_theme_context = to_plain_value(
         evaluate_stock_sector_theme_context(
             normalized_ticker,
@@ -100,7 +116,19 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         bool(technical_dict),
         bool(probabilistic_dict),
         trend_follow_dict,
+        trade_setup_dict,
         sector_theme_context,
+    )
+    provenance = stock_provenance(
+        ticker=normalized_ticker,
+        has_profile=bool(info_dict) and not _is_limited_profile(info_dict),
+        has_history=history_df is not None and not history_df.empty,
+        has_technical=bool(technical_dict),
+        probabilistic=probabilistic_dict,
+        trend_follow=trend_follow_dict,
+        trade_setup=trade_setup_dict,
+        sector_theme=sector_theme_context,
+        news_status=news_source_status,
     )
     stock_signal_context = StockSignalContext(
         ticker=normalized_ticker,
@@ -109,11 +137,14 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         smart_criteria=to_plain_value(smart_res),
         probabilistic_signal=probabilistic_dict,
         trend_follow_diagnostics=trend_follow_dict,
+        fomo_regime=fomo_regime,
+        trade_setup=trade_setup_dict,
         sector_theme_context=sector_theme_context,
         news_headlines=_news_headlines(news_items),
         news_source_status=news_source_status,
         news_error_reason=news_error_reason,
         data_status=data_status,
+        provenance=provenance,
     ).to_dict()
 
     chart_data = _history_to_chart_data(history_df)
@@ -128,9 +159,12 @@ def build_stock_dashboard_context(ticker: str) -> StockDashboardContext:
         smart_criteria=to_plain_value(smart_res),
         probabilistic_signal=probabilistic_dict,
         trend_follow_diagnostics=trend_follow_dict,
+        fomo_regime=fomo_regime,
+        trade_setup=trade_setup_dict,
         sector_theme_context=sector_theme_context,
         stock_signal_context=stock_signal_context,
         data_status=data_status,
+        provenance=provenance,
         profile_warning=_profile_warning_message(info_dict),
         error_message=_dashboard_error_message(info_dict, history_df),
     )
@@ -300,6 +334,7 @@ def _build_data_status(
     has_technical: bool,
     has_probabilistic: bool,
     trend_follow: dict[str, Any],
+    trade_setup: dict[str, Any],
     sector_theme_context: dict[str, Any],
 ) -> list[DataResult]:
     trend_quality = (
@@ -353,6 +388,15 @@ def _build_data_status(
             is_partial=not trend_ok,
             error="; ".join(str(item) for item in trend_warnings[:3])
             if not trend_ok
+            else "",
+            cache_status="computed",
+        ),
+        DataResult(
+            name="trade_setup",
+            source="local_daily_entry_framework",
+            is_partial=trade_setup.get("status") == "insufficient_data",
+            error="; ".join(str(item) for item in trade_setup.get("warnings", [])[:3])
+            if trade_setup.get("status") == "insufficient_data"
             else "",
             cache_status="computed",
         ),

@@ -4,6 +4,7 @@ from src.market_data import (
     get_stock_info,
     get_stock_news,
 )
+from src.services.analysis_context import ProvenanceItem, ProvenanceKind
 
 from .models import PortfolioHolding
 from .technical import analyze_technical
@@ -132,13 +133,22 @@ def analyze_portfolio(
 ) -> dict:
     """ポートフォリオ全体を分析"""
     results = []
+    excluded_holdings = []
     total_value = 0
 
     for holding in holdings:
         info = get_stock_info(holding.ticker)
         tech = analyze_technical(holding.ticker)
 
-        current_price = info.get("current_price", 0)
+        current_price = info.get("current_price")
+        if not isinstance(current_price, (int, float)) or current_price <= 0:
+            excluded_holdings.append(
+                {
+                    "ticker": holding.ticker,
+                    "reason": "現在価格を取得できないため分析対象から除外しました。",
+                }
+            )
+            continue
         value = current_price * holding.shares
         total_value += value
 
@@ -169,7 +179,35 @@ def analyze_portfolio(
     return {
         "holdings": results,
         "total_value": total_value,
-        "num_holdings": len(holdings),
+        "num_holdings": len(results),
+        "excluded_holdings": excluded_holdings,
+        "quality_warnings": [
+            f"{item['ticker']}: {item['reason']}" for item in excluded_holdings
+        ],
+        "provenance": [
+            ProvenanceItem(
+                item_id="portfolio.current_prices",
+                label="ポートフォリオ現在価格",
+                kind=ProvenanceKind.DIRECT if results else ProvenanceKind.UNAVAILABLE,
+                source="market_data providers",
+                method="取得できた正の現在価格だけで時価と構成比を計算。",
+                limitation=(
+                    f"価格未取得により {len(excluded_holdings)} 銘柄を除外。"
+                    if excluded_holdings
+                    else ""
+                ),
+                risk_level="high" if excluded_holdings else "low",
+            ).to_dict(),
+            ProvenanceItem(
+                item_id="portfolio.ai_advice",
+                label="AIポートフォリオ助言",
+                kind=ProvenanceKind.MODEL_OUTPUT,
+                source="Gemini",
+                method="取得済みポートフォリオ分析結果を基に生成。",
+                limitation="生成AIの助言であり、売買判断を保証しない。",
+                risk_level="high",
+            ).to_dict(),
+        ],
     }
 
 

@@ -1,12 +1,15 @@
 import reflex as rx
 
+from frontend.components.data_provenance import provenance_panel
 from frontend.components.flash_summary import (
     market_distortion_panel,
     market_monitor,
     watch_indices_strip,
 )
+from frontend.components.market_risk_intelligence import market_risk_intelligence_panel
 from frontend.components.momentum_display import momentum_monitor_component
 from frontend.components.option_analysis import option_analysis_component
+from frontend.components.ui_primitives import loading_state, page_header
 from frontend.pages.theme import theme_ranking_content
 from frontend.state.market_state import MarketState
 from frontend.template import template
@@ -79,9 +82,9 @@ def market_watch_page() -> rx.Component:
     """市場監視ページ"""
 
     return rx.vstack(
-        rx.hstack(
-            rx.heading("市場監視", size="7"),
-            rx.spacer(),
+        page_header(
+            "市場監視",
+            "市場スタンス、主要ドライバー、リスク要因を段階更新で確認します。",
             rx.button(
                 rx.icon("activity", size=16),
                 "詳細更新",
@@ -96,11 +99,9 @@ def market_watch_page() -> rx.Component:
                 loading=MarketState.is_fetching_options,
                 variant="surface",
             ),
-            width="100%",
-            align_items="center",
-            margin_bottom="2rem",
         ),
         _stage_status_strip(),
+        provenance_panel(MarketState.provenance),
         rx.cond(
             MarketState.error_msg != "",
             rx.callout(
@@ -112,15 +113,10 @@ def market_watch_page() -> rx.Component:
         ),
         rx.cond(
             MarketState.is_fetching,
-            rx.center(
-                rx.spinner(size="3"),
-                rx.text("市場監視データを取得中...", margin_top="1rem", color="gray"),
-                direction="column",
-                width="100%",
-                height="300px",
-            ),
+            loading_state("市場監視データを取得中..."),
             rx.vstack(
                 watch_indices_strip(),
+                market_risk_intelligence_panel(),
                 market_monitor(),
                 market_distortion_panel(),
                 momentum_monitor_component(),

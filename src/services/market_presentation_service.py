@@ -228,9 +228,10 @@ class Spreads(BaseModel):
 
 
 class YieldSpreadData(BaseModel):
-    yield_10y: float = 0.0
+    yield_10y: float | None = None
     spreads: Spreads = Spreads()
     overall_status: str = "neutral"
+    available: bool = False
     warnings: list[str] = []
 
 

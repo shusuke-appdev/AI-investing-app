@@ -5,11 +5,13 @@ from frontend.pages.knowledge import knowledge as knowledge_page
 from frontend.pages.market_watch import market_watch_page
 from frontend.pages.portfolio import portfolio_page
 from frontend.pages.stock import stock_page
+from frontend.pages.trading_plan import trading_plan_page
 from frontend.state.knowledge_state import KnowledgeState
 from frontend.state.market_state import MarketState
 from frontend.state.portfolio_state import PortfolioState
 from frontend.state.stock_state import StockState
 from frontend.state.theme_state import ThemeState
+from frontend.state.trading_plan_state import TradingPlanState
 
 app = rx.App()
 app.add_page(
@@ -35,6 +37,12 @@ app.add_page(
     route="/portfolio",
     title="Portfolio Advisor | AI Investing",
     on_load=PortfolioState.load_portfolio_list,
+)
+app.add_page(
+    trading_plan_page,
+    route="/trading-plan",
+    title="Trading Plan | AI Investing",
+    on_load=TradingPlanState.load_plans,
 )
 app.add_page(
     knowledge_page,

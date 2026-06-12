@@ -4,11 +4,12 @@
 
 Supabase は、2026-05-30 から新規プロジェクトで `public` スキーマの新規テーブルを Data API / GraphQL API に自動公開しない既定に変更します。既存プロジェクトでも 2026-10-30 以降、新しく作成する `public` テーブルには明示的な `GRANT` が必要です。
 
-このアプリは Supabase Python client から PostgREST/Data API を使い、以下の3テーブルを参照します。
+このアプリは Supabase Python client から PostgREST/Data API を使い、以下の4テーブルを参照します。
 
 - `public.user_settings`
 - `public.portfolios`
 - `public.knowledge_items`
+- `public.trade_plans`
 
 ## 対応方針
 
@@ -63,7 +64,7 @@ left join information_schema.role_table_grants g
  and g.grantee in ('anon', 'authenticated', 'service_role')
 where n.nspname = 'public'
   and c.relkind = 'r'
-  and c.relname in ('user_settings', 'portfolios', 'knowledge_items')
+  and c.relname in ('user_settings', 'portfolios', 'knowledge_items', 'trade_plans')
 order by c.relname, g.grantee, g.privilege_type;
 ```
 

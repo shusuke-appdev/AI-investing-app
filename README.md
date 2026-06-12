@@ -23,7 +23,8 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 - 市場環境評価: トレンド、モメンタム、ボラティリティ、マーケットブレッドス、オプションセンチメントを統合評価
 - オプション分析: SPY / QQQ / IWM の Put/Call Ratio、Gamma Exposure、Max Pain、ATM IV、Skew を算出
 - テーマランキング: AI、半導体、エネルギー、ヘルスケアなどのテーマを期間別にランキング
-- 個別銘柄分析: 企業概要、価格チャート、ニュース、テクニカル、SMART基準、AI分析レポート
+- 個別銘柄分析: 企業概要、価格チャート、ニュース、テクニカル、SMART基準、日足Entry Framework、AI分析レポート
+- Trading Plan: 3段階ストップ、R基準サイジング、T+1/T+3確認、利確・ジャーナル管理
 - ポートフォリオ分析: 保有銘柄、評価額、セクター・テーマ露出、AIアドバイス
 - 参照知識管理: テキスト、URL、YouTube、ファイルから知識を登録し、AI分析のコンテキストに利用
 
@@ -116,5 +117,7 @@ python -m ruff format --check .
 - [Supabase Data API grants 対応](docs/SUPABASE_DATA_API_GRANTS.md)
 - [コード点検結果](docs/CODE_AUDIT.md)
 - [データ取得・分析機能レビュー](docs/DATA_ANALYSIS_REVIEW.md)
+- [分析データ来歴台帳](docs/ANALYSIS_DATA_PROVENANCE.md)
+- [UI総合改善計画](docs/UI_IMPROVEMENT_PLAN.md)
 - [根本改修ロードマップ](docs/REMEDIATION_ROADMAP.md)
 - [実行タスク](task.md)

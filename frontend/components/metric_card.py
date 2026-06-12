@@ -14,11 +14,15 @@ def metric_card(title: str, value: str, change: str) -> rx.Component:
         rx.vstack(
             rx.text(title, size="2", color=rx.color("gray", 11), weight="medium"),
             rx.heading(value, size="6", weight="bold"),
-            rx.hstack(
-                rx.icon(change_icon, size=16, color=change_color),
-                rx.text(change, size="2", color=change_color, weight="bold"),
-                spacing="1",
-                align_items="center",
+            rx.cond(
+                change != "",
+                rx.hstack(
+                    rx.icon(change_icon, size=16, color=change_color),
+                    rx.text(change, size="2", color=change_color, weight="bold"),
+                    spacing="1",
+                    align_items="center",
+                ),
+                rx.text("取得済み指標", size="1", color=rx.color("gray", 9)),
             ),
             spacing="2",
         ),

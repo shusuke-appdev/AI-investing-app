@@ -1,5 +1,10 @@
 from src import stock_analyst
-from src.stock_analyst import _format_sector_theme_context, _format_trend_follow_context
+from src.stock_analyst import (
+    _format_provenance_context,
+    _format_sector_theme_context,
+    _format_trade_setup_context,
+    _format_trend_follow_context,
+)
 
 
 def test_format_trend_follow_context_marks_diagnostics_as_context_only():
@@ -27,6 +32,23 @@ def test_format_trend_follow_context_marks_diagnostics_as_context_only():
 
 def test_format_trend_follow_context_handles_missing_data():
     assert _format_trend_follow_context({}) == "Trend-Follow Diagnostics: unavailable."
+
+
+def test_format_trade_setup_context_preserves_blocked_status():
+    text = _format_trade_setup_context(
+        {
+            "trade_setup": {
+                "status": "blocked",
+                "grade": "A",
+                "score_display": "90/100",
+                "blocked_reasons": ["下降する200MAに逆らうEntryは禁止。"],
+                "warnings": ["LoDは未判定。"],
+            }
+        }
+    )
+
+    assert "Status: blocked" in text
+    assert "Do not override" in text
 
 
 def test_analyze_stock_reuses_supplied_context_without_recomputing(monkeypatch):
@@ -79,6 +101,17 @@ def test_analyze_stock_reuses_supplied_context_without_recomputing(monkeypatch):
             },
             "probabilistic_signal": {"signal_label": "Constructive"},
             "news_headlines": ["Context headline"],
+            "provenance": [
+                {
+                    "item_id": "technical_score",
+                    "label": "Technical score",
+                    "kind": "model_output",
+                    "source": "local indicators",
+                    "method": "weighted score",
+                    "limitation": "Not a direct quote",
+                    "risk_level": "medium",
+                }
+            ],
         },
     )
 
@@ -87,6 +120,8 @@ def test_analyze_stock_reuses_supplied_context_without_recomputing(monkeypatch):
     assert "S: ✅ Sales" in captured["prompt"]
     assert "Context headline" in captured["prompt"]
     assert "Constructive" in captured["prompt"]
+    assert "Data provenance:" in captured["prompt"]
+    assert "kind=model_output" in captured["prompt"]
 
 
 def test_format_sector_theme_context_includes_advantage_flags():
@@ -114,3 +149,7 @@ def test_format_sector_theme_context_includes_advantage_flags():
     assert "Sector/Theme Context" in text
     assert "Combined Rating: high" in text
     assert "fundamental=True" in text or "Stock Fundamental Advantage: True" in text
+
+
+def test_format_provenance_context_handles_missing_data():
+    assert _format_provenance_context({}) == ""
