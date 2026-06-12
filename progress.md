@@ -226,3 +226,12 @@ streamlit run legacy_streamlit/app.py
 - Product Design / Browser監査で全5ルートをdesktop・tablet・mobile幅で確認し、モバイルナビを左ドロワー化。監査証跡を `docs/ui-audit/2026-06-11/` に保存。
 - 検証結果: compileall、ruff check、ruff format check、全pytest `146 passed`、Reflex frontend export、Browser監査通過。
 - その後に並行追加されたTrading Plan関連コードを含む最終ワークツリーでは、`frontend/pages/trading_plan.py` の未型付け文字列連結によりReflex exportが停止。UI・来歴変更範囲のruffは通過し、全pytestは引き続き `146 passed`。
+
+# Session update: 2026-06-12 volatility / sentiment / top-risk / FOMO intelligence
+- Fixed the existing market-volatility integration so normalized OHLCV automatically produces log returns before volatility-clustering evaluation.
+- Added official-Cboe-history market volatility intelligence with persistent stale fallback, historical analog outcomes, and staged `Defensive / Watch / Pilot / Staged` posture.
+- Added a reproducible local Fear & Greed-style composite. CNN Fear & Greed is best-effort external reference only and cannot block or directly weight decisions.
+- Added a clearly labeled non-official BofA-inspired top-risk subset with exact/proxy/unknown handling; proprietary Sell Side, LT-growth, and M&A indicators remain intentionally omitted.
+- Added the FOMO Volatility Regime to individual-stock context/UI and an explicit bounded `/market-watch` scan for high-volatility semiconductor names.
+- Preserved the existing probabilistic stock signal and staged MarketContext loading; new diagnostics are parallel context, not replacement trade signals.
+- Validation: full pytest passed, live Cboe/FRED/SPY/NVDA smoke passed, and target Stock/Market Watch page imports passed. Reflex export remains blocked by the pre-existing uncommitted `frontend/pages/trading_plan.py` string/ObjectItemOperation type error.
