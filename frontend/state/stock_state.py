@@ -9,6 +9,7 @@ from frontend.components.data_provenance import (
     ProvenanceDisplay,
     provenance_display_items,
 )
+from src.display_labels import SECTOR_RATING_LABELS, display_label
 from src.services.stock_dashboard_service import (
     build_stock_dashboard_context,
     to_plain_value,
@@ -17,12 +18,14 @@ from src.services.stock_dashboard_service import (
 
 class SmartItem(BaseModel):
     met: bool = False
+    status: str = "unknown"
     desc: str = ""
     value: str = ""
 
 
 class SmartCriteria(BaseModel):
     all_met: bool = False
+    overall_status: str = "pending"
     S: SmartItem = SmartItem()
     M: SmartItem = SmartItem()
     A: SmartItem = SmartItem()
@@ -83,10 +86,13 @@ class StockState(rx.State):
     trade_setup: dict[str, Any] = {}
     sector_theme_context: dict[str, Any] = {}
     sector_theme_rating: str = ""
+    sector_theme_rating_display: str = ""
     sector_theme_rationale: str = ""
     sector_theme_themes: list[str] = []
     sector_theme_fundamental_score: float = 0.0
     sector_theme_flow_score: float = 0.0
+    sector_theme_fundamental_score_display: str = "算出不可"
+    sector_theme_flow_score_display: str = "算出不可"
     sector_theme_fundamental_advantage: bool = False
     sector_theme_flow_advantage: bool = False
     stock_signal_context: dict[str, Any] = {}
@@ -150,13 +156,24 @@ class StockState(rx.State):
             self.sector_theme_rating = self.sector_theme_context.get(
                 "combined_rating", ""
             )
+            self.sector_theme_rating_display = display_label(
+                self.sector_theme_rating, SECTOR_RATING_LABELS
+            )
             self.sector_theme_rationale = self.sector_theme_context.get("rationale", "")
             self.sector_theme_themes = list(self.sector_theme_context.get("themes", []))
             self.sector_theme_fundamental_score = float(
-                self.sector_theme_context.get("stock_fundamental_score", 0.0)
+                self.sector_theme_context.get("stock_fundamental_score") or 0.0
             )
             self.sector_theme_flow_score = float(
-                self.sector_theme_context.get("stock_flow_score", 0.0)
+                self.sector_theme_context.get("stock_flow_score") or 0.0
+            )
+            self.sector_theme_fundamental_score_display = str(
+                self.sector_theme_context.get(
+                    "stock_fundamental_score_display", "算出不可"
+                )
+            )
+            self.sector_theme_flow_score_display = str(
+                self.sector_theme_context.get("stock_flow_score_display", "算出不可")
             )
             self.sector_theme_fundamental_advantage = bool(
                 self.sector_theme_context.get("fundamental_advantage", False)
@@ -197,10 +214,13 @@ class StockState(rx.State):
             self.trade_setup = {}
             self.sector_theme_context = {}
             self.sector_theme_rating = ""
+            self.sector_theme_rating_display = ""
             self.sector_theme_rationale = ""
             self.sector_theme_themes = []
             self.sector_theme_fundamental_score = 0.0
             self.sector_theme_flow_score = 0.0
+            self.sector_theme_fundamental_score_display = "算出不可"
+            self.sector_theme_flow_score_display = "算出不可"
             self.sector_theme_fundamental_advantage = False
             self.sector_theme_flow_advantage = False
             self.stock_signal_context = {}

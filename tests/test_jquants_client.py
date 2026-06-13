@@ -30,19 +30,19 @@ def test_get_daily_quotes(mock_get, mock_get_headers):
     mock_get_headers.return_value = {"x-api-key": "dummy"}
     mock_response = MagicMock()
     mock_response.json.return_value = {
-        "daily_quotes": [
+        "data": [
             {
                 "Date": "2024-01-01",
-                "Open": 100,
-                "High": 110,
-                "Low": 90,
-                "Close": 105,
-                "Volume": 1000,
-                "AdjustmentOpen": 100,
-                "AdjustmentHigh": 110,
-                "AdjustmentLow": 90,
-                "AdjustmentClose": 105,
-                "AdjustmentVolume": 1000,
+                "O": 100,
+                "H": 110,
+                "L": 90,
+                "C": 105,
+                "Vo": 1000,
+                "AdjO": 100,
+                "AdjH": 110,
+                "AdjL": 90,
+                "AdjC": 105,
+                "AdjVo": 1000,
             }
         ]
     }
@@ -53,6 +53,7 @@ def test_get_daily_quotes(mock_get, mock_get_headers):
     assert not df.empty
     assert "Open" in df.columns
     assert df.iloc[0]["Close"] == 105
+    assert mock_get.call_args.args[0].endswith("/v2/equities/bars/daily")
 
 
 @patch("src.jquants_client._get_headers")
@@ -61,11 +62,11 @@ def test_get_fins_statements(mock_get, mock_get_headers):
     mock_get_headers.return_value = {"x-api-key": "dummy"}
     mock_response = MagicMock()
     mock_response.json.return_value = {
-        "statements": [
+        "data": [
             {
-                "DiscloseDate": "2024-02-01",
-                "NetSales": "1000.5",
-                "OperatingProfit": "100.2",
+                "DiscDate": "2024-02-01",
+                "Sales": "1000.5",
+                "OP": "100.2",
             }
         ]
     }
@@ -75,3 +76,4 @@ def test_get_fins_statements(mock_get, mock_get_headers):
     assert fins is not None
     assert fins["net_sales"] == 1000.5
     assert fins["operating_income"] == 100.2
+    assert mock_get.call_args.args[0].endswith("/v2/fins/summary")

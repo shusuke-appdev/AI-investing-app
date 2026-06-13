@@ -3,6 +3,7 @@ from unittest.mock import patch
 import pandas as pd
 
 from src.data_provider import DataProvider
+from src.persistent_cache import PersistentJsonCache
 
 
 class FakeYFinanceTicker:
@@ -99,12 +100,17 @@ class TestDataProvider:
 
     @patch("src.stock_data_provider.is_japanese_stock", return_value=False)
     def test_get_stock_info_uses_fast_info_when_profile_is_unavailable(
-        self, mock_is_jp, monkeypatch
+        self, mock_is_jp, monkeypatch, tmp_path
     ):
         from src import stock_data_provider
 
         stock_data_provider.get_stock_info.clear_cache()
         monkeypatch.setattr(stock_data_provider.yf, "Ticker", FastInfoOnlyTicker)
+        monkeypatch.setattr(
+            stock_data_provider,
+            "repo_state_cache",
+            lambda namespace: PersistentJsonCache(tmp_path, namespace),
+        )
 
         info = DataProvider.get_stock_info("TEST", translate_summary=False)
 

@@ -144,7 +144,7 @@ def _fetch_with_timeout(
 
 
 def get_option_chain(
-    ticker: str, *, allow_marketdata: bool = False
+    ticker: str, *, allow_marketdata: bool = False, cache_only: bool = False
 ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """
     オプションチェーンデータを取得する。
@@ -162,6 +162,27 @@ def get_option_chain(
     mode = _marketdata_options_mode() if allow_marketdata else "off"
     if ticker not in MARKETDATA_OPTION_TICKERS:
         mode = "off"
+    if cache_only:
+        cached = _load_persistent_cache(ticker, max_age_seconds=OPTION_STALE_TTL)
+        if cached is None:
+            return None
+        calls, puts, fetched_at, cache_status, cache_age_seconds = cached
+        _remember_success(ticker, calls, puts)
+        _set_metadata(
+            ticker,
+            source="yfinance",
+            fetched_at=fetched_at,
+            cache_status=cache_status,
+            cache_age_seconds=cache_age_seconds,
+            is_stale=cache_status == "stale_cache",
+            data_quality="stale_cache"
+            if cache_status == "stale_cache"
+            else "available",
+            quality_warnings=[
+                "通常の銘柄分析では保存済みオプションデータのみ使用しています。"
+            ],
+        )
+        return calls, puts
 
     if mode == "preferred":
         marketdata_result = _fetch_marketdata_chain(ticker)

@@ -8,6 +8,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from src.display_labels import TREND_RATING_LABELS, display_label
+
 DEFAULT_COST_BPS = 20.0
 MIN_HISTORY_DAYS = 260
 RANDOM_TRIALS = 500
@@ -155,7 +157,9 @@ def trend_follow_to_dict(diagnostics: TrendFollowDiagnostics) -> dict[str, Any]:
     current = data.get("current_state") or {}
     data.update(
         {
-            "rating_display": data.get("diagnostic_rating", "Unavailable"),
+            "rating_display": display_label(
+                data.get("diagnostic_rating", "Unavailable"), TREND_RATING_LABELS
+            ),
             "current_state_display": current.get(
                 "description", "Trend state unavailable."
             ),

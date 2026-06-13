@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
@@ -13,6 +14,7 @@ from src.constants import CACHE_TTL_DAILY, CACHE_TTL_MEDIUM, CACHE_TTL_SHORT
 from src.edinet_client import get_company_finance
 from src.log_config import get_logger
 from src.models import StockInfo
+from src.persistent_cache import repo_state_cache, utc_now_iso
 from src.translator import translate_to_japanese
 from src.yfinance_runtime import configure_yfinance_cache
 
@@ -20,6 +22,14 @@ logger = get_logger(__name__)
 configure_yfinance_cache()
 
 NO_SUMMARY_TEXT = "N/A"
+YFINANCE_HISTORY_CACHE_NAMESPACE = "yfinance_history_cache"
+YFINANCE_PROFILE_CACHE_NAMESPACE = "yfinance_profile_cache"
+YFINANCE_HISTORY_FRESH_SECONDS = 15 * 60
+YFINANCE_HISTORY_STALE_SECONDS = 24 * 60 * 60
+YFINANCE_PROFILE_FRESH_SECONDS = 12 * 60 * 60
+YFINANCE_PROFILE_STALE_SECONDS = 7 * 24 * 60 * 60
+YFINANCE_RATE_LIMIT_COOLDOWN_SECONDS = 15 * 60
+_rate_limited_until: datetime | None = None
 
 
 def is_japanese_stock(ticker: str) -> bool:
@@ -84,18 +94,46 @@ def _get_fast_info(stock: yf.Ticker) -> Any:
 
 
 def _get_info(stock: yf.Ticker) -> dict[str, Any]:
+    global _rate_limited_until
+    cache = repo_state_cache(YFINANCE_PROFILE_CACHE_NAMESPACE)
+    cached = cache.read(
+        stock.ticker,
+        fresh_seconds=YFINANCE_PROFILE_FRESH_SECONDS,
+        stale_seconds=YFINANCE_PROFILE_STALE_SECONDS,
+    )
+    if _rate_limited_until and datetime.now(timezone.utc) < _rate_limited_until:
+        return dict(cached.payload.get("profile") or {}) if cached.is_available else {}
     try:
         raw_info = getattr(stock, "info", None)
     except Exception as exc:
+        if _is_rate_limit_error(exc):
+            _rate_limited_until = datetime.fromtimestamp(
+                datetime.now(timezone.utc).timestamp()
+                + YFINANCE_RATE_LIMIT_COOLDOWN_SECONDS,
+                tz=timezone.utc,
+            )
         logger.warning(f"yfinance profile fetch failed for {stock.ticker}: {exc}")
-        return {}
-    return raw_info if isinstance(raw_info, dict) else {}
+        return dict(cached.payload.get("profile") or {}) if cached.is_available else {}
+    profile = raw_info if isinstance(raw_info, dict) else {}
+    if profile:
+        cache.write(stock.ticker, {"profile": profile})
+        return profile
+    return dict(cached.payload.get("profile") or {}) if cached.is_available else {}
 
 
 def _get_history(stock: yf.Ticker, period: str) -> pd.DataFrame:
+    global _rate_limited_until
+    if _rate_limited_until and datetime.now(timezone.utc) < _rate_limited_until:
+        return pd.DataFrame()
     try:
         return stock.history(period=period)
     except Exception as exc:
+        if _is_rate_limit_error(exc):
+            _rate_limited_until = datetime.fromtimestamp(
+                datetime.now(timezone.utc).timestamp()
+                + YFINANCE_RATE_LIMIT_COOLDOWN_SECONDS,
+                tz=timezone.utc,
+            )
         logger.warning(f"yfinance history fetch failed for {stock.ticker}: {exc}")
         return pd.DataFrame()
 
@@ -117,6 +155,32 @@ def _normalize_history(df: pd.DataFrame) -> pd.DataFrame:
     )
     normalized.index.name = normalized.index.name or "Date"
     return normalized
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "too many requests" in text or "rate limit" in text or "429" in text
+
+
+def _history_cache_key(ticker: str, period: str) -> str:
+    return f"{ticker.upper()}_{period}"
+
+
+def _history_from_payload(payload: dict[str, Any]) -> pd.DataFrame:
+    records = list(payload.get("records") or [])
+    if not records:
+        return pd.DataFrame()
+    frame = pd.DataFrame(records)
+    if "Date" not in frame.columns:
+        return pd.DataFrame()
+    frame["Date"] = pd.to_datetime(frame["Date"], utc=True)
+    return _normalize_history(frame.set_index("Date"))
+
+
+def _history_payload(frame: pd.DataFrame) -> dict[str, Any]:
+    normalized = _normalize_history(frame)
+    records = normalized.reset_index().to_dict(orient="records")
+    return {"records": records, "source": "yfinance", "fetched_at": utc_now_iso()}
 
 
 def _latest_history_values(df: pd.DataFrame) -> dict[str, float | None]:
@@ -224,8 +288,27 @@ def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
         if not df.empty:
             return df
 
+    cache = repo_state_cache(YFINANCE_HISTORY_CACHE_NAMESPACE)
+    key = _history_cache_key(ticker, period)
+    cached = cache.read(
+        key,
+        fresh_seconds=YFINANCE_HISTORY_FRESH_SECONDS,
+        stale_seconds=YFINANCE_HISTORY_STALE_SECONDS,
+    )
+    if cached.status == "fresh":
+        return _history_from_payload(cached.payload)
+
     stock = yf.Ticker(ticker)
-    return _normalize_history(_get_history(stock, period))
+    live = _normalize_history(_get_history(stock, period))
+    if not live.empty:
+        cache.write(key, _history_payload(live))
+        return live
+    if cached.is_available:
+        logger.warning(
+            "yfinance live fetch failed; using cached history for %s", ticker
+        )
+        return _history_from_payload(cached.payload)
+    return pd.DataFrame()
 
 
 def _extract_yfinance_profile(

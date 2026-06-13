@@ -1,5 +1,6 @@
 import reflex as rx
 
+from frontend.components.ui_primitives import evaluation_badge
 from frontend.state.stock_state import StockState
 
 
@@ -13,9 +14,9 @@ def fomo_volatility_panel() -> rx.Component:
                 rx.hstack(
                     rx.heading("FOMO Volatility Regime", size="4"),
                     rx.spacer(),
-                    rx.badge(
+                    evaluation_badge(
                         StockState.fomo_label,
-                        color_scheme=rx.cond(
+                        rx.cond(
                             StockState.fomo_risk_level == "critical",
                             "red",
                             rx.cond(
@@ -28,7 +29,6 @@ def fomo_volatility_panel() -> rx.Component:
                                 ),
                             ),
                         ),
-                        variant="surface",
                     ),
                     width="100%",
                 ),

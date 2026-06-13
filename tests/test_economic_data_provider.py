@@ -102,7 +102,7 @@ def test_fetch_fred_series_returns_stale_cache_immediately_when_preferred(
     assert result.cache_status == "stale_cache"
     assert result.is_partial is True
     assert result.data["BAA10Y"].iloc[0] == 1.25
-    assert "Using cached FRED data" in result.warnings[-1]
+    assert "保存済みデータ" in result.warnings[-1]
 
 
 def test_fetch_fred_series_can_skip_pandas_datareader_fallback(monkeypatch, tmp_path):
@@ -130,4 +130,4 @@ def test_fetch_fred_series_can_skip_pandas_datareader_fallback(monkeypatch, tmp_
     assert result.data.empty
     assert result.is_partial is True
     assert result.cache_status == "failed"
-    assert "FRED CSV failed" in result.error
+    assert "FRED CSV取得失敗" in result.error

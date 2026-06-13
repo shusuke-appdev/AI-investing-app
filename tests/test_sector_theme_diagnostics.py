@@ -103,3 +103,43 @@ def test_stock_sector_theme_context_rates_both_advantages_high(monkeypatch):
     assert context["combined_rating"] == "high"
     assert context["fundamental_advantage"] is True
     assert context["flow_advantage"] is True
+
+
+def test_missing_fundamentals_are_unavailable_not_zero(monkeypatch):
+    monkeypatch.setattr(
+        diagnostics,
+        "get_themes",
+        lambda market_type: {"Missing": ["AAA", "BBB"]},
+    )
+    monkeypatch.setattr(
+        diagnostics,
+        "get_stock_info",
+        lambda ticker, include_summary=False: {},
+    )
+    monkeypatch.setattr(
+        diagnostics,
+        "get_stock_data",
+        lambda ticker, period: _history(100, 120),
+    )
+
+    result = diagnostics.evaluate_theme_diagnostics("US")
+
+    assert result[0].fundamental_score is None
+    assert result[0].distortion_score is None
+    assert result[0].classification == "unavailable"
+    assert result[0].rating == "unavailable"
+
+
+def test_stock_context_exposes_unavailable_score_display(monkeypatch):
+    monkeypatch.setattr(diagnostics, "get_themes", lambda market_type: {})
+
+    context = diagnostics.evaluate_stock_sector_theme_context(
+        "AAA",
+        {"sector": "Technology", "industry": "Software"},
+        stock_price_df=pd.DataFrame(),
+        benchmark_price_df=pd.DataFrame(),
+    )
+
+    assert context["combined_rating"] == "unavailable"
+    assert context["stock_fundamental_score"] is None
+    assert context["stock_fundamental_score_display"] == "算出不可"

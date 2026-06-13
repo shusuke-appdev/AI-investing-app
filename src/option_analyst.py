@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 
 def _fetch_option_data(
-    ticker: str, *, allow_marketdata: bool = False
+    ticker: str, *, allow_marketdata: bool = False, cache_only: bool = False
 ) -> tuple[pd.DataFrame, pd.DataFrame, float, str, dict[str, Any]] | None:
     """
     オプションチェーンと現在価格を1回で取得する内部ヘルパー。
@@ -31,7 +31,9 @@ def _fetch_option_data(
     Returns:
         (calls_df, puts_df, current_price, fetched_at, metadata) のタプル、またはNone
     """
-    option_data = get_option_chain(ticker, allow_marketdata=allow_marketdata)
+    option_data = get_option_chain(
+        ticker, allow_marketdata=allow_marketdata, cache_only=cache_only
+    )
     if option_data is None:
         return None
 
@@ -575,7 +577,7 @@ def estimate_price_range(
 
 
 def analyze_option_sentiment(
-    ticker: str, *, allow_marketdata: bool = False
+    ticker: str, *, allow_marketdata: bool = False, cache_only: bool = False
 ) -> dict | None:
     """
     オプションセンチメント分析を行います。
@@ -588,7 +590,9 @@ def analyze_option_sentiment(
         センチメント分析結果
     """
     # === データ取得（1回のみ） ===
-    fetched = _fetch_option_data(ticker, allow_marketdata=allow_marketdata)
+    fetched = _fetch_option_data(
+        ticker, allow_marketdata=allow_marketdata, cache_only=cache_only
+    )
     if fetched is None:
         return None
     calls, puts, current_price, fetched_at, metadata = fetched

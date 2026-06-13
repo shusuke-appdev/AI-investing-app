@@ -1,5 +1,6 @@
 import reflex as rx
 
+from frontend.components.ui_primitives import evaluation_badge
 from frontend.state.stock_state import StockState
 
 
@@ -7,8 +8,12 @@ def _setup_check(item: dict) -> rx.Component:
     return rx.card(
         rx.vstack(
             rx.hstack(
-                rx.badge(
-                    item["status"],
+                evaluation_badge(
+                    rx.cond(
+                        item["status"] == "pass",
+                        "達成",
+                        rx.cond(item["status"] == "fail", "未達", "判定不能"),
+                    ),
                     color_scheme=rx.cond(
                         item["status"] == "pass",
                         "green",
@@ -42,7 +47,7 @@ def trade_setup_panel() -> rx.Component:
         rx.box(
             rx.hstack(
                 rx.vstack(
-                    rx.heading("Entry Framework", size="5"),
+                    rx.heading("エントリー品質評価", size="5"),
                     rx.text(
                         "既存分析を置き換えず、日足のEntry品質と禁止条件を判定します。",
                         size="2",
@@ -53,8 +58,16 @@ def trade_setup_panel() -> rx.Component:
                 ),
                 rx.spacer(),
                 rx.badge(
-                    setup["status"].to(str),
-                    color_scheme=rx.cond(
+                    rx.cond(
+                        setup["status"].to(str) == "ready",
+                        "準備良好",
+                        rx.cond(
+                            setup["status"].to(str) == "blocked",
+                            "見送り",
+                            "条件付き",
+                        ),
+                    ),
+                    rx.cond(
                         setup["status"].to(str) == "ready",
                         "green",
                         rx.cond(
@@ -63,9 +76,8 @@ def trade_setup_panel() -> rx.Component:
                             "orange",
                         ),
                     ),
-                    size="3",
                 ),
-                rx.badge("Grade " + setup["grade"].to(str), size="3"),
+                rx.badge("評価 " + setup["grade"].to(str), size="3"),
                 rx.badge(setup["score_display"].to(str), size="3"),
                 width="100%",
                 align_items="center",
@@ -80,7 +92,7 @@ def trade_setup_panel() -> rx.Component:
                         _metric("ADR%", setup["adr_display"].to(str)),
                         _metric("VARS proxy", setup["vars_display"].to(str)),
                         _metric(
-                            "50MA Extension",
+                            "50日線乖離",
                             setup["ma50_extension_display"].to(str),
                         ),
                         columns=rx.breakpoints(initial="2", md="4"),
@@ -111,7 +123,7 @@ def trade_setup_panel() -> rx.Component:
             ),
             rx.card(
                 rx.vstack(
-                    rx.text("ATR% Extension 利確目安", weight="bold", size="2"),
+                    rx.text("ATR%乖離による利確目安", weight="bold", size="2"),
                     rx.hstack(
                         rx.badge("4x " + profit_levels["4x"].to(str)),
                         rx.badge("6x " + profit_levels["6x"].to(str)),
@@ -140,7 +152,7 @@ def trade_setup_panel() -> rx.Component:
             rx.link(
                 rx.button(
                     rx.icon("clipboard-list", size=16),
-                    "Trading Planを作成",
+                    "売買計画を作成",
                     variant="outline",
                     margin_top="1rem",
                 ),

@@ -94,9 +94,14 @@ class RegimePlaybookDisplay(BaseModel):
 class DistortionItem(BaseModel):
     theme: str = ""
     tickers: list[str] = []
-    fundamental_score: float = 0.0
-    flow_score: float = 0.0
-    distortion_score: float = 0.0
+    fundamental_score: float | None = None
+    flow_score: float | None = None
+    distortion_score: float | None = None
+    fundamental_score_str: str = "算出不可"
+    flow_score_str: str = "算出不可"
+    distortion_score_str: str = "算出不可"
+    fundamental_coverage_str: str = "0%"
+    flow_coverage_str: str = "0%"
     classification: str = ""
     rating: str = ""
     rationale: str = ""
@@ -454,9 +459,14 @@ def _format_distortions(rows: list[dict[str, Any]]) -> list[DistortionItem]:
         DistortionItem(
             theme=item.get("theme", ""),
             tickers=list(item.get("tickers", [])),
-            fundamental_score=float(item.get("fundamental_score", 0.0)),
-            flow_score=float(item.get("flow_score", 0.0)),
-            distortion_score=float(item.get("distortion_score", 0.0)),
+            fundamental_score=_optional_float(item.get("fundamental_score")),
+            flow_score=_optional_float(item.get("flow_score")),
+            distortion_score=_optional_float(item.get("distortion_score")),
+            fundamental_score_str=_optional_score(item.get("fundamental_score")),
+            flow_score_str=_optional_score(item.get("flow_score")),
+            distortion_score_str=_optional_score(item.get("distortion_score")),
+            fundamental_coverage_str=_coverage_str(item.get("fundamental_coverage")),
+            flow_coverage_str=_coverage_str(item.get("flow_coverage")),
             classification=item.get("classification", ""),
             rating=item.get("rating", ""),
             rationale=item.get("rationale", ""),
@@ -466,6 +476,23 @@ def _format_distortions(rows: list[dict[str, Any]]) -> list[DistortionItem]:
         for item in rows
         if isinstance(item, dict)
     ]
+
+
+def _optional_float(value: Any) -> float | None:
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_score(value: Any) -> str:
+    number = _optional_float(value)
+    return f"{number:.2f}" if number is not None else "算出不可"
+
+
+def _coverage_str(value: Any) -> str:
+    number = _optional_float(value)
+    return f"{number:.0%}" if number is not None else "0%"
 
 
 def _format_sector_flow(raw: dict[str, Any]) -> list[SectorFlowGroup]:

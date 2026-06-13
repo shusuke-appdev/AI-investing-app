@@ -3,6 +3,21 @@
 import reflex as rx
 
 
+def evaluation_badge(label, color_scheme) -> rx.Component:
+    """Render a prominent primary evaluation consistently across stock diagnostics."""
+
+    return rx.badge(
+        label,
+        color_scheme=color_scheme,
+        variant="surface",
+        size="3",
+        font_size="1rem",
+        padding_x="0.8rem",
+        padding_y="0.45rem",
+        white_space="nowrap",
+    )
+
+
 def page_header(title: str, subtitle: str, *actions: rx.Component) -> rx.Component:
     return rx.flex(
         rx.vstack(

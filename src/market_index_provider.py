@@ -9,7 +9,6 @@ from io import StringIO
 
 import pandas as pd
 import requests
-import yfinance as yf
 
 from src.cache import ttl_cache
 from src.constants import CACHE_TTL_MEDIUM, MARKET_US
@@ -18,6 +17,7 @@ from src.finnhub_client import is_configured
 from src.log_config import get_logger
 from src.market_config import get_market_config
 from src.models import MarketIndex
+from src.stock_data_provider import get_historical_data
 from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
@@ -53,7 +53,7 @@ def _get_stooq_data(ticker: str) -> tuple[float, float] | None:
 
 def _fetch_yfinance_market_item(n: str, t: str) -> tuple[str, str, dict]:
     try:
-        hist = yf.Ticker(t).history(period="5d")
+        hist = get_historical_data(t, "5d")
         if "Close" in hist.columns:
             hist.dropna(subset=["Close"], inplace=True)
         else:

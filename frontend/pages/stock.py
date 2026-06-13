@@ -9,7 +9,12 @@ from frontend.components.trade_setup import trade_setup_panel
 from frontend.components.trend_follow_diagnostics import (
     trend_follow_diagnostics_panel,
 )
-from frontend.components.ui_primitives import empty_state, loading_state, page_header
+from frontend.components.ui_primitives import (
+    empty_state,
+    evaluation_badge,
+    loading_state,
+    page_header,
+)
 from frontend.state.stock_state import StockState
 from frontend.template import template
 
@@ -98,44 +103,81 @@ def stock_page() -> rx.Component:
                         margin_bottom="1rem",
                     ),
                     provenance_panel(StockState.provenance),
-                    # 総合評価・モードバッジ
+                    # 現在の評価
                     rx.cond(
                         StockState.technical_data.contains("overall_signal"),
-                        rx.hstack(
-                            rx.badge(
-                                StockState.technical_data["overall_signal"].to(str),
-                                size="3",
-                                color_scheme=rx.cond(
-                                    StockState.technical_data["overall_score"].to(int)
-                                    >= 60,
-                                    "green",
-                                    rx.cond(
-                                        StockState.technical_data["overall_score"].to(
-                                            int
-                                        )
-                                        <= 40,
-                                        "red",
-                                        "yellow",
+                        rx.card(
+                            rx.vstack(
+                                rx.text(
+                                    "現在の評価",
+                                    size="2",
+                                    weight="bold",
+                                    color=rx.color("gray", 10),
+                                ),
+                                rx.hstack(
+                                    evaluation_badge(
+                                        StockState.technical_data[
+                                            "overall_signal_display"
+                                        ].to(str),
+                                        rx.cond(
+                                            StockState.technical_data[
+                                                "overall_score"
+                                            ].to(int)
+                                            >= 60,
+                                            "green",
+                                            rx.cond(
+                                                StockState.technical_data[
+                                                    "overall_score"
+                                                ].to(int)
+                                                < 40,
+                                                "red",
+                                                "yellow",
+                                            ),
+                                        ),
                                     ),
+                                    rx.heading(
+                                        StockState.technical_data["overall_score"].to(
+                                            str
+                                        )
+                                        + "点",
+                                        size="6",
+                                    ),
+                                    rx.badge(
+                                        "分析モード: "
+                                        + StockState.technical_data["analysis_mode"].to(
+                                            str
+                                        ),
+                                        size="2",
+                                        color_scheme="purple",
+                                        variant="surface",
+                                    ),
+                                    rx.cond(
+                                        StockState.technical_data["entry_signal"].to(
+                                            str
+                                        )
+                                        != "",
+                                        rx.badge(
+                                            StockState.technical_data[
+                                                "entry_signal"
+                                            ].to(str),
+                                            size="2",
+                                            color_scheme="orange",
+                                        ),
+                                    ),
+                                    spacing="3",
+                                    align_items="center",
+                                    wrap="wrap",
                                 ),
-                            ),
-                            rx.badge(
-                                "モード: "
-                                + StockState.technical_data["analysis_mode"].to(str),
-                                size="3",
-                                color_scheme="purple",
-                            ),
-                            rx.cond(
-                                StockState.technical_data["entry_signal"].to(str) != "",
-                                rx.badge(
-                                    StockState.technical_data["entry_signal"].to(str),
-                                    size="3",
-                                    color_scheme="orange",
+                                rx.text(
+                                    "テクニカル・確率シグナル・トレンド堅牢性は異なる評価軸です。単独で売買判断に使わず、各説明とデータ品質を確認してください。",
+                                    size="2",
+                                    color=rx.color("gray", 11),
                                 ),
+                                width="100%",
+                                align_items="start",
                             ),
+                            width="100%",
                             margin_bottom="1rem",
-                            wrap="wrap",
-                            spacing="2",
                         ),
                     ),
                     # メトリックカード（主要指標）
@@ -267,8 +309,13 @@ def stock_page() -> rx.Component:
                                 rx.heading("SMART基準評価", size="4"),
                                 rx.cond(
                                     StockState.smart_criteria.all_met,
-                                    rx.badge("ALL CLEAR", color_scheme="green"),
-                                    rx.badge("条件未達", color_scheme="orange"),
+                                    evaluation_badge("全条件達成", "green"),
+                                    rx.cond(
+                                        StockState.smart_criteria.overall_status
+                                        == "pending",
+                                        evaluation_badge("判定不能あり", "gray"),
+                                        evaluation_badge("条件未達", "orange"),
+                                    ),
                                 ),
                                 align_items="center",
                                 margin_bottom="1rem",
@@ -276,45 +323,80 @@ def stock_page() -> rx.Component:
                             rx.vstack(
                                 rx.text(
                                     rx.cond(
-                                        StockState.smart_criteria.S.met, "✅ ", "❌ "
+                                        StockState.smart_criteria.S.status == "met",
+                                        "✅ ",
+                                        rx.cond(
+                                            StockState.smart_criteria.S.status
+                                            == "unknown",
+                                            "❓ ",
+                                            "❌ ",
+                                        ),
                                     )
-                                    + "S (Sales): "
+                                    + "S（売上成長）: "
                                     + StockState.smart_criteria.S.desc
                                     + " - "
                                     + StockState.smart_criteria.S.value
                                 ),
                                 rx.text(
                                     rx.cond(
-                                        StockState.smart_criteria.M.met, "✅ ", "❌ "
+                                        StockState.smart_criteria.M.status == "met",
+                                        "✅ ",
+                                        rx.cond(
+                                            StockState.smart_criteria.M.status
+                                            == "unknown",
+                                            "❓ ",
+                                            "❌ ",
+                                        ),
                                     )
-                                    + "M (Margin): "
+                                    + "M（利益率）: "
                                     + StockState.smart_criteria.M.desc
                                     + " - "
                                     + StockState.smart_criteria.M.value
                                 ),
                                 rx.text(
                                     rx.cond(
-                                        StockState.smart_criteria.A.met, "✅ ", "❌ "
+                                        StockState.smart_criteria.A.status == "met",
+                                        "✅ ",
+                                        rx.cond(
+                                            StockState.smart_criteria.A.status
+                                            == "unknown",
+                                            "❓ ",
+                                            "❌ ",
+                                        ),
                                     )
-                                    + "A (Accel): "
+                                    + "A（利益成長加速）: "
                                     + StockState.smart_criteria.A.desc
                                     + " - "
                                     + StockState.smart_criteria.A.value
                                 ),
                                 rx.text(
                                     rx.cond(
-                                        StockState.smart_criteria.R.met, "✅ ", "❌ "
+                                        StockState.smart_criteria.R.status == "met",
+                                        "✅ ",
+                                        rx.cond(
+                                            StockState.smart_criteria.R.status
+                                            == "unknown",
+                                            "❓ ",
+                                            "❌ ",
+                                        ),
                                     )
-                                    + "R (ROE): "
+                                    + "R（自己資本利益率）: "
                                     + StockState.smart_criteria.R.desc
                                     + " - "
                                     + StockState.smart_criteria.R.value
                                 ),
                                 rx.text(
                                     rx.cond(
-                                        StockState.smart_criteria.T.met, "✅ ", "❌ "
+                                        StockState.smart_criteria.T.status == "met",
+                                        "✅ ",
+                                        rx.cond(
+                                            StockState.smart_criteria.T.status
+                                            == "unknown",
+                                            "❓ ",
+                                            "❌ ",
+                                        ),
                                     )
-                                    + "T (Timing): "
+                                    + "T（市場タイミング）: "
                                     + StockState.smart_criteria.T.desc
                                     + " - "
                                     + StockState.smart_criteria.T.value
@@ -330,16 +412,21 @@ def stock_page() -> rx.Component:
                             rx.vstack(
                                 rx.hstack(
                                     rx.heading("セクター/テーマ評価", size="4"),
-                                    rx.badge(
-                                        StockState.sector_theme_rating,
-                                        color_scheme=rx.cond(
+                                    evaluation_badge(
+                                        StockState.sector_theme_rating_display,
+                                        rx.cond(
                                             StockState.sector_theme_rating == "high",
                                             "green",
                                             rx.cond(
                                                 StockState.sector_theme_rating
                                                 == "conditional",
                                                 "orange",
-                                                "gray",
+                                                rx.cond(
+                                                    StockState.sector_theme_rating
+                                                    == "weak",
+                                                    "red",
+                                                    "gray",
+                                                ),
                                             ),
                                         ),
                                     ),
@@ -372,10 +459,10 @@ def stock_page() -> rx.Component:
                                         ),
                                     ),
                                     rx.text(
-                                        "Fund "
-                                        + StockState.sector_theme_fundamental_score.to_string()
-                                        + " / Flow "
-                                        + StockState.sector_theme_flow_score.to_string(),
+                                        "ファンダメンタル "
+                                        + StockState.sector_theme_fundamental_score_display
+                                        + " / フロー "
+                                        + StockState.sector_theme_flow_score_display,
                                         size="2",
                                         color=rx.color("gray", 10),
                                     ),
@@ -417,9 +504,7 @@ def stock_page() -> rx.Component:
                     # AI Recap (Gemini)
                     rx.box(
                         rx.hstack(
-                            rx.heading(
-                                "AI Stock Recap", size="5", margin_bottom="1rem"
-                            ),
+                            rx.heading("AI銘柄要約", size="5", margin_bottom="1rem"),
                             rx.spacer(),
                             rx.button(
                                 rx.icon("sparkles", size=16),

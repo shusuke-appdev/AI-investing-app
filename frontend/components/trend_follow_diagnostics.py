@@ -1,5 +1,6 @@
 import reflex as rx
 
+from frontend.components.ui_primitives import evaluation_badge
 from frontend.state.stock_state import StockState
 
 
@@ -19,12 +20,23 @@ def trend_follow_diagnostics_panel() -> rx.Component:
         diagnostics.contains("diagnostic_rating"),
         rx.box(
             rx.hstack(
-                rx.heading("Trend-Follow Diagnostics", size="5"),
+                rx.heading("トレンド追随診断", size="5"),
                 rx.spacer(),
-                rx.badge(
+                evaluation_badge(
                     diagnostics["rating_display"].to(str),
-                    color_scheme="teal",
-                    variant="surface",
+                    rx.cond(
+                        diagnostics["diagnostic_rating"].to(str) == "Robust",
+                        "green",
+                        rx.cond(
+                            diagnostics["diagnostic_rating"].to(str) == "Fragile",
+                            "red",
+                            rx.cond(
+                                diagnostics["diagnostic_rating"].to(str) == "Watch",
+                                "orange",
+                                "gray",
+                            ),
+                        ),
+                    ),
                 ),
                 width="100%",
                 align_items="center",
@@ -33,7 +45,7 @@ def trend_follow_diagnostics_panel() -> rx.Component:
             rx.grid(
                 rx.card(
                     rx.vstack(
-                        rx.heading("Robustness", size="4"),
+                        rx.heading("堅牢性", size="4"),
                         rx.text(
                             diagnostics["current_state_display"].to(str),
                             size="2",
@@ -41,19 +53,19 @@ def trend_follow_diagnostics_panel() -> rx.Component:
                         ),
                         rx.grid(
                             _metric(
-                                "Strategy Return",
+                                "戦略リターン",
                                 diagnostics["strategy_total_return_display"].to(str),
                             ),
                             _metric(
-                                "Buy & Hold",
+                                "買い持ち",
                                 diagnostics["buy_hold_total_return_display"].to(str),
                             ),
                             _metric(
-                                "OOS Alpha",
+                                "期間外アルファ",
                                 diagnostics["oos_alpha_display"].to(str),
                             ),
                             _metric(
-                                "Random Percentile",
+                                "ランダム比較順位",
                                 diagnostics["random_percentile_display"].to(str),
                             ),
                             columns="2",
@@ -67,22 +79,22 @@ def trend_follow_diagnostics_panel() -> rx.Component:
                 ),
                 rx.card(
                     rx.vstack(
-                        rx.heading("Failure Tests", size="4"),
+                        rx.heading("失敗耐性テスト", size="4"),
                         rx.grid(
                             _metric(
-                                "Max Drawdown",
+                                "最大ドローダウン",
                                 diagnostics["strategy_max_drawdown_display"].to(str),
                             ),
                             _metric(
-                                "Max TUW",
+                                "最大含み損期間",
                                 diagnostics["strategy_tuw_display"].to(str),
                             ),
                             _metric(
-                                "Profit Factor",
+                                "プロフィットファクター",
                                 diagnostics["strategy_profit_factor_display"].to(str),
                             ),
                             _metric(
-                                "Top 5% Removed",
+                                "上位5%除外後",
                                 diagnostics["top5_removed_display"].to(str),
                             ),
                             columns="2",
@@ -100,7 +112,7 @@ def trend_follow_diagnostics_panel() -> rx.Component:
                 width="100%",
             ),
             rx.text(
-                "Diagnostic only. This does not replace the existing signal or create a trade recommendation.",
+                "診断専用です。既存シグナルや売買判断を置き換えるものではありません。",
                 size="1",
                 color="gray",
                 margin_top="0.75rem",

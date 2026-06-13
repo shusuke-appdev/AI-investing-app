@@ -95,25 +95,24 @@ def calculate_long_term_ma(close: pd.Series) -> dict:
     res["ma_250"] = ma250
     dev250 = (latest - ma250) / ma250 if ma250 else 0
 
+    deviations = [dev250]
     if len(close) >= 500:
         ma500 = close.rolling(500).mean().iloc[-1]
         res["ma_500"] = ma500
         dev500 = (latest - ma500) / ma500 if ma500 else 0
-    else:
-        dev500 = 0
+        deviations.append(dev500)
 
     if len(close) >= 750:
         ma750 = close.rolling(750).mean().iloc[-1]
         res["ma_750"] = ma750
         dev750 = (latest - ma750) / ma750 if ma750 else 0
-    else:
-        dev750 = 0
+        deviations.append(dev750)
 
     # 判定：いずれかの長期MAから極端に下方に乖離しているか、または長期MA付近（サポート）にいるか
-    if dev250 < -0.3 or dev500 < -0.3 or dev750 < -0.3:
+    if any(deviation < -0.3 for deviation in deviations):
         res["signal"] = "deep_discount"
         res["description"] = "長期移動平均から30%以上下方に乖離。歴史的売られすぎ水準。"
-    elif abs(dev250) < 0.03 or abs(dev500) < 0.03 or abs(dev750) < 0.03:
+    elif any(abs(deviation) < 0.03 for deviation in deviations):
         res["signal"] = "near_support"
         res["description"] = "長期MA（1-3年）の強力なサポート水準に接近。"
 
@@ -218,10 +217,10 @@ def analyze_technical(
 
     # 重み付き集約
     weighted = (
-        trend_score * weights["trend"]
-        + momentum_score * weights["mom"]
-        + pattern_score * weights["pat"]
-        + flow_score * weights["flow"]
+        (trend_score / 2) * weights["trend"]
+        + (momentum_score / 2) * weights["mom"]
+        + (pattern_score / 2) * weights["pat"]
+        + (flow_score / 2) * weights["flow"]
         + mtf_score * weights["mtf"]
     )
 
@@ -324,6 +323,7 @@ def analyze_technical(
         pcr_signal=opt_data["pcr_signal"],
         atm_iv=opt_data["atm_iv"],
         max_pain=opt_data["max_pain"],
+        option_data_available=opt_data["available"],
         stage_data=stage_res,
         vcp_data=vcp_data_out,
         skew=opt_data.get("skew"),
@@ -379,13 +379,13 @@ def get_technical_summary_for_ai(ticker: str) -> str:
         else "なし"
     )
 
-    # オプション拡張テキスト構築
-    opt_extra = ""
-    if tech.skew is not None:
-        opt_extra += f", Skew={tech.skew:.2%}"
-    if tech.price_range and tech.dte:
-        lower, upper = tech.price_range
-        opt_extra += f", 予想レンジ({int(tech.dte)}日): ${lower:.2f} - ${upper:.2f}"
+    option_line = "- オプション需給: データ未取得"
+    if tech.option_data_available:
+        option_line = (
+            f"- オプション需給: GEX={tech.gex_regime}, "
+            f"PCR={tech.pcr_ratio:.2f}({tech.pcr_signal}), "
+            f"IV={tech.atm_iv:.1%}, MaxPain=${tech.max_pain:.0f}"
+        )
 
     # Mean Reversion拡張テキスト構築
     mr_str = ""
@@ -428,7 +428,7 @@ def get_technical_summary_for_ai(ticker: str) -> str:
 - MACD: {tech.macd_signal} (Hist: {tech.macd_hist_slope})
 - 一目均衡表: {tech.ichimoku_signal} ({tech.ichimoku_regime})
 - ボリンジャー: {tech.bb_position}, スクイズ: {tech.bb_squeeze_signal}
-- 需給環境: GEX={tech.gex_regime}, PCR={tech.pcr_ratio:.2f}({tech.pcr_signal}), IV={tech.atm_iv:.1%}, MaxPain=${tech.max_pain:.0f}{opt_extra}
+{option_line}
 - OBV: {tech.obv_trend} (Div: {tech.obv_divergence})
 - パターン: 極値={tech.peak_valley_signal}, ローソク足={cdl_str}
 - サポート/レジスタンス: ${tech.support_price:.2f} / ${tech.resistance_price:.2f}
@@ -437,5 +437,5 @@ def get_technical_summary_for_ai(ticker: str) -> str:
 - AVWAP(YTD): ${tech.avwap_ytd:.2f} (乖離 {tech.avwap_deviation:+.1f}%)
 - ベース認識: {base_str}
 - エントリーシグナル: {tech.entry_signal if tech.entry_signal else "なし"}
-- 目安: 損切り ${tech.stop_loss:.2f} / 収益ライン ${tech.profit_line:.2f}
+- 売買価格の判断: 売買計画機能で確認
 """

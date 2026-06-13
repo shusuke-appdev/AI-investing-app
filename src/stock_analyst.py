@@ -330,8 +330,8 @@ def _format_sector_theme_context(stock_signal_context: dict | None) -> str:
         diagnostic_lines.append(
             "- "
             f"{item.get('theme')}: "
-            f"fundamental={float(item.get('fundamental_score', 0.0)):.2f}, "
-            f"flow={float(item.get('flow_score', 0.0)):.2f}, "
+            f"fundamental={_optional_score_text(item.get('fundamental_score'))}, "
+            f"flow={_optional_score_text(item.get('flow_score'))}, "
             f"class={item.get('classification', 'neutral')}"
         )
     return f"""Sector/Theme Context (qualitative base layer):
@@ -343,3 +343,10 @@ def _format_sector_theme_context(stock_signal_context: dict | None) -> str:
 - Rationale: {context.get("rationale", "N/A")}
 {chr(10).join(diagnostic_lines) if diagnostic_lines else "- Theme diagnostics: unavailable"}
 """
+
+
+def _optional_score_text(value) -> str:
+    try:
+        return "unavailable" if value is None else f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return "unavailable"

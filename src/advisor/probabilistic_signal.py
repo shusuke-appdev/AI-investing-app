@@ -16,6 +16,12 @@ from src.advisor.stock_feature_engine import (
     create_feature_snapshot,
 )
 from src.backtesting.walk_forward import run_walk_forward_validation
+from src.display_labels import (
+    ACTION_LABELS,
+    CONFIDENCE_LABELS,
+    SIGNAL_LABELS,
+    display_label,
+)
 
 ROUND_TRIP_COST = 0.002
 
@@ -328,6 +334,13 @@ def generate_probabilistic_stock_signal(
         else None,
         regime_fit=float(regime.get("regime_fit", 0.0)),
     )
+    if signal_label in {"Neutral", "Insufficient data"} or confidence == "Low":
+        exposure["suggested_action"] = "Watch"
+        exposure["max_allocation_pct"] = 0
+        exposure["size_multiplier"] = 0.0
+        exposure.setdefault("risk_cap_notes", []).append(
+            "Neutral or low-confidence signals are observation-only."
+        )
     snapshot = create_feature_snapshot(ticker, feature_frame)
     positives, negatives = _why_lists(latest, signal_label)
 
@@ -359,6 +372,11 @@ def signal_to_dict(signal: ProbabilisticSignal) -> dict[str, Any]:
     """Serialize signal for Reflex state."""
 
     data = asdict(signal)
+    data["signal_label_display"] = display_label(signal.signal_label, SIGNAL_LABELS)
+    data["suggested_action_display"] = display_label(
+        signal.suggested_action, ACTION_LABELS
+    )
+    data["confidence_display"] = display_label(signal.confidence, CONFIDENCE_LABELS)
     data["expected_5d_return_display"] = f"{signal.expected_5d_return:+.2%}"
     data["expected_20d_excess_return_display"] = (
         f"{signal.expected_20d_excess_return:+.2%}"

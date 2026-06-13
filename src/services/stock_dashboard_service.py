@@ -23,6 +23,7 @@ from src.advisor.trend_follow_diagnostics import (
     generate_trend_follow_diagnostics,
     trend_follow_to_dict,
 )
+from src.display_labels import TECHNICAL_LABELS, display_label
 from src.market_data import get_stock_data, get_stock_info, get_stock_news_with_status
 from src.services.analysis_context import DataResult, ProvenanceItem, StockSignalContext
 from src.services.provenance_service import stock_provenance
@@ -332,6 +333,9 @@ def _technical_to_dict(tech_data: Any) -> dict[str, Any]:
     tech_dict = to_plain_value(tech_data)
     if not isinstance(tech_dict, dict):
         return {}
+    tech_dict["overall_signal_display"] = display_label(
+        str(tech_dict.get("overall_signal", "")), TECHNICAL_LABELS
+    )
     for key in ("contrarian_buy_zone", "price_range"):
         if key in tech_dict and isinstance(tech_dict[key], tuple):
             tech_dict[key] = list(tech_dict[key])

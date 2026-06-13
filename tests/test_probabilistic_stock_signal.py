@@ -130,4 +130,7 @@ def test_generate_probabilistic_signal_with_mocked_data(monkeypatch):
     assert signal.ticker == "TEST"
     assert signal.confidence in {"Low", "Medium", "High"}
     assert signal.suggested_action in {"Add small", "Hold", "Watch", "Avoid"}
+    if signal.signal_label == "Neutral" or signal.confidence == "Low":
+        assert signal.suggested_action == "Watch"
+        assert signal.max_allocation_pct == 0
     assert signal.max_allocation_pct in {0, 1, 2, 3, 5}

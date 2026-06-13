@@ -13,6 +13,9 @@ from src.market_data import get_stock_data, get_stock_info
 from src.themes_config import get_themes
 
 THEME_TICKER_LIMIT = 5
+MIN_METRICS_PER_STOCK = 2
+MIN_THEME_TICKERS = 2
+MIN_THEME_COVERAGE = 0.40
 
 
 @dataclass
@@ -21,9 +24,11 @@ class ThemeDiagnostic:
 
     theme: str
     tickers: list[str] = field(default_factory=list)
-    fundamental_score: float = 0.0
-    flow_score: float = 0.0
-    distortion_score: float = 0.0
+    fundamental_score: float | None = None
+    flow_score: float | None = None
+    distortion_score: float | None = None
+    fundamental_coverage: float = 0.0
+    flow_coverage: float = 0.0
     classification: str = "neutral"
     rating: str = "neutral"
     rationale: str = ""
@@ -52,12 +57,16 @@ def detect_market_distortions(
     bullish = [
         item
         for item in diagnostics
-        if item.classification == "bullish_distortion" and item.distortion_score > 0
+        if item.classification == "bullish_distortion"
+        and item.distortion_score is not None
+        and item.distortion_score > 0
     ]
     bearish = [
         item
         for item in diagnostics
-        if item.classification == "bearish_distortion" and item.distortion_score < 0
+        if item.classification == "bearish_distortion"
+        and item.distortion_score is not None
+        and item.distortion_score < 0
     ]
     bullish.sort(key=lambda item: item.distortion_score, reverse=True)
     bearish.sort(key=lambda item: item.distortion_score)
@@ -94,22 +103,28 @@ def evaluate_theme_diagnostics(
         warnings = []
         for ticker in selected:
             try:
-                fundamentals.append(
-                    _fundamental_score(get_stock_info(ticker, include_summary=False))
+                value = _fundamental_score(
+                    get_stock_info(ticker, include_summary=False)
                 )
+                if value is not None:
+                    fundamentals.append(value)
             except Exception as exc:
                 warnings.append(f"{ticker} fundamental data failed: {exc}")
             try:
-                flows.append(
-                    _flow_score(_safe_history(ticker, "6mo"), benchmark_returns)
-                )
+                value = _flow_score(_safe_history(ticker, "6mo"), benchmark_returns)
+                if value is not None:
+                    flows.append(value)
             except Exception as exc:
                 warnings.append(f"{ticker} flow data failed: {exc}")
 
-        fundamental_score = round(mean(fundamentals), 3) if fundamentals else 0.0
-        flow_score = round(mean(flows), 3) if flows else 0.0
-        distortion_score = round(fundamental_score - flow_score, 3)
+        fundamental_score = _theme_average(fundamentals, len(selected))
+        flow_score = _theme_average(flows, len(selected))
+        distortion_score = _difference(fundamental_score, flow_score)
         classification = _classification(fundamental_score, flow_score)
+        if fundamental_score is None:
+            warnings.append("ファンダメンタルの有効データが不足しています。")
+        if flow_score is None:
+            warnings.append("資金フローの有効データが不足しています。")
         diagnostics.append(
             ThemeDiagnostic(
                 theme=theme,
@@ -117,6 +132,8 @@ def evaluate_theme_diagnostics(
                 fundamental_score=fundamental_score,
                 flow_score=flow_score,
                 distortion_score=distortion_score,
+                fundamental_coverage=_coverage(fundamentals, selected),
+                flow_coverage=_coverage(flows, selected),
                 classification=classification,
                 rating=_rating(fundamental_score, flow_score),
                 rationale=_rationale(classification, fundamental_score, flow_score),
@@ -126,7 +143,12 @@ def evaluate_theme_diagnostics(
             )
         )
 
-    diagnostics.sort(key=lambda item: abs(item.distortion_score), reverse=True)
+    diagnostics.sort(
+        key=lambda item: (
+            abs(item.distortion_score) if item.distortion_score is not None else -1
+        ),
+        reverse=True,
+    )
     return diagnostics
 
 
@@ -178,13 +200,17 @@ def evaluate_stock_sector_theme_context(
             )
         ),
     )
-    fundamentals_are_strong = stock_fundamental >= 0.55
-    flows_are_strong = stock_flow >= 0.55
+    fundamentals_are_strong = (
+        stock_fundamental is not None and stock_fundamental >= 0.55
+    )
+    flows_are_strong = stock_flow is not None and stock_flow >= 0.55
     combined_rating = (
         "high"
         if fundamentals_are_strong and flows_are_strong
         else "conditional"
         if fundamentals_are_strong or flows_are_strong
+        else "unavailable"
+        if stock_fundamental is None or stock_flow is None
         else "weak"
     )
 
@@ -193,8 +219,10 @@ def evaluate_stock_sector_theme_context(
         "sector": str(stock_info.get("sector") or ""),
         "industry": str(stock_info.get("industry") or ""),
         "themes": themes,
-        "stock_fundamental_score": round(stock_fundamental, 3),
-        "stock_flow_score": round(stock_flow, 3),
+        "stock_fundamental_score": _round_optional(stock_fundamental),
+        "stock_flow_score": _round_optional(stock_flow),
+        "stock_fundamental_score_display": _score_display(stock_fundamental),
+        "stock_flow_score_display": _score_display(stock_flow),
         "fundamental_advantage": fundamentals_are_strong,
         "flow_advantage": flows_are_strong,
         "combined_rating": combined_rating,
@@ -238,22 +266,22 @@ def _evaluate_selected_theme_diagnostics(
         warnings = []
         for ticker in tickers:
             try:
-                fundamentals.append(
-                    _fundamental_score(info_provider(ticker, include_summary=False))
-                )
+                value = _fundamental_score(info_provider(ticker, include_summary=False))
+                if value is not None:
+                    fundamentals.append(value)
             except Exception as exc:
                 warnings.append(f"{ticker} fundamental data failed: {exc}")
             try:
-                flows.append(
-                    _flow_score(
-                        _safe_history(ticker, "6mo", history_provider),
-                        benchmark_returns,
-                    )
+                value = _flow_score(
+                    _safe_history(ticker, "6mo", history_provider),
+                    benchmark_returns,
                 )
+                if value is not None:
+                    flows.append(value)
             except Exception as exc:
                 warnings.append(f"{ticker} flow data failed: {exc}")
-        fundamental_score = round(mean(fundamentals), 3) if fundamentals else 0.0
-        flow_score = round(mean(flows), 3) if flows else 0.0
+        fundamental_score = _theme_average(fundamentals, len(tickers))
+        flow_score = _theme_average(flows, len(tickers))
         classification = _classification(fundamental_score, flow_score)
         diagnostics.append(
             ThemeDiagnostic(
@@ -261,7 +289,9 @@ def _evaluate_selected_theme_diagnostics(
                 tickers=tickers,
                 fundamental_score=fundamental_score,
                 flow_score=flow_score,
-                distortion_score=round(fundamental_score - flow_score, 3),
+                distortion_score=_difference(fundamental_score, flow_score),
+                fundamental_coverage=_coverage(fundamentals, tickers),
+                flow_coverage=_coverage(flows, tickers),
                 classification=classification,
                 rating=_rating(fundamental_score, flow_score),
                 rationale=_rationale(classification, fundamental_score, flow_score),
@@ -273,7 +303,7 @@ def _evaluate_selected_theme_diagnostics(
     return diagnostics
 
 
-def _fundamental_score(info: dict[str, Any]) -> float:
+def _fundamental_score(info: dict[str, Any]) -> float | None:
     values = [
         _growth_score(info.get("revenueGrowth")),
         _growth_score(info.get("earningsGrowth")),
@@ -284,18 +314,22 @@ def _fundamental_score(info: dict[str, Any]) -> float:
         ),
     ]
     usable = [value for value in values if value is not None]
-    return float(mean(usable)) if usable else 0.0
+    return float(mean(usable)) if len(usable) >= MIN_METRICS_PER_STOCK else None
 
 
-def _flow_score(frame: pd.DataFrame, benchmark_returns: dict[str, float]) -> float:
+def _flow_score(
+    frame: pd.DataFrame, benchmark_returns: dict[str, float]
+) -> float | None:
     returns = _return_profile(frame)
     if not returns:
-        return 0.0
+        return None
     scores = []
     for key in ("1m", "3m", "6m"):
         if key in returns:
-            relative = returns[key] - benchmark_returns.get(key, 0.0)
-            scores.append(_bounded((relative + 0.15) / 0.30))
+            benchmark = benchmark_returns.get(key)
+            if benchmark is not None:
+                relative = returns[key] - benchmark
+                scores.append(_bounded((relative + 0.15) / 0.30))
     close = (
         frame["Close"].dropna() if "Close" in frame.columns else pd.Series(dtype=float)
     )
@@ -307,7 +341,7 @@ def _flow_score(frame: pd.DataFrame, benchmark_returns: dict[str, float]) -> flo
         scores.append(
             0.75 if close.iloc[-1] >= close.rolling(200).mean().iloc[-1] else 0.25
         )
-    return float(mean(scores)) if scores else 0.0
+    return float(mean(scores)) if len(scores) >= 2 else None
 
 
 def _safe_history(
@@ -372,7 +406,9 @@ def _valuation_score(forward_pe: Any, trailing_pe: Any, peg: Any) -> float | Non
     return float(mean(scores)) if scores else None
 
 
-def _classification(fundamental_score: float, flow_score: float) -> str:
+def _classification(fundamental_score: float | None, flow_score: float | None) -> str:
+    if fundamental_score is None or flow_score is None:
+        return "unavailable"
     gap = fundamental_score - flow_score
     if fundamental_score >= 0.55 and gap >= 0.2:
         return "bullish_distortion"
@@ -383,7 +419,9 @@ def _classification(fundamental_score: float, flow_score: float) -> str:
     return "neutral"
 
 
-def _rating(fundamental_score: float, flow_score: float) -> str:
+def _rating(fundamental_score: float | None, flow_score: float | None) -> str:
+    if fundamental_score is None or flow_score is None:
+        return "unavailable"
     if fundamental_score >= 0.55 and flow_score >= 0.55:
         return "high"
     if fundamental_score >= 0.55 or flow_score >= 0.55:
@@ -391,13 +429,23 @@ def _rating(fundamental_score: float, flow_score: float) -> str:
     return "weak"
 
 
-def _rationale(classification: str, fundamental_score: float, flow_score: float) -> str:
-    return (
-        f"{classification}: fundamental={fundamental_score:.2f}, flow={flow_score:.2f}"
-    )
+def _rationale(
+    classification: str, fundamental_score: float | None, flow_score: float | None
+) -> str:
+    if fundamental_score is None or flow_score is None:
+        return "有効データが不足しているため、歪み判定は算出不可です。"
+    label = {
+        "bullish_distortion": "強気歪み",
+        "bearish_distortion": "弱気歪み",
+        "fundamental_and_flow_aligned": "ファンダメンタルとフローが整合",
+        "neutral": "中立",
+    }.get(classification, classification)
+    return f"{label}: ファンダメンタル={fundamental_score:.2f}, フロー={flow_score:.2f}"
 
 
-def _fundamental_evidence(score: float) -> list[str]:
+def _fundamental_evidence(score: float | None) -> list[str]:
+    if score is None:
+        return ["有効なファンダメンタル指標が不足しています。"]
     if score >= 0.7:
         return ["成長・収益性・バリュエーションの複合スコアが強い。"]
     if score >= 0.55:
@@ -405,7 +453,9 @@ def _fundamental_evidence(score: float) -> list[str]:
     return ["ファンダメンタル優位は未確認。"]
 
 
-def _flow_evidence(score: float) -> list[str]:
+def _flow_evidence(score: float | None) -> list[str]:
+    if score is None:
+        return ["有効な価格・ベンチマークデータが不足しています。"]
     if score >= 0.7:
         return ["相対強度と移動平均の位置が強い。"]
     if score >= 0.55:
@@ -424,6 +474,8 @@ def _stock_context_rationale(
         return "ファンダメンタル優位はあるが、フロー確認が不十分。買いは需給改善待ち。"
     if flow_advantage:
         return "フロー優位はあるが、ファンダメンタル裏付けが弱い。過熱やナラティブ先行を疑う。"
+    if rating == "unavailable":
+        return "有効データが不足しているため、セクター/テーマ評価は算出不可。"
     return "ファンダメンタル優位・フロー優位とも未確認。個別材料だけで強気判断しない。"
 
 
@@ -441,6 +493,30 @@ def _as_float(value: Any) -> float | None:
 
 def _bounded(value: float) -> float:
     return max(0.0, min(1.0, value))
+
+
+def _theme_average(values: list[float], total: int) -> float | None:
+    if total <= 0 or len(values) < MIN_THEME_TICKERS:
+        return None
+    if len(values) / total < MIN_THEME_COVERAGE:
+        return None
+    return round(mean(values), 3)
+
+
+def _coverage(values: list[float], selected: list[str]) -> float:
+    return round(len(values) / len(selected), 2) if selected else 0.0
+
+
+def _difference(left: float | None, right: float | None) -> float | None:
+    return round(left - right, 3) if left is not None and right is not None else None
+
+
+def _round_optional(value: float | None) -> float | None:
+    return round(value, 3) if value is not None else None
+
+
+def _score_display(value: float | None) -> str:
+    return f"{value:.2f}" if value is not None else "算出不可"
 
 
 def _unique(values) -> list[str]:

@@ -274,3 +274,17 @@ streamlit run legacy_streamlit/app.py
 - Added memoized `StockAnalysisInputs` so one stock-analysis run shares target and benchmark histories, company information, news, and peer/provider requests across technical, probabilistic, trend, FOMO, Entry Framework, and sector/theme diagnostics.
 - Changed technical multi-timeframe analysis to derive its views from supplied daily history instead of issuing three additional target-ticker requests.
 - Added an explicit Trading Plan T+1/T+3 candidate refresh action that fetches each active ticker once, preserves partial successes, and never performs network work during list rendering.
+
+# Session update: 2026-06-13 provider resilience / analysis contract / Japanese stock UI
+- Migrated J-Quants calls from invalid legacy-style V2 paths to the official V2 daily bars, equity master, and financial summary endpoints with pagination and response-field mapping.
+- Added yfinance history/profile last-success persistence, 429 cooldown, shared market-index history retrieval, and cache-only option use during normal stock analysis to reduce repeated provider pressure.
+- Kept the existing FRED stale-cache/partial-success design and localized user-facing FRED recovery messages.
+- Changed sector/theme distortion scoring so missing fundamentals or flows are unavailable rather than factual zeroes; added minimum metric/ticker coverage and coverage-aware display.
+- Fixed false long-term-MA support signals, normalized technical category scores before the 0-100 mapping, made SMART proxy/unknown states explicit, and limited Neutral/Low-confidence probabilistic signals to Watch with 0% allocation.
+- Added centralized Japanese display labels and enlarged/clarified Stock technical, probabilistic, trend robustness, sector/theme, SMART, and Entry Framework evaluations.
+- Validation: compileall, ruff check, ruff format check, full pytest (`202 passed`), Reflex frontend export, live FRED smoke, live AAPL stock-context smoke, and HTTP 200 on `/stock`. In-app Browser localhost access remained blocked by the browser execution surface.
+
+# Session update: 2026-06-13 primary evaluation badge consistency
+- Audited primary Stock evaluation badges and confirmed the earlier change enlarged Buy/Sell and Robust/Fragile symmetrically, but found inconsistent colors and smaller SMART, sector/theme, and FOMO evaluations.
+- Added one shared prominent evaluation-badge primitive and applied it to all primary Stock evaluations: technical Buy/Hold/Sell, probabilistic Add/Hold/Watch/Avoid, trend Robust/Fragile/Watch/Unavailable, SMART, sector/theme, Entry quality, and FOMO regime.
+- Positive, negative, neutral/watch, and unavailable states now use symmetric size and semantic colors. Secondary evidence, ticker, provenance, and metric badges intentionally remain compact to avoid visual overload.

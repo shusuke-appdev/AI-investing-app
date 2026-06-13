@@ -48,6 +48,31 @@ def test_option_provider_uses_stale_persistent_cache_when_refresh_fails(
     assert metadata["cache_age_seconds"] is not None
 
 
+def test_option_provider_cache_only_never_refreshes(monkeypatch, tmp_path):
+    cache_file = tmp_path / "AAPL.json"
+    calls = pd.DataFrame({"strike": [100], "openInterest": [10]})
+    puts = pd.DataFrame({"strike": [100], "openInterest": [20]})
+
+    monkeypatch.setattr(option_data_provider, "_cache_file", lambda ticker: cache_file)
+    monkeypatch.setattr(
+        option_data_provider,
+        "_get_yfinance_option_chain",
+        lambda ticker: (_ for _ in ()).throw(AssertionError("live refresh ran")),
+    )
+    option_data_provider._save_persistent_cache(
+        "AAPL", calls, puts, datetime.now(timezone.utc).isoformat()
+    )
+
+    result = option_data_provider.get_option_chain("AAPL", cache_only=True)
+
+    assert result is not None
+    assert result[0]["strike"].iloc[0] == 100
+    assert (
+        "保存済み"
+        in option_data_provider.get_option_chain_metadata("AAPL")["quality_warnings"][0]
+    )
+
+
 def test_marketdata_is_only_used_when_explicitly_allowed(monkeypatch):
     calls = pd.DataFrame({"strike": [100]})
     puts = pd.DataFrame({"strike": [100]})

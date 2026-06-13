@@ -284,16 +284,25 @@ def _distortion_item(item) -> rx.Component:
             rx.text(item.theme, weight="bold", size="2"),
             rx.spacer(),
             rx.badge(
-                "gap " + item.distortion_score.to_string(),
-                color_scheme=rx.cond(item.distortion_score >= 0, "green", "red"),
+                "乖離 " + item.distortion_score_str,
+                color_scheme=rx.cond(
+                    item.distortion_score_str == "算出不可",
+                    "gray",
+                    rx.cond(item.distortion_score >= 0, "green", "red"),
+                ),
             ),
             width="100%",
         ),
         rx.text(
-            "Fund "
-            + item.fundamental_score.to_string()
-            + " / Flow "
-            + item.flow_score.to_string(),
+            "ファンダメンタル "
+            + item.fundamental_score_str
+            + "（網羅率 "
+            + item.fundamental_coverage_str
+            + "） / フロー "
+            + item.flow_score_str
+            + "（網羅率 "
+            + item.flow_coverage_str
+            + "）",
             size="1",
             color=rx.color("gray", 10),
         ),

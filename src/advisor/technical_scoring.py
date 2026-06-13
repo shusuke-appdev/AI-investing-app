@@ -28,6 +28,7 @@ def analyze_options_data(ticker: str, current_price: float) -> dict:
     from typing import Any
 
     res: dict[str, Any] = {
+        "available": False,
         "gex_regime": "unknown",
         "gex_positive_wall": 0.0,
         "gex_negative_wall": 0.0,
@@ -44,9 +45,10 @@ def analyze_options_data(ticker: str, current_price: float) -> dict:
     try:
         from src.option_analyst import analyze_option_sentiment
 
-        opt_sentiment = analyze_option_sentiment(ticker)
+        opt_sentiment = analyze_option_sentiment(ticker, cache_only=True)
         if not opt_sentiment:
             return res
+        res["available"] = True
 
         # GEX
         gex = opt_sentiment.get("gex")

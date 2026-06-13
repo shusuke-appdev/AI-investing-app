@@ -86,7 +86,7 @@ class TechnicalScore:
     resistance_price: float  # 直近レジスタンス価格
 
     # 総合判断
-    overall_score: int  # -100 to 100
+    overall_score: int  # 0 to 100
     overall_signal: str  # 強気/弱気/中立
 
     # 逆張り買いゾーン
@@ -159,6 +159,7 @@ class TechnicalScore:
     pcr_signal: str = ""  # 強気/弱気/中立
     atm_iv: float = 0.0  # ATM Implied Volatility
     max_pain: float = 0.0  # Max Pain Price
+    option_data_available: bool = False
 
     # === Phase 3 拡張 ===
 

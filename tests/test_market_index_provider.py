@@ -29,7 +29,11 @@ def test_market_indices_fall_back_to_yfinance_when_finnhub_quote_empty(monkeypat
     monkeypatch.setattr(
         market_index_provider, "_finnhub_get_quote", lambda ticker: None
     )
-    monkeypatch.setattr(market_index_provider.yf, "Ticker", FakeTicker)
+    monkeypatch.setattr(
+        market_index_provider,
+        "get_historical_data",
+        lambda ticker, period: FakeTicker(ticker).history(period),
+    )
 
     result = market_index_provider.get_market_indices("US")
 
@@ -56,7 +60,11 @@ def test_yahoo_only_symbols_do_not_probe_finnhub_when_configured(monkeypatch):
         "_finnhub_get_quote",
         lambda ticker: (_ for _ in ()).throw(AssertionError("Finnhub was called")),
     )
-    monkeypatch.setattr(market_index_provider.yf, "Ticker", FakeTicker)
+    monkeypatch.setattr(
+        market_index_provider,
+        "get_historical_data",
+        lambda ticker, period: FakeTicker(ticker).history(period),
+    )
 
     result = market_index_provider.get_market_indices("US")
 

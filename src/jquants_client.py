@@ -17,6 +17,7 @@ logger = get_logger(__name__)
 
 # V2 API Base URL
 BASE_URL = "https://api.jquants.com/v2"
+PAGINATION_KEY = "pagination_key"
 
 
 def is_configured() -> bool:
@@ -30,6 +31,27 @@ def _get_headers() -> dict:
     if not api_key:
         return {}
     return {"x-api-key": api_key}
+
+
+def _get_v2_rows(path: str, params: dict) -> list[dict]:
+    """Fetch every page from a J-Quants V2 endpoint."""
+
+    rows: list[dict] = []
+    next_params = dict(params)
+    while True:
+        response = requests.get(
+            f"{BASE_URL}/{path}",
+            params=next_params,
+            headers=_get_headers(),
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        rows.extend(payload.get("data", []))
+        pagination_key = payload.get(PAGINATION_KEY)
+        if not pagination_key:
+            return rows
+        next_params[PAGINATION_KEY] = pagination_key
 
 
 @ttl_cache(ttl=CACHE_TTL_SHORT)
@@ -63,16 +85,12 @@ def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
         from_date = (to_dt - days).strftime("%Y%m%d")
         to_date = to_dt.strftime("%Y%m%d")
 
-        url = f"{BASE_URL}/prices/daily_quotes"
         params = {
             "code": f"{code}0",  # J-Quantsは5桁コード(末尾0)
             "from": from_date,
             "to": to_date,
         }
-
-        response = requests.get(url, params=params, headers=headers, timeout=15)
-        response.raise_for_status()
-        data = response.json().get("daily_quotes", [])
+        data = _get_v2_rows("equities/bars/daily", params)
 
         if not data:
             return pd.DataFrame()
@@ -82,6 +100,16 @@ def get_daily_quotes(ticker: str, period: str = "1mo") -> pd.DataFrame:
         df.rename(
             columns={
                 "Date": "Date",
+                "O": "Open",
+                "H": "High",
+                "L": "Low",
+                "C": "Close",
+                "Vo": "Volume",
+                "AdjO": "Adj Open",
+                "AdjH": "Adj High",
+                "AdjL": "Adj Low",
+                "AdjC": "Adj Close",
+                "AdjVo": "Adj Volume",
                 "Open": "Open",
                 "High": "High",
                 "Low": "Low",
@@ -135,24 +163,15 @@ def get_fins_statements(ticker: str) -> dict | None:
         return None
 
     try:
-        url = f"{BASE_URL}/fins/statements"
-        params = {
-            "code": f"{code}0",
-        }
-
-        days = timedelta(days=400)
-        from_date = (datetime.now() - days).strftime("%Y%m%d")
-        params["date"] = from_date
-
-        response = requests.get(url, params=params, headers=headers, timeout=15)
-        response.raise_for_status()
-        statements = response.json().get("statements", [])
+        statements = _get_v2_rows("fins/summary", {"code": f"{code}0"})
 
         if not statements:
             return None
 
         # 最新のものを取得(文字列の日付でソート)
-        statements.sort(key=lambda x: x.get("DiscloseDate", ""), reverse=True)
+        statements.sort(
+            key=lambda x: x.get("DiscDate") or x.get("DiscloseDate", ""), reverse=True
+        )
         latest = statements[0]
 
         def _parse_num(val):
@@ -164,17 +183,21 @@ def get_fins_statements(ticker: str) -> dict | None:
                 return None
 
         return {
-            "net_sales": _parse_num(latest.get("NetSales")),
-            "operating_income": _parse_num(latest.get("OperatingProfit")),
-            "ordinary_income": _parse_num(latest.get("OrdinaryProfit")),
-            "net_income": _parse_num(latest.get("Profit")),
-            "eps": _parse_num(latest.get("EarningsPerShare")),
-            "bps": _parse_num(latest.get("BookValuePerShare")),
-            "total_assets": _parse_num(latest.get("TotalAssets")),
-            "equity": _parse_num(latest.get("Equity")),
-            "disclose_date": latest.get("DiscloseDate"),
-            "type": latest.get("TypeOfDocument"),
-            "company_name": latest.get("CompanyName"),
+            "net_sales": _parse_num(latest.get("Sales") or latest.get("NetSales")),
+            "operating_income": _parse_num(
+                latest.get("OP") or latest.get("OperatingProfit")
+            ),
+            "ordinary_income": _parse_num(
+                latest.get("OdP") or latest.get("OrdinaryProfit")
+            ),
+            "net_income": _parse_num(latest.get("NP") or latest.get("Profit")),
+            "eps": _parse_num(latest.get("EPS") or latest.get("EarningsPerShare")),
+            "bps": _parse_num(latest.get("BPS") or latest.get("BookValuePerShare")),
+            "total_assets": _parse_num(latest.get("TA") or latest.get("TotalAssets")),
+            "equity": _parse_num(latest.get("Eq") or latest.get("Equity")),
+            "disclose_date": latest.get("DiscDate") or latest.get("DiscloseDate"),
+            "type": latest.get("DocType") or latest.get("TypeOfDocument"),
+            "company_name": latest.get("CoName") or latest.get("CompanyName"),
         }
 
     except Exception as e:
@@ -194,24 +217,19 @@ def get_company_info(ticker: str) -> dict | None:
         return None
 
     try:
-        url = f"{BASE_URL}/listed/info"
-        params = {"code": f"{code}0"}
-
-        response = requests.get(url, params=params, headers=headers, timeout=15)
-        response.raise_for_status()
-        info_list = response.json().get("info", [])
+        info_list = _get_v2_rows("equities/master", {"code": f"{code}0"})
 
         if not info_list:
             return None
 
         info = info_list[0]
         return {
-            "company_name": info.get("CompanyName"),
-            "company_name_en": info.get("CompanyNameEnglish"),
-            "sector_name": info.get("Sector33CodeName"),
-            "industry_name": info.get("Sector17CodeName"),
-            "market_code_name": info.get("MarketCodeName"),
-            "margin_code_name": info.get("MarginCodeName"),
+            "company_name": info.get("CoName") or info.get("CompanyName"),
+            "company_name_en": info.get("CoNameEn") or info.get("CompanyNameEnglish"),
+            "sector_name": info.get("S33Nm") or info.get("Sector33CodeName"),
+            "industry_name": info.get("S17Nm") or info.get("Sector17CodeName"),
+            "market_code_name": info.get("MktNm") or info.get("MarketCodeName"),
+            "margin_code_name": info.get("MgnNm") or info.get("MarginCodeName"),
         }
     except Exception as e:
         logger.warning(f"J-Quants: Failed to get company info for {ticker}: {e}")

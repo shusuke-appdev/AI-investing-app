@@ -51,7 +51,9 @@ def fetch_fred_series(
 
     ids = [str(item).strip().upper() for item in series_ids if str(item).strip()]
     if not ids:
-        return EconomicDataResult(error="No FRED series ids supplied.", is_partial=True)
+        return EconomicDataResult(
+            error="FRED系列IDが指定されていません。", is_partial=True
+        )
 
     cache = _economic_cache()
     key = _cache_key(ids, start, end)
@@ -63,7 +65,7 @@ def fetch_fred_series(
         result.is_partial = True
         result.warnings = [
             *result.warnings,
-            "Using cached FRED data before slow live refresh.",
+            "FREDのライブ更新を待たず、保存済みデータを表示しています。",
         ]
         result.error = "; ".join(result.warnings)
         return result
@@ -73,7 +75,7 @@ def fetch_fred_series(
         frame = _fetch_with_fred_csv(ids, start, end, timeout=csv_timeout)
         source = "fred_csv"
     except Exception as exc:
-        warnings.append(f"FRED CSV failed: {exc}")
+        warnings.append(f"FRED CSV取得失敗: {exc}")
         if cached.is_available and prefer_stale_cache:
             result = _result_from_cache(cached)
             result.warnings = [*result.warnings, *warnings]
@@ -99,7 +101,7 @@ def fetch_fred_series(
             frame = _fetch_with_pandas_datareader(ids, start, end)
             source = "pandas_datareader"
         except Exception as pdr_exc:
-            warnings.append(f"pandas_datareader fallback failed: {pdr_exc}")
+            warnings.append(f"pandas_datareader代替取得失敗: {pdr_exc}")
             if cached.is_available:
                 result = _result_from_cache(cached)
                 result.warnings = [*result.warnings, *warnings]

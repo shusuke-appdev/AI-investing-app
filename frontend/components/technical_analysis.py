@@ -1,5 +1,6 @@
 import reflex as rx
 
+from frontend.components.ui_primitives import evaluation_badge
 from frontend.state.stock_state import StockState
 
 
@@ -8,14 +9,12 @@ def _render_score_row() -> rx.Component:
     tech = StockState.technical_data
 
     overall_score = tech["overall_score"].to(int)
-    overall_signal = tech["overall_signal"].to(str)
-
     # 総合スコアのバッジ表示用
     badge_color = rx.cond(
-        overall_score > 20, "green", rx.cond(overall_score < -20, "red", "amber")
+        overall_score >= 60, "green", rx.cond(overall_score < 40, "red", "amber")
     )
     badge_icon = rx.cond(
-        overall_score > 20, "🟢", rx.cond(overall_score < -20, "🔴", "🟡")
+        overall_score >= 60, "🟢", rx.cond(overall_score < 40, "🔴", "🟡")
     )
 
     # RSIアイコン
@@ -27,11 +26,14 @@ def _render_score_row() -> rx.Component:
             rx.text("総合評価", size="1", color="gray", weight="bold"),
             rx.hstack(
                 rx.text(badge_icon),
-                rx.badge(
-                    rx.text(overall_signal, " (", overall_score, ")"),
-                    color_scheme=badge_color,
-                    variant="surface",
-                    size="2",
+                evaluation_badge(
+                    rx.text(
+                        tech["overall_signal_display"].to(str),
+                        " (",
+                        overall_score,
+                        "点)",
+                    ),
+                    badge_color,
                 ),
             ),
             spacing="1",
@@ -164,7 +166,7 @@ def technical_analysis() -> rx.Component:
         StockState.technical_data.contains("overall_score"),
         rx.box(
             rx.heading(
-                "📊 テクニカル分析", size="5", margin_bottom="1rem", margin_top="2rem"
+                "テクニカル分析", size="5", margin_bottom="1rem", margin_top="2rem"
             ),
             _render_score_row(),
             _render_detail_section(),
