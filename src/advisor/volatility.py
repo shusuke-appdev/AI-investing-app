@@ -59,7 +59,13 @@ def get_market_data(
                         return _prepare_vol_df(df)
 
             # 2. フォールバック: yfinance
-            df = yf.download(asset, period=period, interval=interval, progress=False)
+            df = yf.download(
+                asset,
+                period=period,
+                interval=interval,
+                progress=False,
+                timeout=20,
+            )
             if df.empty:
                 raise ValueError(f"データが空です: {asset}")
 

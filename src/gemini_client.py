@@ -5,6 +5,7 @@ google.genai SDK のクライアントを一元管理します。
 
 from google import genai
 
+from src.app_mode import ai_generation_enabled, require_ai_generation_enabled
 from src.constants import GEMINI_MODEL_NAME
 from src.log_config import get_logger
 from src.settings_storage import get_gemini_api_key
@@ -20,6 +21,8 @@ def get_gemini_client() -> genai.Client | None:
     APIキーが設定されていない場合は None を返します。
     """
     global _client
+    if not ai_generation_enabled():
+        return None
     if _client is not None:
         return _client
 
@@ -42,6 +45,8 @@ def configure_gemini(api_key: str | None = None) -> bool:
         設定成功時 True
     """
     global _client
+    if not ai_generation_enabled():
+        return False
     key = api_key or get_gemini_api_key()
     if not key:
         return False
@@ -67,6 +72,7 @@ def generate_content(
     """
     import time
 
+    require_ai_generation_enabled()
     client = get_gemini_client()
     if client is None:
         return None

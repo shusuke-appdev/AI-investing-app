@@ -3,6 +3,17 @@
 import reflex as rx
 
 
+def private_mode_notice(feature_name: str) -> rx.Component:
+    """Explain why a personal feature is unavailable in public mode."""
+
+    return rx.callout(
+        f"{feature_name}は非公開モード専用です。公開モードでは個人データを読み込みません。",
+        icon="lock",
+        color_scheme="amber",
+        width="100%",
+    )
+
+
 def evaluation_badge(label, color_scheme) -> rx.Component:
     """Render a prominent primary evaluation consistently across stock diagnostics."""
 

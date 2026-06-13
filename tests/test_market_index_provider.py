@@ -70,3 +70,29 @@ def test_yahoo_only_symbols_do_not_probe_finnhub_when_configured(monkeypatch):
 
     assert set(result) == {"S&P 500", "WTI Oil", "Bitcoin", "USD/JPY"}
     assert all(item["price"] == 105.0 for item in result.values())
+
+
+def test_market_indices_omit_unavailable_symbols_instead_of_returning_zero(monkeypatch):
+    market_index_provider.get_market_indices.clear_cache()
+    monkeypatch.setattr(
+        market_index_provider,
+        "get_market_config",
+        lambda market_type: {
+            "indices": {},
+            "sectors": {"Unavailable": "FAIL"},
+            "commodities": {},
+            "crypto": {},
+            "treasuries": {},
+            "forex": {},
+        },
+    )
+    monkeypatch.setattr(market_index_provider, "is_configured", lambda: False)
+    monkeypatch.setattr(
+        market_index_provider,
+        "get_historical_data",
+        lambda ticker, period: pd.DataFrame(),
+    )
+
+    result = market_index_provider.get_market_indices("US")
+
+    assert "Unavailable" not in result

@@ -17,6 +17,7 @@ from frontend.components.ui_primitives import (
 )
 from frontend.state.stock_state import StockState
 from frontend.template import template
+from src.app_mode import ai_generation_enabled
 
 
 @template
@@ -512,6 +513,7 @@ def stock_page() -> rx.Component:
                                 on_click=StockState.generate_ai_analysis,
                                 loading=StockState.is_generating_analysis,
                                 color_scheme="indigo",
+                                disabled=not ai_generation_enabled(),
                             ),
                             width="100%",
                             align_items="center",
@@ -522,7 +524,11 @@ def stock_page() -> rx.Component:
                                 rx.markdown(StockState.ai_analysis),
                                 rx.center(
                                     rx.text(
-                                        "AI銘柄分析レポートを生成して投資判断をサポートします。",
+                                        (
+                                            "公開モードではAI銘柄分析を利用できません。"
+                                            if not ai_generation_enabled()
+                                            else "AI銘柄分析レポートを生成して投資判断をサポートします。"
+                                        ),
                                         color="gray",
                                     ),
                                     height="100px",

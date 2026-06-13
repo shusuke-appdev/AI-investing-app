@@ -15,6 +15,8 @@ from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
 configure_yfinance_cache()
+MIN_THEME_COMPONENTS = 2
+MIN_THEME_COVERAGE = 0.4
 
 
 def fetch_and_calculate_all_performances(
@@ -30,6 +32,15 @@ def fetch_and_calculate_all_performances(
     Returns:
         {ticker: performance} の辞書
     """
+    observations = _fetch_performance_observations(days, market_type)
+    return {ticker: float(item["performance"]) for ticker, item in observations.items()}
+
+
+def _fetch_performance_observations(
+    days: int, market_type: str = "US"
+) -> dict[str, dict[str, float | int]]:
+    """Return only performances that cover the full requested calendar window."""
+
     configure_yfinance_cache()
     themes = get_themes(market_type)
 
@@ -61,7 +72,7 @@ def fetch_and_calculate_all_performances(
     else:
         fetch_period = "2y"  # 1年以上なら2年分
 
-    performance_map = {}
+    performance_map: dict[str, dict[str, float | int]] = {}
 
     try:
         # yfinanceで一括ダウンロード
@@ -73,6 +84,7 @@ def fetch_and_calculate_all_performances(
             auto_adjust=True,
             threads=True,
             progress=False,
+            timeout=20,
         )
 
         if df.empty:
@@ -116,15 +128,17 @@ def fetch_and_calculate_all_performances(
 
                 past_data = closes[closes.index <= target_date]
                 if past_data.empty:
-                    # データ不足（上場から日が浅いなど）の場合は、ある最古データを使うか、計算しないか。
-                    # ここでは最古データを使う（期間が短くなるがエラーにはしない）
-                    start_price = float(closes.iloc[0])
-                else:
-                    start_price = float(past_data.iloc[-1])
+                    continue
+                start_date = past_data.index[-1]
+                start_price = float(past_data.iloc[-1])
 
                 if start_price != 0:
                     perf = ((float(current_price) - start_price) / start_price) * 100
-                    performance_map[ticker] = perf
+                    performance_map[ticker] = {
+                        "performance": perf,
+                        "requested_days": days,
+                        "actual_days": max(0, int((current_date - start_date).days)),
+                    }
 
             except Exception:
                 continue
@@ -152,7 +166,7 @@ def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:
         raise ValueError(f"Unknown period: {period_name}")
 
     days = PERIODS[period_name]
-    ticker_performances = fetch_and_calculate_all_performances(days, market_type)
+    ticker_performances = _fetch_performance_observations(days, market_type)
 
     themes = get_themes(market_type)
     theme_performances = []
@@ -161,14 +175,31 @@ def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:
         stock_perfs = []
         for t in tickers:
             if t in ticker_performances:
-                stock_perfs.append({"ticker": t, "performance": ticker_performances[t]})
+                observation = ticker_performances[t]
+                stock_perfs.append(
+                    {
+                        "ticker": t,
+                        "performance": observation["performance"],
+                        "requested_days": observation["requested_days"],
+                        "actual_days": observation["actual_days"],
+                    }
+                )
 
-        if stock_perfs:
+        coverage = len(stock_perfs) / len(tickers) if tickers else 0.0
+        if len(stock_perfs) >= MIN_THEME_COMPONENTS and coverage >= MIN_THEME_COVERAGE:
             avg_perf = sum(s["performance"] for s in stock_perfs) / len(stock_perfs)
             stock_perfs.sort(key=lambda x: x["performance"], reverse=True)
 
             theme_performances.append(
-                {"theme": theme_name, "performance": avg_perf, "stocks": stock_perfs}
+                {
+                    "theme": theme_name,
+                    "performance": avg_perf,
+                    "stocks": stock_perfs,
+                    "requested_days": days,
+                    "component_count": len(stock_perfs),
+                    "total_components": len(tickers),
+                    "coverage": coverage,
+                }
             )
 
     # パフォーマンス順にソート (降順)

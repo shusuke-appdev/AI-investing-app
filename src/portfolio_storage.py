@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from src.app_mode import require_writes_enabled
+from src.app_mode import require_personal_data_enabled, require_writes_enabled
 from src.log_config import get_logger
 from src.storage.atomic_json import delete_file, read_json, update_json
 from src.storage.base import BaseStorage
@@ -190,11 +190,13 @@ def save_portfolio(
 
 
 def load_portfolio(name: str, storage: StorageType | None = None) -> dict | None:
+    require_personal_data_enabled()
     st_type = storage or get_storage_type()
     return PortfolioStorageFactory.get_storage(st_type).load(name)
 
 
 def list_portfolios(storage: StorageType | None = None) -> list[str]:
+    require_personal_data_enabled()
     st_type = storage or get_storage_type()
     return PortfolioStorageFactory.get_storage(st_type).list_all()
 

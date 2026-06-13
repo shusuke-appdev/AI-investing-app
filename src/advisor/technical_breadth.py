@@ -18,7 +18,9 @@ def get_sp500_components() -> list[str]:
     try:
         url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
         headers = {"User-Agent": "Mozilla/5.0"}
-        html = requests.get(url, headers=headers).text
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        html = response.text
         tables = pd.read_html(StringIO(html))
         sp500_table = tables[0]
         tickers = sp500_table["Symbol"].str.replace(".", "-", regex=False).tolist()
@@ -41,7 +43,7 @@ def fetch_breadth_data(period: str = "6mo") -> pd.DataFrame:
         return pd.DataFrame()
 
     try:
-        data = yf.download(tickers, period=period, progress=False)["Close"]
+        data = yf.download(tickers, period=period, progress=False, timeout=20)["Close"]
         if data.empty:
             return pd.DataFrame()
 

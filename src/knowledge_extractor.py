@@ -7,14 +7,16 @@ import ipaddress
 import re
 import socket
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
+from src.app_mode import require_external_content_fetch_enabled
 from src.gemini_client import generate_content
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 MAX_URL_RESPONSE_BYTES = 2 * 1024 * 1024
+MAX_URL_REDIRECTS = 5
 SUPPORTED_FILE_EXTENSIONS = {".txt", ".pdf", ".md", ".csv", ".json"}
 SUPPORTED_URL_CONTENT_TYPES = {
     "text/html",
@@ -130,6 +132,7 @@ def extract_from_youtube(video_url: str) -> str:
     Returns:
         トランスクリプトテキスト
     """
+    require_external_content_fetch_enabled()
     # Video IDを抽出
     video_id = _extract_youtube_video_id(video_url)
     if not video_id:
@@ -198,32 +201,52 @@ def extract_from_url(url: str) -> str:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
 
-        _validate_public_http_url(url)
-        response = requests.get(
-            url,
-            headers=headers,
-            timeout=15,
-            allow_redirects=True,
-            stream=True,
-        )
-        response.raise_for_status()
-        for redirect in [*response.history, response]:
-            _validate_public_http_url(redirect.url)
+        require_external_content_fetch_enabled()
+        response = None
+        current_url = url
+        for _ in range(MAX_URL_REDIRECTS + 1):
+            _validate_public_http_url(current_url)
+            response = requests.get(
+                current_url,
+                headers=headers,
+                timeout=15,
+                allow_redirects=False,
+                stream=True,
+            )
+            if response.is_redirect or response.is_permanent_redirect:
+                location = response.headers.get("Location", "")
+                if not location:
+                    return "[URL取得エラー: リダイレクト先がありません]"
+                current_url = urljoin(current_url, location)
+                response.close()
+                continue
+            break
+        else:
+            return "[URL取得エラー: リダイレクト回数が上限を超えています]"
 
-        content_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
-        if content_type and content_type not in SUPPORTED_URL_CONTENT_TYPES:
-            return f"[未対応のContent-Type: {content_type}]"
-        content_length = int(response.headers.get("Content-Length", "0") or 0)
-        if content_length > MAX_URL_RESPONSE_BYTES:
-            return "[URL取得エラー: ページサイズが上限を超えています]"
-        chunks = []
-        total = 0
-        for chunk in response.iter_content(chunk_size=65536):
-            total += len(chunk)
-            if total > MAX_URL_RESPONSE_BYTES:
+        if response is None:
+            return "[URL取得エラー: 応答を取得できませんでした]"
+        try:
+            response.raise_for_status()
+
+            content_type = (
+                response.headers.get("Content-Type", "").split(";", 1)[0].lower()
+            )
+            if content_type and content_type not in SUPPORTED_URL_CONTENT_TYPES:
+                return f"[未対応のContent-Type: {content_type}]"
+            content_length = int(response.headers.get("Content-Length", "0") or 0)
+            if content_length > MAX_URL_RESPONSE_BYTES:
                 return "[URL取得エラー: ページサイズが上限を超えています]"
-            chunks.append(chunk)
-        content = b"".join(chunks)
+            chunks = []
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                total += len(chunk)
+                if total > MAX_URL_RESPONSE_BYTES:
+                    return "[URL取得エラー: ページサイズが上限を超えています]"
+                chunks.append(chunk)
+            content = b"".join(chunks)
+        finally:
+            response.close()
 
         soup = BeautifulSoup(content, "html.parser")
 

@@ -11,7 +11,7 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from src.app_mode import require_writes_enabled
+from src.app_mode import require_personal_data_enabled, require_writes_enabled
 from src.log_config import get_logger
 from src.settings_storage import get_storage_type
 from src.storage.atomic_json import read_json, update_json
@@ -204,6 +204,7 @@ def save_knowledge(item: KnowledgeItem) -> bool:
 
 
 def load_all_knowledge() -> list[KnowledgeItem]:
+    require_personal_data_enabled()
     storage = KnowledgeStorageFactory.get_storage()
     data_list = storage.list_all()
     items = []
@@ -216,6 +217,7 @@ def load_all_knowledge() -> list[KnowledgeItem]:
 
 
 def get_knowledge_by_id(item_id: str) -> KnowledgeItem | None:
+    require_personal_data_enabled()
     storage = KnowledgeStorageFactory.get_storage()
     data = storage.load(item_id)
     if data:

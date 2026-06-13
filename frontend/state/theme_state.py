@@ -20,6 +20,10 @@ class ThemeItem(BaseModel):
     theme: str = ""
     performance: float = 0.0
     stocks: list[ThemeStock] = []
+    requested_days: int = 0
+    component_count: int = 0
+    total_components: int = 0
+    coverage: float = 0.0
 
 
 class ThemeState(rx.State):
@@ -103,6 +107,10 @@ class ThemeState(rx.State):
                             theme=td["theme"],
                             performance=round(float(td["performance"]), 1),
                             stocks=stocks_out,
+                            requested_days=int(td.get("requested_days", 0)),
+                            component_count=int(td.get("component_count", 0)),
+                            total_components=int(td.get("total_components", 0)),
+                            coverage=round(float(td.get("coverage", 0.0)) * 100, 1),
                         )
                     )
                 self.ranked_themes = items

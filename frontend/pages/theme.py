@@ -45,11 +45,23 @@ def _render_theme_item(theme_data: ThemeItem, index: int) -> rx.Component:
                 ),
                 rx.vstack(
                     rx.text(theme_data.theme, weight="bold", size="3"),
-                    rx.badge(
-                        theme_data.stocks.length(),
-                        " 銘柄",
-                        color_scheme="gray",
-                        variant="soft",
+                    rx.hstack(
+                        rx.badge(
+                            theme_data.component_count,
+                            "/",
+                            theme_data.total_components,
+                            " 銘柄",
+                            color_scheme="gray",
+                            variant="soft",
+                        ),
+                        rx.badge(
+                            "取得率 ",
+                            theme_data.coverage,
+                            "%",
+                            color_scheme="gray",
+                            variant="soft",
+                        ),
+                        spacing="2",
                     ),
                     align_items="start",
                     spacing="1",

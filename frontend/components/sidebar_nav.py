@@ -1,6 +1,7 @@
 import reflex as rx
 
 from frontend.state.market_state import MarketState
+from src.app_mode import personal_data_enabled
 
 
 def nav_item(text: str, icon: str, url: str) -> rx.Component:
@@ -74,6 +75,27 @@ def market_switcher() -> rx.Component:
     )
 
 
+def _main_navigation_items() -> list[rx.Component]:
+    items = [
+        nav_item("Market", "globe", "/"),
+        nav_item("市場監視", "radar", "/market-watch"),
+        nav_item("Stock", "trending-up", "/stock"),
+    ]
+    if personal_data_enabled():
+        items.extend(
+            [
+                nav_item("Trading Plan", "clipboard-list", "/trading-plan"),
+                nav_item("Portfolio", "pie-chart", "/portfolio"),
+                nav_item("Knowledge", "book-open", "/knowledge"),
+            ]
+        )
+    return items
+
+
+def _drawer_navigation_items() -> list[rx.Component]:
+    return [rx.drawer.close(item) for item in _main_navigation_items()]
+
+
 def sidebar_nav() -> rx.Component:
     """左側に固定されるメインナビゲーションサイドバー"""
     return rx.vstack(
@@ -90,12 +112,7 @@ def sidebar_nav() -> rx.Component:
         market_switcher(),
         # ナビゲーションリンク
         rx.vstack(
-            nav_item("Market", "globe", "/"),
-            nav_item("市場監視", "radar", "/market-watch"),
-            nav_item("Stock", "trending-up", "/stock"),
-            nav_item("Trading Plan", "clipboard-list", "/trading-plan"),
-            nav_item("Portfolio", "pie-chart", "/portfolio"),
-            nav_item("Knowledge", "book-open", "/knowledge"),
+            *_main_navigation_items(),
             width="100%",
             spacing="2",
         ),
@@ -154,26 +171,7 @@ def mobile_nav() -> rx.Component:
                                 color=rx.color("gray", 10),
                             ),
                             rx.vstack(
-                                rx.drawer.close(nav_item("Market", "globe", "/")),
-                                rx.drawer.close(
-                                    nav_item("市場監視", "radar", "/market-watch")
-                                ),
-                                rx.drawer.close(
-                                    nav_item("Stock", "trending-up", "/stock")
-                                ),
-                                rx.drawer.close(
-                                    nav_item(
-                                        "Trading Plan",
-                                        "clipboard-list",
-                                        "/trading-plan",
-                                    )
-                                ),
-                                rx.drawer.close(
-                                    nav_item("Portfolio", "pie-chart", "/portfolio")
-                                ),
-                                rx.drawer.close(
-                                    nav_item("Knowledge", "book-open", "/knowledge")
-                                ),
+                                *_drawer_navigation_items(),
                                 width="100%",
                                 spacing="2",
                             ),

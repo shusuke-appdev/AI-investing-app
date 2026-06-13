@@ -266,11 +266,6 @@ def _build_yfinance_quote(ticker: str) -> dict | None:
 
 @ttl_cache(ttl=CACHE_TTL_SHORT)
 def get_current_price(ticker: str) -> float:
-    if is_japanese_stock(ticker) and jquants_client.is_configured():
-        price = jquants_client.get_current_price(ticker)
-        if price > 0:
-            return price
-
     try:
         q = _build_yfinance_quote(ticker)
         price = _safe_float(q.get("c") if q else None)
@@ -283,11 +278,6 @@ def get_current_price(ticker: str) -> float:
 
 @ttl_cache(ttl=CACHE_TTL_MEDIUM)
 def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
-    if is_japanese_stock(ticker) and jquants_client.is_configured():
-        df = jquants_client.get_daily_quotes(ticker, period)
-        if not df.empty:
-            return df
-
     cache = repo_state_cache(YFINANCE_HISTORY_CACHE_NAMESPACE)
     key = _history_cache_key(ticker, period)
     cached = cache.read(

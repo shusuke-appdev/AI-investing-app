@@ -26,19 +26,37 @@ def test_extract_from_url_rejects_private_redirect(monkeypatch):
             (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))
         ],
     )
-    redirect = SimpleNamespace(url="http://127.0.0.1/admin")
     response = SimpleNamespace(
-        url="https://example.com/final",
-        history=[redirect],
-        headers={"Content-Type": "text/html"},
+        is_redirect=True,
+        is_permanent_redirect=False,
+        headers={"Location": "http://127.0.0.1/admin"},
         raise_for_status=lambda: None,
         iter_content=lambda chunk_size: iter([b"<html><body>ok</body></html>"]),
+        close=lambda: None,
     )
-    monkeypatch.setattr("requests.get", lambda *args, **kwargs: response)
+    calls = []
+    monkeypatch.setattr(
+        "requests.get", lambda url, **kwargs: calls.append(url) or response
+    )
 
     result = knowledge_extractor.extract_from_url("https://example.com/report")
 
     assert "非公開ネットワーク" in result
+    assert calls == ["https://example.com/report"]
+
+
+def test_public_mode_rejects_url_before_network_request(monkeypatch):
+    monkeypatch.setenv("APP_MODE", "public_readonly")
+    monkeypatch.setattr(
+        "requests.get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("network request was made")
+        ),
+    )
+
+    result = knowledge_extractor.extract_from_url("https://example.com/report")
+
+    assert "公開読み取り専用モード" in result
 
 
 def test_extract_from_file_rejects_large_or_unsupported_upload():

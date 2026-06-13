@@ -10,6 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from src.app_mode import require_writes_enabled
 from src.log_config import get_logger
 
 from .supabase_client import get_supabase_client
@@ -85,6 +86,7 @@ def save_settings(settings: dict) -> bool:
     設定を保存します。保存後はキャッシュを無効化します。
     """
     global _settings_cache
+    require_writes_enabled()
     try:
         # 1. Local Save
         _ensure_dir()

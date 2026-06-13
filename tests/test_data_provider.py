@@ -154,6 +154,38 @@ class TestDataProvider:
             "dividend_yield": None,
         }
 
+    def test_generic_japanese_price_and_history_do_not_use_delayed_jquants(
+        self, monkeypatch, tmp_path
+    ):
+        from src import stock_data_provider
+
+        stock_data_provider.get_current_price.clear_cache()
+        stock_data_provider.get_historical_data.clear_cache()
+        monkeypatch.setattr(stock_data_provider.yf, "Ticker", FakeYFinanceTicker)
+        monkeypatch.setattr(
+            stock_data_provider,
+            "repo_state_cache",
+            lambda namespace: PersistentJsonCache(tmp_path, namespace),
+        )
+        monkeypatch.setattr(
+            stock_data_provider.jquants_client,
+            "get_current_price",
+            lambda ticker: (_ for _ in ()).throw(
+                AssertionError("delayed J-Quants price was used")
+            ),
+        )
+        monkeypatch.setattr(
+            stock_data_provider.jquants_client,
+            "get_daily_quotes",
+            lambda ticker, period: (_ for _ in ()).throw(
+                AssertionError("delayed J-Quants history was used")
+            ),
+        )
+
+        assert stock_data_provider.get_current_price("7203.T") == 145.0
+        history = stock_data_provider.get_historical_data("7203.T", "1mo")
+        assert history["Close"].iloc[-1] == 145.0
+
     @patch("src.news_provider._finnhub_get_company_news")
     @patch("src.news_provider.is_configured", return_value=True)
     def test_get_stock_news_structure(self, mock_is_conf, mock_news):

@@ -12,6 +12,8 @@ class KnowledgeState(rx.State):
     # 知識一覧データ
     items: list[dict[str, Any]] = []
     is_loading: bool = False
+    error_msg: str = ""
+    success_msg: str = ""
 
     # 追加用ステート
     input_type: str = "text"
@@ -53,6 +55,7 @@ class KnowledgeState(rx.State):
 
     async def load_items(self):
         self.is_loading = True
+        self.error_msg = ""
         yield
         try:
             from src.knowledge_storage import load_all_knowledge
@@ -70,20 +73,26 @@ class KnowledgeState(rx.State):
                 }
                 for item in db_items
             ]
+        except Exception as e:
+            self.items = []
+            self.error_msg = f"参照知識の読み込みに失敗しました: {e}"
         finally:
             self.is_loading = False
             yield
 
     async def delete_item(self, item_id: str):
+        self.error_msg = ""
+        self.success_msg = ""
         try:
             from src.knowledge_storage import delete_knowledge
 
             deleted = await asyncio.to_thread(delete_knowledge, item_id)
             if not deleted:
                 raise ValueError("削除対象が存在しないか、削除に失敗しました")
+            self.success_msg = "参照知識を削除しました。"
             return KnowledgeState.load_items
         except Exception as e:
-            print(f"Error deleting: {e}")
+            self.error_msg = f"削除に失敗しました: {e}"
 
     def prepare_edit(self, item_id: str):
         from src.knowledge_storage import get_knowledge_by_id
@@ -97,19 +106,25 @@ class KnowledgeState(rx.State):
             self.mode = "edit"
 
     async def save_edit(self):
+        self.error_msg = ""
+        self.success_msg = ""
         try:
             from src.knowledge_storage import update_knowledge
 
             updates = {"title": self.edit_title, "summary": self.edit_summary}
-            await asyncio.to_thread(update_knowledge, self.edit_id, updates)
+            updated = await asyncio.to_thread(update_knowledge, self.edit_id, updates)
+            if updated is None:
+                raise ValueError("更新対象が存在しないか、更新に失敗しました")
             self.mode = "list"
+            self.success_msg = "参照知識を更新しました。"
             return KnowledgeState.load_items
         except Exception as e:
-            print(f"Error updating: {e}")
+            self.error_msg = f"更新に失敗しました: {e}"
 
     async def extract_content(self):
         self.is_extracting = True
         self.extracted_content = ""
+        self.error_msg = ""
         yield
 
         try:
@@ -126,7 +141,7 @@ class KnowledgeState(rx.State):
                     extract_from_youtube, self.url_input
                 )
         except Exception as e:
-            self.extracted_content = f"[Error] {e}"
+            self.error_msg = f"コンテンツ抽出に失敗しました: {e}"
         finally:
             self.is_extracting = False
             yield
@@ -136,6 +151,8 @@ class KnowledgeState(rx.State):
             return
 
         self.is_saving = True
+        self.error_msg = ""
+        self.success_msg = ""
         yield
 
         try:
@@ -167,9 +184,10 @@ class KnowledgeState(rx.State):
                 raise ValueError("参照知識の保存に失敗しました")
 
             self.mode = "list"
+            self.success_msg = "参照知識を追加しました。"
             yield KnowledgeState.load_items
         except Exception as e:
-            print(f"Error saving new knowledge: {e}")
+            self.error_msg = f"参照知識の保存に失敗しました: {e}"
         finally:
             self.is_saving = False
             yield

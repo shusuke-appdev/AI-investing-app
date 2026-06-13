@@ -9,6 +9,7 @@ from frontend.components.ui_primitives import (
 )
 from frontend.state.market_state import MarketState
 from frontend.template import template
+from src.app_mode import ai_generation_enabled
 
 
 @template
@@ -26,6 +27,7 @@ def index() -> rx.Component:
                 color_scheme="indigo",
                 size="3",
                 variant="solid",
+                disabled=not ai_generation_enabled(),
             ),
             rx.tooltip(
                 rx.icon_button(
@@ -34,6 +36,7 @@ def index() -> rx.Component:
                     size="3",
                     variant="surface",
                     aria_label="任意の分析項目を追加",
+                    disabled=not ai_generation_enabled(),
                 ),
                 content="任意の分析項目を追加",
             ),
@@ -44,6 +47,16 @@ def index() -> rx.Component:
                 loading=MarketState.is_fetching_summary,
                 variant="surface",
             ),
+        ),
+        (
+            rx.callout(
+                "公開モードではAIレポート生成を利用できません。",
+                icon="lock",
+                color_scheme="amber",
+                width="100%",
+            )
+            if not ai_generation_enabled()
+            else rx.fragment()
         ),
         rx.cond(
             MarketState.recap_focus_visible,
@@ -65,6 +78,7 @@ def index() -> rx.Component:
                             on_click=MarketState.generate_ai_recap_with_focus,
                             loading=MarketState.is_generating_recap,
                             color_scheme="indigo",
+                            disabled=not ai_generation_enabled(),
                         ),
                         width="100%",
                     ),
@@ -103,7 +117,11 @@ def index() -> rx.Component:
                             rx.markdown(MarketState.ai_recap),
                             rx.center(
                                 rx.text(
-                                    "上部の「AI Market Recap」ボタンを押して、最新の市況レポートを生成します。",
+                                    (
+                                        "公開モードではAIレポート生成を利用できません。"
+                                        if not ai_generation_enabled()
+                                        else "上部の「AI Market Recap」ボタンを押して、最新の市況レポートを生成します。"
+                                    ),
                                     color="gray",
                                 ),
                                 height="150px",

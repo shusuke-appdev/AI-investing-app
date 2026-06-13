@@ -1,5 +1,11 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-06-14 product review high-risk remediation
+- Expanded `APP_MODE=public_readonly` from write-only protection to a complete public boundary: personal-data reads, AI generation, and URL/YouTube ingestion are blocked; personal pages are hidden from navigation and show a direct-access notice.
+- Changed Knowledge URL redirects to validate every destination before connection and close streamed responses reliably.
+- Removed delayed J-Quants Free price/history from generic live-price paths, omitted unavailable market items instead of emitting `0.0`, and required full-window observations plus minimum theme coverage for Theme Ranking.
+- Added external-call timeouts, Knowledge user-visible errors, Theme Ranking coverage UI, and focused regression tests for the new contracts.
+
 ## Session update: 2026-06-13 MarketData.app options complement
 - Added an optional MarketData.app REST path for explicit SPY / QQQ / IWM option refreshes, with Bearer authentication, HTTP 203/204 handling, bounded 0DTE requests, direct IV/Greeks/OI/Volume normalization, and provider-specific persistent cache.
 - Added `MARKETDATA_OPTIONS_MODE=off|shadow|preferred`; `shadow` keeps yfinance output while recording MarketData.app comparison metadata, and `preferred` falls back to yfinance on failure.

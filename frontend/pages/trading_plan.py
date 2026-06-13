@@ -1,8 +1,14 @@
 import reflex as rx
 
-from frontend.components.ui_primitives import empty_state, loading_state, page_header
+from frontend.components.ui_primitives import (
+    empty_state,
+    loading_state,
+    page_header,
+    private_mode_notice,
+)
 from frontend.state.trading_plan_state import TradingPlanState
 from frontend.template import template
+from src.app_mode import personal_data_enabled
 
 
 def _plan_card(plan: dict) -> rx.Component:
@@ -225,6 +231,9 @@ def _review_panel() -> rx.Component:
 
 @template
 def trading_plan_page() -> rx.Component:
+    if not personal_data_enabled():
+        return private_mode_notice("Trading Plan")
+
     return rx.vstack(
         page_header(
             "Trading Plan",

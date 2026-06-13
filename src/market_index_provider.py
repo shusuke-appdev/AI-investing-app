@@ -51,7 +51,7 @@ def _get_stooq_data(ticker: str) -> tuple[float, float] | None:
         return None
 
 
-def _fetch_yfinance_market_item(n: str, t: str) -> tuple[str, str, dict]:
+def _fetch_yfinance_market_item(n: str, t: str) -> tuple[str, str, dict | None]:
     try:
         hist = get_historical_data(t, "5d")
         if "Close" in hist.columns:
@@ -68,7 +68,7 @@ def _fetch_yfinance_market_item(n: str, t: str) -> tuple[str, str, dict]:
                 prev = hist.iloc[-2, 0] if len(hist) >= 2 else current
 
             if math.isnan(current) or math.isnan(prev):
-                return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
+                return n, t, None
 
             change = ((current - prev) / prev) * 100 if prev != 0 else 0
             return (
@@ -80,10 +80,10 @@ def _fetch_yfinance_market_item(n: str, t: str) -> tuple[str, str, dict]:
                     "ticker": t,
                 },
             )
-        return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
+        return n, t, None
     except Exception as e:
         logger.warning(f"[MarketIndexProvider] Failed to fetch {t}: {e}")
-        return n, t, {"price": 0.0, "change": 0.0, "ticker": t}
+        return n, t, None
 
 
 @ttl_cache(ttl=CACHE_TTL_MEDIUM)
@@ -116,7 +116,8 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                 ]
                 for future in as_completed(futures):
                     n, t, data = future.result()
-                    result[n] = data
+                    if data is not None:
+                        result[n] = data
         return result
 
     finnhub_targets = {
@@ -179,7 +180,7 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
     elif finnhub_targets:
         yf_targets.update(finnhub_targets)
 
-    def _fetch_yf(n: str, t: str) -> tuple[str, str, dict]:
+    def _fetch_yf(n: str, t: str) -> tuple[str, str, dict | None]:
         return _fetch_yfinance_market_item(n, t)
 
     if yf_targets:
@@ -190,7 +191,8 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
                 ]
                 for future in as_completed(futures):
                     n, t, data = future.result()
-                    result[n] = data
+                    if data is not None:
+                        result[n] = data
         except Exception as e:
             logger.error(f"[MarketIndexProvider] Batch download execution failed: {e}")
 

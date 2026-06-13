@@ -1,13 +1,13 @@
 # Product Refactor Review and Roadmap
 
-更新日: 2026-06-13
+更新日: 2026-06-14
 
 ## プロダクト契約
 
 - 本アプリは個人用の投資調査ダッシュボードであり、売買助言・投資一任を目的としない。
 - 主UIと新規開発の正本は `frontend/` のReflexアプリとする。
-- `APP_MODE=private` は個人データの保存・更新・削除を許可する。
-- 公開配置では `APP_MODE=public_readonly` を設定し、Portfolio、Knowledge、Trading Planの書き込みを禁止する。
+- `APP_MODE=private` は個人データの読み書き、AI生成、外部コンテンツ取り込みを許可する。
+- 公開配置では `APP_MODE=public_readonly` を設定し、Portfolio、Knowledge、Trading Planの読み書き、AI生成、URL・YouTube取り込みを禁止する。
 - 保存先の既定値はローカルJSONとし、Supabaseは明示選択時のみ使用する。
 
 ## 分析機能の責務マップ
@@ -36,6 +36,15 @@
 - `.dockerignore`、CIのconstraints適用、Reflex export検証を追加した。
 - 個人ポートフォリオJSONをGit追跡から外した。
 
+## 2026-06-14 実施済み
+
+- 公開モードの境界を読み取り、AI生成、外部コンテンツ取得まで拡張し、個人ページをナビゲーションから除外した。
+- Knowledge URLのリダイレクト先を接続前に検査し、応答ストリームを確実に解放するようにした。
+- J-Quants Freeの遅延価格系列を汎用現在値・履歴経路から除外した。
+- 市場データ取得失敗を `0.0` として表示せず、利用不可項目として省略するようにした。
+- Theme Rankingへ要求期間、実測期間、構成銘柄取得率、最低取得数を追加した。
+- 直接利用する外部HTTP・yfinance一括取得へタイムアウトを設定した。
+
 ## 次期ロードマップ
 
 ### P1: 分析入力の共有と待ち時間削減
@@ -44,7 +53,6 @@
 
 ### P1: データ品質
 
-- Theme Rankingへ要求期間、実測期間、構成銘柄取得率、最低取得数を追加する。
 - `MarketContext` と `StockSignalContext` の主要な `dict[str, Any]` を型付きサブコンテキストへ移行する。
 - provider層の曖昧な空値を、出所と失敗理由を持つ結果型へ移行する。
 
@@ -58,5 +66,5 @@
 
 - 一部の外部API・任意診断が失敗しても、取得済み分析と品質警告を表示できる。
 - UIとAIが同一コンテキストを再利用し、同一更新内で結論が矛盾しない。
-- 公開読み取り専用モードでは個人データを書き込めない。
+- 公開読み取り専用モードでは個人データを読み書きできず、AI生成と任意URL・YouTube取得も実行できない。
 - pytest、ruff、format check、compileall、Reflex frontend exportがCIで通る。

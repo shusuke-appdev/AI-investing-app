@@ -15,7 +15,7 @@
 | `FINNHUB_API_KEY` | 推奨 | 企業ニュース、決算、オプション補完データ |
 | `MARKETDATA_TOKEN` | 米国オプション補完時に必須 | MarketData.appのSPY / QQQ / IWMオプションチェーン、IV、Greeks、OI、Volume |
 | `MARKETDATA_OPTIONS_MODE` | 任意 | `off` / `shadow` / `preferred`。未設定時は`off` |
-| `JQUANTS_API_KEY` | 日本株分析では推奨 | 日本株の価格・財務情報 |
+| `JQUANTS_API_KEY` | 日本株分析では任意 | 日本株の企業マスター・財務情報。Freeの遅延価格系列は汎用現在値・履歴に使わない |
 | `EDINET_API_KEY` | 日本株財務では推奨 | EDINET からの財務情報取得 |
 | `NIKKEI_JSF_SHORT_BALANCE_BILLION` | 任意 | 日経6条件の条件1を直接判定するための、日証金合計売り残（億円） |
 | `NIKKEI_LEVERAGE_MARGIN_RATIO` | 任意 | 日経6条件の条件2を直接判定するための、日経レバ1570信用倍率 |
@@ -104,7 +104,11 @@ python tools/migrate_to_supabase.py --print-setup-sql
 
 ## 運用上の注意
 
+- `APP_MODE=public_readonly` ではPortfolio・Knowledge・Trading Planの読み書き、AI生成、URL・YouTube取り込みを拒否します。個人機能のナビゲーションも表示しません
 - 外部APIの制限により、オプション分析とニュース集約は一時的に空になることがあります
+- 市場指数・セクター等の取得失敗は価格 `0.0` として表示せず、その項目を利用不可として省略します
+- Theme Rankingは指定期間を満たす構成銘柄だけを使い、2銘柄以上かつ構成銘柄の40%以上を取得できたテーマだけを表示します
+- 日本株の汎用現在値・価格履歴はyfinanceを使います。J-Quants Freeの価格系列は遅延するため現在値として扱わず、企業マスター・財務情報の補完に限定します
 - Market Intelligence の起動時は軽量サマリーのみ自動取得します。詳細分析はサイドバーの「市場監視」で「詳細更新」を押すと、キャッシュ/サマリー、市場状態・資金フロー、FRED信用ストレス・歪み検知、オプション分析の順に段階取得します
 - 「市場監視」には、IBD式市場状態、状態別プレイブック、総合市場監視、テーマモメンタム、テーマランキング、オプション分析、市場の歪み検知を統合しています。各段階は「取得中」「最新」「キャッシュ」「一部取得」「取得失敗」を表示します
 - IBD式市場状態は無料データによる近似です。公式IBD Market Pulseではなく、SPY / Nasdaq 100 の売り抜け日、ラリー試行、FTD、移動平均割れから分類します

@@ -113,6 +113,7 @@ def _download_universe() -> pd.DataFrame:
         group_by="ticker",
         progress=False,
         threads=True,
+        timeout=20,
     )
 
 

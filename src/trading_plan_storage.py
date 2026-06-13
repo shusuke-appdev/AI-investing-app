@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from src.app_mode import require_writes_enabled
+from src.app_mode import require_personal_data_enabled, require_writes_enabled
 from src.log_config import get_logger
 from src.services.trading_plan_service import TradePlanRecord
 from src.settings_storage import get_storage_type
@@ -25,6 +25,7 @@ def save_trade_plan(plan: TradePlanRecord) -> bool:
 
 
 def load_trade_plans() -> list[TradePlanRecord]:
+    require_personal_data_enabled()
     storage_type = get_storage_type()
     raw = _load_supabase() if storage_type == "supabase" else _load_local()
     plans = [
