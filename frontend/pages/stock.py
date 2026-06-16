@@ -20,6 +20,34 @@ from frontend.template import template
 from src.app_mode import ai_generation_enabled
 
 
+def _option_signal_label(value) -> rx.Var:
+    return rx.cond(
+        value == "upside_squeeze_candidate",
+        "上方向ガンマ候補",
+        rx.cond(
+            value == "downside_vol_expansion",
+            "下方向ボラ警戒",
+            rx.cond(
+                value == "pinning_resistance",
+                "抵抗/Pin",
+                rx.cond(value == "pinning", "中立/Pin", "判定不能"),
+            ),
+        ),
+    )
+
+
+def _option_signal_color(value) -> rx.Var:
+    return rx.cond(
+        value == "upside_squeeze_candidate",
+        "green",
+        rx.cond(
+            value == "downside_vol_expansion",
+            "red",
+            rx.cond(value == "pinning_resistance", "orange", "gray"),
+        ),
+    )
+
+
 @template
 def stock_page() -> rx.Component:
     """個別銘柄分析画面 (Stock)"""
@@ -469,6 +497,121 @@ def stock_page() -> rx.Component:
                                     ),
                                     spacing="2",
                                     wrap="wrap",
+                                ),
+                                rx.hstack(
+                                    rx.cond(
+                                        StockState.sector_theme_parent_sector != "",
+                                        rx.badge(
+                                            "親セクター: "
+                                            + StockState.sector_theme_parent_sector,
+                                            color_scheme="gray",
+                                            variant="surface",
+                                        ),
+                                        rx.fragment(),
+                                    ),
+                                    rx.cond(
+                                        StockState.sector_theme_proxy_ticker != "",
+                                        rx.badge(
+                                            "Theme ETF: "
+                                            + StockState.sector_theme_proxy_ticker,
+                                            color_scheme="cyan",
+                                            variant="surface",
+                                        ),
+                                        rx.fragment(),
+                                    ),
+                                    rx.cond(
+                                        StockState.sector_theme_best_rank != "",
+                                        rx.badge(
+                                            "Trend "
+                                            + StockState.sector_theme_best_rank
+                                            + "位 / +"
+                                            + StockState.sector_theme_rank_points
+                                            + "pt",
+                                            color_scheme="blue",
+                                            variant="surface",
+                                        ),
+                                        rx.fragment(),
+                                    ),
+                                    spacing="2",
+                                    wrap="wrap",
+                                ),
+                                rx.cond(
+                                    StockState.sector_theme_ranking_summary != "",
+                                    rx.text(
+                                        StockState.sector_theme_ranking_summary,
+                                        size="2",
+                                        color=rx.color("gray", 10),
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                rx.cond(
+                                    StockState.sector_theme_option_proxy != "",
+                                    rx.box(
+                                        rx.hstack(
+                                            rx.text(
+                                                "テーマETFオプション",
+                                                weight="bold",
+                                                size="2",
+                                            ),
+                                            rx.badge(
+                                                StockState.sector_theme_option_proxy,
+                                                color_scheme="cyan",
+                                                variant="surface",
+                                            ),
+                                            rx.badge(
+                                                _option_signal_label(
+                                                    StockState.sector_theme_option_signal
+                                                ),
+                                                color_scheme=_option_signal_color(
+                                                    StockState.sector_theme_option_signal
+                                                ),
+                                                variant="surface",
+                                            ),
+                                            rx.cond(
+                                                StockState.sector_theme_option_score
+                                                != "",
+                                                rx.badge(
+                                                    StockState.sector_theme_option_score,
+                                                    color_scheme="gray",
+                                                ),
+                                                rx.fragment(),
+                                            ),
+                                            spacing="2",
+                                            wrap="wrap",
+                                            align_items="center",
+                                        ),
+                                        rx.cond(
+                                            StockState.sector_theme_option_summary
+                                            != "",
+                                            rx.text(
+                                                StockState.sector_theme_option_summary,
+                                                size="2",
+                                                color=rx.color("gray", 10),
+                                                margin_top="0.25rem",
+                                            ),
+                                            rx.fragment(),
+                                        ),
+                                        rx.cond(
+                                            StockState.sector_theme_option_source != "",
+                                            rx.text(
+                                                "source: "
+                                                + StockState.sector_theme_option_source
+                                                + " / quality: "
+                                                + StockState.sector_theme_option_data_quality
+                                                + " / as_of: "
+                                                + StockState.sector_theme_option_data_as_of,
+                                                size="1",
+                                                color=rx.color("gray", 9),
+                                                margin_top="0.25rem",
+                                            ),
+                                            rx.fragment(),
+                                        ),
+                                        width="100%",
+                                        padding="0.75rem",
+                                        border=f"1px solid {rx.color('gray', 4)}",
+                                        border_radius="8px",
+                                    ),
+                                    rx.fragment(),
                                 ),
                                 rx.text(
                                     StockState.sector_theme_rationale,

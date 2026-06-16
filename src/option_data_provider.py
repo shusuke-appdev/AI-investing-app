@@ -17,7 +17,9 @@ import pandas as pd
 import yfinance as yf
 
 from src.log_config import get_logger
+from src.marketdata_client import is_configured as marketdata_is_configured
 from src.persistent_cache import PersistentJsonCache, repo_state_cache, utc_now_iso
+from src.theme_taxonomy import marketdata_option_universe
 from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
@@ -37,7 +39,7 @@ MAX_EXPIRATIONS = 1
 OPTION_CACHE_TTL = 900
 OPTION_STALE_TTL = 86400
 OPTION_CACHE_NAMESPACE = "option_chain_cache"
-MARKETDATA_OPTION_TICKERS = {"SPY", "QQQ", "IWM"}
+MARKETDATA_OPTION_TICKERS = marketdata_option_universe()
 MARKETDATA_OPTIONS_MODES = {"off", "shadow", "preferred"}
 
 
@@ -160,7 +162,7 @@ def get_option_chain(
     """
     ticker = ticker.upper()
     mode = _marketdata_options_mode() if allow_marketdata else "off"
-    if ticker not in MARKETDATA_OPTION_TICKERS:
+    if not _marketdata_allowed_for_ticker(ticker):
         mode = "off"
     if cache_only:
         cached = _load_persistent_cache(ticker, max_age_seconds=OPTION_STALE_TTL)
@@ -196,9 +198,14 @@ def get_option_chain(
     if mode == "preferred":
         metadata = get_option_chain_metadata(ticker)
         warnings = list(metadata.get("quality_warnings") or [])
-        warnings.append(
-            "MarketData.app preferred fetch unavailable; yfinance fallback is active."
-        )
+        if marketdata_is_configured():
+            warnings.append(
+                "MarketData.app preferred fetch unavailable; yfinance fallback is active."
+            )
+        else:
+            warnings.append(
+                "MarketData.app token is not configured; yfinance fallback is active."
+            )
         metadata["quality_warnings"] = warnings
         metadata["marketdata_options_mode"] = mode
         _replace_metadata(ticker, metadata)
@@ -390,8 +397,16 @@ def _get_yfinance_option_chain(
 
 
 def _marketdata_options_mode() -> str:
-    mode = os.getenv("MARKETDATA_OPTIONS_MODE", "off").strip().lower()
+    default_mode = "preferred" if marketdata_is_configured() else "off"
+    mode = os.getenv("MARKETDATA_OPTIONS_MODE", default_mode).strip().lower()
     return mode if mode in MARKETDATA_OPTIONS_MODES else "off"
+
+
+def _marketdata_allowed_for_ticker(ticker: str) -> bool:
+    normalized = ticker.upper()
+    if normalized.endswith(".T"):
+        return False
+    return normalized in MARKETDATA_OPTION_TICKERS
 
 
 def _fetch_marketdata_chain(

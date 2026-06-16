@@ -336,7 +336,12 @@ def _format_sector_theme_context(stock_signal_context: dict | None) -> str:
         )
     return f"""Sector/Theme Context (qualitative base layer):
 - Sector: {context.get("sector", "N/A")}
+- Parent Sector: {context.get("parent_sector", "N/A")}
 - Themes: {", ".join(str(item) for item in themes) if themes else "N/A"}
+- Trend Ranking: {context.get("ranking_summary", "N/A")}
+- Theme ETF Option Proxy: {context.get("option_proxy_ticker", "N/A")}
+- Theme Option Signal: {context.get("theme_option_signal", "unavailable")}
+- Theme Option Summary: {context.get("theme_option_summary", "N/A")}
 - Stock Fundamental Advantage: {context.get("fundamental_advantage", False)}
 - Stock Flow Advantage: {context.get("flow_advantage", False)}
 - Combined Rating: {context.get("combined_rating", "unknown")}

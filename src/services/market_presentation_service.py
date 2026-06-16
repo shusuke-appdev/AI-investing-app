@@ -186,6 +186,89 @@ class FlowAlignmentDisplay(BaseModel):
     sector_role: str = ""
 
 
+class StrategyRegimeDisplay(BaseModel):
+    key: str = ""
+    label: str = ""
+    rationale: str = ""
+    risk_budget: str = ""
+    invalidation: str = ""
+    evidence: list[str] = []
+
+
+class TimeframeOutlookDisplay(BaseModel):
+    key: str = ""
+    label: str = ""
+    score: float = 0.0
+    score_str: str = ""
+    market_tone: str = ""
+    direction: str = ""
+    direction_label: str = ""
+    confidence: str = ""
+    evidence: list[str] = []
+
+
+class ImportantLevelDisplay(BaseModel):
+    label: str = ""
+    ticker: str = ""
+    close_str: str = ""
+    support_str: str = ""
+    resistance_str: str = ""
+    lower_support_str: str = ""
+    ma20_str: str = ""
+    ma50_str: str = ""
+    ma200_str: str = ""
+    change_1d_str: str = ""
+    behavior: str = ""
+    behavior_label: str = ""
+    data_quality: str = "unavailable"
+
+
+class MarketDriverDisplay(BaseModel):
+    label: str = ""
+    ticker: str = ""
+    value_str: str = ""
+    change_5d_str: str = ""
+    change_20d_str: str = ""
+    interpretation: str = ""
+    data_quality: str = "unavailable"
+
+
+class TrendRankingDisplay(BaseModel):
+    rank: int = 0
+    theme: str = ""
+    parent_sector: str = ""
+    proxy_ticker: str = ""
+    option_proxy_ticker: str = ""
+    total_score: float = 0.0
+    total_score_str: str = ""
+    rank_points: int = 0
+    performance_1w_str: str = ""
+    performance_1m_str: str = ""
+    performance_6m_str: str = ""
+    flow_score_str: str = ""
+    participation_str: str = ""
+    option_asymmetry: str = ""
+    option_score_str: str = ""
+    option_summary: str = ""
+    option_source: str = ""
+    option_data_as_of: str = ""
+    option_data_quality: str = ""
+    representative_tickers: list[str] = []
+
+
+class OpportunityThemeDisplay(BaseModel):
+    theme: str = ""
+    parent_sector: str = ""
+    rank: int = 0
+    opportunity_score: float = 0.0
+    opportunity_score_str: str = ""
+    label: str = ""
+    reason: str = ""
+    representative_tickers: list[str] = []
+    option_asymmetry: str = ""
+    invalidation: str = ""
+
+
 class StageStatusDisplay(BaseModel):
     key: str = ""
     label: str = ""
@@ -267,6 +350,16 @@ class MarketDisplayContext(BaseModel):
     credit_stress: CreditStressDisplay = CreditStressDisplay()
     flow_monitor: FlowProxyDisplay = FlowProxyDisplay()
     flow_alignment: FlowAlignmentDisplay = FlowAlignmentDisplay()
+    strategy_regime: StrategyRegimeDisplay = StrategyRegimeDisplay()
+    market_timeframes: list[TimeframeOutlookDisplay] = []
+    important_levels: list[ImportantLevelDisplay] = []
+    important_levels_summary: str = ""
+    market_drivers: list[MarketDriverDisplay] = []
+    market_drivers_summary: str = ""
+    trend_ranking_items: list[TrendRankingDisplay] = []
+    trend_ranking_summary: str = ""
+    opportunity_theme_items: list[OpportunityThemeDisplay] = []
+    opportunity_theme_summary: str = ""
     detail_stages: list[StageStatusDisplay] = []
     japan_conditions: list[JapanConditionDisplay] = []
     japan_conditions_summary: str = ""
@@ -307,6 +400,16 @@ def build_market_display_context(context: MarketContext) -> MarketDisplayContext
         credit_stress=_format_credit_stress(context.credit_stress),
         flow_monitor=_format_flow_monitor(context.flow_monitor),
         flow_alignment=_format_flow_alignment(context.flow_alignment),
+        strategy_regime=_format_strategy_regime(context.strategy_regime),
+        market_timeframes=_format_timeframes(context.market_timeframes),
+        important_levels=_format_important_levels(context.important_levels),
+        important_levels_summary=context.important_levels.get("summary", ""),
+        market_drivers=_format_market_drivers(context.market_driver_monitor),
+        market_drivers_summary=context.market_driver_monitor.get("summary", ""),
+        trend_ranking_items=_format_trend_ranking(context.trend_ranking),
+        trend_ranking_summary=context.trend_ranking.get("summary", ""),
+        opportunity_theme_items=_format_opportunities(context.opportunity_themes),
+        opportunity_theme_summary=context.opportunity_themes.get("summary", ""),
         detail_stages=_format_detail_stages(context.detail_stages),
         japan_conditions=_format_japan_conditions(context.japan_conditions),
         japan_conditions_summary=context.japan_conditions.get("summary", ""),
@@ -498,7 +601,9 @@ def _coverage_str(value: Any) -> str:
 def _format_sector_flow(raw: dict[str, Any]) -> list[SectorFlowGroup]:
     groups = []
     markets = raw.get("markets", {}) if raw else {}
-    for market in ("US", "JP"):
+    ordered = [market for market in ("US", "JP") if market in markets]
+    ordered.extend(market for market in markets if market not in {"US", "JP"})
+    for market in ordered:
         payload = markets.get(market, {})
         leaders = []
         for item in payload.get("leaders", []):
@@ -613,6 +718,131 @@ def _format_flow_alignment(raw: dict[str, Any]) -> FlowAlignmentDisplay:
     )
 
 
+def _format_strategy_regime(raw: dict[str, Any]) -> StrategyRegimeDisplay:
+    if not raw:
+        return StrategyRegimeDisplay()
+    return StrategyRegimeDisplay(
+        key=raw.get("key", ""),
+        label=raw.get("label", ""),
+        rationale=raw.get("rationale", ""),
+        risk_budget=raw.get("risk_budget", ""),
+        invalidation=raw.get("invalidation", ""),
+        evidence=list(raw.get("evidence", [])),
+    )
+
+
+def _format_timeframes(raw: dict[str, Any]) -> list[TimeframeOutlookDisplay]:
+    rows = []
+    for item in raw.get("items", []) if raw else []:
+        score = float(item.get("score", 0.0))
+        rows.append(
+            TimeframeOutlookDisplay(
+                key=item.get("key", ""),
+                label=item.get("label", ""),
+                score=score,
+                score_str=f"{score:+.2f}",
+                market_tone=item.get("market_tone", ""),
+                direction=item.get("direction", ""),
+                direction_label=item.get("direction_label", ""),
+                confidence=item.get("confidence", ""),
+                evidence=list(item.get("evidence", [])),
+            )
+        )
+    return rows
+
+
+def _format_important_levels(raw: dict[str, Any]) -> list[ImportantLevelDisplay]:
+    rows = []
+    for item in raw.get("items", []) if raw else []:
+        rows.append(
+            ImportantLevelDisplay(
+                label=item.get("label", ""),
+                ticker=item.get("ticker", ""),
+                close_str=_price_str(item.get("close")),
+                support_str=_price_str(item.get("support")),
+                resistance_str=_price_str(item.get("resistance")),
+                lower_support_str=_price_str(item.get("lower_support")),
+                ma20_str=_price_str(item.get("ma20")),
+                ma50_str=_price_str(item.get("ma50")),
+                ma200_str=_price_str(item.get("ma200")),
+                change_1d_str=_pct_str(item.get("change_1d")),
+                behavior=item.get("behavior", ""),
+                behavior_label=item.get("behavior_label", ""),
+                data_quality=item.get("data_quality", "unavailable"),
+            )
+        )
+    return rows
+
+
+def _format_market_drivers(raw: dict[str, Any]) -> list[MarketDriverDisplay]:
+    rows = []
+    for item in raw.get("items", []) if raw else []:
+        rows.append(
+            MarketDriverDisplay(
+                label=item.get("label", ""),
+                ticker=item.get("ticker", ""),
+                value_str=_driver_value_str(item.get("label", ""), item.get("value")),
+                change_5d_str=_pct_str(item.get("change_5d")),
+                change_20d_str=_pct_str(item.get("change_20d")),
+                interpretation=item.get("interpretation", ""),
+                data_quality=item.get("data_quality", "unavailable"),
+            )
+        )
+    return rows
+
+
+def _format_trend_ranking(raw: dict[str, Any]) -> list[TrendRankingDisplay]:
+    rows = []
+    for item in raw.get("items", []) if raw else []:
+        total_score = float(item.get("total_score", 0.0))
+        rows.append(
+            TrendRankingDisplay(
+                rank=int(item.get("rank", 0) or 0),
+                theme=item.get("theme", ""),
+                parent_sector=item.get("parent_sector", ""),
+                proxy_ticker=item.get("proxy_ticker", ""),
+                option_proxy_ticker=item.get("option_proxy_ticker", ""),
+                total_score=total_score,
+                total_score_str=f"{total_score:+.1f}",
+                rank_points=int(item.get("rank_points", 0) or 0),
+                performance_1w_str=_pct_str(item.get("performance_1w")),
+                performance_1m_str=_pct_str(item.get("performance_1m")),
+                performance_6m_str=_pct_str(item.get("performance_6m")),
+                flow_score_str=_signed_str(item.get("flow_score")),
+                participation_str=_ratio_percent_str(item.get("participation")),
+                option_asymmetry=item.get("option_asymmetry", "unavailable"),
+                option_score_str=_signed_str(item.get("option_score")),
+                option_summary=item.get("option_summary", ""),
+                option_source=item.get("option_source", ""),
+                option_data_as_of=item.get("option_data_as_of", ""),
+                option_data_quality=item.get("option_data_quality", ""),
+                representative_tickers=list(item.get("representative_tickers", [])),
+            )
+        )
+    return rows
+
+
+def _format_opportunities(raw: dict[str, Any]) -> list[OpportunityThemeDisplay]:
+    rows = []
+    for item in raw.get("items", []) if raw else []:
+        score = float(item.get("opportunity_score", 0.0))
+        rows.append(
+            OpportunityThemeDisplay(
+                theme=item.get("theme", ""),
+                parent_sector=item.get("parent_sector", ""),
+                rank=int(item.get("rank", 0) or 0),
+                opportunity_score=score,
+                opportunity_score_str=f"{score:+.1f}",
+                label=item.get("label", ""),
+                reason=item.get("reason", ""),
+                representative_tickers=list(item.get("representative_tickers", [])),
+                option_asymmetry=item.get("option_asymmetry", ""),
+                invalidation=item.get("invalidation", ""),
+            )
+        )
+    return rows
+
+
 def _format_detail_stages(raw: dict[str, dict[str, Any]]) -> list[StageStatusDisplay]:
     stages = []
     for key in ("low", "medium", "high", "options"):
@@ -654,6 +884,33 @@ def _format_flow_proxy_item(item: dict[str, Any]) -> FlowProxyItem:
         trend_above_ma50=bool(item.get("trend_above_ma50", False)),
         level=item.get("level", "gray"),
     )
+
+
+def _price_str(value: Any) -> str:
+    number = _optional_float(value)
+    return "-" if number is None else f"{number:,.2f}"
+
+
+def _pct_str(value: Any) -> str:
+    number = _optional_float(value)
+    return "-" if number is None else f"{number:+.2f}%"
+
+
+def _signed_str(value: Any) -> str:
+    number = _optional_float(value)
+    return "-" if number is None else f"{number:+.1f}"
+
+
+def _ratio_percent_str(value: Any) -> str:
+    number = _optional_float(value)
+    return "-" if number is None else f"{number:.0%}"
+
+
+def _driver_value_str(label: str, value: Any) -> str:
+    number = _optional_float(value)
+    if number is None:
+        return "-"
+    return f"{number:.2f}%" if label == "US10Y" else f"{number:,.2f}"
 
 
 def _market_lists(

@@ -4,6 +4,7 @@ from frontend.components.data_provenance import provenance_panel
 from frontend.components.flash_summary import (
     market_distortion_panel,
     market_monitor,
+    trend_ranking_panel,
     watch_indices_strip,
 )
 from frontend.components.market_risk_intelligence import market_risk_intelligence_panel
@@ -118,6 +119,7 @@ def market_watch_page() -> rx.Component:
                 watch_indices_strip(),
                 market_risk_intelligence_panel(),
                 market_monitor(),
+                trend_ranking_panel(),
                 market_distortion_panel(),
                 momentum_monitor_component(),
                 option_analysis_component(),

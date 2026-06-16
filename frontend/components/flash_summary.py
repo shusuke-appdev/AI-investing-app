@@ -98,6 +98,11 @@ def market_monitor() -> rx.Component:
                 rx.vstack(
                     _ibd_regime_panel(),
                     _playbook_panel(),
+                    rx.cond(
+                        MarketState.strategy_regime.label != "",
+                        _strategy_regime_panel(),
+                        rx.fragment(),
+                    ),
                     _environment_header(eval_data),
                     _signal_grid(),
                     rx.cond(
@@ -174,6 +179,331 @@ def market_distortion_panel() -> rx.Component:
             width="100%",
         ),
         width="100%",
+    )
+
+
+def trend_ranking_panel() -> rx.Component:
+    """Render the integrated trend ranking and opportunity themes."""
+
+    return rx.box(
+        rx.heading("統合トレンドランキング", size="5", margin_bottom="0.75rem"),
+        rx.card(
+            rx.vstack(
+                rx.hstack(
+                    rx.text(
+                        MarketState.trend_ranking_summary,
+                        size="2",
+                        color=rx.color("gray", 11),
+                        flex="1",
+                    ),
+                    rx.badge("MarketData preferred", color_scheme="blue"),
+                    width="100%",
+                    align_items="center",
+                ),
+                rx.cond(
+                    MarketState.opportunity_theme_items.length() > 0,
+                    rx.box(
+                        rx.text("注目セクター/テーマ", weight="bold", size="2"),
+                        rx.grid(
+                            rx.foreach(
+                                MarketState.opportunity_theme_items,
+                                _opportunity_theme_card,
+                            ),
+                            columns=rx.breakpoints(initial="1", md="2", xl="3"),
+                            spacing="2",
+                            width="100%",
+                            margin_top="0.5rem",
+                        ),
+                        width="100%",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    MarketState.trend_ranking_items.length() > 0,
+                    rx.vstack(
+                        rx.foreach(MarketState.trend_ranking_items, _trend_rank_row),
+                        width="100%",
+                        spacing="1",
+                    ),
+                    rx.text("ランキングを算出できません。", size="2", color="gray"),
+                ),
+                width="100%",
+                align_items="start",
+                spacing="3",
+            ),
+            width="100%",
+        ),
+        width="100%",
+    )
+
+
+def _strategy_regime_panel() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.vstack(
+                rx.text("戦略レジーム", size="2", weight="bold"),
+                rx.hstack(
+                    rx.badge(
+                        MarketState.strategy_regime.label,
+                        color_scheme=_strategy_color(MarketState.strategy_regime.key),
+                        size="3",
+                    ),
+                    rx.badge(
+                        "リスク枠 " + MarketState.strategy_regime.risk_budget,
+                        color_scheme="gray",
+                        variant="surface",
+                    ),
+                    spacing="2",
+                    wrap="wrap",
+                ),
+                rx.text(
+                    MarketState.strategy_regime.rationale,
+                    size="2",
+                    color=rx.color("gray", 11),
+                ),
+                rx.text(
+                    "無効化: " + MarketState.strategy_regime.invalidation,
+                    size="1",
+                    color=rx.color("gray", 10),
+                ),
+                align_items="start",
+                spacing="2",
+                flex="1",
+            ),
+            rx.grid(
+                rx.foreach(MarketState.market_timeframes, _timeframe_card),
+                columns=rx.breakpoints(initial="1", md="3"),
+                spacing="2",
+                flex="2",
+            ),
+            align_items="start",
+            width="100%",
+            spacing="3",
+        ),
+        rx.cond(
+            MarketState.important_levels.length() > 0,
+            rx.box(
+                rx.text("重要水準", weight="bold", size="2", margin_top="0.75rem"),
+                rx.grid(
+                    rx.foreach(MarketState.important_levels, _important_level_card),
+                    columns=rx.breakpoints(initial="1", md="2"),
+                    spacing="2",
+                    width="100%",
+                    margin_top="0.5rem",
+                ),
+            ),
+            rx.fragment(),
+        ),
+        rx.cond(
+            MarketState.market_drivers.length() > 0,
+            rx.box(
+                rx.text("判断材料", weight="bold", size="2", margin_top="0.75rem"),
+                rx.grid(
+                    rx.foreach(MarketState.market_drivers, _market_driver_row),
+                    columns=rx.breakpoints(initial="1", md="2", xl="3"),
+                    spacing="2",
+                    width="100%",
+                    margin_top="0.5rem",
+                ),
+            ),
+            rx.fragment(),
+        ),
+        width="100%",
+        padding="0.75rem",
+        border=f"1px solid {rx.color('green', 5)}",
+        border_radius="8px",
+        bg=rx.color("green", 2),
+    )
+
+
+def _timeframe_card(item) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.text(item.label, weight="bold", size="1"),
+                rx.spacer(),
+                rx.badge(
+                    item.confidence, color_scheme=_confidence_color(item.confidence)
+                ),
+                width="100%",
+            ),
+            rx.hstack(
+                rx.badge(item.market_tone, color_scheme=_tone_color(item.market_tone)),
+                rx.badge(item.direction_label, color_scheme="gray", variant="surface"),
+                spacing="1",
+                wrap="wrap",
+            ),
+            rx.text("score " + item.score_str, size="1", color=rx.color("gray", 10)),
+            align_items="start",
+            spacing="1",
+        ),
+        padding="0.55rem",
+    )
+
+
+def _important_level_card(item) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.text(item.label, weight="bold", size="2"),
+                rx.text(item.ticker, size="1", color=rx.color("gray", 10)),
+                rx.spacer(),
+                rx.badge(
+                    item.behavior_label, color_scheme=_behavior_color(item.behavior)
+                ),
+                width="100%",
+                align_items="center",
+            ),
+            rx.text(
+                "終値 " + item.close_str + " / 1日 " + item.change_1d_str,
+                size="1",
+                color=rx.color("gray", 10),
+            ),
+            rx.text(
+                "支持 "
+                + item.support_str
+                + " / 下値 "
+                + item.lower_support_str
+                + " / 抵抗 "
+                + item.resistance_str,
+                size="1",
+                color=rx.color("gray", 10),
+            ),
+            rx.text(
+                "20MA "
+                + item.ma20_str
+                + " / 50MA "
+                + item.ma50_str
+                + " / 200MA "
+                + item.ma200_str,
+                size="1",
+                color=rx.color("gray", 9),
+            ),
+            align_items="start",
+            spacing="1",
+        ),
+        padding="0.55rem",
+    )
+
+
+def _market_driver_row(item) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.text(item.label, weight="bold", size="2"),
+                rx.text(item.value_str, size="2", weight="bold"),
+                rx.spacer(),
+                rx.badge(item.interpretation, color_scheme="gray", variant="surface"),
+                width="100%",
+                align_items="center",
+            ),
+            rx.text(
+                "5日 " + item.change_5d_str + " / 20日 " + item.change_20d_str,
+                size="1",
+                color=rx.color("gray", 10),
+            ),
+            align_items="start",
+            spacing="1",
+        ),
+        padding="0.55rem",
+    )
+
+
+def _trend_rank_row(item) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.badge("#" + item.rank.to_string(), color_scheme="blue", width="48px"),
+            rx.vstack(
+                rx.hstack(
+                    rx.text(item.theme, weight="bold", size="2"),
+                    rx.badge(
+                        item.parent_sector, color_scheme="gray", variant="surface"
+                    ),
+                    rx.cond(
+                        item.proxy_ticker != "",
+                        rx.badge(
+                            item.proxy_ticker, color_scheme="cyan", variant="surface"
+                        ),
+                        rx.fragment(),
+                    ),
+                    spacing="2",
+                    wrap="wrap",
+                ),
+                rx.text(
+                    "1週 "
+                    + item.performance_1w_str
+                    + " / 1ヶ月 "
+                    + item.performance_1m_str
+                    + " / 6ヶ月 "
+                    + item.performance_6m_str
+                    + " / Flow "
+                    + item.flow_score_str,
+                    size="1",
+                    color=rx.color("gray", 10),
+                ),
+                rx.cond(
+                    item.option_summary != "",
+                    rx.text(item.option_summary, size="1", color=rx.color("gray", 10)),
+                    rx.fragment(),
+                ),
+                align_items="start",
+                spacing="1",
+                flex="1",
+            ),
+            rx.vstack(
+                rx.badge(
+                    item.total_score_str,
+                    color_scheme=_score_color(item.total_score),
+                    variant="surface",
+                ),
+                rx.badge(
+                    _option_label(item.option_asymmetry),
+                    color_scheme=_option_color(item.option_asymmetry),
+                    variant="surface",
+                ),
+                align_items="end",
+                spacing="1",
+            ),
+            width="100%",
+            align_items="start",
+            spacing="3",
+        ),
+        width="100%",
+        padding_y="0.55rem",
+        border_bottom=f"1px solid {rx.color('gray', 3)}",
+    )
+
+
+def _opportunity_theme_card(item) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.text(item.theme, weight="bold", size="2", flex="1"),
+                rx.badge(item.label, color_scheme="green", variant="surface"),
+                width="100%",
+                align_items="center",
+            ),
+            rx.text(item.reason, size="1", color=rx.color("gray", 10)),
+            rx.text(
+                "無効化: " + item.invalidation,
+                size="1",
+                color=rx.color("gray", 9),
+            ),
+            rx.hstack(
+                rx.badge("rank " + item.rank.to_string(), color_scheme="blue"),
+                rx.badge(item.opportunity_score_str, color_scheme="green"),
+                rx.badge(
+                    _option_label(item.option_asymmetry),
+                    color_scheme=_option_color(item.option_asymmetry),
+                    variant="surface",
+                ),
+                spacing="1",
+                wrap="wrap",
+            ),
+            align_items="start",
+            spacing="1",
+        ),
+        padding="0.65rem",
     )
 
 
@@ -982,6 +1312,74 @@ def _nikkei_score_color(score) -> rx.Var:
         score >= 0.65,
         "green",
         rx.cond(score >= 0.4, "orange", "gray"),
+    )
+
+
+def _strategy_color(key) -> rx.Var:
+    return rx.cond(
+        key == "aggressive_trend_following",
+        "green",
+        rx.cond(
+            key == "trend_following",
+            "blue",
+            rx.cond(
+                key == "mean_reversion",
+                "orange",
+                rx.cond(key == "aggressive_mean_reversion", "red", "gray"),
+            ),
+        ),
+    )
+
+
+def _tone_color(tone) -> rx.Var:
+    return rx.cond(
+        tone == "強気",
+        "green",
+        rx.cond(tone == "弱気", "red", "gray"),
+    )
+
+
+def _behavior_color(behavior) -> rx.Var:
+    return rx.cond(
+        behavior == "breakout",
+        "green",
+        rx.cond(
+            behavior == "support_bounce",
+            "blue",
+            rx.cond(
+                behavior == "breakdown",
+                "red",
+                rx.cond(behavior == "resistance", "orange", "gray"),
+            ),
+        ),
+    )
+
+
+def _option_label(value) -> rx.Var:
+    return rx.cond(
+        value == "upside_squeeze_candidate",
+        "上方向GEX",
+        rx.cond(
+            value == "downside_vol_expansion",
+            "下方向警戒",
+            rx.cond(
+                value == "pinning_resistance",
+                "抵抗/Pin",
+                rx.cond(value == "pinning", "中立/Pin", "Options未取得"),
+            ),
+        ),
+    )
+
+
+def _option_color(value) -> rx.Var:
+    return rx.cond(
+        value == "upside_squeeze_candidate",
+        "green",
+        rx.cond(
+            value == "downside_vol_expansion",
+            "red",
+            rx.cond(value == "pinning_resistance", "orange", "gray"),
+        ),
     )
 
 

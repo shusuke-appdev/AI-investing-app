@@ -13,8 +13,8 @@
 | `GEMINI_API_KEY` | AI機能には必須 | Gemini による市況・銘柄・ポートフォリオ分析 |
 | `GEMINI_MODEL_NAME` / `GEMINI_MODEL` | 任意 | Geminiモデル名の上書き。未設定時は `gemini-3.5-flash` |
 | `FINNHUB_API_KEY` | 推奨 | 企業ニュース、決算、オプション補完データ |
-| `MARKETDATA_TOKEN` | 米国オプション補完時に必須 | MarketData.appのSPY / QQQ / IWMオプションチェーン、IV、Greeks、OI、Volume |
-| `MARKETDATA_OPTIONS_MODE` | 任意 | `off` / `shadow` / `preferred`。未設定時は`off` |
+| `MARKETDATA_TOKEN` | 米国オプション分析に推奨 | MarketData.appのSPY / QQQ / IWMおよび主要テーマETF proxyのオプションチェーン、IV、Greeks、OI、Volume |
+| `MARKETDATA_OPTIONS_MODE` | 任意 | `off` / `shadow` / `preferred`。トークン設定済みの未設定時は`preferred`、トークン未設定時は`off` |
 | `JQUANTS_API_KEY` | 日本株分析では任意 | 日本株の企業マスター・財務情報。Freeの遅延価格系列は汎用現在値・履歴に使わない |
 | `EDINET_API_KEY` | 日本株財務では推奨 | EDINET からの財務情報取得 |
 | `NIKKEI_JSF_SHORT_BALANCE_BILLION` | 任意 | 日経6条件の条件1を直接判定するための、日証金合計売り残（億円） |
@@ -113,13 +113,13 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - 「市場監視」には、IBD式市場状態、状態別プレイブック、総合市場監視、テーマモメンタム、テーマランキング、オプション分析、市場の歪み検知を統合しています。各段階は「取得中」「最新」「キャッシュ」「一部取得」「取得失敗」を表示します
 - IBD式市場状態は無料データによる近似です。公式IBD Market Pulseではなく、SPY / Nasdaq 100 の売り抜け日、ラリー試行、FTD、移動平均割れから分類します
 - Market Recap では「＋」ボタンから任意の追加分析項目を入力できます。入力内容はプロンプトに渡され、現在の市場状態、フロー、ファンダメンタル、反証条件に結び付けて分析されます
-- 「詳細更新」では、ETFリーダーシップproxyを市場全体の確認、米国セクターETFと日本テーマバスケットの資金流入判定を具体候補の抽出として扱います。これは売買命令ではなく、市場分析の入力です
+- 「詳細更新」では、ETFリーダーシップproxyを市場全体の確認、選択市場ごとのセクター/テーマ資金流入判定を具体候補の抽出として扱います。US表示では日本株テーマを混ぜず、JP表示では日本株条件を扱います。これは売買命令ではなく、市場分析の入力です
 - 日経平均上昇の6条件は、無料で自動取得できるデータを優先し、直接データがない条件は `データ不足` または `代理達成/代理未達` として表示します。上記の任意環境変数を設定すると、一部条件を直接値として評価できます
 - AI Market Recap は米国市場を主軸にし、日本市場は米国市場との相対強弱、日経6条件、ドル円・原油・資金流入の文脈で補助的に扱います
 - yfinanceオプションデータにGreeks/Gammaがない場合、GEXは非表示になります。UIの `data_quality` バッジと品質警告を確認してください
-- MarketData.appは `/market-watch` の明示的なSPY / QQQ / IWMオプション更新時だけ利用します。個別株分析、起動時、市場マイクロストラクチャー更新からは呼び出さず、APIクレジット消費を抑えます
-- Free/Trial導入時は `MARKETDATA_OPTIONS_MODE=shadow` を使います。画面表示と分析は従来のyfinance結果を維持し、MarketData.appの取得可否・基準時刻・契約既定mode・クレジット情報を品質警告へ記録します
-- `MARKETDATA_OPTIONS_MODE=preferred` は、MarketData.appを優先し、データなし・認証失敗・必須列不足時にyfinanceへ戻します。Free/Trialの遅延データを確認せずに切り替えないでください
+- MarketData.appは `/market-watch` の明示的なOptions更新、統合トレンドランキングのテーマETFオプション更新、個別銘柄分析の所属テーマETFオプション確認時に利用します。起動時・単なる描画時・市場マイクロストラクチャー更新からは呼び出さず、APIクレジット消費を抑えます
+- 標準運用は `MARKETDATA_OPTIONS_MODE=preferred` です。MarketData.appを優先し、204 no data、認証/HTTP/API失敗、必須列不足、トークン未設定時だけyfinance/cacheへ戻します。トークン未設定のローカル環境は「MarketData未設定」として扱い、アプリ全体の失敗にはしません
+- `MARKETDATA_OPTIONS_MODE=shadow` は比較検証用として残します。画面表示と分析は従来のyfinance結果を維持し、MarketData.appの取得可否・基準時刻・契約既定mode・クレジット情報を品質警告へ記録します
 - MarketData.app経路では0DTE、`strikeLimit=100`、標準契約、必要列だけを取得します。GEXのCall正・Put負は実ディーラー建玉を直接観測したものではなく、簡易な符号仮定です
 - MarketData.appの鮮度modeはAPIへ強制指定せず、アカウント契約の既定値を使います。リアルタイムとは断定せず、各カードの`updated`由来の基準時刻を確認してください
 - キャッシュ由来のデータは `source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` としてUI/AIへ渡します。`stale_cache` 表示がある場合は、外部API失敗時に最後の成功データを使っています

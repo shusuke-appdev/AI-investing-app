@@ -113,6 +113,12 @@ class MarketContext:
     momentum: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     monitor: dict[str, Any] = field(default_factory=dict)
     market_distortions: dict[str, Any] = field(default_factory=dict)
+    trend_ranking: dict[str, Any] = field(default_factory=dict)
+    opportunity_themes: dict[str, Any] = field(default_factory=dict)
+    important_levels: dict[str, Any] = field(default_factory=dict)
+    market_timeframes: dict[str, Any] = field(default_factory=dict)
+    strategy_regime: dict[str, Any] = field(default_factory=dict)
+    market_driver_monitor: dict[str, Any] = field(default_factory=dict)
     japan_conditions: dict[str, Any] = field(default_factory=dict)
     sector_flow: dict[str, Any] = field(default_factory=dict)
     credit_stress: dict[str, Any] = field(default_factory=dict)
@@ -148,6 +154,12 @@ class MarketContext:
             "momentum": self.momentum,
             "monitor": self.monitor,
             "market_distortions": self.market_distortions,
+            "trend_ranking": self.trend_ranking,
+            "opportunity_themes": self.opportunity_themes,
+            "important_levels": self.important_levels,
+            "market_timeframes": self.market_timeframes,
+            "strategy_regime": self.strategy_regime,
+            "market_driver_monitor": self.market_driver_monitor,
             "japan_conditions": self.japan_conditions,
             "sector_flow": self.sector_flow,
             "credit_stress": self.credit_stress,
@@ -216,6 +228,12 @@ class MarketContext:
             momentum=value.get("momentum") or {},
             monitor=value.get("monitor") or {},
             market_distortions=value.get("market_distortions") or {},
+            trend_ranking=value.get("trend_ranking") or {},
+            opportunity_themes=value.get("opportunity_themes") or {},
+            important_levels=value.get("important_levels") or {},
+            market_timeframes=value.get("market_timeframes") or {},
+            strategy_regime=value.get("strategy_regime") or {},
+            market_driver_monitor=value.get("market_driver_monitor") or {},
             japan_conditions=value.get("japan_conditions") or {},
             sector_flow=value.get("sector_flow") or {},
             credit_stress=value.get("credit_stress") or {},

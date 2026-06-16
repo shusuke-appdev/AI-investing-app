@@ -25,13 +25,14 @@ def test_sector_flow_ranks_confirmed_inflow(monkeypatch):
 
     monkeypatch.setattr(service, "get_stock_data", fake_stock_data)
 
-    result = service.build_sector_flow_context()
+    result = service.build_sector_flow_context("US")
 
     us_top = result["markets"]["US"]["leaders"][0]
     assert us_top["theme"] == "AI"
     assert us_top["flow_score"] > 25
     assert us_top["action"] in {"乗る候補", "押し目待ち"}
     assert result["primary_market"] == "US"
+    assert "JP" not in result["markets"]
 
 
 def test_cross_market_context_keeps_us_primary():

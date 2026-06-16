@@ -10,6 +10,8 @@ from typing import Any
 import pandas as pd
 
 from src.market_data import get_stock_data, get_stock_info
+from src.services.trend_ranking_service import find_theme_rankings
+from src.theme_taxonomy import get_theme_profile
 from src.themes_config import get_themes
 
 THEME_TICKER_LIMIT = 5
@@ -161,6 +163,8 @@ def evaluate_stock_sector_theme_context(
     benchmark_price_df: pd.DataFrame | None = None,
     history_provider: Callable[[str, str], pd.DataFrame] | None = None,
     info_provider: Callable[..., dict[str, Any]] | None = None,
+    include_market_ranking: bool = False,
+    include_theme_options: bool = False,
 ) -> dict[str, Any]:
     """Build the sector/theme context used by the individual stock page and AI."""
 
@@ -213,12 +217,32 @@ def evaluate_stock_sector_theme_context(
         if stock_fundamental is None or stock_flow is None
         else "weak"
     )
+    profile = _primary_theme_profile(market_type, themes)
+    ranking_context = (
+        _stock_theme_ranking_context(
+            market_type,
+            themes,
+            include_options=include_theme_options,
+        )
+        if include_market_ranking
+        else {}
+    )
+    best_ranking = (
+        (ranking_context.get("items") or [{}])[0]
+        if isinstance(ranking_context, dict)
+        else {}
+    )
 
     return {
         "ticker": normalized,
         "sector": str(stock_info.get("sector") or ""),
         "industry": str(stock_info.get("industry") or ""),
         "themes": themes,
+        "parent_sector": profile.parent_sector,
+        "proxy_ticker": profile.proxy_ticker,
+        "option_proxy_ticker": best_ranking.get("option_proxy_ticker")
+        or profile.option_proxy_ticker,
+        "representative_tickers": list(profile.representative_tickers),
         "stock_fundamental_score": _round_optional(stock_fundamental),
         "stock_flow_score": _round_optional(stock_flow),
         "stock_fundamental_score_display": _score_display(stock_fundamental),
@@ -231,6 +255,22 @@ def evaluate_stock_sector_theme_context(
             for theme in themes
             if theme in theme_diagnostics
         ],
+        "trend_ranking": ranking_context,
+        "best_theme_rank": ranking_context.get("best_rank")
+        if isinstance(ranking_context, dict)
+        else None,
+        "best_theme_rank_points": ranking_context.get("best_rank_points", 0)
+        if isinstance(ranking_context, dict)
+        else 0,
+        "ranking_summary": ranking_context.get("summary", "")
+        if isinstance(ranking_context, dict)
+        else "",
+        "theme_option_signal": best_ranking.get("option_asymmetry", "unavailable"),
+        "theme_option_score": best_ranking.get("option_score"),
+        "theme_option_summary": best_ranking.get("option_summary", ""),
+        "theme_option_source": best_ranking.get("option_source", ""),
+        "theme_option_data_as_of": best_ranking.get("option_data_as_of", ""),
+        "theme_option_data_quality": best_ranking.get("option_data_quality", ""),
         "rationale": _stock_context_rationale(
             combined_rating,
             fundamentals_are_strong,
@@ -301,6 +341,34 @@ def _evaluate_selected_theme_diagnostics(
             )
         )
     return diagnostics
+
+
+def _primary_theme_profile(market_type: str, themes: list[str]):
+    theme = themes[0] if themes else ""
+    tickers = get_themes(market_type).get(theme, [])
+    return get_theme_profile(theme, market_type, tickers=tickers)
+
+
+def _stock_theme_ranking_context(
+    market_type: str,
+    themes: list[str],
+    *,
+    include_options: bool,
+) -> dict[str, Any]:
+    try:
+        return find_theme_rankings(
+            market_type,
+            themes,
+            include_options=include_options and market_type == "US",
+        )
+    except Exception as exc:
+        return {
+            "items": [],
+            "best_rank": None,
+            "best_rank_points": 0,
+            "summary": f"統合トレンドランキングは取得できません: {exc}",
+            "quality_warnings": [str(exc)],
+        }
 
 
 def _fundamental_score(info: dict[str, Any]) -> float | None:

@@ -143,3 +143,51 @@ def test_stock_context_exposes_unavailable_score_display(monkeypatch):
     assert context["combined_rating"] == "unavailable"
     assert context["stock_fundamental_score"] is None
     assert context["stock_fundamental_score_display"] == "算出不可"
+
+
+def test_stock_sector_theme_context_can_include_trend_rank_and_theme_options(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        diagnostics,
+        "get_themes",
+        lambda market_type: {"AI半導体": ["AAA", "AAB"]},
+    )
+    monkeypatch.setattr(
+        diagnostics,
+        "find_theme_rankings",
+        lambda market_type, themes, include_options=False: {
+            "items": [
+                {
+                    "theme": "AI半導体",
+                    "rank": 2,
+                    "rank_points": 10,
+                    "option_proxy_ticker": "SMH",
+                    "option_asymmetry": "upside_squeeze_candidate",
+                    "option_score": 12.0,
+                    "option_summary": "MarketData option signal.",
+                    "option_source": "marketdata.app",
+                    "option_data_quality": "available",
+                }
+            ],
+            "best_rank": 2,
+            "best_rank_points": 10,
+            "summary": "AI半導体 は統合トレンドランキング 2位。",
+        },
+    )
+
+    context = diagnostics.evaluate_stock_sector_theme_context(
+        "AAA",
+        {"sector": "Technology", "industry": "Semiconductors"},
+        stock_price_df=_history(100, 120),
+        benchmark_price_df=_history(100, 110),
+        include_market_ranking=True,
+        include_theme_options=True,
+    )
+
+    assert context["parent_sector"] == "情報技術"
+    assert context["best_theme_rank"] == 2
+    assert context["best_theme_rank_points"] == 10
+    assert context["option_proxy_ticker"] == "SMH"
+    assert context["theme_option_signal"] == "upside_squeeze_candidate"
+    assert context["theme_option_source"] == "marketdata.app"

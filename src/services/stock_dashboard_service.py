@@ -195,6 +195,8 @@ def build_stock_dashboard_context(
                 benchmark_price_df=benchmark_df,
                 history_provider=inputs.history,
                 info_provider=inputs.info,
+                include_market_ranking=True,
+                include_theme_options=not normalized_ticker.endswith(".T"),
             )
         ),
         {},

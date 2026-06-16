@@ -22,7 +22,7 @@ def _monitor_payload():
 
 def _sector_flow_payload():
     return {
-        "summary": "米国: 情報技術(+50.0) / 日本: 半導体製造装置(+30.0)",
+        "summary": "米国: 情報技術(+50.0)",
         "markets": {
             "US": {
                 "leaders": [
@@ -32,17 +32,6 @@ def _sector_flow_payload():
                         "confidence": "高",
                         "continuation": "高",
                         "action": "乗る候補",
-                    }
-                ]
-            },
-            "JP": {
-                "leaders": [
-                    {
-                        "theme": "半導体製造装置",
-                        "flow_score": 30.0,
-                        "confidence": "中",
-                        "continuation": "中",
-                        "action": "押し目待ち",
                     }
                 ]
             },
@@ -120,7 +109,11 @@ def _flow_monitor_payload():
 
 def _patch_new_market_layers(monkeypatch):
     monkeypatch.setattr(service, "get_stock_data", lambda *args, **kwargs: None)
-    monkeypatch.setattr(service, "build_sector_flow_context", _sector_flow_payload)
+    monkeypatch.setattr(
+        service,
+        "build_sector_flow_context",
+        lambda market_type="US": _sector_flow_payload(),
+    )
     monkeypatch.setattr(
         service,
         "build_credit_stress_monitor",
@@ -142,6 +135,67 @@ def _patch_new_market_layers(monkeypatch):
         lambda sector_flow: {
             "stance": "US flow leadership remains dominant; Japan is supplemental.",
             "relative_flow_score": -20.0,
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "build_trend_ranking_context",
+        lambda market_type, **kwargs: {
+            "items": [
+                {
+                    "rank": 1,
+                    "theme": "AI",
+                    "parent_sector": "情報技術",
+                    "proxy_ticker": "SMH",
+                    "option_asymmetry": "upside_squeeze_candidate"
+                    if kwargs.get("include_options")
+                    else "unavailable",
+                    "total_score": 55.0,
+                    "rank_points": 10,
+                }
+            ],
+            "summary": "首位は AI。",
+            "quality_warnings": [],
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "build_opportunity_themes",
+        lambda trend_ranking, market_distortions=None: {
+            "items": [
+                {
+                    "theme": "AI",
+                    "label": "投資妙味/上方向非対称",
+                    "opportunity_score": 60,
+                    "reason": "統合順位 1位",
+                }
+            ],
+            "summary": "注目候補は AI。",
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "build_market_strategy_context",
+        lambda market_type, **kwargs: {
+            "important_levels": {"items": [], "summary": "levels"},
+            "market_timeframes": {
+                "items": [
+                    {
+                        "key": "current",
+                        "label": "現在時点",
+                        "direction_label": "上昇相場",
+                        "market_tone": "強気",
+                        "score": 0.5,
+                    }
+                ],
+                "summary": "現在時点: 上昇相場",
+            },
+            "strategy_regime": {
+                "key": "trend_following",
+                "label": "順張り",
+                "risk_budget": "30-70%",
+            },
+            "market_driver_monitor": {"items": [], "summary": "drivers"},
         },
     )
     monkeypatch.setattr(
@@ -264,13 +318,19 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     assert context.flow_alignment["etf_leader"]["ticker"] == "SMH"
     assert context.detail_stages["medium"]["status"] == "live"
     assert context.detail_stages["high"]["status"] == "live"
-    assert context.japan_conditions["score_label"] == "中立"
+    assert context.japan_conditions == {}
+    assert context.cross_market == {}
+    assert context.trend_ranking["items"][0]["theme"] == "AI"
+    assert context.opportunity_themes["items"][0]["theme"] == "AI"
+    assert context.strategy_regime["label"] == "順張り"
     assert "Market environment" in service.format_market_context_for_ai(context)
     assert "NVDA, MSFT" in service.format_market_context_for_ai(context)
     assert "ETF proxy / sector-flow role split" in service.format_market_context_for_ai(
         context
     )
-    assert "Nikkei upside six conditions" in service.format_market_context_for_ai(
+    assert "Integrated trend ranking" in service.format_market_context_for_ai(context)
+    assert "Strategy regime" in service.format_market_context_for_ai(context)
+    assert "Nikkei upside six conditions" not in service.format_market_context_for_ai(
         context
     )
     assert "[Data provenance]" in service.format_market_context_for_ai(context)
@@ -412,7 +472,7 @@ def test_market_details_reuses_supplied_context(monkeypatch):
     assert context.market_data == base.market_data
     assert context.options.items == base.options.items
     assert context.monitor["distribution_spy"]["count"] == 2
-    assert context.cross_market["relative_flow_score"] == -20.0
+    assert context.cross_market == {}
 
 
 def test_market_detail_stages_can_update_sequentially(monkeypatch):
@@ -472,10 +532,33 @@ def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
             "etf_role": "市場全体の確認",
             "sector_role": "具体候補",
         },
-        japan_conditions=_japan_conditions_payload(),
-        cross_market={
-            "stance": "US flow leadership remains dominant; Japan is supplemental.",
-            "relative_flow_score": -20.0,
+        trend_ranking={"items": [{"rank": 1, "theme": "AI", "total_score": 50}]},
+        opportunity_themes={
+            "items": [
+                {
+                    "theme": "AI",
+                    "label": "上昇候補",
+                    "opportunity_score": 55,
+                    "reason": "統合順位 1位",
+                }
+            ]
+        },
+        strategy_regime={
+            "key": "trend_following",
+            "label": "順張り",
+            "risk_budget": "30-70%",
+        },
+        market_timeframes={
+            "items": [
+                {
+                    "key": "current",
+                    "label": "現在時点",
+                    "direction_label": "上昇相場",
+                    "market_tone": "強気",
+                    "score": 0.5,
+                    "confidence": "中",
+                }
+            ]
         },
     )
     captured = {}
@@ -532,8 +615,11 @@ def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
     assert "Market environment: Bullish" in captured["advanced"]
     assert "Credit stress velocity" in captured["advanced"]
     assert "Leadership flow-pressure proxy" in captured["advanced"]
-    assert "US primary / Japan supplemental sector flow" in captured["advanced"]
+    assert "Sector/theme flow" in captured["advanced"]
     assert "ETF proxy / sector-flow role split" in captured["advanced"]
+    assert "Integrated trend ranking" in captured["advanced"]
+    assert "Strategy regime" in captured["advanced"]
+    assert "Nikkei upside six conditions" not in captured["advanced"]
 
 
 def test_market_ai_report_reports_gemini_unavailable():

@@ -95,6 +95,18 @@ class StockState(rx.State):
     sector_theme_flow_score_display: str = "算出不可"
     sector_theme_fundamental_advantage: bool = False
     sector_theme_flow_advantage: bool = False
+    sector_theme_parent_sector: str = ""
+    sector_theme_proxy_ticker: str = ""
+    sector_theme_option_proxy: str = ""
+    sector_theme_best_rank: str = ""
+    sector_theme_rank_points: str = ""
+    sector_theme_ranking_summary: str = ""
+    sector_theme_option_signal: str = ""
+    sector_theme_option_score: str = ""
+    sector_theme_option_summary: str = ""
+    sector_theme_option_source: str = ""
+    sector_theme_option_data_as_of: str = ""
+    sector_theme_option_data_quality: str = ""
     stock_signal_context: dict[str, Any] = {}
     data_status: list[dict[str, Any]] = []
     provenance: list[ProvenanceDisplay] = []
@@ -181,6 +193,42 @@ class StockState(rx.State):
             self.sector_theme_flow_advantage = bool(
                 self.sector_theme_context.get("flow_advantage", False)
             )
+            self.sector_theme_parent_sector = str(
+                self.sector_theme_context.get("parent_sector", "")
+            )
+            self.sector_theme_proxy_ticker = str(
+                self.sector_theme_context.get("proxy_ticker", "")
+            )
+            self.sector_theme_option_proxy = str(
+                self.sector_theme_context.get("option_proxy_ticker", "")
+            )
+            rank = self.sector_theme_context.get("best_theme_rank")
+            self.sector_theme_best_rank = "" if rank in (None, "") else str(rank)
+            self.sector_theme_rank_points = str(
+                self.sector_theme_context.get("best_theme_rank_points", 0)
+            )
+            self.sector_theme_ranking_summary = str(
+                self.sector_theme_context.get("ranking_summary", "")
+            )
+            self.sector_theme_option_signal = str(
+                self.sector_theme_context.get("theme_option_signal", "")
+            )
+            option_score = self.sector_theme_context.get("theme_option_score")
+            self.sector_theme_option_score = (
+                "" if option_score is None else f"{float(option_score):+.1f}"
+            )
+            self.sector_theme_option_summary = str(
+                self.sector_theme_context.get("theme_option_summary", "")
+            )
+            self.sector_theme_option_source = str(
+                self.sector_theme_context.get("theme_option_source", "")
+            )
+            self.sector_theme_option_data_as_of = str(
+                self.sector_theme_context.get("theme_option_data_as_of", "")
+            )
+            self.sector_theme_option_data_quality = str(
+                self.sector_theme_context.get("theme_option_data_quality", "")
+            )
             self.stock_signal_context = plain_state_value(context.stock_signal_context)
             self.data_status = plain_state_value(context.data_status)
             self.provenance = provenance_display_items(context.provenance)
@@ -223,6 +271,18 @@ class StockState(rx.State):
             self.sector_theme_flow_score_display = "算出不可"
             self.sector_theme_fundamental_advantage = False
             self.sector_theme_flow_advantage = False
+            self.sector_theme_parent_sector = ""
+            self.sector_theme_proxy_ticker = ""
+            self.sector_theme_option_proxy = ""
+            self.sector_theme_best_rank = ""
+            self.sector_theme_rank_points = ""
+            self.sector_theme_ranking_summary = ""
+            self.sector_theme_option_signal = ""
+            self.sector_theme_option_score = ""
+            self.sector_theme_option_summary = ""
+            self.sector_theme_option_source = ""
+            self.sector_theme_option_data_as_of = ""
+            self.sector_theme_option_data_quality = ""
             self.stock_signal_context = {}
             self.data_status = []
             self.provenance = []

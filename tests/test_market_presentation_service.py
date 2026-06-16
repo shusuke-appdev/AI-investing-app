@@ -66,6 +66,66 @@ def test_market_display_context_formats_market_context_for_reflex_state():
             "etf_role": "市場全体の確認",
             "sector_role": "具体候補",
         },
+        strategy_regime={
+            "key": "trend_following",
+            "label": "順張り",
+            "risk_budget": "30-70%",
+            "rationale": "test",
+        },
+        market_timeframes={
+            "items": [
+                {
+                    "key": "current",
+                    "label": "現在時点",
+                    "score": 0.5,
+                    "market_tone": "強気",
+                    "direction_label": "上昇相場",
+                    "confidence": "中",
+                }
+            ]
+        },
+        important_levels={
+            "summary": "SPY breakout",
+            "items": [
+                {
+                    "label": "S&P 500",
+                    "ticker": "SPY",
+                    "close": 530.12,
+                    "support": 510.0,
+                    "resistance": 535.0,
+                    "behavior": "breakout",
+                    "behavior_label": "突破",
+                    "data_quality": "ok",
+                }
+            ],
+        },
+        trend_ranking={
+            "summary": "首位は AI半導体。",
+            "items": [
+                {
+                    "rank": 1,
+                    "theme": "AI半導体",
+                    "parent_sector": "情報技術",
+                    "proxy_ticker": "SMH",
+                    "option_proxy_ticker": "SMH",
+                    "total_score": 50.0,
+                    "rank_points": 10,
+                    "option_asymmetry": "upside_squeeze_candidate",
+                    "representative_tickers": ["NVDA"],
+                }
+            ],
+        },
+        opportunity_themes={
+            "summary": "注目候補は AI半導体。",
+            "items": [
+                {
+                    "theme": "AI半導体",
+                    "label": "投資妙味/上方向非対称",
+                    "opportunity_score": 60,
+                    "rank": 1,
+                }
+            ],
+        },
         detail_stages={
             "low": {
                 "key": "low",
@@ -94,4 +154,9 @@ def test_market_display_context_formats_market_context_for_reflex_state():
     assert display.bullish_distortions[0].tickers == ["NVDA", "MSFT"]
     assert display.sector_flow_groups[0].leaders[0].flow_score_str == "+50.0"
     assert display.flow_alignment.alignment_label == "整合"
+    assert display.strategy_regime.label == "順張り"
+    assert display.market_timeframes[0].direction_label == "上昇相場"
+    assert display.important_levels[0].behavior_label == "突破"
+    assert display.trend_ranking_items[0].option_asymmetry == "upside_squeeze_candidate"
+    assert display.opportunity_theme_items[0].theme == "AI半導体"
     assert display.detail_stages[0].status_label == "キャッシュ"

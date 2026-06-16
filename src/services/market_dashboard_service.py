@@ -35,6 +35,7 @@ from src.sector_flow_monitor import build_sector_flow_monitor
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.services.japan_market_conditions import build_japan_conditions_context
 from src.services.market_playbook import get_market_playbook
+from src.services.market_strategy_service import build_market_strategy_context
 from src.services.provenance_service import (
     market_high_provenance,
     market_medium_provenance,
@@ -45,6 +46,10 @@ from src.services.provenance_service import (
 from src.services.sector_flow_service import (
     build_cross_market_context,
     build_sector_flow_context,
+)
+from src.services.trend_ranking_service import (
+    build_opportunity_themes,
+    build_trend_ranking_context,
 )
 from src.stock_data_provider import get_valuation_metrics
 
@@ -198,7 +203,7 @@ def build_market_medium_context(
         return build_market_monitor_context(options.items)
 
     def sector_flow_task() -> dict[str, Any]:
-        return build_sector_flow_context()
+        return build_sector_flow_context(market_type)
 
     def flow_monitor_task() -> dict[str, Any]:
         return build_sector_flow_monitor(market_type)
@@ -218,15 +223,23 @@ def build_market_medium_context(
         }
     sector_flow = results.get("sector_flow") or base.sector_flow
     flow_monitor = results.get("flow_monitor") or base.flow_monitor
-    japan_conditions = _safe_call(
-        lambda: build_japan_conditions_context(base.market_data, sector_flow),
-        base.japan_conditions,
-        errors,
+    japan_conditions = (
+        _safe_call(
+            lambda: build_japan_conditions_context(base.market_data, sector_flow),
+            base.japan_conditions,
+            errors,
+        )
+        if market_type == "JP"
+        else {}
     )
-    cross_market = _safe_call(
-        lambda: build_cross_market_context(sector_flow),
-        base.cross_market,
-        errors,
+    cross_market = (
+        _safe_call(
+            lambda: build_cross_market_context(sector_flow),
+            base.cross_market,
+            errors,
+        )
+        if market_type == "JP"
+        else {}
     )
     ibd_regime = results.get("ibd_regime") or base.ibd_regime
     regime_playbook = (
@@ -250,6 +263,104 @@ def build_market_medium_context(
         volatility_sentiment.get("volatility_regime") or base.volatility_regime
     )
     sentiment = volatility_sentiment.get("sentiment") or base.sentiment
+    trend_ranking = _safe_call(
+        lambda: build_trend_ranking_context(
+            market_type,
+            sector_flow=sector_flow,
+            distortions=base.market_distortions,
+            include_options=False,
+        ),
+        base.trend_ranking,
+        errors,
+    )
+    strategy_bundle = _safe_call(
+        lambda: build_market_strategy_context(
+            market_type,
+            options=options.items,
+            ibd_regime=ibd_regime,
+            evaluation=evaluation,
+            volatility_regime=volatility_regime,
+            credit_stress=base.credit_stress,
+            trend_ranking=trend_ranking,
+        ),
+        {},
+        errors,
+    )
+    data_updates = [
+        DataResult(
+            name="market_details_medium",
+            source="market_dashboard_service",
+            fetched_at=_utc_now(),
+            is_partial=bool(errors),
+            error="; ".join(errors) if errors else "",
+            cache_status="live",
+        ),
+        DataResult(
+            name="ibd_market_regime",
+            source="local_ohlcv_classification",
+            fetched_at=_utc_now(),
+            is_partial=not bool(ibd_regime)
+            or bool(ibd_regime.get("quality_warnings", [])),
+            error="; ".join(ibd_regime.get("quality_warnings", []))
+            if ibd_regime
+            else "",
+            cache_status="computed",
+        ),
+        DataResult(
+            name="sector_flow",
+            source="sector_flow_service",
+            fetched_at=_utc_now(),
+            is_partial=not bool(sector_flow),
+            cache_status="live",
+        ),
+        DataResult(
+            name="integrated_trend_ranking",
+            source="trend_ranking_service",
+            fetched_at=_utc_now(),
+            is_partial=not bool(trend_ranking.get("items")),
+            error="; ".join(trend_ranking.get("quality_warnings", [])),
+            cache_status="computed",
+        ),
+        DataResult(
+            name="market_strategy_regime",
+            source="market_strategy_service",
+            fetched_at=_utc_now(),
+            is_partial=not bool(strategy_bundle.get("strategy_regime")),
+            cache_status="computed",
+        ),
+        DataResult(
+            name="flow_monitor",
+            source=flow_monitor.get("source", ""),
+            fetched_at=_utc_now(),
+            is_partial=bool(flow_monitor.get("is_partial", False)),
+            error="; ".join(flow_monitor.get("warnings", [])),
+            cache_status="live",
+        ),
+        DataResult(
+            name="market_volatility_regime",
+            source=volatility_regime.get("source", ""),
+            fetched_at=_utc_now(),
+            is_stale=bool(volatility_regime.get("is_stale", False)),
+            is_partial=not bool(volatility_regime)
+            or volatility_regime.get("regime") == "unavailable",
+            error="; ".join(volatility_regime.get("warnings", [])),
+            cache_status="computed",
+        ),
+    ]
+    if market_type == "JP":
+        data_updates.append(
+            DataResult(
+                name="nikkei_conditions",
+                source="japan_market_conditions",
+                fetched_at=_utc_now(),
+                is_partial=not bool(japan_conditions)
+                or bool(japan_conditions.get("unavailable_count", 0)),
+                error="; ".join(japan_conditions.get("quality_warnings", []))
+                if japan_conditions
+                else "",
+                cache_status="live",
+            )
+        )
 
     context = MarketContext(
         market_type=market_type,
@@ -263,6 +374,12 @@ def build_market_medium_context(
         momentum=results.get("momentum") or base.momentum,
         monitor=results.get("monitor") or base.monitor,
         market_distortions=base.market_distortions,
+        trend_ranking=trend_ranking,
+        opportunity_themes=base.opportunity_themes,
+        important_levels=strategy_bundle.get("important_levels", {}),
+        market_timeframes=strategy_bundle.get("market_timeframes", {}),
+        strategy_regime=strategy_bundle.get("strategy_regime", {}),
+        market_driver_monitor=strategy_bundle.get("market_driver_monitor", {}),
         japan_conditions=japan_conditions,
         sector_flow=sector_flow,
         credit_stress=base.credit_stress,
@@ -273,64 +390,7 @@ def build_market_medium_context(
         sentiment=sentiment,
         top_risk_signposts=base.top_risk_signposts,
         fomo_scan=base.fomo_scan,
-        data_status=_replace_data_status(
-            base.data_status,
-            DataResult(
-                name="market_details_medium",
-                source="market_dashboard_service",
-                fetched_at=_utc_now(),
-                is_partial=bool(errors),
-                error="; ".join(errors) if errors else "",
-                cache_status="live",
-            ),
-            DataResult(
-                name="ibd_market_regime",
-                source="local_ohlcv_classification",
-                fetched_at=_utc_now(),
-                is_partial=not bool(ibd_regime)
-                or bool(ibd_regime.get("quality_warnings", [])),
-                error="; ".join(ibd_regime.get("quality_warnings", []))
-                if ibd_regime
-                else "",
-                cache_status="computed",
-            ),
-            DataResult(
-                name="sector_flow",
-                source="sector_flow_service",
-                fetched_at=_utc_now(),
-                is_partial=not bool(sector_flow),
-                cache_status="live",
-            ),
-            DataResult(
-                name="flow_monitor",
-                source=flow_monitor.get("source", ""),
-                fetched_at=_utc_now(),
-                is_partial=bool(flow_monitor.get("is_partial", False)),
-                error="; ".join(flow_monitor.get("warnings", [])),
-                cache_status="live",
-            ),
-            DataResult(
-                name="nikkei_conditions",
-                source="japan_market_conditions",
-                fetched_at=_utc_now(),
-                is_partial=not bool(japan_conditions)
-                or bool(japan_conditions.get("unavailable_count", 0)),
-                error="; ".join(japan_conditions.get("quality_warnings", []))
-                if japan_conditions
-                else "",
-                cache_status="live",
-            ),
-            DataResult(
-                name="market_volatility_regime",
-                source=volatility_regime.get("source", ""),
-                fetched_at=_utc_now(),
-                is_stale=bool(volatility_regime.get("is_stale", False)),
-                is_partial=not bool(volatility_regime)
-                or volatility_regime.get("regime") == "unavailable",
-                error="; ".join(volatility_regime.get("warnings", [])),
-                cache_status="computed",
-            ),
-        ),
+        data_status=_replace_data_status(base.data_status, *data_updates),
         provenance=_merge_provenance(
             base.provenance,
             market_medium_provenance(
@@ -352,6 +412,11 @@ def build_market_medium_context(
             base.quality_warnings,
             options.quality_warnings,
             sector_flow.get("quality_warnings", []),
+            trend_ranking.get("quality_warnings", []),
+            strategy_bundle.get("important_levels", {}).get("quality_warnings", []),
+            strategy_bundle.get("market_driver_monitor", {}).get(
+                "quality_warnings", []
+            ),
             flow_monitor.get("warnings", []),
             ibd_regime.get("quality_warnings", []) if ibd_regime else [],
             japan_conditions.get("quality_warnings", []) if japan_conditions else [],
@@ -428,6 +493,33 @@ def build_market_high_context(
         if market_type == "US"
         else {}
     )
+    trend_ranking = _safe_call(
+        lambda: build_trend_ranking_context(
+            market_type,
+            sector_flow=base.sector_flow,
+            distortions=market_distortions,
+            include_options=False,
+        ),
+        base.trend_ranking,
+        errors,
+    )
+    opportunity_themes = build_opportunity_themes(
+        trend_ranking,
+        market_distortions=market_distortions,
+    )
+    strategy_bundle = _safe_call(
+        lambda: build_market_strategy_context(
+            market_type,
+            options=base.options.items,
+            ibd_regime=base.ibd_regime,
+            evaluation=base.evaluation,
+            volatility_regime=volatility_regime,
+            credit_stress=credit_stress,
+            trend_ranking=trend_ranking,
+        ),
+        {},
+        errors,
+    )
     context = MarketContext(
         market_type=market_type,
         market_data=base.market_data,
@@ -440,6 +532,16 @@ def build_market_high_context(
         momentum=base.momentum,
         monitor=base.monitor,
         market_distortions=market_distortions,
+        trend_ranking=trend_ranking,
+        opportunity_themes=opportunity_themes,
+        important_levels=strategy_bundle.get("important_levels", base.important_levels),
+        market_timeframes=strategy_bundle.get(
+            "market_timeframes", base.market_timeframes
+        ),
+        strategy_regime=strategy_bundle.get("strategy_regime", base.strategy_regime),
+        market_driver_monitor=strategy_bundle.get(
+            "market_driver_monitor", base.market_driver_monitor
+        ),
         japan_conditions=base.japan_conditions,
         sector_flow=base.sector_flow,
         credit_stress=credit_stress,
@@ -466,6 +568,21 @@ def build_market_high_context(
                 fetched_at=_utc_now(),
                 is_partial=not bool(market_distortions),
                 error="; ".join(market_distortions.get("quality_warnings", [])[:3]),
+                cache_status="computed",
+            ),
+            DataResult(
+                name="integrated_trend_ranking",
+                source="trend_ranking_service",
+                fetched_at=_utc_now(),
+                is_partial=not bool(trend_ranking.get("items")),
+                error="; ".join(trend_ranking.get("quality_warnings", [])),
+                cache_status="computed",
+            ),
+            DataResult(
+                name="opportunity_themes",
+                source="trend_ranking_service",
+                fetched_at=_utc_now(),
+                is_partial=not bool(opportunity_themes.get("items")),
                 cache_status="computed",
             ),
             DataResult(
@@ -509,6 +626,11 @@ def build_market_high_context(
             base.quality_warnings,
             credit_stress.get("warnings", []),
             market_distortions.get("quality_warnings", []),
+            trend_ranking.get("quality_warnings", []),
+            strategy_bundle.get("important_levels", {}).get("quality_warnings", []),
+            strategy_bundle.get("market_driver_monitor", {}).get(
+                "quality_warnings", []
+            ),
             errors,
         ),
         cache_status=credit_stress.get("cache_status", base.cache_status),
@@ -567,22 +689,60 @@ def build_market_options_context(
         results = {
             name: _future_result(future, errors) for name, future in futures.items()
         }
+    evaluation = _merge_ibd_signal(
+        results.get("evaluation") or base.evaluation,
+        base.ibd_regime,
+    )
+    trend_ranking = _safe_call(
+        lambda: build_trend_ranking_context(
+            market_type,
+            sector_flow=base.sector_flow,
+            distortions=base.market_distortions,
+            include_options=market_type == "US",
+        ),
+        base.trend_ranking,
+        errors,
+    )
+    opportunity_themes = build_opportunity_themes(
+        trend_ranking,
+        market_distortions=base.market_distortions,
+    )
+    strategy_bundle = _safe_call(
+        lambda: build_market_strategy_context(
+            market_type,
+            options=options.items,
+            ibd_regime=base.ibd_regime,
+            evaluation=evaluation,
+            volatility_regime=base.volatility_regime,
+            credit_stress=base.credit_stress,
+            trend_ranking=trend_ranking,
+        ),
+        {},
+        errors,
+    )
 
     context = MarketContext(
         market_type=market_type,
         market_data=base.market_data,
         market_config=base.market_config,
         options=options,
-        evaluation=_merge_ibd_signal(
-            results.get("evaluation") or base.evaluation,
-            base.ibd_regime,
-        ),
+        evaluation=evaluation,
         ibd_regime=base.ibd_regime,
         regime_playbook=base.regime_playbook,
         microstructure=base.microstructure,
         momentum=base.momentum,
         monitor=results.get("monitor") or base.monitor,
         market_distortions=base.market_distortions,
+        trend_ranking=trend_ranking,
+        opportunity_themes=opportunity_themes,
+        important_levels=strategy_bundle.get("important_levels", base.important_levels),
+        market_timeframes=strategy_bundle.get(
+            "market_timeframes", base.market_timeframes
+        ),
+        strategy_regime=strategy_bundle.get("strategy_regime", base.strategy_regime),
+        market_driver_monitor=strategy_bundle.get(
+            "market_driver_monitor", base.market_driver_monitor
+        ),
         japan_conditions=base.japan_conditions,
         sector_flow=base.sector_flow,
         credit_stress=base.credit_stress,
@@ -605,6 +765,28 @@ def build_market_options_context(
                 cache_status=options.cache_status,
                 cache_age_seconds=options.cache_age_seconds,
             ),
+            DataResult(
+                name="integrated_trend_ranking",
+                source="trend_ranking_service",
+                fetched_at=_utc_now(),
+                is_partial=not bool(trend_ranking.get("items")),
+                error="; ".join(trend_ranking.get("quality_warnings", [])),
+                cache_status="computed",
+            ),
+            DataResult(
+                name="opportunity_themes",
+                source="trend_ranking_service",
+                fetched_at=_utc_now(),
+                is_partial=not bool(opportunity_themes.get("items")),
+                cache_status="computed",
+            ),
+            DataResult(
+                name="market_strategy_regime",
+                source="market_strategy_service",
+                fetched_at=_utc_now(),
+                is_partial=not bool(strategy_bundle.get("strategy_regime")),
+                cache_status="computed",
+            ),
         ),
         provenance=_merge_provenance(
             base.provenance,
@@ -621,7 +803,14 @@ def build_market_options_context(
         is_stale=base.is_stale or options.is_stale,
         is_partial=bool(errors) or base.is_partial or options.is_partial,
         quality_warnings=_merge_warnings(
-            base.quality_warnings, options.quality_warnings, errors
+            base.quality_warnings,
+            options.quality_warnings,
+            trend_ranking.get("quality_warnings", []),
+            strategy_bundle.get("important_levels", {}).get("quality_warnings", []),
+            strategy_bundle.get("market_driver_monitor", {}).get(
+                "quality_warnings", []
+            ),
+            errors,
         ),
         cache_status=options.cache_status
         if options.cache_status != "live"
@@ -647,8 +836,9 @@ def build_market_context(market_type: str = "US") -> MarketContext:
     """Build the full context for legacy callers and tests."""
 
     summary = build_market_summary_context(market_type)
-    with_options = build_market_options_context(market_type, summary)
-    return build_market_details_context(market_type, with_options)
+    medium = build_market_medium_context(market_type, summary)
+    high = build_market_high_context(market_type, medium)
+    return build_market_options_context(market_type, high)
 
 
 def build_market_monitor_context(option_data: list[dict[str, Any]] | None) -> dict:
@@ -821,6 +1011,80 @@ def format_market_context_for_ai(context: MarketContext) -> str:
                 f"({item.get('kind', 'proxy')})"
             )
 
+    strategy = context.strategy_regime or {}
+    if strategy:
+        parts.append("[Strategy regime]")
+        parts.append(
+            f"- Selected: {strategy.get('label', 'unknown')} "
+            f"risk_budget={strategy.get('risk_budget', '')}"
+        )
+        if strategy.get("rationale"):
+            parts.append(f"- Rationale: {strategy.get('rationale')}")
+        if strategy.get("invalidation"):
+            parts.append(f"- Invalidation: {strategy.get('invalidation')}")
+
+    timeframes = context.market_timeframes or {}
+    if timeframes.get("items"):
+        parts.append("[Market direction by timeframe]")
+        for item in timeframes.get("items", [])[:3]:
+            parts.append(
+                f"- {item.get('label')}: {item.get('market_tone')} / "
+                f"{item.get('direction_label')} "
+                f"(score={float(item.get('score', 0.0)):+.2f}, "
+                f"confidence={item.get('confidence', '')})"
+            )
+
+    levels = context.important_levels or {}
+    if levels.get("items"):
+        parts.append("[Important SPY / QQQ levels]")
+        for item in levels.get("items", [])[:2]:
+            if item.get("data_quality") != "ok":
+                continue
+            parts.append(
+                f"- {item.get('label')} {item.get('ticker')}: "
+                f"close={item.get('close')}, support={item.get('support')}, "
+                f"resistance={item.get('resistance')}, "
+                f"behavior={item.get('behavior_label')}"
+            )
+
+    drivers = context.market_driver_monitor or {}
+    if drivers.get("items"):
+        parts.append("[Macro/volatility drivers]")
+        if drivers.get("summary"):
+            parts.append(f"- {drivers.get('summary')}")
+        for item in drivers.get("items", [])[:6]:
+            if item.get("data_quality") != "ok":
+                continue
+            parts.append(
+                f"- {item.get('label')}: value={item.get('value')}, "
+                f"5d={float(item.get('change_5d', 0.0)):+.2f}%, "
+                f"interpretation={item.get('interpretation', '')}"
+            )
+
+    trend = context.trend_ranking or {}
+    if trend.get("items"):
+        parts.append("[Integrated trend ranking]")
+        parts.append(f"- {trend.get('summary', '')}")
+        for item in trend.get("items", [])[:5]:
+            parts.append(
+                f"- #{item.get('rank')} {item.get('theme')} "
+                f"score={float(item.get('total_score', 0.0)):.1f}, "
+                f"parent={item.get('parent_sector', '')}, "
+                f"proxy={item.get('proxy_ticker', '')}, "
+                f"option={item.get('option_asymmetry', 'unavailable')}"
+            )
+
+    opportunities = context.opportunity_themes or {}
+    if opportunities.get("items"):
+        parts.append("[Opportunity themes]")
+        parts.append(f"- {opportunities.get('summary', '')}")
+        for item in opportunities.get("items", [])[:5]:
+            parts.append(
+                f"- {item.get('theme')}: {item.get('label')} "
+                f"score={float(item.get('opportunity_score', 0.0)):.1f}; "
+                f"{item.get('reason', '')}"
+            )
+
     evaluation = context.evaluation or {}
     if evaluation:
         parts.append(
@@ -955,7 +1219,7 @@ def format_market_context_for_ai(context: MarketContext) -> str:
 
     sector_flow = context.sector_flow or {}
     if sector_flow:
-        parts.append("[US primary / Japan supplemental sector flow]")
+        parts.append("[Sector/theme flow]")
         if sector_flow.get("summary"):
             parts.append(f"- Flow summary: {sector_flow['summary']}")
         for market, payload in (sector_flow.get("markets") or {}).items():
@@ -977,7 +1241,7 @@ def format_market_context_for_ai(context: MarketContext) -> str:
         parts.append(f"- ETF proxy role: {flow_alignment.get('etf_role', '')}")
         parts.append(f"- Sector/theme role: {flow_alignment.get('sector_role', '')}")
 
-    japan = context.japan_conditions or {}
+    japan = context.japan_conditions if context.market_type == "JP" else {}
     if japan:
         parts.append("[Nikkei upside six conditions]")
         parts.append(
@@ -990,7 +1254,7 @@ def format_market_context_for_ai(context: MarketContext) -> str:
                 f"value={item.get('value')} evidence={item.get('evidence')}"
             )
 
-    cross = context.cross_market or {}
+    cross = context.cross_market if context.market_type == "JP" else {}
     if cross:
         parts.append(
             "[Cross-market stance] "

@@ -21,7 +21,7 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 
 - Market Intelligence: 主要指数、セクター、コモディティ、為替、暗号資産、VIX、米国債利回りを一覧化
 - 市場環境評価: トレンド、モメンタム、ボラティリティ、マーケットブレッドス、オプションセンチメントを統合評価
-- オプション分析: SPY / QQQ / IWM の Put/Call Ratio、Gamma Exposure、Max Pain、ATM IV、Skew を算出。MarketData.appを任意の直接Greeks補完経路として利用可能
+- オプション分析: SPY / QQQ / IWM と主要テーマETF proxy の Put/Call Ratio、Gamma Exposure、Max Pain、ATM IV、Skew を算出。MarketData.appを米国オプションの preferred 経路として利用し、失敗時はyfinance/cacheへフォールバック
 - テーマランキング: AI、半導体、エネルギー、ヘルスケアなどのテーマを期間別にランキング
 - 個別銘柄分析: 企業概要、価格チャート、ニュース、テクニカル、SMART基準、日足Entry Framework、AI分析レポート
 - Trading Plan: 3段階ストップ、R基準サイジング、T+1/T+3確認、利確・ジャーナル管理
@@ -74,7 +74,7 @@ FINNHUB_API_KEY=your_finnhub_api_key_here
 JQUANTS_API_KEY=your_jquants_api_key_here
 EDINET_API_KEY=your_edinet_api_key_here
 MARKETDATA_TOKEN=your_marketdata_token_here
-MARKETDATA_OPTIONS_MODE=shadow
+MARKETDATA_OPTIONS_MODE=preferred
 SUPABASE_URL=your_supabase_url_here
 SUPABASE_SECRET_KEY=your_supabase_secret_key_here
 # SUPABASE_SERVICE_ROLE_KEY=your_legacy_service_role_key_here

@@ -11,30 +11,29 @@ from src.log_config import get_logger
 from src.market_config import get_market_config
 from src.market_data import get_stock_data
 from src.persistent_cache import utc_now_iso
+from src.theme_taxonomy import get_market_theme_profiles
 from src.themes_config import get_themes
 
 logger = get_logger(__name__)
 
 US_BENCHMARK = "SPY"
 JP_BENCHMARK = "^N225"
-MAX_GROUPS_PER_MARKET = 12
+MAX_GROUPS_PER_MARKET = 40
 MAX_TICKERS_PER_GROUP = 8
 
 
-def build_sector_flow_context() -> dict[str, Any]:
-    """Identify likely sector/theme inflows for US and Japan."""
+def build_sector_flow_context(market_type: str = "US") -> dict[str, Any]:
+    """Identify likely sector/theme inflows for the selected market."""
 
-    markets = {
-        "US": _build_market_flow("US"),
-        "JP": _build_market_flow("JP"),
-    }
+    normalized = "JP" if market_type == "JP" else "US"
+    markets = {normalized: _build_market_flow(normalized)}
     warnings = []
     for payload in markets.values():
         warnings.extend(payload.get("quality_warnings", []))
 
     return {
         "generated_at": utc_now_iso(),
-        "primary_market": "US",
+        "primary_market": normalized,
         "markets": markets,
         "summary": _summarize_markets(markets),
         "quality_warnings": _dedupe(warnings),
@@ -46,7 +45,12 @@ def build_cross_market_context(
 ) -> dict[str, Any]:
     """Summarize US-versus-Japan leadership without separating the recap."""
 
-    flow = sector_flow or build_sector_flow_context()
+    flow = sector_flow or {
+        "markets": {
+            "US": _build_market_flow("US"),
+            "JP": _build_market_flow("JP"),
+        }
+    }
     us = flow.get("markets", {}).get("US", {})
     jp = flow.get("markets", {}).get("JP", {})
     us_top = _first_leader(us)
@@ -109,8 +113,20 @@ def _candidate_groups(market_type: str) -> dict[str, list[str]]:
     if market_type == "JP":
         themes = get_themes("JP")
         return dict(list(themes.items())[:MAX_GROUPS_PER_MARKET])
+
     sectors = get_market_config("US").get("sectors", {})
-    return {name: [ticker] for name, ticker in sectors.items()}
+    groups = {name: [ticker] for name, ticker in sectors.items()}
+    profiles = get_market_theme_profiles("US")
+    for theme, profile in profiles.items():
+        if theme in groups:
+            continue
+        if profile.proxy_ticker:
+            groups[theme] = [profile.proxy_ticker]
+        elif profile.representative_tickers:
+            groups[theme] = list(profile.representative_tickers)
+        if len(groups) >= MAX_GROUPS_PER_MARKET:
+            break
+    return groups
 
 
 def _score_group(
@@ -276,7 +292,7 @@ def _summarize_markets(markets: dict[str, Any]) -> str:
     us = _first_leader(markets.get("US", {}))
     jp = _first_leader(markets.get("JP", {}))
     if not us and not jp:
-        return "日米とも資金流入セクターを判定できない。"
+        return "資金流入セクター/テーマを判定できない。"
     parts = []
     if us:
         parts.append(f"米国: {us['theme']}({us['flow_score']:+.1f})")

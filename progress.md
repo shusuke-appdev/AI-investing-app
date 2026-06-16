@@ -299,3 +299,11 @@ streamlit run legacy_streamlit/app.py
 - Audited primary Stock evaluation badges and confirmed the earlier change enlarged Buy/Sell and Robust/Fragile symmetrically, but found inconsistent colors and smaller SMART, sector/theme, and FOMO evaluations.
 - Added one shared prominent evaluation-badge primitive and applied it to all primary Stock evaluations: technical Buy/Hold/Sell, probabilistic Add/Hold/Watch/Avoid, trend Robust/Fragile/Watch/Unavailable, SMART, sector/theme, Entry quality, and FOMO regime.
 - Positive, negative, neutral/watch, and unavailable states now use symmetric size and semantic colors. Secondary evidence, ticker, provenance, and metric badges intentionally remain compact to avoid visual overload.
+
+# Session update: 2026-06-16 MarketData preferred / strategy regime / integrated trend ranking
+- Promoted MarketData.app options to the preferred US options path when `MARKETDATA_TOKEN` is configured; `shadow` remains available only for comparison, and token-missing local runs fall back without failing the app.
+- Added theme taxonomy metadata with parent sector, ETF proxy, option proxy, and representative tickers; US sector/theme flow now stays US-only and uses detailed ETF proxies where available, while JP-specific conditions remain in JP mode.
+- Added integrated trend ranking and opportunity-theme extraction that combine performance, relative strength, flow proxy, participation, distortion, timeframe fit, and optional theme ETF option asymmetry.
+- Added strategy-regime selection (`積極的順張り` / `順張り` / `判断不能(待ち)` / `逆張り` / `積極的逆張り`), timeframe market direction, SPY/QQQ important levels, and macro/volatility drivers to Market Watch and AI context.
+- Extended Stock sector/theme context with theme ranking, parent sector, theme ETF proxy, and theme ETF option structure for US names.
+- Focused validation passed: `pytest tests\test_trend_ranking_service.py tests\test_market_strategy_service.py tests\test_sector_flow_service.py tests\test_sector_theme_diagnostics.py tests\test_option_data_provider_cache.py tests\test_market_presentation_service.py tests\test_market_context_service.py -q`.

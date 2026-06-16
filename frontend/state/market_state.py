@@ -24,15 +24,21 @@ from src.services.market_presentation_service import (
     FlowAlignmentDisplay,
     FlowProxyDisplay,
     IbdRegimeDisplay,
+    ImportantLevelDisplay,
     JapanConditionDisplay,
+    MarketDriverDisplay,
     MarketMonitorData,
     MarketSignal,
     MicrostructureData,
     MomentumCategory,
+    OpportunityThemeDisplay,
     OptionSummary,
     RegimePlaybookDisplay,
     SectorFlowGroup,
     StageStatusDisplay,
+    StrategyRegimeDisplay,
+    TimeframeOutlookDisplay,
+    TrendRankingDisplay,
     build_market_display_context,
 )
 
@@ -79,6 +85,16 @@ class MarketState(rx.State):
     credit_stress: CreditStressDisplay = CreditStressDisplay()
     flow_monitor: FlowProxyDisplay = FlowProxyDisplay()
     flow_alignment: FlowAlignmentDisplay = FlowAlignmentDisplay()
+    strategy_regime: StrategyRegimeDisplay = StrategyRegimeDisplay()
+    market_timeframes: list[TimeframeOutlookDisplay] = []
+    important_levels: list[ImportantLevelDisplay] = []
+    important_levels_summary: str = ""
+    market_drivers: list[MarketDriverDisplay] = []
+    market_drivers_summary: str = ""
+    trend_ranking_items: list[TrendRankingDisplay] = []
+    trend_ranking_summary: str = ""
+    opportunity_theme_items: list[OpportunityThemeDisplay] = []
+    opportunity_theme_summary: str = ""
     detail_stages: list[StageStatusDisplay] = []
     japan_conditions: list[JapanConditionDisplay] = []
     japan_conditions_summary: str = ""
@@ -351,6 +367,16 @@ class MarketState(rx.State):
         self.credit_stress = display.credit_stress
         self.flow_monitor = display.flow_monitor
         self.flow_alignment = display.flow_alignment
+        self.strategy_regime = display.strategy_regime
+        self.market_timeframes = display.market_timeframes
+        self.important_levels = display.important_levels
+        self.important_levels_summary = display.important_levels_summary
+        self.market_drivers = display.market_drivers
+        self.market_drivers_summary = display.market_drivers_summary
+        self.trend_ranking_items = display.trend_ranking_items
+        self.trend_ranking_summary = display.trend_ranking_summary
+        self.opportunity_theme_items = display.opportunity_theme_items
+        self.opportunity_theme_summary = display.opportunity_theme_summary
         self.detail_stages = display.detail_stages
         self.japan_conditions = display.japan_conditions
         self.japan_conditions_summary = display.japan_conditions_summary
