@@ -33,6 +33,20 @@ def _provider_color(status) -> rx.Var:
     )
 
 
+def _health_color(status) -> rx.Var:
+    return rx.cond(
+        status == "ok",
+        "green",
+        rx.cond(
+            status == "partial",
+            "amber",
+            rx.cond(
+                status == "stale", "orange", rx.cond(status == "failed", "red", "gray")
+            ),
+        ),
+    )
+
+
 def _provider_card(item) -> rx.Component:
     return rx.card(
         rx.vstack(
@@ -47,6 +61,64 @@ def _provider_card(item) -> rx.Component:
                 align_items="center",
             ),
             rx.text(item.detail, size="1", color=rx.color("gray", 10)),
+            align_items="start",
+            spacing="1",
+            width="100%",
+        ),
+        padding="0.75rem",
+    )
+
+
+def _provider_health_card(item) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.text(item.name, weight="bold", size="2", flex="1"),
+                rx.badge(
+                    item.status_label,
+                    color_scheme=_health_color(item.status_key),
+                    variant="surface",
+                ),
+                width="100%",
+                align_items="center",
+            ),
+            rx.cond(
+                item.source != "",
+                rx.text("source: " + item.source, size="1", color=rx.color("gray", 10)),
+                rx.fragment(),
+            ),
+            rx.cond(
+                item.last_success_at != "",
+                rx.text(
+                    "last success: " + item.last_success_at,
+                    size="1",
+                    color=rx.color("gray", 9),
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                item.last_error_at != "",
+                rx.text(
+                    "last error: " + item.last_error_at,
+                    size="1",
+                    color=rx.color("gray", 9),
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                item.cache_status != "",
+                rx.text(
+                    "cache: " + item.cache_status + " " + item.cache_age_label,
+                    size="1",
+                    color=rx.color("gray", 9),
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                item.degraded_reason != "",
+                rx.text(item.degraded_reason, size="1", color=rx.color("amber", 11)),
+                rx.fragment(),
+            ),
             align_items="start",
             spacing="1",
             width="100%",
@@ -94,6 +166,24 @@ def data_quality_page() -> rx.Component:
             columns=rx.breakpoints(initial="1", md="2", xl="3"),
             spacing="3",
             width="100%",
+        ),
+        section_heading(
+            "Provider直近ヘルス",
+            "Market / Stock / Portfolioで最後に観測した成功・失敗・キャッシュ状態です。",
+        ),
+        rx.cond(
+            DataQualityState.provider_health.length() > 0,
+            rx.grid(
+                rx.foreach(DataQualityState.provider_health, _provider_health_card),
+                columns=rx.breakpoints(initial="1", md="2", xl="3"),
+                spacing="3",
+                width="100%",
+            ),
+            rx.text(
+                "まだ取得ヘルスは記録されていません。Market / Stock / Portfolioを一度実行すると表示されます。",
+                size="2",
+                color="gray",
+            ),
         ),
         section_heading("Market", "Market / 市場監視で最後に取得した状態です。"),
         data_status_panel(MarketState.data_status),

@@ -2,6 +2,10 @@
 .github
 .env
 .env.*
+*.key
+*.pem
+secrets
+**/.streamlit/secrets.toml
 .venv
 .states
 .reflex_states
@@ -13,6 +17,12 @@ __pycache__
 *.zip
 data/knowledge
 data/portfolios
+data/*.json
+data/*.csv
+data/portfolio_history
+data/supabase_backups
 data/trading_plans.json
+downloads
+uploaded_files
 docs/ui-audit
 tmp

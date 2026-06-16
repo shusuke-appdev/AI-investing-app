@@ -41,6 +41,44 @@ def _render_holding_row(holding: HoldingItem) -> rx.Component:
 def _render_input_section() -> rx.Component:
     """ポートフォリオ管理画面（銘柄追加・削除・保存）"""
     return rx.vstack(
+        rx.hstack(
+            rx.hstack(
+                rx.icon("database", size=16, color=rx.color("blue", 9)),
+                rx.text("保存先", size="2", weight="bold"),
+                rx.badge(
+                    PortfolioState.storage_type_label,
+                    color_scheme=rx.cond(
+                        PortfolioState.storage_type == "supabase", "green", "gray"
+                    ),
+                    variant="surface",
+                ),
+                spacing="2",
+                align_items="center",
+            ),
+            rx.spacer(),
+            rx.segmented_control.root(
+                rx.foreach(
+                    PortfolioState.storage_options,
+                    lambda item: rx.segmented_control.item(
+                        rx.cond(item == "supabase", "Supabase", "Local"),
+                        value=item,
+                    ),
+                ),
+                value=PortfolioState.storage_type,
+                on_change=PortfolioState.change_storage_type,
+                size="1",
+            ),
+            width="100%",
+            align_items="center",
+            flex_wrap="wrap",
+            margin_bottom="0.75rem",
+        ),
+        rx.text(
+            "保存・読込・削除はこの共通保存先に対して実行されます。",
+            size="1",
+            color=rx.color("gray", 10),
+            margin_bottom="0.75rem",
+        ),
         # ポートフォリオ選択
         rx.hstack(
             rx.heading(PortfolioState.current_portfolio_name, size="5"),

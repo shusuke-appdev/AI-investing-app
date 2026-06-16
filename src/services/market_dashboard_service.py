@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -30,10 +29,18 @@ from src.market_volatility_intelligence import (
 )
 from src.momentum_monitor import get_momentum_themes
 from src.option_analyst import get_major_indices_option_status
-from src.persistent_cache import PersistentJsonCache, repo_state_cache, utc_now_iso
+from src.persistent_cache import PersistentJsonCache, utc_now_iso
 from src.sector_flow_monitor import build_sector_flow_monitor
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.services.japan_market_conditions import build_japan_conditions_context
+from src.services.market_context_cache import (
+    context_cache_key,
+    context_cache_path,
+    context_from_cache_payload,
+    market_context_cache,
+    read_context_cache,
+    save_context_cache,
+)
 from src.services.market_playbook import get_market_playbook
 from src.services.market_strategy_service import build_market_strategy_context
 from src.services.provenance_service import (
@@ -1472,17 +1479,16 @@ def _merge_ibd_signal(
     }
 
 
-def _context_cache_path(market_type: str, kind: str) -> Path:
-    return _market_context_cache().path_for_key(_context_cache_key(market_type, kind))
+def _context_cache_path(market_type: str, kind: str):
+    return context_cache_path(_market_context_cache(), market_type, kind)
 
 
 def _save_context_cache(context: MarketContext, kind: str) -> None:
-    path = _context_cache_path(context.market_type, kind)
     try:
-        _market_context_cache().write_path(
-            path,
-            _context_cache_key(context.market_type, kind),
-            context.to_dict(),
+        save_context_cache(
+            _market_context_cache(),
+            context,
+            kind,
             fetched_at=context.fetched_at or _utc_now(),
         )
     except OSError:
@@ -1496,18 +1502,17 @@ def _load_context_cache(
     max_age_seconds: int,
     fresh_seconds: int,
 ) -> MarketContext | None:
-    key = _context_cache_key(market_type, kind)
-    path = _context_cache_path(market_type, kind)
-    read = _market_context_cache().read_path(
-        path,
-        key,
+    read = read_context_cache(
+        _market_context_cache(),
+        market_type,
+        kind,
         fresh_seconds=fresh_seconds,
         stale_seconds=max_age_seconds,
     )
     if not read.is_available:
         return None
 
-    context = MarketContext.from_mapping(read.payload)
+    context = context_from_cache_payload(read.payload)
     if read.fetched_at and not context.fetched_at:
         context.fetched_at = read.fetched_at
     context.source = f"{context.source or kind}_cache"
@@ -1648,11 +1653,11 @@ def _merge_provenance(*groups):
 
 
 def _context_cache_key(market_type: str, kind: str) -> str:
-    return f"{market_type.lower()}_{kind}"
+    return context_cache_key(market_type, kind)
 
 
 def _market_context_cache() -> PersistentJsonCache:
-    return repo_state_cache(MARKET_CONTEXT_CACHE_NAMESPACE)
+    return market_context_cache(MARKET_CONTEXT_CACHE_NAMESPACE)
 
 
 def _optional_float(value: Any) -> float | None:

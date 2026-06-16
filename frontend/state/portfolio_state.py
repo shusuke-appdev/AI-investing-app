@@ -53,8 +53,9 @@ class PortfolioState(rx.State):
     success_msg: str = ""
     submode: str = "input"  # "input" or "analysis"
 
-    # ストレージタイプ（Streamlit依存を回避するため直接管理）
+    # 現在の共通ストレージ設定をUIに表示するためのミラー
     storage_type: str = "local"
+    storage_options: list[str] = ["local", "supabase"]
 
     def set_submode(self, mode: str):
         self.submode = mode
@@ -71,15 +72,60 @@ class PortfolioState(rx.State):
     def set_save_name(self, value: str):
         self.save_name = value
 
+    @rx.var
+    def storage_type_label(self) -> str:
+        return storage_type_label(self.storage_type)
+
+    def _sync_storage_type(self) -> None:
+        self.storage_type = get_active_storage_type()
+
     async def load_portfolio_list(self):
         """保存済みポートフォリオ一覧を取得"""
         try:
+            self._sync_storage_type()
             from src.portfolio_storage import list_portfolios
 
-            names = await asyncio.to_thread(list_portfolios, self.storage_type)
+            names = await asyncio.to_thread(list_portfolios)
             self.portfolio_names = names
         except Exception as e:
             self.error_msg = f"ポートフォリオ一覧の取得に失敗: {e}"
+
+    async def change_storage_type(self, value: str | list[str]):
+        """共通ストレージ設定を変更し、選択先のポートフォリオ一覧を読み直す"""
+
+        if isinstance(value, list):
+            value = value[0] if value else ""
+        if value not in {"local", "supabase"}:
+            self.error_msg = "保存先は local または supabase を選択してください"
+            return
+
+        self.is_loading = True
+        self.error_msg = ""
+        yield
+
+        try:
+            from src.settings_storage import set_storage_type_setting
+
+            success = await asyncio.to_thread(set_storage_type_setting, value)
+            if not success:
+                self.error_msg = "保存先設定の更新に失敗しました"
+                return
+            self.storage_type = value
+            self.current_portfolio_name = "新規ポートフォリオ"
+            self.holdings = []
+            self.analysis_result = {}
+            self.provenance = []
+            self.analysis_warnings = []
+            self.ai_advice = ""
+            from src.portfolio_storage import list_portfolios
+
+            self.portfolio_names = await asyncio.to_thread(list_portfolios)
+            self.success_msg = f"保存先を「{storage_type_label(value)}」に変更しました"
+        except Exception as e:
+            self.error_msg = f"保存先設定エラー: {e}"
+        finally:
+            self.is_loading = False
+            yield
 
     async def select_portfolio(self, name: str):
         """既存ポートフォリオを選択して読み込む"""
@@ -88,9 +134,10 @@ class PortfolioState(rx.State):
         yield
 
         try:
+            self._sync_storage_type()
             from src.portfolio_storage import load_portfolio
 
-            data = await asyncio.to_thread(load_portfolio, name, self.storage_type)
+            data = await asyncio.to_thread(load_portfolio, name)
             if data:
                 raw_holdings = data.get("holdings", [])
                 self.holdings = [
@@ -167,24 +214,23 @@ class PortfolioState(rx.State):
         yield
 
         try:
+            self._sync_storage_type()
             from src.portfolio_storage import save_portfolio
 
             holdings_data = holdings_to_payload(self.holdings)
             if not holdings_data:
                 self.error_msg = "保存できる保有銘柄がありません"
                 return
-            success = await asyncio.to_thread(
-                save_portfolio, name, holdings_data, self.storage_type
-            )
+            success = await asyncio.to_thread(save_portfolio, name, holdings_data)
             if success:
                 self.current_portfolio_name = name
-                self.success_msg = f"「{name}」を保存しました"
+                self.success_msg = (
+                    f"「{name}」を{storage_type_label(self.storage_type)}へ保存しました"
+                )
                 # リストを更新
                 from src.portfolio_storage import list_portfolios
 
-                self.portfolio_names = await asyncio.to_thread(
-                    list_portfolios, self.storage_type
-                )
+                self.portfolio_names = await asyncio.to_thread(list_portfolios)
             else:
                 self.error_msg = "保存に失敗しました"
         except Exception as e:
@@ -202,10 +248,11 @@ class PortfolioState(rx.State):
         yield
 
         try:
+            self._sync_storage_type()
             from src.portfolio_storage import delete_portfolio
 
             deleted = await asyncio.to_thread(
-                delete_portfolio, self.current_portfolio_name, self.storage_type
+                delete_portfolio, self.current_portfolio_name
             )
             if not deleted:
                 raise ValueError("削除対象が存在しないか、削除に失敗しました")
@@ -214,9 +261,7 @@ class PortfolioState(rx.State):
             self.success_msg = "ポートフォリオを削除しました"
             from src.portfolio_storage import list_portfolios
 
-            self.portfolio_names = await asyncio.to_thread(
-                list_portfolios, self.storage_type
-            )
+            self.portfolio_names = await asyncio.to_thread(list_portfolios)
         except Exception as e:
             self.error_msg = f"削除エラー: {e}"
         finally:
@@ -240,6 +285,21 @@ class PortfolioState(rx.State):
                 self.analysis_result = result
                 self.provenance = provenance_display_items(result.get("provenance", []))
                 self.analysis_warnings = list(result.get("quality_warnings", []))
+                from src.services.analysis_context import DataResult
+                from src.services.provider_health import record_data_results
+
+                record_data_results(
+                    [
+                        DataResult(
+                            name="portfolio_analysis",
+                            source="market_data providers",
+                            is_partial=bool(self.analysis_warnings),
+                            error="; ".join(self.analysis_warnings[:3]),
+                            cache_status="computed",
+                        )
+                    ],
+                    scope="portfolio",
+                )
                 self.submode = "analysis"
             else:
                 self.error_msg = "分析結果を取得できませんでした"
@@ -260,10 +320,15 @@ class PortfolioState(rx.State):
         yield
 
         try:
+            from frontend.state.market_state import MarketState
             from src.portfolio_advisor import generate_portfolio_advice
 
+            market_state = await self.get_state(MarketState)
             advice = await asyncio.to_thread(
-                generate_portfolio_advice, self.analysis_result
+                generate_portfolio_advice,
+                self.analysis_result,
+                market_context=market_state.market_context or None,
+                include_news=False,
             )
             if advice:
                 self.ai_advice = advice
@@ -284,3 +349,16 @@ class PortfolioState(rx.State):
         self.analysis_warnings = []
         self.ai_advice = ""
         self.submode = "input"
+
+
+def get_active_storage_type() -> str:
+    """Read the shared storage setting used by all personal-data stores."""
+
+    from src.settings_storage import get_storage_type
+
+    value = get_storage_type()
+    return value if value in {"local", "supabase"} else "local"
+
+
+def storage_type_label(value: str) -> str:
+    return {"local": "ローカルJSON", "supabase": "Supabase"}.get(value, value)

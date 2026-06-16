@@ -16,7 +16,7 @@
   - `/trading-plan`: 売買計画・実行品質管理
   - `/portfolio`: ポートフォリオ分析
   - `/knowledge`: 参照知識管理
-- 旧Streamlit UI: `legacy_streamlit/app.py` と `src/ui/`
+- 旧Streamlit UI: `legacy_streamlit/app.py` と `src/ui/` は frozen archive。通常の機能追加・不具合修正は `frontend/` に行う
 
 ## レイヤー構成
 

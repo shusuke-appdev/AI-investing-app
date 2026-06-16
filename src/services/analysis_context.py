@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, TypedDict
 
 
 class ProvenanceKind(str, Enum):
@@ -74,6 +74,95 @@ class DataResult:
         return asdict(self)
 
 
+class StrategyRegimeContext(TypedDict, total=False):
+    """Strategy-regime wire shape shared by Market UI and AI prompts."""
+
+    key: str
+    label: str
+    rationale: str
+    risk_budget: str
+    invalidation: str
+    evidence: list[str]
+
+
+class TrendRankingItemContext(TypedDict, total=False):
+    """One integrated trend-ranking row."""
+
+    rank: int
+    theme: str
+    parent_sector: str
+    proxy_ticker: str
+    option_proxy_ticker: str
+    option_asymmetry: str
+    total_score: float
+    rank_points: float
+    data_quality: str
+
+
+class TrendRankingContext(TypedDict, total=False):
+    """Integrated trend-ranking payload."""
+
+    items: list[TrendRankingItemContext]
+    summary: str
+    quality_warnings: list[str]
+
+
+class SectorFlowLeaderContext(TypedDict, total=False):
+    """Sector/theme flow leader payload."""
+
+    market: str
+    theme: str
+    flow_score: float
+    confidence: str
+    continuation: str
+    action: str
+    evidence: str
+
+
+class SectorFlowContext(TypedDict, total=False):
+    """US/JP sector-flow monitor payload."""
+
+    summary: str
+    markets: dict[str, dict[str, list[SectorFlowLeaderContext]]]
+    quality_warnings: list[str]
+
+
+class TechnicalSummaryContext(TypedDict, total=False):
+    """Stock technical summary fields consumed by UI and AI."""
+
+    overall_signal: str
+    overall_signal_display: str
+    overall_score: float
+    rsi: float
+    rsi_signal: str
+    macd_signal: str
+    support_price: float | None
+    resistance_price: float | None
+
+
+class StockDataStatusContext(TypedDict, total=False):
+    """Lightweight status summary for a stock-analysis run."""
+
+    ticker: str
+    has_profile: bool
+    has_history: bool
+    has_news: bool
+    warnings: list[str]
+
+
+class TradeSetupContextDict(TypedDict, total=False):
+    """Serializable daily entry-framework payload."""
+
+    ticker: str
+    status: str
+    grade: str
+    score: float
+    score_display: str
+    summary: str
+    blocked_reasons: list[str]
+    warnings: list[str]
+
+
 @dataclass
 class OptionContext:
     """Option-market analysis inputs and retrieval status."""
@@ -113,14 +202,14 @@ class MarketContext:
     momentum: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     monitor: dict[str, Any] = field(default_factory=dict)
     market_distortions: dict[str, Any] = field(default_factory=dict)
-    trend_ranking: dict[str, Any] = field(default_factory=dict)
+    trend_ranking: TrendRankingContext = field(default_factory=dict)
     opportunity_themes: dict[str, Any] = field(default_factory=dict)
     important_levels: dict[str, Any] = field(default_factory=dict)
     market_timeframes: dict[str, Any] = field(default_factory=dict)
-    strategy_regime: dict[str, Any] = field(default_factory=dict)
+    strategy_regime: StrategyRegimeContext = field(default_factory=dict)
     market_driver_monitor: dict[str, Any] = field(default_factory=dict)
     japan_conditions: dict[str, Any] = field(default_factory=dict)
-    sector_flow: dict[str, Any] = field(default_factory=dict)
+    sector_flow: SectorFlowContext = field(default_factory=dict)
     credit_stress: dict[str, Any] = field(default_factory=dict)
     flow_monitor: dict[str, Any] = field(default_factory=dict)
     flow_alignment: dict[str, Any] = field(default_factory=dict)
@@ -268,12 +357,12 @@ class StockSignalContext:
 
     ticker: str
     stock_info: dict[str, Any] = field(default_factory=dict)
-    technical_data: dict[str, Any] = field(default_factory=dict)
+    technical_data: TechnicalSummaryContext = field(default_factory=dict)
     smart_criteria: dict[str, Any] = field(default_factory=dict)
     probabilistic_signal: dict[str, Any] = field(default_factory=dict)
     trend_follow_diagnostics: dict[str, Any] = field(default_factory=dict)
     fomo_regime: dict[str, Any] = field(default_factory=dict)
-    trade_setup: dict[str, Any] = field(default_factory=dict)
+    trade_setup: TradeSetupContextDict = field(default_factory=dict)
     sector_theme_context: dict[str, Any] = field(default_factory=dict)
     news_headlines: list[str] = field(default_factory=list)
     news_source_status: str = ""

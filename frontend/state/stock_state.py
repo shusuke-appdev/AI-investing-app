@@ -234,6 +234,9 @@ class StockState(rx.State):
             self.stock_signal_context = plain_state_value(context.stock_signal_context)
             self.data_status = data_status_display_items(context.data_status)
             self.provenance = provenance_display_items(context.provenance)
+            from src.services.provider_health import record_data_results
+
+            record_data_results(context.data_status, scope=f"stock.{self.ticker}")
             self.profile_warning = context.profile_warning
             if context.error_message:
                 self.error_msg = context.error_message

@@ -13,7 +13,7 @@ short_description: Market intelligence and investment research dashboard
 
 AI Investing App は、米国株・日本株を対象に、市場環境、テーマ別モメンタム、個別銘柄、ポートフォリオ、ユーザー知識ベースを横断して分析する投資調査ダッシュボードです。
 
-現在の主UIは **Reflex** です。Streamlit 実装は `src/ui/` と `legacy_streamlit/` に残っていますが、現行画面の入口は `frontend/` です。
+現在の主UIは **Reflex** です。現行画面の入口は `frontend/` です。`src/ui/` と `legacy_streamlit/` は移行前の frozen archive であり、通常の機能追加・不具合修正の対象外です。
 
 > 注意: 本アプリは投資判断を補助する調査ツールです。売買助言、投資一任、金融商品の推奨を目的としたものではありません。
 
@@ -47,11 +47,11 @@ AI-investing-app/
     advisor/               テクニカル、ボラティリティ、市場環境、ポートフォリオ分析
     services/              AI市場分析などのユースケース調整層
     storage/               保存先の抽象インターフェース
-    ui/                    旧Streamlit UI
+    ui/                    旧Streamlit UI（frozen archive）
   tests/                   単体テスト
   docs/                    設計・運用・点検・改修計画
   scripts/                 検証・デバッグ用スクリプト
-  legacy_streamlit/        旧Streamlitアプリ
+  legacy_streamlit/        旧Streamlitアプリ（frozen archive）
 ```
 
 ## セットアップ

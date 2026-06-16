@@ -10,6 +10,20 @@ class ProviderStatus(BaseModel):
     detail: str = ""
 
 
+class ProviderHealthDisplay(BaseModel):
+    name: str = ""
+    status_key: str = "unavailable"
+    status_label: str = "未取得"
+    source: str = ""
+    scope: str = ""
+    last_success_at: str = ""
+    last_error_at: str = ""
+    last_error: str = ""
+    cache_status: str = ""
+    cache_age_label: str = ""
+    degraded_reason: str = ""
+
+
 class DataQualityState(rx.State):
     """Non-secret provider configuration summary for the data-quality page."""
 
@@ -22,6 +36,11 @@ class DataQualityState(rx.State):
     def provider_statuses(self) -> list[ProviderStatus]:
         _ = self.refresh_key
         return _provider_statuses()
+
+    @rx.var
+    def provider_health(self) -> list[ProviderHealthDisplay]:
+        _ = self.refresh_key
+        return _provider_health()
 
 
 def _provider_statuses() -> list[ProviderStatus]:
@@ -85,3 +104,39 @@ def _provider_statuses() -> list[ProviderStatus]:
 
 def _env_configured(name: str) -> bool:
     return bool(os.getenv(name, "").strip())
+
+
+def _provider_health() -> list[ProviderHealthDisplay]:
+    from src.services.provider_health import load_provider_health
+
+    rows = []
+    for item in load_provider_health():
+        payload = item.to_dict()
+        rows.append(
+            ProviderHealthDisplay(
+                name=str(payload.get("name") or ""),
+                status_key=str(payload.get("status_key") or "unavailable"),
+                status_label=str(payload.get("status_label") or "未取得"),
+                source=str(payload.get("source") or ""),
+                scope=str(payload.get("scope") or ""),
+                last_success_at=str(payload.get("last_success_at") or ""),
+                last_error_at=str(payload.get("last_error_at") or ""),
+                last_error=str(payload.get("last_error") or ""),
+                cache_status=str(payload.get("cache_status") or ""),
+                cache_age_label=_cache_age_label(payload.get("cache_age_seconds")),
+                degraded_reason=str(payload.get("degraded_reason") or ""),
+            )
+        )
+    return rows
+
+
+def _cache_age_label(value) -> str:
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    if seconds < 3600:
+        return f"{seconds / 60:.0f}m"
+    return f"{seconds / 3600:.1f}h"

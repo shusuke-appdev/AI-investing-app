@@ -1,5 +1,14 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-06-17 product review roadmap implementation
+- Changed Reflex Portfolio storage to use the shared local/Supabase storage setting instead of forcing `local`; added a Portfolio-page storage selector/status and regression coverage for shared storage defaults.
+- Hardened Docker build context exclusions for local secrets and personal data, including Streamlit secrets, `data/*.json`, backups/history, uploads, downloads, keys, and pem files; added a `.dockerignore` regression test.
+- Added persistent provider health snapshots under `.states/provider_health_snapshot` and surfaced last success/failure/cache state on `/data-quality`; Market, Stock, and Portfolio analysis paths now record their DataResult health.
+- Updated Portfolio AI advice to reuse the current MarketContext when available and skip hidden macro/market/sector refetches on that path; stale/proxy/provenance context now reaches the prompt.
+- Added typed subcontext wire shapes for high-churn Market/Stock payloads and split MarketContext cache I/O into `src/services/market_context_cache.py` while keeping existing helper compatibility.
+- Marked `legacy_streamlit/` and `src/ui/` as frozen archives in README, architecture docs, and local directory README files.
+- Validation: compileall passed, ruff check passed, ruff format check passed, full pytest passed (`227 passed`), and Reflex frontend export passed.
+
 ## Session update: 2026-06-16 Hugging Face Spaces sync fix
 - Root cause: GitHub Actions quality checks were passing, but Hugging Face Spaces rejected direct history pushes because tracked `docs/ui-audit/2026-06-11/*.png` binary audit artifacts were present in `main`.
 - Changed Spaces sync to deploy a clean `git archive HEAD` worktree, remove `docs/ui-audit` from that deploy-only tree, and force-push the generated deploy commit to Hugging Face.

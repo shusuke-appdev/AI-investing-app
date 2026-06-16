@@ -1,4 +1,5 @@
 from src.gemini_client import generate_content
+from src.services.analysis_context import MarketContext
 
 from .analysis import (
     get_holdings_news,
@@ -25,6 +26,7 @@ def generate_portfolio_advice(
     option_summary: str | None = None,
     include_macro: bool = True,
     include_news: bool = True,
+    market_context: MarketContext | dict | None = None,
 ) -> str:
     """
     AIによる包括的なポートフォリオ調査レポートを生成します。
@@ -81,8 +83,18 @@ def generate_portfolio_advice(
     sector_text = ""
     theme_text = ""
     news_text = ""
+    shared_market_text = ""
 
-    if include_macro:
+    shared_context = _coerce_market_context(market_context)
+    if shared_context is not None:
+        from src.services.market_dashboard_service import format_market_context_for_ai
+
+        shared_market_text = (
+            "【共有MarketContext（画面表示済みの市場データ）】\n"
+            + format_market_context_for_ai(shared_context)
+        )
+
+    if include_macro and shared_context is None:
         # マクロ環境
         macro = get_macro_context()
         macro_lines = ["【マクロ環境】"]
@@ -128,15 +140,15 @@ def generate_portfolio_advice(
                 sector_lines.append(f"- {sector}: {data['change_1m']:+.1f}%")
             sector_text = "\n".join(sector_lines)
 
-        # テーマエクスポージャー
-        themes = get_theme_exposure_analysis(analysis["holdings"])
-        if themes:
-            theme_lines = ["【テーマ別エクスポージャー】"]
-            for theme, data in list(themes.items())[:5]:
-                theme_lines.append(
-                    f"- {theme}: ${data['value']:,.0f} ({data['weight']:.1f}%)"
-                )
-            theme_text = "\n".join(theme_lines)
+    # テーマエクスポージャーはポートフォリオ保有から算出できるため外部再取得しない。
+    themes = get_theme_exposure_analysis(analysis["holdings"])
+    if themes:
+        theme_lines = ["【テーマ別エクスポージャー】"]
+        for theme, data in list(themes.items())[:5]:
+            theme_lines.append(
+                f"- {theme}: ${data['value']:,.0f} ({data['weight']:.1f}%)"
+            )
+        theme_text = "\n".join(theme_lines)
 
     if include_news:
         news = get_holdings_news(analysis["holdings"])
@@ -160,6 +172,8 @@ def generate_portfolio_advice(
 
 【保有銘柄詳細（テクニカル分析含む）】
 {chr(10).join(holdings_text)}
+
+{shared_market_text}
 
 {macro_text}
 
@@ -222,3 +236,11 @@ def generate_portfolio_advice(
     if result:
         return result
     return "アドバイス生成エラー: Gemini APIが利用できません"
+
+
+def _coerce_market_context(value: MarketContext | dict | None) -> MarketContext | None:
+    if isinstance(value, MarketContext):
+        return value
+    if isinstance(value, dict) and value:
+        return MarketContext.from_mapping(value)
+    return None

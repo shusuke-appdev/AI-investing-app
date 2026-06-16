@@ -102,3 +102,66 @@ def test_portfolio_ai_accepts_serialized_technical_analysis(monkeypatch):
     assert "テクニカル: Buy" in prompt
     assert "売買数量や注文を指示しない" in prompt
     assert "未信頼の引用データ" in prompt
+
+
+def test_portfolio_ai_reuses_market_context_without_market_refetch(monkeypatch):
+    from src.advisor import llm
+    from src.services.analysis_context import DataResult, MarketContext, ProvenanceItem
+
+    def fail_fetch():
+        raise AssertionError("market fetch should not run when context is supplied")
+
+    monkeypatch.setattr(llm, "get_macro_context", fail_fetch)
+    monkeypatch.setattr(llm, "analyze_market_technicals", fail_fetch)
+    monkeypatch.setattr(llm, "get_sector_performance", fail_fetch)
+    monkeypatch.setattr(llm, "get_holdings_news", lambda holdings: [])
+    monkeypatch.setattr(llm, "generate_content", lambda prompt: prompt)
+    monkeypatch.setattr(
+        "src.knowledge_storage.get_knowledge_for_ai_context", lambda max_items: ""
+    )
+    analysis = {
+        "total_value": 200.0,
+        "num_holdings": 1,
+        "holdings": [
+            {
+                "ticker": "AAPL",
+                "name": "Apple",
+                "current_price": 100.0,
+                "shares": 2.0,
+                "value": 200.0,
+                "weight": 100.0,
+                "technical": None,
+            }
+        ],
+    }
+    market_context = MarketContext(
+        market_type="US",
+        evaluation={"status": "Neutral", "score": 0.0, "signals": []},
+        data_status=[
+            DataResult(
+                name="market_indices",
+                source="persistent_cache",
+                is_stale=True,
+                cache_status="stale_cache",
+                error="using stale fallback",
+            )
+        ],
+        provenance=[
+            ProvenanceItem(
+                item_id="market.indices",
+                label="Market indices",
+                source="persistent_cache",
+                limitation="stale fallback",
+            )
+        ],
+    )
+
+    prompt = llm.generate_portfolio_advice(
+        analysis,
+        market_context=market_context,
+        include_news=False,
+    )
+
+    assert "共有MarketContext" in prompt
+    assert "persistent_cache" in prompt
+    assert "stale fallback" in prompt

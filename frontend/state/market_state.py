@@ -346,6 +346,13 @@ class MarketState(rx.State):
 
     def _apply_market_context(self, context) -> None:
         self.market_context = context.to_dict()
+        from src.services.provider_health import (
+            record_data_results,
+            record_option_context,
+        )
+
+        record_data_results(context.data_status, scope=f"market.{context.market_type}")
+        record_option_context(context.options, scope=f"market.{context.market_type}")
         display = build_market_display_context(context)
 
         self.option_error_msg = context.options.error_message
