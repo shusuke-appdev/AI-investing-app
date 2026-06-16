@@ -30,6 +30,22 @@ def _render_stock_row(stock: ThemeStock) -> rx.Component:
     )
 
 
+def _theme_stocks_accordion(theme_data: ThemeItem) -> rx.Component:
+    return rx.accordion.root(
+        rx.accordion.item(
+            header="構成銘柄を表示",
+            content=rx.vstack(
+                rx.foreach(theme_data.stocks, _render_stock_row),
+                width="100%",
+                spacing="0",
+            ),
+        ),
+        type="single",
+        collapsible=True,
+        width="100%",
+    )
+
+
 def _render_theme_item(theme_data: ThemeItem, index: int) -> rx.Component:
     """個別のテーマ項目を描画する"""
     perf = theme_data.performance
@@ -79,22 +95,17 @@ def _render_theme_item(theme_data: ThemeItem, index: int) -> rx.Component:
                 align_items="start",
                 spacing="3",
             ),
-            rx.divider(),
             rx.cond(
                 theme_data.stocks.length() > 0,
-                rx.vstack(
-                    rx.foreach(theme_data.stocks, _render_stock_row),
-                    width="100%",
-                    spacing="0",
-                ),
+                _theme_stocks_accordion(theme_data),
                 rx.text("銘柄データなし", size="2", color="gray"),
             ),
             width="100%",
             align_items="start",
-            spacing="3",
+            spacing="2",
         ),
         width="100%",
-        padding="1rem",
+        padding="0.8rem",
     )
 
 

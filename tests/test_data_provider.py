@@ -228,3 +228,30 @@ class TestDataProvider:
         finally:
             # Cleanup to avoid side-effects on other tests
             set_data_provider(DefaultDataProvider())
+
+    def test_market_data_option_facade_forwards_cache_only(self):
+        from src import market_data
+        from src.data_provider import DefaultDataProvider, set_data_provider
+
+        calls = []
+
+        class FakeProvider:
+            def get_option_chain(
+                self, ticker, *, allow_marketdata=False, cache_only=False
+            ):
+                calls.append((ticker, allow_marketdata, cache_only))
+                return None
+
+        try:
+            set_data_provider(FakeProvider())
+
+            assert (
+                market_data.get_option_chain(
+                    "SPY", allow_marketdata=True, cache_only=True
+                )
+                is None
+            )
+        finally:
+            set_data_provider(DefaultDataProvider())
+
+        assert calls == [("SPY", True, True)]

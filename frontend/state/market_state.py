@@ -5,7 +5,9 @@ import reflex as rx
 from pydantic import BaseModel
 
 from frontend.components.data_provenance import (
+    DataStatusDisplay,
     ProvenanceDisplay,
+    data_status_display_items,
     provenance_display_items,
 )
 from src.services.market_analyst_service import generate_market_analysis_report
@@ -114,6 +116,7 @@ class MarketState(rx.State):
     recap_focus_visible: bool = False
     custom_recap_focus: str = ""
     market_context: dict[str, Any] = {}
+    data_status: list[DataStatusDisplay] = []
     provenance: list[ProvenanceDisplay] = []
 
     def set_market_type(self, m_type: str):
@@ -391,6 +394,7 @@ class MarketState(rx.State):
         self.sectors_data = display.sectors_data
         self.others_data = display.others_data
         self.watch_indices_data = display.watch_indices_data
+        self.data_status = data_status_display_items(context.data_status)
         self.provenance = provenance_display_items(context.provenance)
 
         if context.quality_warnings and not self.error_msg:

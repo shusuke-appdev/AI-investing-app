@@ -114,7 +114,9 @@ def estimate_cta_positioning(df: pd.DataFrame) -> dict | None:
 
 
 @ttl_cache(ttl=600)  # 10分間キャッシュ
-def analyze_market_structure(ticker: str = "SPY") -> dict | None:
+def analyze_market_structure(
+    ticker: str = "SPY", option_analysis: dict | None = None
+) -> dict | None:
     """
     ターゲット銘柄（主にSPY想定）の市場構造を総合分析する。
     """
@@ -126,7 +128,7 @@ def analyze_market_structure(ticker: str = "SPY") -> dict | None:
             return None
 
         # 2. オプション分析データ取得 (IV, GEX等)
-        opt_data = analyze_option_sentiment(ticker)
+        opt_data = option_analysis or analyze_option_sentiment(ticker)
 
         # --- VRP (Volatility Risk Premium) の算出 ---
         hv20 = calculate_historical_volatility(df, window=20)

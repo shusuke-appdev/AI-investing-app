@@ -83,6 +83,7 @@ python -m ruff format --check .
 ```
 
 任意保存先が未設定の場合も失敗にするには `--require-optional` を付けます。
+MarketData.app の live オプション取得を必須検証にするには、`.env` に `MARKETDATA_TOKEN=<token>` を設定したうえで `--require-marketdata` を付けます。token 未設定の状態は `SKIP` とし、アプリ本体は yfinance/cache fallback で継続します。
 
 2026-06-12時点の本番確認:
 
@@ -122,6 +123,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - `MARKETDATA_OPTIONS_MODE=shadow` は比較検証用として残します。画面表示と分析は従来のyfinance結果を維持し、MarketData.appの取得可否・基準時刻・契約既定mode・クレジット情報を品質警告へ記録します
 - MarketData.app経路では0DTE、`strikeLimit=100`、標準契約、必要列だけを取得します。GEXのCall正・Put負は実ディーラー建玉を直接観測したものではなく、簡易な符号仮定です
 - MarketData.appの鮮度modeはAPIへ強制指定せず、アカウント契約の既定値を使います。リアルタイムとは断定せず、各カードの`updated`由来の基準時刻を確認してください
+- データ信頼度・来歴は通常分析画面の上部には常時出さず、専用の「データ品質」ページでProvider設定、最後の成功状態、失敗理由、stale cache/proxy/unavailableを集約確認します
 - キャッシュ由来のデータは `source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` としてUI/AIへ渡します。`stale_cache` 表示がある場合は、外部API失敗時に最後の成功データを使っています
 - 時系列データを突合する場合は `src/services/temporal_alignment.py` の as-of join を使い、許容時間差外の未突合行を `DataResult.is_partial` と `quality_warnings` で明示します
 - 重い分析処理は `src/services/analysis_jobs.py` の `queued/running/succeeded/failed/partial/cancelled` 状態で管理し、単一Reflex環境ではローカルJSON永続化を使います

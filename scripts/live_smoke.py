@@ -8,7 +8,9 @@ import sys
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -85,17 +87,65 @@ def _finnhub_check() -> str:
 
 
 def _marketdata_options_check() -> str:
+    mode = os.getenv("MARKETDATA_OPTIONS_MODE", "<unset>") or "<unset>"
     if not os.getenv("MARKETDATA_TOKEN"):
-        return "SKIP: MARKETDATA_TOKEN is not configured"
-    from src.marketdata_option_provider import fetch_marketdata_option_chain
+        return f"SKIP: MARKETDATA_TOKEN is not configured; mode={mode}"
 
-    result = fetch_marketdata_option_chain("SPY", allow_stale=False, force_refresh=True)
-    if result is None:
-        raise RuntimeError("MarketData.app SPY 0DTE option chain is empty")
-    return (
-        f"source={result.source}, calls={len(result.calls)}, puts={len(result.puts)}, "
-        f"as_of={result.data_as_of or 'unknown'}, credits={result.credits_consumed}"
+    from src.marketdata_client import MarketDataClient
+    from src.marketdata_option_provider import (
+        DEFAULT_DTE,
+        DEFAULT_STRIKE_LIMIT,
+        OPTION_COLUMNS,
+        normalize_option_chain_response,
     )
+
+    client = MarketDataClient()
+    targets = ["SPY", "QQQ", "IWM", "SMH", "SOXX", "IGV"]
+    summaries = []
+    failures = []
+    for ticker in targets:
+        response = client.get(
+            f"/options/chain/{ticker}/",
+            params={
+                "dte": DEFAULT_DTE,
+                "strikeLimit": DEFAULT_STRIKE_LIMIT,
+                "nonstandard": "false",
+                "columns": OPTION_COLUMNS,
+            },
+        )
+        frame = normalize_option_chain_response(response.data)
+        if frame.empty:
+            failures.append(f"{ticker}:HTTP{response.status_code} no_rows")
+            continue
+        calls = int((frame["side"] == "call").sum())
+        puts = int((frame["side"] == "put").sum())
+        summaries.append(
+            f"{ticker}:HTTP{response.status_code} calls={calls} puts={puts} "
+            f"as_of={_latest_updated_timestamp(frame.get('updated')) or 'unknown'} "
+            f"credits={response.credits_consumed}/{response.credits_remaining}"
+        )
+
+    detail = f"mode={mode}; " + "; ".join(summaries)
+    if failures and not summaries:
+        raise RuntimeError("MarketData.app option chains empty: " + "; ".join(failures))
+    if failures:
+        return "DEGRADED: " + detail + "; failures=" + ", ".join(failures)
+    return detail
+
+
+def _latest_updated_timestamp(values: Any) -> str:
+    if values is None:
+        return ""
+    try:
+        numeric = values.dropna()
+    except AttributeError:
+        return ""
+    if numeric.empty:
+        return ""
+    value = float(numeric.max())
+    if value > 10_000_000_000:
+        value = value / 1000.0
+    return datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
 
 
 def _public_readonly_check() -> str:
@@ -143,6 +193,11 @@ def main() -> int:
         action="store_true",
         help="Treat unconfigured Supabase as a failure.",
     )
+    parser.add_argument(
+        "--require-marketdata",
+        action="store_true",
+        help="Treat MarketData.app options skip/degraded as a failure.",
+    )
     args = parser.parse_args()
     checks = [
         _run("external_market", _external_market_check),
@@ -157,6 +212,12 @@ def main() -> int:
     failed = [check for check in checks if check.status == "FAIL"]
     if args.require_optional:
         failed.extend(check for check in checks if check.status == "SKIP")
+    if args.require_marketdata:
+        failed.extend(
+            check
+            for check in checks
+            if check.name == "marketdata_options" and check.status != "PASS"
+        )
     print({"checks": [asdict(check) for check in checks]})
     return 1 if failed else 0
 

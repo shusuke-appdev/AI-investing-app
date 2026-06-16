@@ -1,6 +1,5 @@
 import reflex as rx
 
-from frontend.components.data_provenance import provenance_panel
 from frontend.components.flash_summary import flash_summary
 from frontend.components.ui_primitives import (
     loading_state,
@@ -105,7 +104,6 @@ def index() -> rx.Component:
             MarketState.is_fetching,
             loading_state("市場データを取得中..."),
             rx.vstack(
-                provenance_panel(MarketState.provenance),
                 rx.box(
                     section_heading(
                         "AI Market Recap",

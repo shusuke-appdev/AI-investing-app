@@ -15,11 +15,13 @@ def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
 
 
 def get_option_chain(
-    ticker: str, *, allow_marketdata: bool = False
+    ticker: str, *, allow_marketdata: bool = False, cache_only: bool = False
 ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """Return option chain data."""
 
-    return DataProvider.get_option_chain(ticker, allow_marketdata=allow_marketdata)
+    return DataProvider.get_option_chain(
+        ticker, allow_marketdata=allow_marketdata, cache_only=cache_only
+    )
 
 
 def get_market_indices(market_type: str = MARKET_US) -> dict[str, Any]:

@@ -79,7 +79,9 @@ def _main_navigation_items() -> list[rx.Component]:
     items = [
         nav_item("Market", "globe", "/"),
         nav_item("市場監視", "radar", "/market-watch"),
+        nav_item("テーマ", "list-ordered", "/theme"),
         nav_item("Stock", "trending-up", "/stock"),
+        nav_item("データ品質", "database", "/data-quality"),
     ]
     if personal_data_enabled():
         items.extend(

@@ -1,11 +1,14 @@
 import reflex as rx
 
+from frontend.pages.data_quality import data_quality_page
 from frontend.pages.index import index
 from frontend.pages.knowledge import knowledge as knowledge_page
 from frontend.pages.market_watch import market_watch_page
 from frontend.pages.portfolio import portfolio_page
 from frontend.pages.stock import stock_page
+from frontend.pages.theme import theme_page
 from frontend.pages.trading_plan import trading_plan_page
+from frontend.state.data_quality_state import DataQualityState
 from frontend.state.knowledge_state import KnowledgeState
 from frontend.state.market_state import MarketState
 from frontend.state.portfolio_state import PortfolioState
@@ -31,6 +34,18 @@ app.add_page(
     route="/market-watch",
     title="市場監視 | AI Investing",
     on_load=[MarketState.fetch_market_summary_fast, ThemeState.fetch_themes],
+)
+app.add_page(
+    data_quality_page,
+    route="/data-quality",
+    title="データ品質 | AI Investing",
+    on_load=DataQualityState.refresh_provider_statuses,
+)
+app.add_page(
+    theme_page,
+    route="/theme",
+    title="テーマランキング | AI Investing",
+    on_load=ThemeState.fetch_themes,
 )
 app.add_page(
     portfolio_page,

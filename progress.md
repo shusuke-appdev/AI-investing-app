@@ -228,6 +228,18 @@ streamlit run legacy_streamlit/app.py
 - Renamed Theme Trend surfaces to Theme Ranking, removed the `5日` and `2週間` selector windows, and replaced the theme list with cards that show rank, performance, and constituent stock rows.
 - Preserved the stock analysis data path while adding `/stock` page-load flag normalization and a wider clickable sidebar link target.
 
+# Session update: 2026-06-16 data acquisition / MarketData / data-quality UI
+- Fixed the option-data facade mismatch by threading `cache_only` through `DataProviderProtocol`, `DefaultDataProvider`, `DataProvider`, and `src.market_data.get_option_chain`.
+- Confirmed the prior option failure was not a MarketData.app live failure: local `MARKETDATA_TOKEN` and `MARKETDATA_OPTIONS_MODE` are unset, so MarketData live validation is intentionally `SKIP` and yfinance/cache fallback is the correct behavior.
+- Changed preferred/shadow MarketData option mode so token-missing local runs do not attempt MarketData calls and instead record explicit fallback warnings.
+- Added `/data-quality` plus sidebar navigation, provider configuration status without secrets, Market/Stock data-status panels, and provenance/warning aggregation; removed the prominent top provenance panels from Market, Market Watch, Stock, and Portfolio.
+- Reused the already-fetched SPY option analysis inside market microstructure to avoid a duplicate SPY option fetch.
+- Made opportunity themes return multiple candidates by supplementing with top observation candidates, and added parent sector / ETF proxy / option proxy display.
+- Changed Theme Ranking rows so constituent tickers are hidden behind a disclosure control instead of always shown.
+- Extended `scripts/live_smoke.py` with multi-ticker MarketData options diagnostics and `--require-marketdata`.
+- Updated README, `docs/OPERATIONS.md`, and `docs/ANALYSIS_DATA_PROVENANCE.md` for token setup, dedicated data-quality placement, and proxy/stale-cache handling.
+- Validation: compileall, ruff check, ruff format check, full pytest (`221 passed`), Reflex frontend export, live smoke, direct option-status/microstructure smoke, and Browser checks for `/data-quality` and `/theme` passed. Live smoke still reports FRED as `DEGRADED` with app recovery and MarketData options as `SKIP` until `MARKETDATA_TOKEN` is set.
+
 # Session update: 2026-06-12 daily Entry Framework / Trading Plan
 - Added a daily-data Entry Framework to `StockSignalContext` and the Stock UI, covering market/sector relative strength, transparent VARS proxy, VCP/tightness, RVOL, pocket-pivot proxy, ADR%, ATR extension, and declining-200MA hard rules.
 - US sector relative strength uses the mapped sector ETF; JP theme relative strength uses the median return of up to five peers in the configured theme, with 1306.T fallback.

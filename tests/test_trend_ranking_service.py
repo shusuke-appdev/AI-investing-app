@@ -82,6 +82,7 @@ def test_opportunity_themes_use_ranking_and_option_asymmetry():
                     "option_asymmetry": "upside_squeeze_candidate",
                     "representative_tickers": ["NVDA", "AMD"],
                     "proxy_ticker": "SMH",
+                    "option_proxy_ticker": "SMH",
                 }
             ]
         }
@@ -89,3 +90,54 @@ def test_opportunity_themes_use_ranking_and_option_asymmetry():
 
     assert result["items"][0]["theme"] == "AI半導体"
     assert "非対称" in result["items"][0]["label"]
+    assert result["items"][0]["proxy_ticker"] == "SMH"
+    assert result["items"][0]["option_proxy_ticker"] == "SMH"
+
+
+def test_opportunity_themes_supplement_to_multiple_observation_candidates():
+    result = service.build_opportunity_themes(
+        {
+            "items": [
+                {
+                    "theme": "AI半導体",
+                    "parent_sector": "情報技術",
+                    "rank": 1,
+                    "total_score": 45,
+                    "option_score": 0,
+                    "option_asymmetry": "unavailable",
+                    "representative_tickers": ["NVDA"],
+                    "proxy_ticker": "SMH",
+                    "option_proxy_ticker": "SMH",
+                },
+                {
+                    "theme": "原子力",
+                    "parent_sector": "公益",
+                    "rank": 2,
+                    "total_score": 12,
+                    "option_score": 0,
+                    "option_asymmetry": "unavailable",
+                    "representative_tickers": ["CEG"],
+                    "proxy_ticker": "NLR",
+                    "option_proxy_ticker": "XLU",
+                },
+                {
+                    "theme": "防衛",
+                    "parent_sector": "資本財",
+                    "rank": 3,
+                    "total_score": 10,
+                    "option_score": 0,
+                    "option_asymmetry": "unavailable",
+                    "representative_tickers": ["LMT"],
+                    "proxy_ticker": "ITA",
+                    "option_proxy_ticker": "ITA",
+                },
+            ]
+        }
+    )
+
+    assert [item["theme"] for item in result["items"]] == [
+        "AI半導体",
+        "原子力",
+        "防衛",
+    ]
+    assert result["items"][1]["label"] == "観察"

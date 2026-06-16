@@ -259,6 +259,8 @@ class TrendRankingDisplay(BaseModel):
 class OpportunityThemeDisplay(BaseModel):
     theme: str = ""
     parent_sector: str = ""
+    proxy_ticker: str = ""
+    option_proxy_ticker: str = ""
     rank: int = 0
     opportunity_score: float = 0.0
     opportunity_score_str: str = ""
@@ -830,6 +832,8 @@ def _format_opportunities(raw: dict[str, Any]) -> list[OpportunityThemeDisplay]:
             OpportunityThemeDisplay(
                 theme=item.get("theme", ""),
                 parent_sector=item.get("parent_sector", ""),
+                proxy_ticker=item.get("proxy_ticker", ""),
+                option_proxy_ticker=item.get("option_proxy_ticker", ""),
                 rank=int(item.get("rank", 0) or 0),
                 opportunity_score=score,
                 opportunity_score_str=f"{score:+.1f}",

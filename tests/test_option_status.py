@@ -61,3 +61,19 @@ def test_major_indices_option_status_reports_all_failed(monkeypatch):
     assert result["items"] == []
     assert result["status"] == "failed"
     assert result["failed_tickers"] == ["SPY", "QQQ", "IWM"]
+
+
+def test_major_indices_option_status_passes_marketdata_flag(monkeypatch):
+    seen = []
+
+    def fake_analysis(ticker, **kwargs):
+        seen.append((ticker, kwargs))
+        return {"ticker": ticker, "data_quality": "available"}
+
+    monkeypatch.setattr(option_analyst, "analyze_option_sentiment", fake_analysis)
+
+    result = option_analyst.get_major_indices_option_status("US")
+
+    assert result["status"] == "available"
+    assert [ticker for ticker, _ in seen] == ["SPY", "QQQ", "IWM"]
+    assert all(kwargs["allow_marketdata"] is True for _, kwargs in seen)

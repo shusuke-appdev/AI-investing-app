@@ -20,6 +20,17 @@ class ProvenanceDisplay(BaseModel):
     risk_level: str = "low"
 
 
+class DataStatusDisplay(BaseModel):
+    name: str = ""
+    source: str = ""
+    fetched_at: str = ""
+    status_label: str = "OK"
+    status_key: str = "ok"
+    cache_status: str = ""
+    cache_age_label: str = ""
+    error: str = ""
+
+
 def provenance_display_items(items: Iterable[Any]) -> list[ProvenanceDisplay]:
     result = []
     for item in items:
@@ -30,6 +41,44 @@ def provenance_display_items(items: Iterable[Any]) -> list[ProvenanceDisplay]:
         else:
             continue
         result.append(ProvenanceDisplay(**value))
+    return result
+
+
+def data_status_display_items(items: Iterable[Any]) -> list[DataStatusDisplay]:
+    result = []
+    for item in items:
+        if hasattr(item, "to_dict"):
+            value = item.to_dict()
+        elif isinstance(item, dict):
+            value = item
+        else:
+            continue
+        is_stale = bool(value.get("is_stale", False))
+        is_partial = bool(value.get("is_partial", False))
+        error = str(value.get("error") or "")
+        cache_status = str(value.get("cache_status") or "")
+        age = value.get("cache_age_seconds")
+        status_key = (
+            "failed"
+            if error and cache_status == "failed"
+            else "stale"
+            if is_stale or cache_status == "stale_cache"
+            else "partial"
+            if is_partial or error
+            else "ok"
+        )
+        result.append(
+            DataStatusDisplay(
+                name=str(value.get("name") or ""),
+                source=str(value.get("source") or ""),
+                fetched_at=str(value.get("fetched_at") or ""),
+                status_key=status_key,
+                status_label=_status_label(status_key),
+                cache_status=cache_status,
+                cache_age_label=_cache_age_label(age),
+                error=error,
+            )
+        )
     return result
 
 
@@ -62,6 +111,29 @@ def provenance_panel(items, *, title: str = "データの来歴・信頼性") ->
                     width="100%",
                 ),
                 rx.text("来歴情報はまだありません。", size="2", color="gray"),
+            ),
+            width="100%",
+            align_items="start",
+            spacing="3",
+        ),
+        width="100%",
+        variant="surface",
+    )
+
+
+def data_status_panel(items, *, title: str = "取得ステータス") -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.icon("database", size=18, color=rx.color("blue", 9)),
+                rx.text(title, weight="bold", size="3"),
+                width="100%",
+                align_items="center",
+            ),
+            rx.cond(
+                items.length() > 0,
+                rx.vstack(rx.foreach(items, _data_status_item), width="100%"),
+                rx.text("取得ステータスはまだありません。", size="2", color="gray"),
             ),
             width="100%",
             align_items="start",
@@ -131,6 +203,53 @@ def _provenance_item(item) -> rx.Component:
     )
 
 
+def _data_status_item(item) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(item.name, weight="bold", size="2", flex="1"),
+            rx.badge(
+                item.status_label,
+                color_scheme=_status_color(item.status_key),
+                variant="surface",
+            ),
+            rx.cond(
+                item.cache_status != "",
+                rx.badge(item.cache_status, color_scheme="gray", variant="outline"),
+                rx.fragment(),
+            ),
+            width="100%",
+            align_items="center",
+        ),
+        rx.cond(
+            item.source != "",
+            rx.text("source: " + item.source, size="1", color=rx.color("gray", 10)),
+            rx.fragment(),
+        ),
+        rx.cond(
+            item.fetched_at != "",
+            rx.text("fetched: " + item.fetched_at, size="1", color=rx.color("gray", 9)),
+            rx.fragment(),
+        ),
+        rx.cond(
+            item.cache_age_label != "",
+            rx.text(
+                "cache age: " + item.cache_age_label,
+                size="1",
+                color=rx.color("gray", 9),
+            ),
+            rx.fragment(),
+        ),
+        rx.cond(
+            item.error != "",
+            rx.text(item.error, size="1", color=rx.color("amber", 11)),
+            rx.fragment(),
+        ),
+        padding_y="0.55rem",
+        border_bottom=f"1px solid {rx.color('gray', 3)}",
+        width="100%",
+    )
+
+
 def _kind_label(kind) -> rx.Var:
     return rx.cond(
         kind == "direct",
@@ -185,3 +304,36 @@ def _risk_label(risk) -> rx.Var:
 
 def _risk_color(risk) -> rx.Var:
     return rx.cond(risk == "high", "red", rx.cond(risk == "medium", "amber", "gray"))
+
+
+def _status_label(status_key: str) -> str:
+    return {
+        "ok": "OK",
+        "partial": "一部取得",
+        "stale": "古いデータ",
+        "failed": "失敗",
+    }.get(status_key, status_key)
+
+
+def _cache_age_label(value: Any) -> str:
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    if seconds < 3600:
+        return f"{seconds / 60:.0f}m"
+    return f"{seconds / 3600:.1f}h"
+
+
+def _status_color(status_key) -> rx.Var:
+    return rx.cond(
+        status_key == "ok",
+        "green",
+        rx.cond(
+            status_key == "partial",
+            "amber",
+            rx.cond(status_key == "stale", "orange", "red"),
+        ),
+    )

@@ -85,6 +85,8 @@ SUPABASE_SECRET_KEY=your_supabase_secret_key_here
 公開配置では `APP_MODE=public_readonly` を設定してください。公開モードでは個人データを読み書きせず、個人ページをナビゲーションから除外し、AI生成とURL・YouTube取り込みも拒否します。
 保存先の既定値はローカルJSONです。
 
+MarketData.app の live オプション取得を厳格に検証するには、ローカル `.env` に `MARKETDATA_TOKEN` を設定してください。未設定時はアプリ障害ではなく `MarketData未設定 / yfinance・cache fallback中` として扱います。
+
 J-Quants Freeの価格系列は遅延するため、汎用の現在値・価格履歴には使用しません。日本株の現在値・履歴はyfinanceを使い、J-Quantsは企業マスター・財務情報の補完に限定します。
 
 ## 起動

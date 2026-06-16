@@ -95,6 +95,7 @@ def build_opportunity_themes(
     trend_ranking: dict[str, Any] | None,
     *,
     market_distortions: dict[str, Any] | None = None,
+    min_items: int = 3,
     max_items: int = 5,
 ) -> dict[str, Any]:
     """Select themes with favorable trend, asymmetry, and distortion evidence."""
@@ -108,12 +109,12 @@ def build_opportunity_themes(
         distortion = distortions.get(str(item.get("theme")), {})
         distortion_score = float(distortion.get("distortion_score") or 0.0)
         opportunity_score = score + option_score * 0.8 + max(distortion_score, 0) * 30
-        if opportunity_score < 20:
-            continue
         rows.append(
             {
                 "theme": item.get("theme", ""),
                 "parent_sector": item.get("parent_sector", ""),
+                "proxy_ticker": item.get("proxy_ticker", ""),
+                "option_proxy_ticker": item.get("option_proxy_ticker", ""),
                 "rank": item.get("rank", 0),
                 "opportunity_score": round(opportunity_score, 1),
                 "label": _opportunity_label(opportunity_score, option_score),
@@ -124,9 +125,21 @@ def build_opportunity_themes(
             }
         )
     rows.sort(key=lambda row: row["opportunity_score"], reverse=True)
+    selected = [row for row in rows if row["opportunity_score"] >= 20]
+    selected = selected[:max_items]
+    desired_min = min(min_items, max_items)
+    if len(selected) < desired_min:
+        selected_themes = {row["theme"] for row in selected}
+        for row in rows:
+            if row["theme"] in selected_themes:
+                continue
+            selected.append({**row, "label": "観察"})
+            selected_themes.add(row["theme"])
+            if len(selected) >= desired_min:
+                break
     return {
-        "items": rows[:max_items],
-        "summary": _opportunity_summary(rows),
+        "items": selected[:max_items],
+        "summary": _opportunity_summary(selected),
     }
 
 

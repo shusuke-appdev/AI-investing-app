@@ -6,7 +6,9 @@ import reflex as rx
 from pydantic import BaseModel
 
 from frontend.components.data_provenance import (
+    DataStatusDisplay,
     ProvenanceDisplay,
+    data_status_display_items,
     provenance_display_items,
 )
 from src.display_labels import SECTOR_RATING_LABELS, display_label
@@ -108,7 +110,7 @@ class StockState(rx.State):
     sector_theme_option_data_as_of: str = ""
     sector_theme_option_data_quality: str = ""
     stock_signal_context: dict[str, Any] = {}
-    data_status: list[dict[str, Any]] = []
+    data_status: list[DataStatusDisplay] = []
     provenance: list[ProvenanceDisplay] = []
 
     def prepare_page(self):
@@ -230,7 +232,7 @@ class StockState(rx.State):
                 self.sector_theme_context.get("theme_option_data_quality", "")
             )
             self.stock_signal_context = plain_state_value(context.stock_signal_context)
-            self.data_status = plain_state_value(context.data_status)
+            self.data_status = data_status_display_items(context.data_status)
             self.provenance = provenance_display_items(context.provenance)
             self.profile_warning = context.profile_warning
             if context.error_message:

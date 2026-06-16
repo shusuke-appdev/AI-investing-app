@@ -161,8 +161,15 @@ def get_option_chain(
         (calls_df, puts_df) のタプル。取得不可の場合はNone。
     """
     ticker = ticker.upper()
-    mode = _marketdata_options_mode() if allow_marketdata else "off"
+    requested_mode = _marketdata_options_mode() if allow_marketdata else "off"
+    mode = requested_mode
     if not _marketdata_allowed_for_ticker(ticker):
+        mode = "off"
+        requested_mode = "off"
+    marketdata_unconfigured = mode in {"preferred", "shadow"} and not (
+        marketdata_is_configured()
+    )
+    if marketdata_unconfigured:
         mode = "off"
     if cache_only:
         cached = _load_persistent_cache(ticker, max_age_seconds=OPTION_STALE_TTL)
@@ -195,7 +202,7 @@ def get_option_chain(
 
     yfinance_result = _get_yfinance_option_chain(ticker)
 
-    if mode == "preferred":
+    if requested_mode == "preferred":
         metadata = get_option_chain_metadata(ticker)
         warnings = list(metadata.get("quality_warnings") or [])
         if marketdata_is_configured():
@@ -207,14 +214,20 @@ def get_option_chain(
                 "MarketData.app token is not configured; yfinance fallback is active."
             )
         metadata["quality_warnings"] = warnings
-        metadata["marketdata_options_mode"] = mode
+        metadata["marketdata_options_mode"] = requested_mode
         _replace_metadata(ticker, metadata)
 
-    if mode == "shadow":
-        marketdata_result = _fetch_marketdata_chain(ticker)
+    if requested_mode == "shadow":
+        marketdata_result = (
+            None if marketdata_unconfigured else _fetch_marketdata_chain(ticker)
+        )
         metadata = get_option_chain_metadata(ticker)
         warnings = list(metadata.get("quality_warnings") or [])
-        if marketdata_result is None:
+        if marketdata_unconfigured:
+            warnings.append(
+                "MarketData.app token is not configured; shadow comparison is skipped."
+            )
+        elif marketdata_result is None:
             warnings.append(
                 "MarketData.app shadow comparison unavailable; yfinance result retained."
             )
@@ -239,7 +252,7 @@ def get_option_chain(
                 }
             )
         metadata["quality_warnings"] = warnings
-        metadata["marketdata_options_mode"] = mode
+        metadata["marketdata_options_mode"] = requested_mode
         _replace_metadata(ticker, metadata)
 
     return yfinance_result
@@ -400,6 +413,21 @@ def _marketdata_options_mode() -> str:
     default_mode = "preferred" if marketdata_is_configured() else "off"
     mode = os.getenv("MARKETDATA_OPTIONS_MODE", default_mode).strip().lower()
     return mode if mode in MARKETDATA_OPTIONS_MODES else "off"
+
+
+def marketdata_options_status() -> dict[str, Any]:
+    """Return non-secret MarketData.app option configuration status."""
+
+    raw_mode = os.getenv("MARKETDATA_OPTIONS_MODE", "").strip().lower()
+    configured = marketdata_is_configured()
+    effective_mode = _marketdata_options_mode()
+    return {
+        "token_configured": configured,
+        "configured_mode": raw_mode or "<unset>",
+        "effective_mode": effective_mode,
+        "is_active": configured and effective_mode in {"preferred", "shadow"},
+        "allowed_tickers": sorted(MARKETDATA_OPTION_TICKERS),
+    }
 
 
 def _marketdata_allowed_for_ticker(ticker: str) -> bool:

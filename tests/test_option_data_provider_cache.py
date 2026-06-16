@@ -78,6 +78,7 @@ def test_marketdata_is_only_used_when_explicitly_allowed(monkeypatch):
     puts = pd.DataFrame({"strike": [100]})
     marketdata_calls = []
 
+    monkeypatch.setenv("MARKETDATA_TOKEN", "secret")
     monkeypatch.setenv("MARKETDATA_OPTIONS_MODE", "preferred")
     monkeypatch.setattr(
         option_data_provider,
@@ -124,6 +125,7 @@ def test_theme_etf_proxy_can_use_marketdata_preferred(monkeypatch):
     puts = pd.DataFrame({"strike": [100]})
     marketdata_calls = []
 
+    monkeypatch.setenv("MARKETDATA_TOKEN", "secret")
     monkeypatch.setenv("MARKETDATA_OPTIONS_MODE", "preferred")
     monkeypatch.setattr(
         option_data_provider,
@@ -158,6 +160,7 @@ def test_shadow_mode_retains_yfinance_and_records_comparison(monkeypatch):
     m_calls = pd.DataFrame({"strike": [101]})
     m_puts = pd.DataFrame({"strike": [101]})
 
+    monkeypatch.setenv("MARKETDATA_TOKEN", "secret")
     monkeypatch.setenv("MARKETDATA_OPTIONS_MODE", "shadow")
     monkeypatch.setattr(
         option_data_provider,
@@ -269,3 +272,42 @@ def test_preferred_mode_without_token_reports_unconfigured_fallback(monkeypatch)
     assert any(
         "token is not configured" in item for item in metadata["quality_warnings"]
     )
+
+
+def test_preferred_mode_without_token_skips_marketdata_fetch(monkeypatch):
+    calls = pd.DataFrame({"strike": [100]})
+    puts = pd.DataFrame({"strike": [100]})
+
+    monkeypatch.delenv("MARKETDATA_TOKEN", raising=False)
+    monkeypatch.setenv("MARKETDATA_OPTIONS_MODE", "preferred")
+    monkeypatch.setattr(
+        option_data_provider,
+        "_fetch_marketdata_chain",
+        lambda ticker: (_ for _ in ()).throw(
+            AssertionError("MarketData fetch should be skipped")
+        ),
+    )
+    monkeypatch.setattr(
+        option_data_provider,
+        "_get_yfinance_option_chain",
+        lambda ticker: (
+            option_data_provider._set_metadata(
+                ticker,
+                source="yfinance",
+                fetched_at="now",
+                is_stale=False,
+                data_quality="available",
+                quality_warnings=[],
+                cache_status="live",
+                cache_age_seconds=None,
+            )
+            or (calls, puts)
+        ),
+    )
+
+    result = option_data_provider.get_option_chain("SPY", allow_marketdata=True)
+    metadata = option_data_provider.get_option_chain_metadata("SPY")
+
+    assert result is not None
+    assert metadata["source"] == "yfinance"
+    assert metadata["marketdata_options_mode"] == "preferred"

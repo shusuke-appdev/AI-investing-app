@@ -1,6 +1,5 @@
 import reflex as rx
 
-from frontend.components.data_provenance import provenance_panel
 from frontend.components.fomo_volatility import fomo_volatility_panel
 from frontend.components.metric_card import metric_card
 from frontend.components.probabilistic_signal import probabilistic_signal_panel
@@ -131,7 +130,6 @@ def stock_page() -> rx.Component:
                         width="100%",
                         margin_bottom="1rem",
                     ),
-                    provenance_panel(StockState.provenance),
                     # 現在の評価
                     rx.cond(
                         StockState.technical_data.contains("overall_signal"),

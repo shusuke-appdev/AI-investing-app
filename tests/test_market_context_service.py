@@ -288,7 +288,7 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     monkeypatch.setattr(
         service,
         "analyze_market_structure",
-        lambda ticker: {
+        lambda ticker, option_analysis=None: {
             "vrp": 0.03,
             "cta_proxy": {"score": 10, "extremity": "Neutral"},
             "liquidity": {"status": "Normal"},
@@ -352,7 +352,9 @@ def test_build_market_context_keeps_partial_data_when_options_fail(monkeypatch):
         "evaluate_market_environment",
         lambda market_type, options: {"status": "Neutral", "score": 0, "signals": []},
     )
-    monkeypatch.setattr(service, "analyze_market_structure", lambda ticker: {})
+    monkeypatch.setattr(
+        service, "analyze_market_structure", lambda ticker, option_analysis=None: {}
+    )
     monkeypatch.setattr(service, "get_momentum_themes", lambda market_type: {})
     monkeypatch.setattr(
         service, "build_market_monitor_context", lambda options: _monitor_payload()
@@ -461,7 +463,9 @@ def test_market_details_reuses_supplied_context(monkeypatch):
         "evaluate_market_environment",
         lambda market_type, options: {"status": "Neutral", "score": 0, "signals": []},
     )
-    monkeypatch.setattr(service, "analyze_market_structure", lambda ticker: {})
+    monkeypatch.setattr(
+        service, "analyze_market_structure", lambda ticker, option_analysis=None: {}
+    )
     monkeypatch.setattr(service, "get_momentum_themes", lambda market_type: {})
     monkeypatch.setattr(
         service, "build_market_monitor_context", lambda options: _monitor_payload()
@@ -489,7 +493,9 @@ def test_market_detail_stages_can_update_sequentially(monkeypatch):
         "evaluate_market_environment",
         lambda market_type, options: {"status": "Neutral", "score": 0, "signals": []},
     )
-    monkeypatch.setattr(service, "analyze_market_structure", lambda ticker: {})
+    monkeypatch.setattr(
+        service, "analyze_market_structure", lambda ticker, option_analysis=None: {}
+    )
     monkeypatch.setattr(service, "get_momentum_themes", lambda market_type: {})
     monkeypatch.setattr(
         service, "build_market_monitor_context", lambda options: _monitor_payload()

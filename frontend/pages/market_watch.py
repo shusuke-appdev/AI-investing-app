@@ -1,6 +1,5 @@
 import reflex as rx
 
-from frontend.components.data_provenance import provenance_panel
 from frontend.components.flash_summary import (
     market_distortion_panel,
     market_monitor,
@@ -102,7 +101,6 @@ def market_watch_page() -> rx.Component:
             ),
         ),
         _stage_status_strip(),
-        provenance_panel(MarketState.provenance),
         rx.cond(
             MarketState.error_msg != "",
             rx.callout(

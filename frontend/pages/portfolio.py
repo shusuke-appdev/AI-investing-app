@@ -1,6 +1,5 @@
 import reflex as rx
 
-from frontend.components.data_provenance import provenance_panel
 from frontend.components.ui_primitives import (
     empty_state,
     page_header,
@@ -227,7 +226,6 @@ def _render_analysis_section() -> rx.Component:
                 width="100%",
             ),
         ),
-        provenance_panel(PortfolioState.provenance),
         # サマリーカード
         rx.cond(
             result.contains("total_value"),

@@ -196,7 +196,7 @@ def trend_ranking_panel() -> rx.Component:
                         color=rx.color("gray", 11),
                         flex="1",
                     ),
-                    rx.badge("MarketData preferred", color_scheme="blue"),
+                    rx.badge("Options best effort", color_scheme="blue"),
                     width="100%",
                     align_items="center",
                 ),
@@ -442,8 +442,9 @@ def _trend_rank_row(item) -> rx.Component:
                     color=rx.color("gray", 10),
                 ),
                 rx.cond(
-                    item.option_summary != "",
-                    rx.text(item.option_summary, size="1", color=rx.color("gray", 10)),
+                    (item.option_summary != "")
+                    | (item.representative_tickers.length() > 0),
+                    _trend_rank_details(item),
                     rx.fragment(),
                 ),
                 align_items="start",
@@ -474,6 +475,46 @@ def _trend_rank_row(item) -> rx.Component:
     )
 
 
+def _trend_rank_details(item) -> rx.Component:
+    return rx.accordion.root(
+        rx.accordion.item(
+            header="詳細",
+            content=rx.vstack(
+                rx.cond(
+                    item.option_summary != "",
+                    rx.text(
+                        item.option_summary,
+                        size="1",
+                        color=rx.color("gray", 10),
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    item.representative_tickers.length() > 0,
+                    rx.hstack(
+                        rx.text("代表銘柄", size="1", color=rx.color("gray", 10)),
+                        rx.foreach(
+                            item.representative_tickers,
+                            lambda ticker: rx.badge(
+                                ticker, color_scheme="gray", variant="surface"
+                            ),
+                        ),
+                        spacing="1",
+                        wrap="wrap",
+                    ),
+                    rx.fragment(),
+                ),
+                width="100%",
+                align_items="start",
+                spacing="1",
+            ),
+        ),
+        type="single",
+        collapsible=True,
+        width="100%",
+    )
+
+
 def _opportunity_theme_card(item) -> rx.Component:
     return rx.card(
         rx.vstack(
@@ -482,6 +523,33 @@ def _opportunity_theme_card(item) -> rx.Component:
                 rx.badge(item.label, color_scheme="green", variant="surface"),
                 width="100%",
                 align_items="center",
+            ),
+            rx.hstack(
+                rx.cond(
+                    item.parent_sector != "",
+                    rx.badge(item.parent_sector, color_scheme="gray", variant="soft"),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    item.proxy_ticker != "",
+                    rx.badge(
+                        "ETF " + item.proxy_ticker,
+                        color_scheme="cyan",
+                        variant="surface",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    item.option_proxy_ticker != "",
+                    rx.badge(
+                        "Option " + item.option_proxy_ticker,
+                        color_scheme="blue",
+                        variant="surface",
+                    ),
+                    rx.fragment(),
+                ),
+                spacing="1",
+                wrap="wrap",
             ),
             rx.text(item.reason, size="1", color=rx.color("gray", 10)),
             rx.text(

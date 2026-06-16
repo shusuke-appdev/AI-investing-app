@@ -194,7 +194,9 @@ def build_market_medium_context(
         ).to_dict()
 
     def microstructure_task() -> dict[str, Any]:
-        return _normalize_microstructure(analyze_market_structure("SPY"))
+        return _normalize_microstructure(
+            analyze_market_structure("SPY", _option_item(options.items, "SPY"))
+        )
 
     def momentum_task() -> dict[str, list[dict[str, Any]]]:
         return get_momentum_themes(market_type)
@@ -1374,6 +1376,18 @@ def _extract_spy_pcr(option_data: list[dict[str, Any]] | None) -> float | None:
         return float(value) if isinstance(value, (int, float)) else None
     if isinstance(pcr, (int, float)):
         return float(pcr)
+    return None
+
+
+def _option_item(
+    option_data: list[dict[str, Any]] | None, ticker: str
+) -> dict[str, Any] | None:
+    if not option_data:
+        return None
+    normalized = ticker.upper()
+    for item in option_data:
+        if str(item.get("ticker") or "").upper() == normalized:
+            return item
     return None
 
 
