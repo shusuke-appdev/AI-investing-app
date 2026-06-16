@@ -1,5 +1,10 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-06-16 Hugging Face Spaces sync fix
+- Root cause: GitHub Actions quality checks were passing, but Hugging Face Spaces rejected direct history pushes because tracked `docs/ui-audit/2026-06-11/*.png` binary audit artifacts were present in `main`.
+- Changed Spaces sync to deploy a clean `git archive HEAD` worktree, remove `docs/ui-audit` from that deploy-only tree, and force-push the generated deploy commit to Hugging Face.
+- Updated GitHub Actions checkout/setup-python actions to Node 24-compatible v6 releases to clear the Node 20 deprecation warning.
+
 ## Session update: 2026-06-14 product review high-risk remediation
 - Expanded `APP_MODE=public_readonly` from write-only protection to a complete public boundary: personal-data reads, AI generation, and URL/YouTube ingestion are blocked; personal pages are hidden from navigation and show a direct-access notice.
 - Changed Knowledge URL redirects to validate every destination before connection and close streamed responses reliably.
