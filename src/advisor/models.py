@@ -2,9 +2,33 @@ from dataclasses import dataclass, field
 from typing import Any, TypedDict
 
 
-class MinerviniStageResult(TypedDict):
+class MinerviniStageCondition(TypedDict, total=False):
+    key: str
+    label: str
+    status: str
+    value: str
+    rationale: str
+
+
+class MinerviniStageResult(TypedDict, total=False):
     stage: int
     description: str
+    label: str
+    status: str
+    current_price: float | None
+    ma50: float | None
+    ma150: float | None
+    ma200: float | None
+    ma200_rising: bool | None
+    ma200_slope_20d_pct: float | None
+    high_52w: float | None
+    low_52w: float | None
+    pct_above_low_52w: float | None
+    pct_below_high_52w: float | None
+    stage2_pass_count: int
+    stage2_total_count: int
+    conditions: list[MinerviniStageCondition]
+    warnings: list[str]
 
 
 class MinerviniVcpResult(TypedDict, total=False):

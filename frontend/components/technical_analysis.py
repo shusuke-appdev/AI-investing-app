@@ -1,3 +1,5 @@
+from typing import Any
+
 import reflex as rx
 
 from frontend.components.ui_primitives import evaluation_badge
@@ -160,6 +162,152 @@ def _render_detail_section() -> rx.Component:
     )
 
 
+def _stage_condition_row(item: dict) -> rx.Component:
+    return rx.hstack(
+        evaluation_badge(
+            rx.cond(item["status"] == "pass", "達成", "未達"),
+            rx.cond(item["status"] == "pass", "green", "red"),
+        ),
+        rx.vstack(
+            rx.text(item["label"], size="2", weight="bold"),
+            rx.text(item["value"], size="1", color=rx.color("gray", 10)),
+            rx.text(item["rationale"], size="1", color=rx.color("gray", 10)),
+            align_items="start",
+            spacing="1",
+        ),
+        align_items="start",
+        width="100%",
+        padding_y="0.35rem",
+        border_bottom=f"1px solid {rx.color('gray', 4)}",
+    )
+
+
+def _stage_metric(label: str, value, suffix: str = "") -> rx.Component:
+    return rx.vstack(
+        rx.text(label, size="1", color=rx.color("gray", 10)),
+        rx.text(value, suffix, size="3", weight="bold"),
+        align_items="start",
+        spacing="1",
+    )
+
+
+def _render_minervini_section() -> rx.Component:
+    tech = StockState.technical_data
+    stage = tech["stage_data"].to(dict[str, Any])
+    vcp = tech["vcp_data"].to(dict[str, Any])
+    conditions = stage["conditions"].to(list[dict])
+    warnings = stage["warnings"].to(list[str])
+    stage_no = stage["stage"].to(int)
+    return rx.cond(
+        tech.contains("stage_data"),
+        rx.box(
+            rx.hstack(
+                rx.vstack(
+                    rx.heading("ミネルヴィニ ステージ分析", size="4"),
+                    rx.text(
+                        stage["description"].to(str),
+                        size="2",
+                        color=rx.color("gray", 11),
+                    ),
+                    align_items="start",
+                    spacing="1",
+                ),
+                rx.spacer(),
+                evaluation_badge(
+                    stage["label"].to(str),
+                    rx.cond(
+                        stage_no == 2,
+                        "green",
+                        rx.cond(
+                            stage_no == 4,
+                            "red",
+                            rx.cond(stage_no == 0, "gray", "orange"),
+                        ),
+                    ),
+                ),
+                rx.badge(
+                    stage["stage2_pass_count"].to(str)
+                    + "/"
+                    + stage["stage2_total_count"].to(str),
+                    color_scheme="blue",
+                    variant="surface",
+                ),
+                width="100%",
+                align_items="center",
+                wrap="wrap",
+                margin_bottom="1rem",
+            ),
+            rx.grid(
+                _stage_metric("現在値", stage["current_price"].to(float)),
+                _stage_metric("50日線", stage["ma50"].to(float)),
+                _stage_metric("150日線", stage["ma150"].to(float)),
+                _stage_metric("200日線", stage["ma200"].to(float)),
+                _stage_metric(
+                    "200日線傾き", stage["ma200_slope_20d_pct"].to(float), "%"
+                ),
+                _stage_metric("52週安値比", stage["pct_above_low_52w"].to(float), "%"),
+                _stage_metric("52週高値比", stage["pct_below_high_52w"].to(float), "%"),
+                columns=rx.breakpoints(initial="2", md="4"),
+                spacing="3",
+                width="100%",
+                margin_bottom="1rem",
+            ),
+            rx.cond(
+                vcp["is_vcp"].to(bool),
+                rx.callout(
+                    rx.hstack(
+                        rx.badge("VCP", color_scheme="green"),
+                        rx.text(
+                            "ブレイク水準 ",
+                            vcp["breakout_price"].to(float),
+                            " / 収縮 ",
+                            vcp["contractions"].to(str),
+                            "回",
+                        ),
+                        spacing="2",
+                        wrap="wrap",
+                    ),
+                    icon="chart-no-axes-combined",
+                    color_scheme="green",
+                    width="100%",
+                    margin_bottom="1rem",
+                ),
+                rx.fragment(),
+            ),
+            rx.grid(
+                rx.foreach(conditions, _stage_condition_row),
+                columns=rx.breakpoints(initial="1", md="2"),
+                spacing="3",
+                width="100%",
+            ),
+            rx.cond(
+                warnings.length() > 0,
+                rx.callout(
+                    rx.vstack(
+                        rx.foreach(
+                            warnings,
+                            lambda item: rx.text(item, size="2"),
+                        ),
+                        align_items="start",
+                    ),
+                    icon="triangle_alert",
+                    color_scheme="amber",
+                    width="100%",
+                    margin_top="1rem",
+                ),
+                rx.fragment(),
+            ),
+            width="100%",
+            padding="1rem",
+            bg=rx.color("gray", 2),
+            border=f"1px solid {rx.color('gray', 4)}",
+            border_radius="8px",
+            margin_bottom="1rem",
+        ),
+        rx.fragment(),
+    )
+
+
 def technical_analysis() -> rx.Component:
     """テクニカル分析セクション"""
     return rx.cond(
@@ -169,6 +317,7 @@ def technical_analysis() -> rx.Component:
                 "テクニカル分析", size="5", margin_bottom="1rem", margin_top="2rem"
             ),
             _render_score_row(),
+            _render_minervini_section(),
             _render_detail_section(),
             width="100%",
         ),

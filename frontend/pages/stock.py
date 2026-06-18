@@ -3,8 +3,8 @@ import reflex as rx
 from frontend.components.fomo_volatility import fomo_volatility_panel
 from frontend.components.metric_card import metric_card
 from frontend.components.probabilistic_signal import probabilistic_signal_panel
+from frontend.components.stock_trade_analysis import stock_trade_analysis_panel
 from frontend.components.technical_analysis import technical_analysis
-from frontend.components.trade_setup import trade_setup_panel
 from frontend.components.trend_follow_diagnostics import (
     trend_follow_diagnostics_panel,
 )
@@ -639,7 +639,7 @@ def stock_page() -> rx.Component:
                     ),
                     # テクニカル分析
                     technical_analysis(),
-                    trade_setup_panel(),
+                    stock_trade_analysis_panel(),
                     probabilistic_signal_panel(),
                     fomo_volatility_panel(),
                     trend_follow_diagnostics_panel(),

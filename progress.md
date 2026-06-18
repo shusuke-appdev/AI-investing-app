@@ -1,5 +1,15 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-06-18 stock trade integration / market cleanup / detail refresh staging
+- Removed the normal `/trading-plan` route and navigation entry while keeping the legacy trade plan storage/code for compatibility; Stock now exposes trade analysis only after the user presses the `トレード分析` button.
+- Added Stock trade analysis generation from existing `StockSignalContext` assets, including timing scenarios, key levels, invalidation/risk levels, supply-demand checks, and the existing entry-quality panel inside the expanded trade analysis surface.
+- Expanded Minervini stage analysis with MA50/150/200, 200-day slope, 52-week positioning, Stage 2 pass/fail conditions, warnings, and VCP breakout details in the Stock technical section.
+- Unified US/JP market index, commodity, FX, and crypto configs; JP sectors now use NEXT FUNDS TOPIX-17 ETFs (`1617.T`-`1633.T`), GBP/USD was removed, and crypto order is Ethereum then Bitcoin.
+- Moved Data Quality navigation to the bottom of the sidebar/drawer, moved expected provider/options/AI recap notices out of the global market error flow, and fixed the CNN Fear & Greed reference routing.
+- Split detailed market refresh into staged updates (`core`, `theme_flow`, `volatility_sentiment`, `credit_distortion`, `options`) and reduced duplicate theme/trend downloads by deriving multiple periods from one maximum-window fetch.
+- Updated product/provenance/operations/architecture docs for the new Stock, Market, data-quality, and staged-refresh behavior.
+- Validation: compileall passed, ruff check passed, ruff format check passed, full pytest passed (`240 passed`), and Reflex frontend export passed.
+
 ## Session update: 2026-06-17 product review roadmap implementation
 - Changed Reflex Portfolio storage to use the shared local/Supabase storage setting instead of forcing `local`; added a Portfolio-page storage selector/status and regression coverage for shared storage defaults.
 - Hardened Docker build context exclusions for local secrets and personal data, including Streamlit secrets, `data/*.json`, backups/history, uploads, downloads, keys, and pem files; added a `.dockerignore` regression test.

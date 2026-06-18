@@ -41,8 +41,22 @@ def _fetch_performance_observations(
 ) -> dict[str, dict[str, float | int]]:
     """Return only performances that cover the full requested calendar window."""
 
+    return _fetch_performance_observations_for_periods((days,), market_type).get(
+        days, {}
+    )
+
+
+def _fetch_performance_observations_for_periods(
+    days_values: tuple[int, ...],
+    market_type: str = "US",
+) -> dict[int, dict[str, dict[str, float | int]]]:
+    """Return performance observations for multiple periods from one batch fetch."""
+
     configure_yfinance_cache()
     themes = get_themes(market_type)
+    requested_days = tuple(sorted({int(days) for days in days_values if days > 0}))
+    if not requested_days:
+        return {}
 
     # 1. 全銘柄リストの作成
     all_tickers = set()
@@ -53,26 +67,11 @@ def _fetch_performance_observations(
     if not all_tickers:
         return {}
 
-    # 2. 一括取得 (yfinance batch)
-    # 期間に応じた適切なデータを取得し、日付ベースで計算する
-
-    # 期間設定を長めに確保して、確実に過去データが含まれるようにする
-    fetch_period = "1mo"
+    fetch_period = _fetch_period_for_days(max(requested_days))
     interval = "1d"
-
-    if days <= 5:
-        fetch_period = "1mo"  # 5日でも1ヶ月分取っておけば確実
-        interval = "1d"
-    elif days <= 30:
-        fetch_period = "3mo"
-    elif days <= 90:
-        fetch_period = "6mo"
-    elif days <= 180:
-        fetch_period = "1y"
-    else:
-        fetch_period = "2y"  # 1年以上なら2年分
-
-    performance_map: dict[str, dict[str, float | int]] = {}
+    performance_maps: dict[int, dict[str, dict[str, float | int]]] = {
+        days: {} for days in requested_days
+    }
 
     try:
         # yfinanceで一括ダウンロード
@@ -118,23 +117,17 @@ def _fetch_performance_observations(
                 current_date = closes.index[-1]
                 current_price = closes.iloc[-1]
 
-                # 目標とする開始日 (営業日ベースで厳密に計算)
-                target_date = current_date - timedelta(days=days)
-
-                # target_date 以前で最も近い日付を探す (asof)
-                # get_indexer は method='nearest' が使えるが、未来方向に行くと期間が短くなるので
-                # target_date "以下" の最大日付を探したい。
-                # 簡易的に、indexから target_date 以下のものをフィルタして最後を取得
-
-                past_data = closes[closes.index <= target_date]
-                if past_data.empty:
-                    continue
-                start_date = past_data.index[-1]
-                start_price = float(past_data.iloc[-1])
-
-                if start_price != 0:
+                for days in requested_days:
+                    target_date = current_date - timedelta(days=days)
+                    past_data = closes[closes.index <= target_date]
+                    if past_data.empty:
+                        continue
+                    start_date = past_data.index[-1]
+                    start_price = float(past_data.iloc[-1])
+                    if start_price == 0:
+                        continue
                     perf = ((float(current_price) - start_price) / start_price) * 100
-                    performance_map[ticker] = {
+                    performance_maps[days][ticker] = {
                         "performance": perf,
                         "requested_days": days,
                         "actual_days": max(0, int((current_date - start_date).days)),
@@ -147,7 +140,19 @@ def _fetch_performance_observations(
         logger.error(f"Batch download error: {e}")
         return {}
 
-    return performance_map
+    return performance_maps
+
+
+def _fetch_period_for_days(days: int) -> str:
+    if days <= 5:
+        return "1mo"
+    if days <= 30:
+        return "3mo"
+    if days <= 90:
+        return "6mo"
+    if days <= 180:
+        return "1y"
+    return "2y"
 
 
 @ttl_cache(ttl=43200)  # 12時間キャッシュ
@@ -167,6 +172,38 @@ def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:
 
     days = PERIODS[period_name]
     ticker_performances = _fetch_performance_observations(days, market_type)
+    return _rank_themes_from_observations(days, ticker_performances, market_type)
+
+
+@ttl_cache(ttl=43200)
+def get_ranked_theme_periods(
+    period_names: tuple[str, ...],
+    market_type: str = "US",
+) -> dict[str, list[dict]]:
+    """Return rankings for several periods using one yfinance batch fetch."""
+
+    unknown = [period for period in period_names if period not in PERIODS]
+    if unknown:
+        raise ValueError(f"Unknown periods: {', '.join(unknown)}")
+    days_by_period = {period: PERIODS[period] for period in period_names}
+    observations_by_days = _fetch_performance_observations_for_periods(
+        tuple(days_by_period.values()), market_type
+    )
+    return {
+        period: _rank_themes_from_observations(
+            days,
+            observations_by_days.get(days, {}),
+            market_type,
+        )
+        for period, days in days_by_period.items()
+    }
+
+
+def _rank_themes_from_observations(
+    days: int,
+    ticker_performances: dict[str, dict[str, float | int]],
+    market_type: str,
+) -> list[dict]:
 
     themes = get_themes(market_type)
     theme_performances = []

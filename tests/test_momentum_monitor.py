@@ -7,7 +7,9 @@ def test_momentum_context_preserves_distinct_leaders_and_laggards(monkeypatch):
         for index in range(10)
     ]
     monkeypatch.setattr(
-        momentum_monitor, "get_ranked_themes", lambda period, market: ranked
+        momentum_monitor,
+        "get_ranked_theme_periods",
+        lambda periods, market: {period: ranked for period in periods},
     )
 
     result = momentum_monitor.get_momentum_themes.__wrapped__("US", top_n=3)

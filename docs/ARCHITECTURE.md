@@ -13,7 +13,6 @@
   - `/`: Market Intelligence
   - `/market-watch`: 市場監視
   - `/stock`: 個別銘柄分析
-  - `/trading-plan`: 売買計画・実行品質管理
   - `/portfolio`: ポートフォリオ分析
   - `/knowledge`: 参照知識管理
 - 旧Streamlit UI: `legacy_streamlit/app.py` と `src/ui/` は frozen archive。通常の機能追加・不具合修正は `frontend/` に行う
@@ -88,7 +87,7 @@ UI
 ### 市場監視
 
 - `/market-watch` は、総合市場監視、IBD式市場状態、状態別固定プレイブック、テーマモメンタム、テーマランキング、オプション分析、市場の歪み検知を集約する
-- 市場監視の詳細更新は、低難易度のキャッシュ/サマリー、中難易度の市場状態・資金フロー、高難易度のFRED信用ストレス・歪み検知、オプション分析の順に `MarketState` が yield し、各ブロックの `status`、`cache_status`、`fetched_at`、`quality_warnings` を表示モデルへ渡す
+- 市場監視の詳細更新は、Core、Theme/Flow、Vol/Sentiment、Credit/Risk、Optionsの順に `MarketState` が yield し、各ブロックの `status`、`cache_status`、`fetched_at`、`quality_warnings` を表示モデルへ渡す
 - IBD式市場状態は `advisor.ibd_market_regime.classify_ibd_market_regime()` が SPY / Nasdaq 100 代理データから判定する。分類は `confirmed_uptrend`、`uptrend_under_pressure`、`rally_attempt`、`market_in_correction`
 - `services.market_playbook` は市場状態ごとの「現在考えるべきこと」「今やること」「避けること」を固定データとして返す
 - `advisor.sector_theme_diagnostics.detect_market_distortions()` はテーマごとのファンダメンタルスコアとフロースコアの乖離から、強気/弱気の歪み候補を上位5件ずつ返す
@@ -103,13 +102,13 @@ UI
 6. `advisor.sector_theme_diagnostics.evaluate_stock_sector_theme_context()` が対象銘柄のセクター/テーマを、ファンダメンタル優位とフロー優位の両面から評価して `StockSignalContext` に追加する
 7. `advisor.trade_setup.evaluate_trade_setup()` が市場/セクター相対強度、VCP、RVOL、ATR拡張、200MAトレンドを日足Entry Frameworkとして評価し、`StockSignalContext.trade_setup` に追加する
 8. `StockSignalContext` は表示済みニュース見出し、SMART基準、テクニカル、Entry Frameworkも保持し、AI分析は `stock_analyst.analyze_stock()` が同じ入力を再利用してプロンプトを組み立てる
+9. `StockState.show_trade_analysis()` はユーザーが「トレード分析」を押した場合だけ、既存の `StockSignalContext` から重要水準、押し目/ブレイク条件、無効化条件、需給根拠を生成する
 
-### Trading Plan
+### Trading Plan互換コード
 
-1. `/stock` のEntry Frameworkは銘柄のセットアップ品質と禁止条件を評価する
-2. `/trading-plan` はEntry価格、最終ストップ、口座金額、許容リスク率から推奨株数と3段階ストップを作る
-3. `trading_plan_storage` はローカルJSONまたはSupabaseへEntry時点の分析スナップショットを保存する
-4. T+1/T+3は取得済み日足セッションから判定し、ジャーナル、実現R、ミスタグをProcess Reviewへ集計する
+1. 独立した `/trading-plan` ルートと通常ナビゲーションは廃止し、通常利用はStockページ内の「トレード分析」に統合する
+2. `trading_plan_state`、`trading_plan_service`、`trading_plan_storage`、Supabase `trade_plans` は既存データ互換用に残す
+3. 新規の通常ワークフローでは保存・レビュー機能をStockへ移植せず、分析データを使った条件整理だけを行う
 
 ### ポートフォリオ
 

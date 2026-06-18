@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pandas as pd
 
 
@@ -122,3 +124,35 @@ def test_market_state_classifies_gemini_recap_failure():
         )
         == "gemini"
     )
+
+
+def test_market_state_keeps_quality_warnings_out_of_global_error(monkeypatch):
+    from frontend.state.market_state import MarketState
+    from src.services import provider_health
+    from src.services.analysis_context import MarketContext, OptionContext
+
+    monkeypatch.setattr(provider_health, "record_data_results", lambda *args, **_: None)
+    monkeypatch.setattr(
+        provider_health, "record_option_context", lambda *args, **_: None
+    )
+    state = SimpleNamespace(error_msg="")
+    context = MarketContext(
+        market_type="US",
+        market_data={"S&P 500": {"ticker": "SPY", "price": 500.0, "change": 0.1}},
+        market_config={"indices": {"S&P 500": "SPY"}},
+        options=OptionContext(
+            status="partial",
+            quality_warnings=[
+                "MarketData.app preferred fetch unavailable; yfinance fallback is active.",
+                "Greeks/Gamma are missing from the option provider; GEX is hidden.",
+            ],
+        ),
+        quality_warnings=[
+            "MarketData.app preferred fetch unavailable; yfinance fallback is active."
+        ],
+    )
+
+    MarketState._apply_market_context(state, context)
+
+    assert state.error_msg == ""
+    assert state.option_status == "partial"

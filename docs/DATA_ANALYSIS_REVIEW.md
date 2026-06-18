@@ -1,6 +1,6 @@
 # データ取得・分析機能レビュー
 
-更新日: 2026-06-04
+更新日: 2026-06-18
 
 ## 全体像
 
@@ -8,18 +8,19 @@
 
 - 市場分析: `MarketContext` を中心に、Market Intelligence UI、`/market-watch`、AI Market Recap が同じ市場監視データを共有する
 - 個別銘柄分析: `StockSignalContext` を中心に、Stock UI と AI Stock Recap が同じ銘柄データ、テクニカル、確率シグナル、トレンド診断、セクター/テーマ評価を共有する
-- 実行品質: `StockSignalContext.trade_setup` が日足Entry Gateを共有し、専用Trading PlanがR基準の手動実行管理を担う
+- トレード分析: `StockSignalContext.trade_setup` と個別銘柄分析済みデータを使い、Stock UIの明示ボタン押下後に売買タイミング、重要水準、無効化条件、需給根拠を整理する
 - データ取得: yfinance、Finnhub、FRED、J-Quants、EDINET、Google News を無料・公開データ優先で使う
 - キャッシュ: `.states` 配下の persistent cache と TTL cache で、重い取得や失敗時の stale fallback を扱う
 
 ## 市場分析の配置
 
-通常の市場分析フローは次の4段階に整理されている。
+通常の市場分析フローは次の5段階に整理されている。
 
 1. 軽量概要: `build_market_summary_context()` が指数、セクター、商品、FX、暗号資産などの初期表示に必要な市場データだけを取得する
-2. 中難易度詳細: `build_market_medium_context()` が市場環境評価、IBD式市場状態、マイクロストラクチャー、テーマモメンタム、総合市場監視、ETFリーダーシップproxy、日経平均6条件、資金流入セクター判定を追加する
-3. 高難易度詳細: `build_market_high_context()` がFRED信用ストレスと市場の歪み検知を追加し、FREDが遅い場合はstale cacheまたは部分成功として扱う
-4. オプション更新: `build_market_options_context()` が SPY / QQQ / IWM のオプション分析を明示操作で更新し、オプション依存の市場環境評価だけを再計算する
+2. Theme/Flow詳細: `build_market_theme_flow_context()` が市場環境評価、IBD式市場状態、マイクロストラクチャー、テーマモメンタム、総合市場監視、ETFリーダーシップproxy、日経平均6条件、資金流入セクター判定を追加する
+3. Vol/Sentiment詳細: `build_market_volatility_sentiment_context()` がCboeボラティリティ、独自Fear & Greed、戦略レジームを更新する
+4. Credit/Risk詳細: `build_market_high_context()` がFRED信用ストレス、市場の歪み検知、天井警戒サインポストを追加し、FREDが遅い場合はstale cacheまたは部分成功として扱う
+5. オプション更新: `build_market_options_context()` が SPY / QQQ / IWM のオプション分析を明示操作で更新し、オプション依存の市場環境評価だけを再計算する
 
 今回の整理で、Reflex state 内にあった市場表示用の整形処理を `src/services/market_presentation_service.py` に移し、`frontend/state/market_state.py` はイベント、loading/error、表示モデル保持に集中する形へ寄せた。
 
@@ -31,6 +32,7 @@
 - `probabilistic_signal` は類似局面、forward return、walk-forward、サイジング目安を返す
 - `trend_follow_diagnostics` は日足トレンドフォローの頑健性診断であり、売買推奨ではない
 - `trade_setup` は日足で判定可能な相対強度、VCP、RVOL、ATR拡張、200MAトレンドをEntry Gateとして整理する
+- `stock_trade_analysis` は追加取得を行わず、既存のテクニカル、エントリー品質、セクター/テーマ、FOMO、トレンド診断、確率シグナルからトレードタイミングを生成する
 - `sector_theme_context` は対象銘柄のファンダメンタル優位とフロー優位を評価する
 - AI Stock Recap は、表示済みニュース見出し、テクニカル、SMART基準、確率シグナル、トレンド診断、セクター/テーマ文脈を再利用する
 
@@ -42,6 +44,14 @@
 - AI Market Recap が通常経路でテーマや市場トレンドを追加取得する重複を減らし、`MarketContext` の momentum / option / monitoring 情報を優先するようにした
 - 個別銘柄AIが表示済みニュースを使っていなかった問題を修正した
 - 個別銘柄AIが `StockSignalContext` のテクニカル/SMART評価を使わずに再計算しうる経路を縮小した
+
+## 2026-06-18 Stock統合・Market段階化
+
+- `/trading-plan` は通常UIのルートとナビゲーションから外し、既存の保存層・`trade_plans` 互換コードだけを残した
+- Stockページでは初期表示にEntry Frameworkを出さず、「トレード分析」ボタン押下後に重要水準、押し目/ブレイク待ち、無効化条件、需給根拠、エントリー品質を展開する
+- Minerviniステージ分析は、ステージ番号だけでなく50/150/200日線、200日線傾き、52週高値/安値位置、Stage 2条件の達成/未達、VCP情報を表示する
+- Market詳細更新は、キャッシュ/サマリー、Theme/Flow、Vol/Sentiment、Credit/Risk、Optionsに分割し、各段階でUIに反映する
+- テーマモメンタムと統合トレンドランキングは、複数期間の個別yfinance取得を避け、最大期間の一括取得結果から各期間を算出する
 
 ## 残るプロダクト改善ロードマップ
 

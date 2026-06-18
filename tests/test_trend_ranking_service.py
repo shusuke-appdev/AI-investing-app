@@ -2,18 +2,21 @@ from src.services import trend_ranking_service as service
 
 
 def test_trend_ranking_reflects_marketdata_option_asymmetry(monkeypatch):
-    def fake_ranked(period, market_type):
-        perf = {
+    def fake_ranked(periods, market_type):
+        raw = {
             "1週間": {"AI半導体": 4.0, "石油・ガス": 1.0},
             "1ヶ月": {"AI半導体": 8.0, "石油・ガス": 2.0},
             "6ヶ月": {"AI半導体": 20.0, "石油・ガス": 3.0},
-        }[period]
-        return [
-            {"theme": theme, "performance": performance}
-            for theme, performance in perf.items()
-        ]
+        }
+        return {
+            period: [
+                {"theme": theme, "performance": performance}
+                for theme, performance in raw[period].items()
+            ]
+            for period in periods
+        }
 
-    monkeypatch.setattr(service, "get_ranked_themes", fake_ranked)
+    monkeypatch.setattr(service, "get_ranked_theme_periods", fake_ranked)
     monkeypatch.setattr(
         service,
         "get_themes",

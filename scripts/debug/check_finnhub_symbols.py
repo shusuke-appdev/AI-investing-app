@@ -16,11 +16,10 @@ CANDIDATES = {
     "Gold": ["GLD", "IAU"],
     "Copper": ["CPER", "COPX"],
     "US 10Y Treasury": ["IEF", "TLT", "GOVT"],  # IEF is 7-10y, TLT is 20y+
-    "Bitcoin": ["BINANCE:BTCUSDT", "BTC-USD"],
     "Ethereum": ["BINANCE:ETHUSDT", "ETH-USD"],
+    "Bitcoin": ["BINANCE:BTCUSDT", "BTC-USD"],
     "USD/JPY": ["FX_IDC:USDJPY", "OANDA:USD_JPY", "PYTH:USDJPY", "BITFINEX:USDJPY"],
     "EUR/USD": ["FX_IDC:EURUSD", "OANDA:EUR_USD"],
-    "GBP/USD": ["FX_IDC:GBPUSD", "OANDA:GBP_USD"],
 }
 
 

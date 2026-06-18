@@ -316,8 +316,9 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     assert context.credit_stress["status"] == "equity_adjustment"
     assert context.flow_monitor["leaders"][0]["ticker"] == "SMH"
     assert context.flow_alignment["etf_leader"]["ticker"] == "SMH"
-    assert context.detail_stages["medium"]["status"] == "live"
-    assert context.detail_stages["high"]["status"] == "live"
+    assert context.detail_stages["theme_flow"]["status"] == "live"
+    assert context.detail_stages["volatility_sentiment"]["status"] == "live"
+    assert context.detail_stages["credit_distortion"]["status"] == "live"
     assert context.japan_conditions == {}
     assert context.cross_market == {}
     assert context.trend_ranking["items"][0]["theme"] == "AI"
@@ -501,14 +502,18 @@ def test_market_detail_stages_can_update_sequentially(monkeypatch):
         service, "build_market_monitor_context", lambda options: _monitor_payload()
     )
 
-    medium = service.build_market_medium_context("US", base.to_dict())
-    high = service.build_market_high_context("US", medium.to_dict())
+    theme_flow = service.build_market_theme_flow_context("US", base.to_dict())
+    volatility = service.build_market_volatility_sentiment_context(
+        "US", theme_flow.to_dict()
+    )
+    high = service.build_market_high_context("US", volatility.to_dict())
 
-    assert medium.detail_stages["low"]["status"] == "pending"
-    assert medium.detail_stages["medium"]["status"] == "live"
-    assert medium.detail_stages["high"]["status"] == "pending"
-    assert high.detail_stages["medium"]["status"] == "live"
-    assert high.detail_stages["high"]["status"] == "live"
+    assert theme_flow.detail_stages["core"]["status"] == "pending"
+    assert theme_flow.detail_stages["theme_flow"]["status"] == "live"
+    assert theme_flow.detail_stages["volatility_sentiment"]["status"] == "pending"
+    assert volatility.detail_stages["theme_flow"]["status"] == "live"
+    assert volatility.detail_stages["volatility_sentiment"]["status"] == "live"
+    assert high.detail_stages["credit_distortion"]["status"] == "live"
     assert high.market_distortions["bullish"][0]["tickers"] == ["NVDA", "MSFT"]
 
 

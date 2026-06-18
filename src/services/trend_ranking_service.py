@@ -6,7 +6,7 @@ from typing import Any
 
 from src.log_config import get_logger
 from src.option_analyst import analyze_option_sentiment
-from src.theme_analyst import get_ranked_themes
+from src.theme_analyst import get_ranked_theme_periods
 from src.theme_taxonomy import get_theme_profile
 from src.themes_config import get_themes
 
@@ -145,15 +145,13 @@ def build_opportunity_themes(
 
 def _period_rank_maps(market_type: str) -> dict[str, dict[str, dict[str, Any]]]:
     result: dict[str, dict[str, dict[str, Any]]] = {}
+    try:
+        rankings = get_ranked_theme_periods(RANKING_PERIODS, market_type)
+    except Exception as exc:
+        logger.warning("[TrendRanking] %s ranking batch failed: %s", market_type, exc)
+        rankings = {}
     for period in RANKING_PERIODS:
-        try:
-            ranked = get_ranked_themes(period, market_type)
-        except Exception as exc:
-            logger.warning(
-                "[TrendRanking] %s %s ranking failed: %s", market_type, period, exc
-            )
-            result[period] = {}
-            continue
+        ranked = rankings.get(period, [])
         result[period] = {str(item.get("theme")): dict(item) for item in ranked}
     return result
 

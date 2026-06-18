@@ -64,22 +64,33 @@ MARKET_SUMMARY_FRESH_SECONDS = 300
 MARKET_SUMMARY_STALE_SECONDS = 86400
 MARKET_DETAILS_STALE_SECONDS = 3 * 86400
 MARKET_CONTEXT_CACHE_NAMESPACE = "market_context_cache"
-DETAIL_STAGE_ORDER = ("low", "medium", "high", "options")
+DETAIL_STAGE_ORDER = (
+    "core",
+    "theme_flow",
+    "volatility_sentiment",
+    "credit_distortion",
+    "options",
+)
 DETAIL_STAGE_DEFAULTS = {
-    "low": {
-        "label": "低: サマリー/キャッシュ",
+    "core": {
+        "label": "Core: 市場概要/キャッシュ",
         "difficulty": "低",
         "summary": "主要指数と前回成功した監視結果を先に表示します。",
     },
-    "medium": {
-        "label": "中: 市場状態/フロー",
+    "theme_flow": {
+        "label": "Theme/Flow: 市場状態/資金流入",
         "difficulty": "中",
         "summary": "IBD式市場状態、モメンタム、ETF proxy、セクター資金流入を更新します。",
     },
-    "high": {
-        "label": "高: 信用/FRED/歪み",
+    "volatility_sentiment": {
+        "label": "Vol/Sentiment: ボラ/センチメント",
+        "difficulty": "中",
+        "summary": "ボラティリティ・レジームと独自Fear & Greedを更新します。",
+    },
+    "credit_distortion": {
+        "label": "Credit/Risk: 信用/歪み/天井警戒",
         "difficulty": "高",
-        "summary": "FRED信用ストレスと市場の歪み検知を更新します。",
+        "summary": "FRED信用ストレス、市場の歪み検知、天井警戒サインポストを更新します。",
     },
     "options": {
         "label": "高: オプション",
@@ -153,7 +164,7 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
         cache_status="live",
         detail_stages=_updated_stage_statuses(
             {},
-            "low",
+            "core",
             "live",
             cache_status="live",
             fetched_at=_utc_now(),
@@ -175,15 +186,16 @@ def build_market_details_context(
     each stage. This wrapper preserves the previous single-call behavior.
     """
 
-    medium = build_market_medium_context(market_type, market_context)
-    return build_market_high_context(market_type, medium)
+    theme_flow = build_market_theme_flow_context(market_type, market_context)
+    volatility = build_market_volatility_sentiment_context(market_type, theme_flow)
+    return build_market_high_context(market_type, volatility)
 
 
-def build_market_medium_context(
+def build_market_theme_flow_context(
     market_type: str = "US",
     market_context: MarketContext | dict[str, Any] | None = None,
 ) -> MarketContext:
-    """Build medium-cost market state, momentum, and flow diagnostics."""
+    """Build market state, momentum, trend ranking, and flow diagnostics."""
 
     base = _coerce_context(market_context) or build_market_summary_context(market_type)
     errors: list[str] = []
@@ -259,19 +271,8 @@ def build_market_medium_context(
         ibd_regime,
     )
     flow_alignment = build_flow_alignment_context(flow_monitor, sector_flow)
-    volatility_sentiment = _safe_call(
-        lambda: _build_volatility_sentiment_context(
-            market_type,
-            ibd_regime=ibd_regime,
-            credit_stress=base.credit_stress,
-        ),
-        {},
-        errors,
-    )
-    volatility_regime = (
-        volatility_sentiment.get("volatility_regime") or base.volatility_regime
-    )
-    sentiment = volatility_sentiment.get("sentiment") or base.sentiment
+    volatility_regime = base.volatility_regime
+    sentiment = base.sentiment
     trend_ranking = _safe_call(
         lambda: build_trend_ranking_context(
             market_type,
@@ -297,7 +298,7 @@ def build_market_medium_context(
     )
     data_updates = [
         DataResult(
-            name="market_details_medium",
+            name="market_theme_flow",
             source="market_dashboard_service",
             fetched_at=_utc_now(),
             is_partial=bool(errors),
@@ -344,16 +345,6 @@ def build_market_medium_context(
             is_partial=bool(flow_monitor.get("is_partial", False)),
             error="; ".join(flow_monitor.get("warnings", [])),
             cache_status="live",
-        ),
-        DataResult(
-            name="market_volatility_regime",
-            source=volatility_regime.get("source", ""),
-            fetched_at=_utc_now(),
-            is_stale=bool(volatility_regime.get("is_stale", False)),
-            is_partial=not bool(volatility_regime)
-            or volatility_regime.get("regime") == "unavailable",
-            error="; ".join(volatility_regime.get("warnings", [])),
-            cache_status="computed",
         ),
     ]
     if market_type == "JP":
@@ -413,7 +404,7 @@ def build_market_medium_context(
             ),
         ),
         errors=errors,
-        source="live_details",
+        source="live_theme_flow",
         fetched_at=_utc_now(),
         is_stale=base.is_stale,
         is_partial=bool(errors) or base.is_partial or options.is_partial,
@@ -435,12 +426,153 @@ def build_market_medium_context(
         cache_age_seconds=base.cache_age_seconds,
         detail_stages=_updated_stage_statuses(
             base.detail_stages,
-            "medium",
+            "theme_flow",
             "partial" if errors else "live",
             cache_status="live",
             fetched_at=_utc_now(),
             summary="市場状態、モメンタム、ETF proxy、セクター資金流入を更新しました。",
             warnings=errors,
+        ),
+    )
+    if context.market_data:
+        _save_context_cache(context, "full")
+    return context
+
+
+def build_market_medium_context(
+    market_type: str = "US",
+    market_context: MarketContext | dict[str, Any] | None = None,
+) -> MarketContext:
+    """Compatibility wrapper for callers that still request the old medium stage."""
+
+    theme_flow = build_market_theme_flow_context(market_type, market_context)
+    return build_market_volatility_sentiment_context(market_type, theme_flow)
+
+
+def build_market_volatility_sentiment_context(
+    market_type: str = "US",
+    market_context: MarketContext | dict[str, Any] | None = None,
+) -> MarketContext:
+    """Build volatility regime, local sentiment, and dependent strategy outputs."""
+
+    base = _coerce_context(market_context) or build_market_summary_context(market_type)
+    errors: list[str] = []
+    volatility_sentiment = _safe_call(
+        lambda: _build_volatility_sentiment_context(
+            market_type,
+            ibd_regime=base.ibd_regime,
+            credit_stress=base.credit_stress,
+        ),
+        {},
+        errors,
+    )
+    volatility_regime = (
+        volatility_sentiment.get("volatility_regime") or base.volatility_regime
+    )
+    sentiment = volatility_sentiment.get("sentiment") or base.sentiment
+    strategy_bundle = _safe_call(
+        lambda: build_market_strategy_context(
+            market_type,
+            options=base.options.items,
+            ibd_regime=base.ibd_regime,
+            evaluation=base.evaluation,
+            volatility_regime=volatility_regime,
+            credit_stress=base.credit_stress,
+            trend_ranking=base.trend_ranking,
+        ),
+        {},
+        errors,
+    )
+    context = MarketContext(
+        market_type=market_type,
+        market_data=base.market_data,
+        market_config=base.market_config,
+        options=base.options,
+        evaluation=base.evaluation,
+        ibd_regime=base.ibd_regime,
+        regime_playbook=base.regime_playbook,
+        microstructure=base.microstructure,
+        momentum=base.momentum,
+        monitor=base.monitor,
+        market_distortions=base.market_distortions,
+        trend_ranking=base.trend_ranking,
+        opportunity_themes=base.opportunity_themes,
+        important_levels=strategy_bundle.get("important_levels", base.important_levels),
+        market_timeframes=strategy_bundle.get(
+            "market_timeframes", base.market_timeframes
+        ),
+        strategy_regime=strategy_bundle.get("strategy_regime", base.strategy_regime),
+        market_driver_monitor=strategy_bundle.get(
+            "market_driver_monitor", base.market_driver_monitor
+        ),
+        japan_conditions=base.japan_conditions,
+        sector_flow=base.sector_flow,
+        credit_stress=base.credit_stress,
+        flow_monitor=base.flow_monitor,
+        flow_alignment=base.flow_alignment,
+        cross_market=base.cross_market,
+        volatility_regime=volatility_regime,
+        sentiment=sentiment,
+        top_risk_signposts=base.top_risk_signposts,
+        fomo_scan=base.fomo_scan,
+        data_status=_replace_data_status(
+            base.data_status,
+            DataResult(
+                name="market_volatility_regime",
+                source=volatility_regime.get("source", ""),
+                fetched_at=_utc_now(),
+                is_stale=bool(volatility_regime.get("is_stale", False)),
+                is_partial=not bool(volatility_regime)
+                or volatility_regime.get("regime") == "unavailable",
+                error="; ".join(volatility_regime.get("warnings", [])),
+                cache_status="computed",
+            ),
+            DataResult(
+                name="local_sentiment_composite",
+                source=sentiment.get("source", "local_sentiment_composite"),
+                fetched_at=_utc_now(),
+                is_partial=not bool(sentiment),
+                error="; ".join(sentiment.get("quality_warnings", [])),
+                cache_status="computed",
+            ),
+            DataResult(
+                name="market_strategy_regime",
+                source="market_strategy_service",
+                fetched_at=_utc_now(),
+                is_partial=not bool(strategy_bundle.get("strategy_regime")),
+                cache_status="computed",
+            ),
+        ),
+        provenance=base.provenance,
+        errors=errors,
+        source="live_volatility_sentiment",
+        fetched_at=_utc_now(),
+        is_stale=base.is_stale,
+        is_partial=bool(errors) or base.is_partial,
+        quality_warnings=_merge_warnings(
+            base.quality_warnings,
+            volatility_regime.get("warnings", []),
+            sentiment.get("quality_warnings", []),
+            strategy_bundle.get("important_levels", {}).get("quality_warnings", []),
+            strategy_bundle.get("market_driver_monitor", {}).get(
+                "quality_warnings", []
+            ),
+            errors,
+        ),
+        cache_status="live" if not base.is_stale else base.cache_status,
+        cache_age_seconds=base.cache_age_seconds,
+        detail_stages=_updated_stage_statuses(
+            base.detail_stages,
+            "volatility_sentiment",
+            "partial" if errors else "live",
+            cache_status="live",
+            fetched_at=_utc_now(),
+            summary="ボラティリティ・レジームと独自Fear & Greedを更新しました。",
+            warnings=_merge_warnings(
+                volatility_regime.get("warnings", []),
+                sentiment.get("quality_warnings", []),
+                errors,
+            ),
         ),
     )
     if context.market_data:
@@ -476,19 +608,8 @@ def build_market_high_context(
 
     credit_stress = results.get("credit_stress") or base.credit_stress
     market_distortions = results.get("market_distortions") or base.market_distortions
-    volatility_sentiment = _safe_call(
-        lambda: _build_volatility_sentiment_context(
-            market_type,
-            ibd_regime=base.ibd_regime,
-            credit_stress=credit_stress,
-        ),
-        {},
-        errors,
-    )
-    volatility_regime = (
-        volatility_sentiment.get("volatility_regime") or base.volatility_regime
-    )
-    sentiment = volatility_sentiment.get("sentiment") or base.sentiment
+    volatility_regime = base.volatility_regime
+    sentiment = base.sentiment
     top_risk_signposts = (
         _safe_call(
             lambda: build_top_risk_signposts(
@@ -647,13 +768,13 @@ def build_market_high_context(
         or base.cache_age_seconds,
         detail_stages=_updated_stage_statuses(
             base.detail_stages,
-            "high",
+            "credit_distortion",
             "partial"
             if errors or bool(credit_stress.get("is_partial", False))
             else "live",
             cache_status=credit_stress.get("cache_status", "live"),
             fetched_at=credit_stress.get("fetched_at", "") or _utc_now(),
-            summary="信用ストレスと市場の歪み検知を更新しました。",
+            summary="信用ストレス、市場の歪み検知、天井警戒サインポストを更新しました。",
             warnings=_merge_warnings(
                 credit_stress.get("warnings", []),
                 market_distortions.get("quality_warnings", []),
@@ -1338,12 +1459,12 @@ def _build_volatility_sentiment_context(
         return {}
     tlt = get_stock_data("TLT", "1y")
     cboe = fetch_cboe_indices()
+    cnn = fetch_cnn_fear_greed()
     return {
         "volatility_regime": build_market_volatility_regime(
             spy,
             cboe_result=cboe,
             credit_stress=credit_stress,
-            cnn_reference=fetch_cnn_fear_greed(),
             ibd_regime=ibd_regime,
         ),
         "sentiment": build_local_sentiment_composite(
@@ -1351,6 +1472,7 @@ def _build_volatility_sentiment_context(
             tlt,
             cboe_result=cboe,
             credit_stress=credit_stress,
+            cnn_reference=cnn,
         ),
     }
 

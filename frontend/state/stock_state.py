@@ -110,6 +110,9 @@ class StockState(rx.State):
     sector_theme_option_data_as_of: str = ""
     sector_theme_option_data_quality: str = ""
     stock_signal_context: dict[str, Any] = {}
+    trade_analysis_visible: bool = False
+    trade_analysis: dict[str, Any] = {}
+    trade_analysis_error: str = ""
     data_status: list[DataStatusDisplay] = []
     provenance: list[ProvenanceDisplay] = []
 
@@ -123,6 +126,27 @@ class StockState(rx.State):
 
     def set_ticker(self, value: str):
         self.ticker = value.upper()
+        self._reset_trade_analysis()
+
+    def show_trade_analysis(self):
+        """Build the trade analysis from the current stock payload on demand."""
+
+        if not self.stock_signal_context:
+            self.trade_analysis_error = "先に銘柄データを取得してください。"
+            self.trade_analysis_visible = False
+            return
+        from src.services.stock_trade_analysis_service import (
+            build_stock_trade_analysis,
+        )
+
+        self.trade_analysis = build_stock_trade_analysis(
+            plain_state_value(self.stock_signal_context)
+        )
+        self.trade_analysis_visible = True
+        self.trade_analysis_error = ""
+
+    def hide_trade_analysis(self):
+        self.trade_analysis_visible = False
 
     async def fetch_stock_data(self):
         """Fetch individual stock data without invoking Gemini/AI generation."""
@@ -134,6 +158,7 @@ class StockState(rx.State):
         self.is_fetching = True
         self.error_msg = ""
         self.profile_warning = ""
+        self._reset_trade_analysis()
         yield
 
         try:
@@ -289,6 +314,7 @@ class StockState(rx.State):
             self.sector_theme_option_data_as_of = ""
             self.sector_theme_option_data_quality = ""
             self.stock_signal_context = {}
+            self._reset_trade_analysis()
             self.data_status = []
             self.provenance = []
             self.smart_criteria = SmartCriteria()
@@ -337,3 +363,8 @@ class StockState(rx.State):
             if title:
                 headlines.append(title)
         return headlines[:5]
+
+    def _reset_trade_analysis(self) -> None:
+        self.trade_analysis_visible = False
+        self.trade_analysis = {}
+        self.trade_analysis_error = ""

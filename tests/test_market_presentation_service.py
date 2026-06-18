@@ -127,9 +127,9 @@ def test_market_display_context_formats_market_context_for_reflex_state():
             ],
         },
         detail_stages={
-            "low": {
-                "key": "low",
-                "label": "低: サマリー/キャッシュ",
+            "core": {
+                "key": "core",
+                "label": "Core: 市場概要/キャッシュ",
                 "difficulty": "低",
                 "status": "cache",
                 "status_label": "キャッシュ",
@@ -160,3 +160,43 @@ def test_market_display_context_formats_market_context_for_reflex_state():
     assert display.trend_ranking_items[0].option_asymmetry == "upside_squeeze_candidate"
     assert display.opportunity_theme_items[0].theme == "AI半導体"
     assert display.detail_stages[0].status_label == "キャッシュ"
+
+
+def test_market_display_context_uses_configured_market_order():
+    context = MarketContext(
+        market_type="US",
+        market_data={
+            "Bitcoin": {"ticker": "BTC-USD", "price": 68000.0, "change": 2.0},
+            "Sensex": {"ticker": "^BSESN", "price": 75000.0, "change": 0.1},
+            "S&P 500": {"ticker": "^GSPC", "price": 5300.0, "change": 0.2},
+            "Ethereum": {"ticker": "ETH-USD", "price": 3500.0, "change": 3.0},
+            "Dow 30": {"ticker": "^DJI", "price": 39000.0, "change": -0.1},
+            "Gold": {"ticker": "GC=F", "price": 2300.0, "change": 0.4},
+            "USD/JPY": {"ticker": "JPY=X", "price": 155.0, "change": 0.2},
+        },
+        market_config={
+            "indices": {
+                "S&P 500": "^GSPC",
+                "Dow 30": "^DJI",
+                "Sensex": "^BSESN",
+            },
+            "sectors": {},
+            "commodities": {"Gold": "GC=F"},
+            "forex": {"USD/JPY": "JPY=X"},
+            "crypto": {"Ethereum": "ETH-USD", "Bitcoin": "BTC-USD"},
+        },
+    )
+
+    display = build_market_display_context(context)
+
+    assert [item["name"] for item in display.indices_data] == [
+        "S&P 500",
+        "Dow 30",
+        "Sensex",
+    ]
+    assert [item["name"] for item in display.others_data] == [
+        "Gold",
+        "USD/JPY",
+        "Ethereum",
+        "Bitcoin",
+    ]

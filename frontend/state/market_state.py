@@ -14,9 +14,10 @@ from src.services.market_analyst_service import generate_market_analysis_report
 from src.services.market_dashboard_service import (
     build_fomo_scan_context,
     build_market_high_context,
-    build_market_medium_context,
     build_market_options_context,
     build_market_summary_context,
+    build_market_theme_flow_context,
+    build_market_volatility_sentiment_context,
     load_cached_market_full_context,
     load_cached_market_summary_context,
 )
@@ -113,6 +114,7 @@ class MarketState(rx.State):
     ai_recap: str = ""
     is_generating_recap: bool = False
     ai_recap_error_type: str = ""
+    ai_recap_notice_msg: str = ""
     recap_focus_visible: bool = False
     custom_recap_focus: str = ""
     market_context: dict[str, Any] = {}
@@ -168,7 +170,7 @@ class MarketState(rx.State):
     async def refresh_market_details(self):
         self.is_fetching_details = True
         self.error_msg = ""
-        self._set_stage_status("low", "loading", "前回成功データを確認中...")
+        self._set_stage_status("core", "loading", "前回成功データを確認中...")
         yield
 
         cached_context = await asyncio.to_thread(
@@ -178,17 +180,17 @@ class MarketState(rx.State):
             self._apply_market_context(cached_context)
             yield
         else:
-            self._set_stage_status("low", "live", "表示中の市場サマリーを使用します。")
+            self._set_stage_status("core", "live", "表示中の市場サマリーを使用します。")
             yield
 
         base_context = self.market_context or None
         try:
             self._set_stage_status(
-                "medium", "loading", "市場状態と資金フローを取得中..."
+                "theme_flow", "loading", "市場状態、テーマ、資金フローを取得中..."
             )
             yield
             context = await asyncio.to_thread(
-                build_market_medium_context,
+                build_market_theme_flow_context,
                 self.market_type,
                 base_context,
             )
@@ -196,13 +198,35 @@ class MarketState(rx.State):
             base_context = self.market_context or None
             yield
         except Exception as exc:
-            self._set_stage_status("medium", "failed", str(exc))
-            self.error_msg = f"Medium stage failed: {exc}"
+            self._set_stage_status("theme_flow", "failed", str(exc))
+            self.error_msg = f"Theme/flow stage failed: {exc}"
             yield
 
         try:
             self._set_stage_status(
-                "high", "loading", "信用ストレスと歪み検知を取得中..."
+                "volatility_sentiment",
+                "loading",
+                "ボラティリティ・レジームと独自Fear & Greedを取得中...",
+            )
+            yield
+            context = await asyncio.to_thread(
+                build_market_volatility_sentiment_context,
+                self.market_type,
+                base_context,
+            )
+            self._apply_market_context(context)
+            base_context = self.market_context or None
+            yield
+        except Exception as exc:
+            self._set_stage_status("volatility_sentiment", "failed", str(exc))
+            self.error_msg = f"Volatility/sentiment stage failed: {exc}"
+            yield
+
+        try:
+            self._set_stage_status(
+                "credit_distortion",
+                "loading",
+                "信用ストレス、歪み検知、天井警戒を取得中...",
             )
             yield
             context = await asyncio.to_thread(
@@ -214,8 +238,8 @@ class MarketState(rx.State):
             base_context = self.market_context or None
             yield
         except Exception as exc:
-            self._set_stage_status("high", "failed", str(exc))
-            self.error_msg = f"High stage failed: {exc}"
+            self._set_stage_status("credit_distortion", "failed", str(exc))
+            self.error_msg = f"Credit/risk stage failed: {exc}"
             yield
 
         try:
@@ -287,6 +311,7 @@ class MarketState(rx.State):
     async def generate_ai_recap(self):
         self.is_generating_recap = True
         self.ai_recap_error_type = ""
+        self.ai_recap_notice_msg = ""
         yield
 
         try:
@@ -300,16 +325,16 @@ class MarketState(rx.State):
                 self.ai_recap = recap
                 self.ai_recap_error_type = self._classify_recap_failure(recap)
                 if self.ai_recap_error_type:
-                    self.error_msg = (
-                        "AI recap generation returned a degraded result: "
+                    self.ai_recap_notice_msg = (
+                        "AI Recapは利用不可または簡易結果です: "
                         + self.ai_recap_error_type
                     )
             else:
                 self.ai_recap_error_type = "unknown"
-                self.error_msg = "Failed to generate market recap."
+                self.ai_recap_notice_msg = "AI Recapを生成できませんでした。"
         except Exception as exc:
             self.ai_recap_error_type = "exception"
-            self.error_msg = f"AI recap generation error: {exc}"
+            self.ai_recap_notice_msg = f"AI Recap生成エラー: {exc}"
         finally:
             self.is_generating_recap = False
             yield
@@ -317,6 +342,7 @@ class MarketState(rx.State):
     async def generate_ai_recap_with_focus(self):
         self.is_generating_recap = True
         self.ai_recap_error_type = ""
+        self.ai_recap_notice_msg = ""
         yield
 
         try:
@@ -330,16 +356,16 @@ class MarketState(rx.State):
                 self.ai_recap = recap
                 self.ai_recap_error_type = self._classify_recap_failure(recap)
                 if self.ai_recap_error_type:
-                    self.error_msg = (
-                        "AI recap generation returned a degraded result: "
+                    self.ai_recap_notice_msg = (
+                        "AI Recapは利用不可または簡易結果です: "
                         + self.ai_recap_error_type
                     )
             else:
                 self.ai_recap_error_type = "unknown"
-                self.error_msg = "Failed to generate market recap."
+                self.ai_recap_notice_msg = "AI Recapを生成できませんでした。"
         except Exception as exc:
             self.ai_recap_error_type = "exception"
-            self.error_msg = f"AI recap generation error: {exc}"
+            self.ai_recap_notice_msg = f"AI Recap生成エラー: {exc}"
         finally:
             self.is_generating_recap = False
             yield
@@ -404,22 +430,26 @@ class MarketState(rx.State):
         self.data_status = data_status_display_items(context.data_status)
         self.provenance = provenance_display_items(context.provenance)
 
-        if context.quality_warnings and not self.error_msg:
-            self.error_msg = "; ".join(context.quality_warnings[:3])
-
     def _has_visible_market_data(self) -> bool:
         return bool(self.indices_data or self.sectors_data or self.others_data)
 
     def _set_stage_status(self, key: str, status: str, summary: str = "") -> None:
         defaults = {
-            "low": ("低: サマリー/キャッシュ", "低"),
-            "medium": ("中: 市場状態/フロー", "中"),
-            "high": ("高: 信用/FRED/歪み", "高"),
+            "core": ("Core: 市場概要/キャッシュ", "低"),
+            "theme_flow": ("Theme/Flow: 市場状態/資金流入", "中"),
+            "volatility_sentiment": ("Vol/Sentiment: ボラ/センチメント", "中"),
+            "credit_distortion": ("Credit/Risk: 信用/歪み/天井警戒", "高"),
             "options": ("高: オプション", "高"),
         }
         existing = {item.key: item for item in self.detail_stages}
         rows: list[StageStatusDisplay] = []
-        for stage_key in ("low", "medium", "high", "options"):
+        for stage_key in (
+            "core",
+            "theme_flow",
+            "volatility_sentiment",
+            "credit_distortion",
+            "options",
+        ):
             current = existing.get(stage_key)
             label, difficulty = defaults[stage_key]
             if current:

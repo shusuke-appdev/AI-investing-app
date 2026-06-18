@@ -34,6 +34,72 @@ class MarketSettings(TypedDict):
     ai_analysis_targets: list[str]
 
 
+SHARED_INDICES: dict[str, str] = {
+    "S&P 500": "^GSPC",
+    "Nasdaq 100": "^NDX",
+    "Dow 30": "^DJI",
+    "Russell 2000": "^RUT",
+    "日経平均": "^N225",
+    "Euro 600": "^STOXX",
+    "Hang Seng": "^HSI",
+    "Sensex": "^BSESN",
+    "KOSPI": "^KS11",
+    "US 10Y Yield": "^TNX",
+    "US 30Y Yield": "^TYX",
+    "VIX": "^VIX",
+}
+
+SHARED_COMMODITIES: dict[str, str] = {
+    "WTI Oil": "CL=F",
+    "Gold": "GC=F",
+    "Silver": "SI=F",
+}
+
+SHARED_CRYPTO: dict[str, str] = {
+    "Ethereum": "ETH-USD",
+    "Bitcoin": "BTC-USD",
+}
+
+SHARED_FOREX: dict[str, str] = {
+    "USD/JPY": "JPY=X",
+    "EUR/USD": "EURUSD=X",
+}
+
+US_SECTORS: dict[str, str] = {
+    "情報技術": "XLK",
+    "ヘルスケア": "XLV",
+    "金融": "XLF",
+    "一般消費財": "XLY",
+    "通信": "XLC",
+    "資本財": "XLI",
+    "生活必需品": "XLP",
+    "エネルギー": "XLE",
+    "公益": "XLU",
+    "不動産": "XLRE",
+    "素材": "XLB",
+}
+
+JP_TOPIX17_SECTORS: dict[str, str] = {
+    "TOPIX-17 食品": "1617.T",
+    "TOPIX-17 エネルギー資源": "1618.T",
+    "TOPIX-17 建設・資材": "1619.T",
+    "TOPIX-17 素材・化学": "1620.T",
+    "TOPIX-17 医薬品": "1621.T",
+    "TOPIX-17 自動車・輸送機": "1622.T",
+    "TOPIX-17 鉄鋼・非鉄": "1623.T",
+    "TOPIX-17 機械": "1624.T",
+    "TOPIX-17 電機・精密": "1625.T",
+    "TOPIX-17 情報通信・サービスその他": "1626.T",
+    "TOPIX-17 電力・ガス": "1627.T",
+    "TOPIX-17 運輸・物流": "1628.T",
+    "TOPIX-17 商社・卸売": "1629.T",
+    "TOPIX-17 小売": "1630.T",
+    "TOPIX-17 銀行": "1631.T",
+    "TOPIX-17 金融(除く銀行)": "1632.T",
+    "TOPIX-17 不動産": "1633.T",
+}
+
+
 # 米国市場設定
 US_CONFIG: MarketSettings = {
     "name": "米国株",
@@ -44,53 +110,14 @@ US_CONFIG: MarketSettings = {
     "sample_tickers": ["AAPL", "NVDA", "TSLA", "MSFT", "GOOGL"],
     "default_ticker": "AAPL",
     "options_available": True,
-    "indices": {
-        # 米国主要指数（生データ）
-        "S&P 500": "^GSPC",
-        "Nasdaq 100": "^NDX",
-        "Dow 30": "^DJI",
-        "Russell 2000": "^RUT",
-        # 米国外株式指数
-        "Euro 600": "^STOXX",
-        "Hang Seng": "^HSI",
-        "KOSPI": "^KS11",
-        "Sensex": "^BSESN",
-        # 米国債利回り
-        "US 10Y Yield": "^TNX",
-        "US 30Y Yield": "^TYX",
-        # ボラティリティ
-        "VIX": "^VIX",
-    },
-    "sectors": {
-        "情報技術": "XLK",
-        "ヘルスケア": "XLV",
-        "金融": "XLF",
-        "一般消費財": "XLY",
-        "通信": "XLC",
-        "資本財": "XLI",
-        "生活必需品": "XLP",
-        "エネルギー": "XLE",
-        "公益": "XLU",
-        "不動産": "XLRE",
-        "素材": "XLB",
-    },
+    "indices": SHARED_INDICES,
+    "sectors": US_SECTORS,
     "treasuries": {
         # indices に統合済み
     },
-    "commodities": {
-        "WTI Oil": "CL=F",
-        "Gold": "GC=F",
-        "Silver": "SI=F",
-    },
-    "crypto": {
-        "Bitcoin": "BTC-USD",
-        "Ethereum": "ETH-USD",
-    },
-    "forex": {
-        "USD/JPY": "JPY=X",
-        "EUR/USD": "EURUSD=X",
-        "GBP/USD": "GBPUSD=X",
-    },
+    "commodities": SHARED_COMMODITIES,
+    "crypto": SHARED_CRYPTO,
+    "forex": SHARED_FOREX,
     "ai_analysis_targets": [
         # Macro / Indices (mapped to ETFs)
         "SPY",
@@ -149,31 +176,15 @@ JP_CONFIG: MarketSettings = {
     "sample_tickers": ["7203.T", "6758.T", "9984.T", "8306.T", "6861.T"],
     "default_ticker": "7203.T",  # トヨタ
     "options_available": False,  # yfinanceでは日本株オプション取得不可
-    "indices": {
-        "日経平均": "^N225",
-        "TOPIX": "^TPX",
-        "東証グロース250": "2516.T",  # ETF
-        "JPX400": "1364.T",  # ETF
-    },
-    "sectors": {},
+    "indices": SHARED_INDICES,
+    "sectors": JP_TOPIX17_SECTORS,
     "treasuries": {
         # 日本国債はyfinanceで直接取得困難
         # Stooq経由で取得
     },
-    "commodities": {
-        "WTI Oil": "CL=F",
-        "Gold": "GC=F",
-        "Silver": "SI=F",
-    },
-    "crypto": {
-        "Bitcoin": "BTC-USD",
-        "Ethereum": "ETH-USD",
-    },
-    "forex": {
-        "USD/JPY": "JPY=X",
-        "EUR/JPY": "EURJPY=X",
-        "GBP/JPY": "GBPJPY=X",
-    },
+    "commodities": SHARED_COMMODITIES,
+    "crypto": SHARED_CRYPTO,
+    "forex": SHARED_FOREX,
     "ai_analysis_targets": [
         # 主要指数
         "1306.T",

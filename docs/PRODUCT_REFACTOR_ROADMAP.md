@@ -1,13 +1,13 @@
 # Product Refactor Review and Roadmap
 
-更新日: 2026-06-14
+更新日: 2026-06-18
 
 ## プロダクト契約
 
 - 本アプリは個人用の投資調査ダッシュボードであり、売買助言・投資一任を目的としない。
 - 主UIと新規開発の正本は `frontend/` のReflexアプリとする。
 - `APP_MODE=private` は個人データの読み書き、AI生成、外部コンテンツ取り込みを許可する。
-- 公開配置では `APP_MODE=public_readonly` を設定し、Portfolio、Knowledge、Trading Planの読み書き、AI生成、URL・YouTube取り込みを禁止する。
+- 公開配置では `APP_MODE=public_readonly` を設定し、Portfolio、Knowledge、Trading Plan互換データの読み書き、AI生成、URL・YouTube取り込みを禁止する。
 - 保存先の既定値はローカルJSONとし、Supabaseは明示選択時のみ使用する。
 
 ## 分析機能の責務マップ
@@ -19,7 +19,8 @@
 | Options | SPY/QQQ/IWMのPCR、IV、Max Pain、Skew等 | `OptionContext`、市場環境評価 |
 | Theme Ranking | テーマと構成銘柄の期間別順位 | Market Watch、Market AI、個別株テーマ評価 |
 | Stock Analysis | 企業情報、価格、ニュース、テクニカル、確率・トレンド・FOMO・Entry診断 | `StockSignalContext`、Stock UI、Stock AI |
-| Trading Plan | R基準の計画、確認、実績、ジャーナル | 手動の実行管理。予測責務を持たない |
+| Stock Trade Analysis | 個別銘柄分析済みデータを使った重要水準、タイミング、無効化条件、需給根拠の整理 | Stock UI。通常UIでは保存・レビュー機能を持たない |
+| Trading Plan互換コード | 既存のR基準計画データ・`trade_plans`保存層の互換維持 | 通常ナビゲーションからは使用しない |
 | Portfolio | 保有比率、損益、集中度、調査レポート | Portfolio UI、Portfolio AI |
 | Knowledge DB | ユーザー資料の保存と安全な引用 | Stock AI、Portfolio AI |
 

@@ -149,15 +149,6 @@ def trade_setup_panel() -> rx.Component:
                 width="100%",
                 margin_top="1rem",
             ),
-            rx.link(
-                rx.button(
-                    rx.icon("clipboard-list", size=16),
-                    "売買計画を作成",
-                    variant="outline",
-                    margin_top="1rem",
-                ),
-                href="/trading-plan",
-            ),
             width="100%",
             margin_bottom="2rem",
         ),

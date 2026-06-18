@@ -5,7 +5,7 @@
 
 from src.cache import ttl_cache
 from src.log_config import get_logger
-from src.theme_analyst import get_ranked_themes
+from src.theme_analyst import get_ranked_theme_periods
 
 logger = get_logger(__name__)
 
@@ -37,9 +37,16 @@ def get_momentum_themes(
     """
     result: dict[str, list[dict]] = {}
 
+    try:
+        period_rankings = get_ranked_theme_periods(
+            tuple(MOMENTUM_CATEGORIES.values()), market_type
+        )
+    except Exception as e:
+        logger.warning("[MomentumMonitor] Failed to get batched rankings: %s", e)
+        period_rankings = {}
     for cat_name, period_name in MOMENTUM_CATEGORIES.items():
         try:
-            ranked = get_ranked_themes(period_name, market_type)
+            ranked = period_rankings.get(period_name, [])
             selected = ranked[:top_n]
             if len(ranked) > top_n:
                 selected += ranked[-top_n:]

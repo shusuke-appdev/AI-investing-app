@@ -1,6 +1,6 @@
 # 分析データ来歴台帳
 
-更新日: 2026-06-16
+更新日: 2026-06-18
 
 ## 目的
 
@@ -34,7 +34,7 @@
 | Market Watch / AI Recap | ショートカバー発生 | proxy | 日経急反発と出来高増 | ショート残高直接データなし | 日経6条件内で代理表示 | 実際の買い戻しと誤認 | 日証金・貸借データを直接取得 | 高 | 既存表示あり |
 | Market Watch / AI Recap | 日経理論値上方修正 | proxy | 日経20日・60日価格トレンド | EPS/PER改定データなし | 日経6条件内で代理表示 | 業績上方修正と誤認 | 指数EPS、予想PER、業績改定幅を取得 | 高 | 既存表示あり |
 | Market Watch / AI Recap | 海外投資家買い | proxy | 原油安、日本テーマflow | 手入力の海外投資家買越額なし | 日経6条件内で代理表示 | 海外投資家の直接買越と誤認 | 投資部門別売買状況を自動取得 | 高 | 既存表示あり |
-| Market Watch / Stock | GEX | estimated / computed | オプションOI、Gamma、株価 | yfinanceは一部Gamma欠損時に推定、全欠損時は非表示。MarketData.appは主要ETF/テーマETF proxyで直接Gammaを使用 | quality warning表示 | 直接GammaでもCall正・Put負はディーラー方向の簡易仮定 | 直接ディーラー建玉データを取得できる場合は別指標として追加 | 高 | MarketData.app preferredへ昇格 |
+| Market Watch / Stock | GEX | estimated / computed | オプションOI、Gamma、株価 | yfinanceは一部Gamma欠損時に推定、全欠損時は非表示。MarketData.appは主要ETF/テーマETF proxyで直接Gammaを使用 | Optionカードとデータ品質ページでquality warning表示。通常のMarket上部エラーには混ぜない | 直接GammaでもCall正・Put負はディーラー方向の簡易仮定 | 直接ディーラー建玉データを取得できる場合は別指標として追加 | 高 | MarketData.app preferredへ昇格 |
 | Market Watch / Stock | オプションIV・Greeks・OI・Volume | direct / stale_cache | MarketData.app 0DTE限定チェーン、またはyfinance/cache | `preferred`ではMarketData.appを優先、204/API失敗/トークン未設定時にyfinance/cacheへフォールバック。`shadow`は比較検証用 | 取得元・基準時刻・mode・品質警告を表示 | Free/Trial遅延値を現在値と誤認 | updated時刻と契約プランを表示し、source/as_ofをAI入力にも渡す | 高 | 2026-06-16 preferred標準 |
 | Market Watch | IV想定価格帯 | estimated | 現在価格、IV、満期日数 | オプションデータ取得時 | オプション分析内 | 予測レンジと誤認 | 想定変動幅として明示し実績比較を追加 | 中 | 台帳化済み |
 | Market Watch | Max Pain | computed | オプションOIと権利行使価格 | オプションチェーン取得時 | オプション分析内 | 価格目標と誤認 | 算出定義と制約を個別表示 | 中 | 台帳化済み |
@@ -45,6 +45,8 @@
 | Stock / AI Recap | ROAによるROE代替 | proxy | ROA | ROE欠損時 | SMART R条件に利用 | ROE直接値と誤認 | ROE欠損は未判定とし代替評価を別表示 | 高 | 台帳化済み |
 | Stock / AI Recap | 確率シグナル・推奨配分 | model_output | 類似局面、forward return、walk-forward、リスクルール | 十分な履歴がある場合 | 来歴パネルでモデル出力表示 | 将来確率・推奨配分の確定値と誤認 | 校正、信頼区間、OOS履歴を強化 | 高 | 表示対応済み |
 | Stock | セクター・テーマ評価 | proxy | テーマ構成銘柄、企業指標、相対収益、MA | 直接フローなし | データ品質ページでproxy表示 | 実資金流入・公式分類と誤認 | 直接フローと分類ソースを追加 | 高 | 専用ページへ移動 |
+| Stock | トレード分析 | model_output / computed | StockSignalContext、technical_data、trade_setup、sector_theme_context、fomo_regime、trend_follow_diagnostics、probabilistic_signal | Stock画面で銘柄分析後にユーザーが「トレード分析」を押した場合だけ生成。追加取得なし | Stock内の展開パネル。初期表示には出さない | 売買命令・保証されたタイミングと誤認 | 売買助言ではなく、条件・無効化・リスク水準の整理として表示し続ける | 高 | 2026-06-18 追加 |
+| Stock | Minerviniステージ分析 | computed | 日足終値、50/150/200日線、200日線20営業日傾き、52週高値/安値、VCP検出 | 200営業日未満は判定不能 | Stockテクニカル分析内に常時表示 | Minervini公式データや裁量判断と誤認 | 条件ごとの達成/未達、データ不足、VCPの水準を併記 | 中 | 2026-06-18 表示拡張 |
 | Stock / Market | 総合テクニカル・市場環境スコア | model_output | 複数テクニカル指標と固定重み | 指標算出時 | 総合評価として表示 | 客観的確率と誤認 | 構成指標、重み、欠損寄与を表示 | 中 | 台帳化済み |
 | Stock | Trend-Follow約定価格 | proxy | 翌日Open、欠損時Close | Open欠損時 | warningへ記録 | 実約定可能価格と誤認 | 欠損ケースを検証対象外にする選択肢を追加 | 中 | 既存警告あり |
 | Stock | forward return / walk-forward | computed / model_output | 過去価格、固定取引コスト | バックテスト時 | 診断パネル | 実運用成績と誤認 | スリッページ感応度と期間外検証を追加 | 高 | 台帳化済み |

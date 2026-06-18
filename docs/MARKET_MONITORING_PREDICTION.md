@@ -25,9 +25,12 @@ data to evaluate relative strength, contraction, volume confirmation, ATR
 extension, and hard-rule violations. It does not replace probabilistic signals
 or trend-follow diagnostics, and it does not infer intraday-only LoD/ORH rules.
 
-Trading Plan is a separate manual execution-management surface. It stores an
-entry-time setup snapshot, R-based sizing, three stop tiers, T+1/T+3 checks,
-realized R, and journal notes. Portfolio remains the asset-allocation surface.
+Trade analysis is now integrated into the Stock page as an explicit on-demand
+panel. It reuses `StockSignalContext`, technical levels, Entry Framework,
+sector/theme context, FOMO regime, trend-follow diagnostics, and probabilistic
+signals to organize timing, invalidation, and risk levels. The legacy
+Trading Plan storage/state code remains only for existing data compatibility.
+Portfolio remains the asset-allocation surface.
 
 IBD-style market regime is a free-data approximation, not an official IBD
 Market Pulse clone. The implementation uses SPY and Nasdaq 100 proxy OHLCV,

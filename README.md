@@ -23,8 +23,7 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 - 市場環境評価: トレンド、モメンタム、ボラティリティ、マーケットブレッドス、オプションセンチメントを統合評価
 - オプション分析: SPY / QQQ / IWM と主要テーマETF proxy の Put/Call Ratio、Gamma Exposure、Max Pain、ATM IV、Skew を算出。MarketData.appを米国オプションの preferred 経路として利用し、失敗時はyfinance/cacheへフォールバック
 - テーマランキング: AI、半導体、エネルギー、ヘルスケアなどのテーマを期間別にランキング
-- 個別銘柄分析: 企業概要、価格チャート、ニュース、テクニカル、SMART基準、日足Entry Framework、AI分析レポート
-- Trading Plan: 3段階ストップ、R基準サイジング、T+1/T+3確認、利確・ジャーナル管理
+- 個別銘柄分析: 企業概要、価格チャート、ニュース、テクニカル、SMART基準、日足Entry Framework、トレード分析、AI分析レポート
 - ポートフォリオ分析: 保有銘柄、評価額、セクター・テーマ露出、AIアドバイス
 - 参照知識管理: テキスト、URL、YouTube、ファイルから知識を登録し、AI分析のコンテキストに利用
 
@@ -81,7 +80,7 @@ SUPABASE_SECRET_KEY=your_supabase_secret_key_here
 # SUPABASE_KEY=your_legacy_supabase_key_here
 ```
 
-`APP_MODE=private` は個人利用向けで、Portfolio・Knowledge・Trading Plan、AI生成、URL・YouTube取り込みを許可します。
+`APP_MODE=private` は個人利用向けで、Portfolio・Knowledge、AI生成、URL・YouTube取り込みを許可します。既存Trading Plan互換データは保存層に残りますが、通常UIではStockページ内の「トレード分析」を使います。
 公開配置では `APP_MODE=public_readonly` を設定してください。公開モードでは個人データを読み書きせず、個人ページをナビゲーションから除外し、AI生成とURL・YouTube取り込みも拒否します。
 保存先の既定値はローカルJSONです。
 

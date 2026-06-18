@@ -849,7 +849,13 @@ def _format_opportunities(raw: dict[str, Any]) -> list[OpportunityThemeDisplay]:
 
 def _format_detail_stages(raw: dict[str, dict[str, Any]]) -> list[StageStatusDisplay]:
     stages = []
-    for key in ("low", "medium", "high", "options"):
+    for key in (
+        "core",
+        "theme_flow",
+        "volatility_sentiment",
+        "credit_distortion",
+        "options",
+    ):
         item = raw.get(key, {}) if raw else {}
         if not item:
             continue
@@ -920,40 +926,27 @@ def _driver_value_str(label: str, value: Any) -> str:
 def _market_lists(
     raw_data: dict[str, Any], config: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-    indices_tickers = set(config.get("indices", {}).values())
-    sector_tickers = set(config.get("sectors", {}).values())
-    commodity_tickers = set(config.get("commodities", {}).values())
-    crypto_tickers = set(config.get("crypto", {}).values())
-    forex_tickers = set(config.get("forex", {}).values())
-    indices_names = set(config.get("indices", {}).keys())
-    sector_names = set(config.get("sectors", {}).keys())
-    commodity_names = set(config.get("commodities", {}).keys())
-    crypto_names = set(config.get("crypto", {}).keys())
-    forex_names = set(config.get("forex", {}).keys())
-
-    indices = []
-    sectors = []
-    others = []
-    for name, data in raw_data.items():
-        if name in {"trend_1mo", "weekly_performance"}:
-            continue
-        item = _market_item(name, data)
-        ticker = data.get("ticker", "")
-        if ticker in indices_tickers or name in indices_names:
-            indices.append(item)
-        elif ticker in sector_tickers or name in sector_names:
-            sectors.append(item)
-        elif (
-            ticker in commodity_tickers
-            or ticker in forex_tickers
-            or ticker in crypto_tickers
-            or name in commodity_names
-            or name in forex_names
-            or name in crypto_names
-        ):
-            others.append(item)
-
+    indices = _ordered_market_items(raw_data, config.get("indices", {}))
+    sectors = _ordered_market_items(raw_data, config.get("sectors", {}))
+    others = [
+        *_ordered_market_items(raw_data, config.get("commodities", {})),
+        *_ordered_market_items(raw_data, config.get("forex", {})),
+        *_ordered_market_items(raw_data, config.get("crypto", {})),
+    ]
     return indices, sectors, others
+
+
+def _ordered_market_items(
+    raw_data: dict[str, Any],
+    configured: dict[str, str],
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for name in configured:
+        data = raw_data.get(name)
+        if not isinstance(data, dict):
+            continue
+        items.append(_market_item(name, data))
+    return items
 
 
 def _market_item(name: str, data: dict[str, Any]) -> dict[str, Any]:

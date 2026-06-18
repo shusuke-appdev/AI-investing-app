@@ -124,7 +124,29 @@ def analyze_stage(data: pd.DataFrame) -> MinerviniStageResult:
     Minerviniのトレンドテンプレートに基づき、4つのステージを判定します。
     """
     if data is None or len(data) < 200:
-        return {"stage": 0, "description": "データ不足"}
+        current = None
+        if data is not None and not data.empty and "Close" in data.columns:
+            current = _safe_float(data["Close"].iloc[-1])
+        return {
+            "stage": 0,
+            "label": "判定不能",
+            "status": "unavailable",
+            "description": "データ不足",
+            "current_price": current,
+            "ma50": None,
+            "ma150": None,
+            "ma200": None,
+            "ma200_rising": None,
+            "ma200_slope_20d_pct": None,
+            "high_52w": None,
+            "low_52w": None,
+            "pct_above_low_52w": None,
+            "pct_below_high_52w": None,
+            "stage2_pass_count": 0,
+            "stage2_total_count": 7,
+            "conditions": [],
+            "warnings": ["Stage analysis requires at least 200 price sessions."],
+        }
 
     close = data["Close"]
     ma50 = close.rolling(window=50).mean()
@@ -132,40 +154,294 @@ def analyze_stage(data: pd.DataFrame) -> MinerviniStageResult:
     ma200 = close.rolling(window=200).mean()
 
     # 200日MAの傾き（最低でも1ヶ月間上昇しているか）
-    ma200_trend = ma200.iloc[-1] > ma200.iloc[-20]
+    ma200_latest = _safe_float(ma200.iloc[-1])
+    ma200_20d_ago = _safe_float(ma200.iloc[-20])
+    ma200_trend = bool(
+        ma200_latest is not None
+        and ma200_20d_ago is not None
+        and ma200_latest > ma200_20d_ago
+    )
+    ma200_slope = (
+        (ma200_latest - ma200_20d_ago) / ma200_20d_ago * 100
+        if ma200_latest is not None and ma200_20d_ago not in (None, 0)
+        else None
+    )
 
     # 52週高値・安値
-    high_52w = close.rolling(window=250).max().iloc[-1]
-    low_52w = close.rolling(window=250).min().iloc[-1]
+    high_52w = _safe_float(close.tail(252).max())
+    low_52w = _safe_float(close.tail(252).min())
 
-    c = close.iloc[-1]
-    m50 = ma50.iloc[-1]
-    m150 = ma150.iloc[-1]
-    m200 = ma200.iloc[-1]
+    c = _safe_float(close.iloc[-1])
+    m50 = _safe_float(ma50.iloc[-1])
+    m150 = _safe_float(ma150.iloc[-1])
+    m200 = ma200_latest
 
     # Stage 2 (上昇トレンド) の条件
-    cond1 = c > m150 and c > m200
-    cond2 = m150 > m200
+    cond1 = _gt(c, m150) and _gt(c, m200)
+    cond2 = _gt(m150, m200)
     cond3 = ma200_trend
-    cond4 = m50 > m150 and m50 > m200
-    cond5 = c > m50
-    cond6 = c > low_52w * 1.30  # 52週安値から30%以上
-    cond7 = c > high_52w * 0.75  # 52週高値の25%以内にある
+    cond4 = _gt(m50, m150) and _gt(m50, m200)
+    cond5 = _gt(c, m50)
+    cond6 = _gt(c, low_52w * 1.30 if low_52w is not None else None)
+    cond7 = _gt(c, high_52w * 0.75 if high_52w is not None else None)
+    pct_above_low = (
+        (c / low_52w - 1) * 100 if c is not None and low_52w not in (None, 0) else None
+    )
+    pct_below_high = (
+        (c / high_52w - 1) * 100
+        if c is not None and high_52w not in (None, 0)
+        else None
+    )
+
+    conditions = [
+        _condition(
+            "price_above_150_200",
+            "株価 > 150日線/200日線",
+            cond1,
+            f"株価 {_fmt_price(c)} / 150日 {_fmt_price(m150)} / 200日 {_fmt_price(m200)}",
+            "価格が中長期移動平均を上回る。",
+        ),
+        _condition(
+            "ma150_above_ma200",
+            "150日線 > 200日線",
+            cond2,
+            f"150日 {_fmt_price(m150)} / 200日 {_fmt_price(m200)}",
+            "中期線が長期線を上回る。",
+        ),
+        _condition(
+            "ma200_rising",
+            "200日線が上向き",
+            cond3,
+            f"20営業日傾き {_fmt_pct(ma200_slope)}",
+            "200日線が少なくとも直近1か月で上昇している。",
+        ),
+        _condition(
+            "ma50_above_150_200",
+            "50日線 > 150日線/200日線",
+            cond4,
+            f"50日 {_fmt_price(m50)} / 150日 {_fmt_price(m150)} / 200日 {_fmt_price(m200)}",
+            "短中期の順行を確認する。",
+        ),
+        _condition(
+            "price_above_ma50",
+            "株価 > 50日線",
+            cond5,
+            f"株価 {_fmt_price(c)} / 50日 {_fmt_price(m50)}",
+            "押し目が深すぎないことを確認する。",
+        ),
+        _condition(
+            "above_52w_low",
+            "52週安値から30%以上",
+            cond6,
+            f"安値比 {_fmt_pct(pct_above_low)}",
+            "底値圏の弱い戻りではないことを確認する。",
+        ),
+        _condition(
+            "near_52w_high",
+            "52週高値から25%以内",
+            cond7,
+            f"高値比 {_fmt_pct(pct_below_high)}",
+            "新高値圏に近いリーダー候補を優先する。",
+        ),
+    ]
+    passed_count = sum(1 for item in conditions if item["status"] == "pass")
 
     if all([cond1, cond2, cond3, cond4, cond5, cond6, cond7]):
-        return {"stage": 2, "description": "ステージ2 (上昇局面)"}
+        return _stage_result(
+            2,
+            "ステージ2",
+            "stage2",
+            "ステージ2 (上昇局面)",
+            c,
+            m50,
+            m150,
+            m200,
+            ma200_trend,
+            ma200_slope,
+            high_52w,
+            low_52w,
+            pct_above_low,
+            pct_below_high,
+            conditions,
+            passed_count,
+            [],
+        )
 
     # Stage 4 (下落トレンド)
-    if c < m200 and m50 < m200 and not ma200_trend:
-        return {"stage": 4, "description": "ステージ4 (下落局面)"}
+    if _lt(c, m200) and _lt(m50, m200) and not ma200_trend:
+        return _stage_result(
+            4,
+            "ステージ4",
+            "stage4",
+            "ステージ4 (下落局面)",
+            c,
+            m50,
+            m150,
+            m200,
+            ma200_trend,
+            ma200_slope,
+            high_52w,
+            low_52w,
+            pct_above_low,
+            pct_below_high,
+            conditions,
+            passed_count,
+            _stage2_warnings(conditions),
+        )
 
     # Stage 1 or 3
-    if c >= m200 and not ma200_trend:
-        return {"stage": 1, "description": "ステージ1 (底固め局面)"}
-    elif c < m50 and c < m150 and m150 > m200:
-        return {"stage": 3, "description": "ステージ3 (天井圏・分布局面)"}
+    if _gte(c, m200) and not ma200_trend:
+        return _stage_result(
+            1,
+            "ステージ1",
+            "stage1",
+            "ステージ1 (底固め局面)",
+            c,
+            m50,
+            m150,
+            m200,
+            ma200_trend,
+            ma200_slope,
+            high_52w,
+            low_52w,
+            pct_above_low,
+            pct_below_high,
+            conditions,
+            passed_count,
+            _stage2_warnings(conditions),
+        )
+    elif _lt(c, m50) and _lt(c, m150) and _gt(m150, m200):
+        return _stage_result(
+            3,
+            "ステージ3",
+            "stage3",
+            "ステージ3 (天井圏・分布局面)",
+            c,
+            m50,
+            m150,
+            m200,
+            ma200_trend,
+            ma200_slope,
+            high_52w,
+            low_52w,
+            pct_above_low,
+            pct_below_high,
+            conditions,
+            passed_count,
+            _stage2_warnings(conditions),
+        )
 
-    return {"stage": 0, "description": "ステージ判定不能（移行期）"}
+    return _stage_result(
+        0,
+        "判定不能",
+        "transition",
+        "ステージ判定不能（移行期）",
+        c,
+        m50,
+        m150,
+        m200,
+        ma200_trend,
+        ma200_slope,
+        high_52w,
+        low_52w,
+        pct_above_low,
+        pct_below_high,
+        conditions,
+        passed_count,
+        _stage2_warnings(conditions),
+    )
+
+
+def _stage_result(
+    stage: int,
+    label: str,
+    status: str,
+    description: str,
+    current_price: float | None,
+    ma50: float | None,
+    ma150: float | None,
+    ma200: float | None,
+    ma200_rising: bool | None,
+    ma200_slope_20d_pct: float | None,
+    high_52w: float | None,
+    low_52w: float | None,
+    pct_above_low_52w: float | None,
+    pct_below_high_52w: float | None,
+    conditions: list[dict[str, str]],
+    stage2_pass_count: int,
+    warnings: list[str],
+) -> MinerviniStageResult:
+    return {
+        "stage": stage,
+        "label": label,
+        "status": status,
+        "description": description,
+        "current_price": current_price,
+        "ma50": ma50,
+        "ma150": ma150,
+        "ma200": ma200,
+        "ma200_rising": ma200_rising,
+        "ma200_slope_20d_pct": ma200_slope_20d_pct,
+        "high_52w": high_52w,
+        "low_52w": low_52w,
+        "pct_above_low_52w": pct_above_low_52w,
+        "pct_below_high_52w": pct_below_high_52w,
+        "stage2_pass_count": stage2_pass_count,
+        "stage2_total_count": len(conditions),
+        "conditions": conditions,
+        "warnings": warnings,
+    }
+
+
+def _condition(
+    key: str,
+    label: str,
+    passed: bool,
+    value: str,
+    rationale: str,
+) -> dict[str, str]:
+    return {
+        "key": key,
+        "label": label,
+        "status": "pass" if passed else "fail",
+        "value": value,
+        "rationale": rationale,
+    }
+
+
+def _stage2_warnings(conditions: list[dict[str, str]]) -> list[str]:
+    failed = [item["label"] for item in conditions if item["status"] != "pass"]
+    if not failed:
+        return []
+    return ["Stage 2未達: " + ", ".join(failed[:4])]
+
+
+def _safe_float(value) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if pd.isna(number) else number
+
+
+def _gt(left: float | None, right: float | None) -> bool:
+    return bool(left is not None and right is not None and left > right)
+
+
+def _gte(left: float | None, right: float | None) -> bool:
+    return bool(left is not None and right is not None and left >= right)
+
+
+def _lt(left: float | None, right: float | None) -> bool:
+    return bool(left is not None and right is not None and left < right)
+
+
+def _fmt_price(value: float | None) -> str:
+    return "-" if value is None else f"{value:,.2f}"
+
+
+def _fmt_pct(value: float | None) -> str:
+    return "-" if value is None else f"{value:+.1f}%"
 
 
 class MarketState(str, Enum):

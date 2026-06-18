@@ -64,7 +64,7 @@ python -m ruff format --check .
 ### ローカル
 
 - ポートフォリオ: `data/portfolios/*.json`
-- Trading Plan: `data/trading_plans.json`
+- Trading Plan互換データ: `data/trading_plans.json`
 - 知識DB: `data/knowledge*.json` 系のローカルファイル
 - HTTPキャッシュ: `.states/http_cache/app_cache.sqlite` など用途別SQLite
 - yfinanceタイムゾーンキャッシュ: `.states/yfinance_cache/`
@@ -105,16 +105,17 @@ python tools/migrate_to_supabase.py --print-setup-sql
 
 ## 運用上の注意
 
-- `APP_MODE=public_readonly` ではPortfolio・Knowledge・Trading Planの読み書き、AI生成、URL・YouTube取り込みを拒否します。個人機能のナビゲーションも表示しません
+- `APP_MODE=public_readonly` ではPortfolio・Knowledge・Trading Plan互換データの読み書き、AI生成、URL・YouTube取り込みを拒否します。個人機能のナビゲーションも表示しません
 - 外部APIの制限により、オプション分析とニュース集約は一時的に空になることがあります
 - 市場指数・セクター等の取得失敗は価格 `0.0` として表示せず、その項目を利用不可として省略します
 - Theme Rankingは指定期間を満たす構成銘柄だけを使い、2銘柄以上かつ構成銘柄の40%以上を取得できたテーマだけを表示します
 - 日本株の汎用現在値・価格履歴はyfinanceを使います。J-Quants Freeの価格系列は遅延するため現在値として扱わず、企業マスター・財務情報の補完に限定します
-- Market Intelligence の起動時は軽量サマリーのみ自動取得します。詳細分析はサイドバーの「市場監視」で「詳細更新」を押すと、キャッシュ/サマリー、市場状態・資金フロー、FRED信用ストレス・歪み検知、オプション分析の順に段階取得します
+- Market Intelligence の起動時は軽量サマリーのみ自動取得します。詳細分析はサイドバーの「市場監視」で「詳細更新」を押すと、キャッシュ/サマリー、Theme/Flow、Vol/Sentiment、Credit/Risk、Optionsの順に段階取得します
 - 「市場監視」には、IBD式市場状態、状態別プレイブック、総合市場監視、テーマモメンタム、テーマランキング、オプション分析、市場の歪み検知を統合しています。各段階は「取得中」「最新」「キャッシュ」「一部取得」「取得失敗」を表示します
 - IBD式市場状態は無料データによる近似です。公式IBD Market Pulseではなく、SPY / Nasdaq 100 の売り抜け日、ラリー試行、FTD、移動平均割れから分類します
 - Market Recap では「＋」ボタンから任意の追加分析項目を入力できます。入力内容はプロンプトに渡され、現在の市場状態、フロー、ファンダメンタル、反証条件に結び付けて分析されます
 - 「詳細更新」では、ETFリーダーシップproxyを市場全体の確認、選択市場ごとのセクター/テーマ資金流入判定を具体候補の抽出として扱います。US表示では日本株テーマを混ぜず、JP表示では日本株条件を扱います。これは売買命令ではなく、市場分析の入力です
+- Market概要の株式指数・金利、商品、FX、暗号資産はUS/JPで同じ構成です。JPのセクター指数だけは、野村アセットマネジメントのNEXT FUNDS TOPIX-17 ETF（1617.T〜1633.T）を価格proxyとして表示します
 - 日経平均上昇の6条件は、無料で自動取得できるデータを優先し、直接データがない条件は `データ不足` または `代理達成/代理未達` として表示します。上記の任意環境変数を設定すると、一部条件を直接値として評価できます
 - AI Market Recap は米国市場を主軸にし、日本市場は米国市場との相対強弱、日経6条件、ドル円・原油・資金流入の文脈で補助的に扱います
 - yfinanceオプションデータにGreeks/Gammaがない場合、GEXは非表示になります。UIの `data_quality` バッジと品質警告を確認してください
@@ -123,11 +124,11 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - `MARKETDATA_OPTIONS_MODE=shadow` は比較検証用として残します。画面表示と分析は従来のyfinance結果を維持し、MarketData.appの取得可否・基準時刻・契約既定mode・クレジット情報を品質警告へ記録します
 - MarketData.app経路では0DTE、`strikeLimit=100`、標準契約、必要列だけを取得します。GEXのCall正・Put負は実ディーラー建玉を直接観測したものではなく、簡易な符号仮定です
 - MarketData.appの鮮度modeはAPIへ強制指定せず、アカウント契約の既定値を使います。リアルタイムとは断定せず、各カードの`updated`由来の基準時刻を確認してください
-- データ信頼度・来歴は通常分析画面の上部には常時出さず、専用の「データ品質」ページでProvider設定、最後の成功状態、失敗理由、stale cache/proxy/unavailableを集約確認します
+- データ信頼度・来歴は通常分析画面の上部には常時出さず、サイドバー/モバイルドロワー最下部の「データ品質」ページでProvider設定、最後の成功状態、失敗理由、stale cache/proxy/unavailableを集約確認します
 - キャッシュ由来のデータは `source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` としてUI/AIへ渡します。`stale_cache` 表示がある場合は、外部API失敗時に最後の成功データを使っています
 - 時系列データを突合する場合は `src/services/temporal_alignment.py` の as-of join を使い、許容時間差外の未突合行を `DataResult.is_partial` と `quality_warnings` で明示します
 - 重い分析処理は `src/services/analysis_jobs.py` の `queued/running/succeeded/failed/partial/cancelled` 状態で管理し、単一Reflex環境ではローカルJSON永続化を使います
-- 個別株分析は `StockAnalysisInputs` が同一実行内の価格・企業情報・ニュース・ベンチマーク取得を共有します。Trading PlanのT+1/T+3候補は一覧表示では取得せず、画面の明示更新操作で銘柄ごと1回取得します
+- 個別株分析は `StockAnalysisInputs` が同一実行内の価格・企業情報・ニュース・ベンチマーク取得を共有します。通常UIでは独立Trading Planページを使わず、Stock画面の「トレード分析」ボタンで既存分析結果から重要水準、タイミング、無効化条件、需給根拠を展開します
 - `yfinance` など外部データソースのレスポンススキーマは変更されることがあり、列名の変化に備えたテストが必要です
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - Entry Frameworkは日足データによるproxyです。LoD、ORH、寄付き後30分、1-2時間確認、即時ギャップ抵抗は判定しません

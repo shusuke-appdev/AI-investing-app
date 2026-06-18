@@ -81,12 +81,10 @@ def _main_navigation_items() -> list[rx.Component]:
         nav_item("市場監視", "radar", "/market-watch"),
         nav_item("テーマ", "list-ordered", "/theme"),
         nav_item("Stock", "trending-up", "/stock"),
-        nav_item("データ品質", "database", "/data-quality"),
     ]
     if personal_data_enabled():
         items.extend(
             [
-                nav_item("Trading Plan", "clipboard-list", "/trading-plan"),
                 nav_item("Portfolio", "pie-chart", "/portfolio"),
                 nav_item("Knowledge", "book-open", "/knowledge"),
             ]
@@ -96,6 +94,10 @@ def _main_navigation_items() -> list[rx.Component]:
 
 def _drawer_navigation_items() -> list[rx.Component]:
     return [rx.drawer.close(item) for item in _main_navigation_items()]
+
+
+def _data_quality_nav_item() -> rx.Component:
+    return nav_item("データ品質", "database", "/data-quality")
 
 
 def sidebar_nav() -> rx.Component:
@@ -121,6 +123,7 @@ def sidebar_nav() -> rx.Component:
         rx.spacer(),
         # フッター情報
         rx.vstack(
+            _data_quality_nav_item(),
             rx.text("v2.0 (Reflex)", size="1", color=rx.color("gray", 8)),
             padding="1rem",
             width="100%",
@@ -177,6 +180,8 @@ def mobile_nav() -> rx.Component:
                                 width="100%",
                                 spacing="2",
                             ),
+                            rx.spacer(),
+                            rx.drawer.close(_data_quality_nav_item()),
                             width="100%",
                             height="100%",
                             padding="1.25rem",

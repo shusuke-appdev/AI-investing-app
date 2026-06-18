@@ -109,6 +109,16 @@ def index() -> rx.Component:
                         "AI Market Recap",
                         "表示済みの市場コンテキストを再利用して市況を整理します。",
                     ),
+                    rx.cond(
+                        MarketState.ai_recap_notice_msg != "",
+                        rx.callout(
+                            MarketState.ai_recap_notice_msg,
+                            icon="info",
+                            color_scheme="amber",
+                            width="100%",
+                            margin_bottom="0.75rem",
+                        ),
+                    ),
                     rx.card(
                         rx.cond(
                             MarketState.ai_recap != "",
