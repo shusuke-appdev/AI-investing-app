@@ -35,6 +35,31 @@ class SmartCriteria(BaseModel):
     T: SmartItem = SmartItem()
 
 
+class FundamentalMetricDisplay(BaseModel):
+    axis: str = ""
+    metric: str = ""
+    actual: str = "-"
+    benchmark: str = "-"
+    score: str = "算出不可"
+
+
+class VolumeProfileBinDisplay(BaseModel):
+    label: str = ""
+    width: str = "0%"
+    share: str = ""
+    is_poc: bool = False
+    in_value_area: bool = False
+
+
+def _number_text(value: Any) -> str:
+    if value is None:
+        return "-"
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return "-"
+
+
 def plain_state_value(value: Any) -> Any:
     """Return Reflex mutable proxy values as plain Python containers."""
 
@@ -107,6 +132,28 @@ class StockState(rx.State):
     sector_theme_option_score: str = ""
     sector_theme_option_summary: str = ""
     sector_theme_option_source: str = ""
+    fundamental_profile: dict[str, Any] = {}
+    fundamental_size_label: str = ""
+    fundamental_size_borderline: bool = False
+    fundamental_style_label: str = ""
+    fundamental_sector_label: str = ""
+    fundamental_score_display: str = "算出不可"
+    fundamental_coverage_display: str = "0%"
+    fundamental_status: str = "unavailable"
+    fundamental_summary: str = ""
+    fundamental_metrics: list[FundamentalMetricDisplay] = []
+    fundamental_missing_reasons: list[str] = []
+    fundamental_cap_reasons: list[str] = []
+    fundamental_excluded_metrics: list[str] = []
+    volume_profile: dict[str, Any] = {}
+    volume_profile_summary: str = ""
+    volume_profile_bins: list[VolumeProfileBinDisplay] = []
+    purchase_evidence: dict[str, Any] = {}
+    purchase_evidence_label: str = "算出不可"
+    purchase_evidence_score_display: str = "算出不可"
+    purchase_evidence_summary: str = ""
+    purchase_evidence_cap_reasons: list[str] = []
+    purchase_evidence_available: bool = False
     sector_theme_option_data_as_of: str = ""
     sector_theme_option_data_quality: str = ""
     stock_signal_context: dict[str, Any] = {}
@@ -256,6 +303,75 @@ class StockState(rx.State):
             self.sector_theme_option_data_quality = str(
                 self.sector_theme_context.get("theme_option_data_quality", "")
             )
+            self.fundamental_profile = plain_state_value(context.fundamental_profile)
+            size_profile = self.fundamental_profile.get("size") or {}
+            style_profile = self.fundamental_profile.get("style") or {}
+            sector_profile = self.fundamental_profile.get("sector_profile") or {}
+            self.fundamental_size_label = str(size_profile.get("label") or "分類不能")
+            self.fundamental_size_borderline = bool(size_profile.get("borderline"))
+            self.fundamental_style_label = str(style_profile.get("label") or "分類不能")
+            self.fundamental_sector_label = str(sector_profile.get("label") or "未分類")
+            self.fundamental_score_display = str(
+                self.fundamental_profile.get("score_display") or "算出不可"
+            )
+            self.fundamental_coverage_display = str(
+                self.fundamental_profile.get("coverage_display") or "0%"
+            )
+            self.fundamental_status = str(
+                self.fundamental_profile.get("status") or "unavailable"
+            )
+            self.fundamental_summary = str(
+                self.fundamental_profile.get("summary") or ""
+            )
+            self.fundamental_metrics = [
+                FundamentalMetricDisplay(
+                    axis=str(item.get("axis") or ""),
+                    metric=str(item.get("metric") or ""),
+                    actual=_number_text(item.get("actual")),
+                    benchmark=_number_text(item.get("benchmark")),
+                    score=_number_text(item.get("score")),
+                )
+                for item in self.fundamental_profile.get("metric_details", [])
+                if isinstance(item, dict)
+            ]
+            self.fundamental_missing_reasons = list(
+                self.fundamental_profile.get("missing_reasons") or []
+            )
+            self.fundamental_cap_reasons = list(
+                self.fundamental_profile.get("cap_reasons") or []
+            )
+            self.fundamental_excluded_metrics = list(
+                self.fundamental_profile.get("excluded_metrics") or []
+            )
+            self.volume_profile = plain_state_value(context.volume_profile)
+            self.volume_profile_summary = str(self.volume_profile.get("summary") or "")
+            self.volume_profile_bins = [
+                VolumeProfileBinDisplay(
+                    label=f"{float(item.get('low', 0)):.2f}～{float(item.get('high', 0)):.2f}",
+                    width=f"{float(item.get('relative_volume', 0)) * 100:.0f}%",
+                    share=f"{float(item.get('share', 0)):.1%}",
+                    is_poc=bool(item.get("is_poc")),
+                    in_value_area=bool(item.get("in_value_area")),
+                )
+                for item in self.volume_profile.get("bins", [])
+                if isinstance(item, dict)
+            ]
+            self.purchase_evidence = plain_state_value(context.purchase_evidence)
+            self.purchase_evidence_label = str(
+                self.purchase_evidence.get("label") or "算出不可"
+            )
+            self.purchase_evidence_score_display = str(
+                self.purchase_evidence.get("score_display") or "算出不可"
+            )
+            self.purchase_evidence_summary = str(
+                self.purchase_evidence.get("summary") or ""
+            )
+            self.purchase_evidence_cap_reasons = list(
+                self.purchase_evidence.get("cap_reasons") or []
+            )
+            self.purchase_evidence_available = (
+                self.purchase_evidence.get("status") == "available"
+            )
             self.stock_signal_context = plain_state_value(context.stock_signal_context)
             self.data_status = data_status_display_items(context.data_status)
             self.provenance = provenance_display_items(context.provenance)
@@ -310,6 +426,28 @@ class StockState(rx.State):
             self.sector_theme_option_signal = ""
             self.sector_theme_option_score = ""
             self.sector_theme_option_summary = ""
+            self.fundamental_profile = {}
+            self.fundamental_size_label = ""
+            self.fundamental_size_borderline = False
+            self.fundamental_style_label = ""
+            self.fundamental_sector_label = ""
+            self.fundamental_score_display = "算出不可"
+            self.fundamental_coverage_display = "0%"
+            self.fundamental_status = "unavailable"
+            self.fundamental_summary = ""
+            self.fundamental_metrics = []
+            self.fundamental_missing_reasons = []
+            self.fundamental_cap_reasons = []
+            self.fundamental_excluded_metrics = []
+            self.volume_profile = {}
+            self.volume_profile_summary = ""
+            self.volume_profile_bins = []
+            self.purchase_evidence = {}
+            self.purchase_evidence_label = "算出不可"
+            self.purchase_evidence_score_display = "算出不可"
+            self.purchase_evidence_summary = ""
+            self.purchase_evidence_cap_reasons = []
+            self.purchase_evidence_available = False
             self.sector_theme_option_source = ""
             self.sector_theme_option_data_as_of = ""
             self.sector_theme_option_data_quality = ""

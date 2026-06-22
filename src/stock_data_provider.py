@@ -364,6 +364,22 @@ def _merge_yfinance_metrics(
     info["fifty_two_week_low"] = _first(metrics, "fiftyTwoWeekLow")
     info["target_price"] = _first(metrics, "targetMeanPrice")
     info["share_outstanding"] = _first(metrics, "sharesOutstanding")
+    info["totalRevenue"] = _first(metrics, "totalRevenue")
+    info["freeCashflow"] = _first(metrics, "freeCashflow")
+    info["operatingCashflow"] = _first(metrics, "operatingCashflow")
+    info["totalCash"] = _first(metrics, "totalCash")
+    info["totalDebt"] = _first(metrics, "totalDebt")
+    info["enterpriseValue"] = _first(metrics, "enterpriseValue")
+    info["enterpriseToRevenue"] = _first(metrics, "enterpriseToRevenue")
+    info["enterpriseToEbitda"] = _first(metrics, "enterpriseToEbitda")
+    info["priceToSalesTrailing12Months"] = _first(
+        metrics, "priceToSalesTrailing12Months"
+    )
+    info["profitMargins"] = _percent(_first(metrics, "profitMargins"))
+    info["ebitdaMargins"] = _percent(_first(metrics, "ebitdaMargins"))
+    info["bookValue"] = _first(metrics, "bookValue")
+    info["forwardEps"] = _first(metrics, "forwardEps")
+    info["trailingEps"] = _first(metrics, "trailingEps")
 
 
 @ttl_cache(ttl=CACHE_TTL_DAILY)
@@ -432,6 +448,21 @@ def get_stock_info(
         "forward_pe": None,
         "pe_ratio": None,
         "share_outstanding": None,
+        "scale_category": "",
+        "totalRevenue": None,
+        "freeCashflow": None,
+        "operatingCashflow": None,
+        "totalCash": None,
+        "totalDebt": None,
+        "enterpriseValue": None,
+        "enterpriseToRevenue": None,
+        "enterpriseToEbitda": None,
+        "priceToSalesTrailing12Months": None,
+        "profitMargins": None,
+        "ebitdaMargins": None,
+        "bookValue": None,
+        "forwardEps": None,
+        "trailingEps": None,
     }
 
     _extract_yfinance_profile(ticker, info, include_summary=include_summary)
@@ -446,6 +477,8 @@ def get_stock_info(
                 info["sector"] = jq_info["sector_name"]
             if jq_info.get("industry_name") and info["industry"] == "N/A":
                 info["industry"] = jq_info["industry_name"]
+            if jq_info.get("scale_category"):
+                info["scale_category"] = jq_info["scale_category"]
 
         jq_fins = jquants_client.get_fins_statements(ticker)
         if jq_fins and jq_fins.get("net_sales") and jq_fins.get("operating_income"):

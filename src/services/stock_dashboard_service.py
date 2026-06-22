@@ -26,8 +26,11 @@ from src.advisor.trend_follow_diagnostics import (
 from src.display_labels import TECHNICAL_LABELS, display_label
 from src.market_data import get_stock_data, get_stock_info, get_stock_news_with_status
 from src.services.analysis_context import DataResult, ProvenanceItem, StockSignalContext
+from src.services.fundamental_profile_service import evaluate_fundamental_profile
 from src.services.provenance_service import stock_provenance
+from src.services.purchase_evidence_service import evaluate_purchase_evidence
 from src.services.stock_analysis_inputs import StockAnalysisInputs
+from src.services.volume_profile_service import build_volume_profile
 
 
 @dataclass
@@ -47,6 +50,9 @@ class StockDashboardContext:
     fomo_regime: dict[str, Any] = field(default_factory=dict)
     trade_setup: dict[str, Any] = field(default_factory=dict)
     sector_theme_context: dict[str, Any] = field(default_factory=dict)
+    fundamental_profile: dict[str, Any] = field(default_factory=dict)
+    volume_profile: dict[str, Any] = field(default_factory=dict)
+    purchase_evidence: dict[str, Any] = field(default_factory=dict)
     stock_signal_context: dict[str, Any] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
     provenance: list[ProvenanceItem] = field(default_factory=list)
@@ -184,6 +190,38 @@ def build_stock_dashboard_context(
         {},
         diagnostic_errors,
     )
+    fundamental_profile = _safe_analysis(
+        "fundamental_profile",
+        lambda: evaluate_fundamental_profile(
+            normalized_ticker,
+            info_dict,
+            market_type="JP" if normalized_ticker.endswith(".T") else "US",
+        ),
+        {},
+        diagnostic_errors,
+    )
+    if fundamental_profile.get("smart_applicability") != "growth_proxy":
+        smart_res = to_plain_value(smart_res)
+        smart_res["all_met"] = False
+        smart_res["overall_status"] = "unknown"
+        for key in ("S", "M", "A", "R", "T"):
+            item = smart_res.get(key)
+            if not isinstance(item, dict):
+                continue
+            item["met"] = False
+            item["status"] = "unknown"
+            item["desc"] = "適用外（SMARTはグロース分類向けproxy）: " + str(
+                item.get("desc") or key
+            )
+    volume_profile = _safe_analysis(
+        "volume_profile",
+        lambda: build_volume_profile(
+            history_df,
+            current_price=info_dict.get("current_price"),
+        ),
+        {},
+        diagnostic_errors,
+    )
     sector_theme_context = _safe_analysis(
         "sector_theme_context",
         lambda: to_plain_value(
@@ -197,7 +235,21 @@ def build_stock_dashboard_context(
                 info_provider=inputs.info,
                 include_market_ranking=True,
                 include_theme_options=not normalized_ticker.endswith(".T"),
+                fundamental_profile=fundamental_profile,
             )
+        ),
+        {},
+        diagnostic_errors,
+    )
+    purchase_evidence = _safe_analysis(
+        "purchase_evidence",
+        lambda: evaluate_purchase_evidence(
+            technical=technical_dict,
+            trade_setup=trade_setup_dict,
+            fundamental_profile=fundamental_profile,
+            sector_theme=sector_theme_context,
+            probabilistic_signal=probabilistic_dict,
+            fomo_regime=fomo_regime,
         ),
         {},
         diagnostic_errors,
@@ -235,6 +287,9 @@ def build_stock_dashboard_context(
         trend_follow=trend_follow_dict,
         trade_setup=trade_setup_dict,
         sector_theme=sector_theme_context,
+        fundamental_profile=fundamental_profile,
+        volume_profile=volume_profile,
+        purchase_evidence=purchase_evidence,
         news_status=news_source_status,
     )
     stock_signal_context = StockSignalContext(
@@ -250,6 +305,9 @@ def build_stock_dashboard_context(
         news_headlines=_news_headlines(news_items),
         news_source_status=news_source_status,
         news_error_reason=news_error_reason,
+        fundamental_profile=fundamental_profile,
+        volume_profile=volume_profile,
+        purchase_evidence=purchase_evidence,
         data_status=data_status,
         provenance=provenance,
     ).to_dict()
@@ -272,6 +330,9 @@ def build_stock_dashboard_context(
         stock_signal_context=stock_signal_context,
         data_status=data_status,
         provenance=provenance,
+        fundamental_profile=fundamental_profile,
+        volume_profile=volume_profile,
+        purchase_evidence=purchase_evidence,
         profile_warning=_profile_warning_message(info_dict),
         quality_warnings=list(diagnostic_errors.values()),
         error_message=_dashboard_error_message(info_dict, history_df),

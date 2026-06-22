@@ -191,6 +191,9 @@ def stock_provenance(
     trend_follow: dict[str, Any],
     trade_setup: dict[str, Any],
     sector_theme: dict[str, Any],
+    fundamental_profile: dict[str, Any],
+    volume_profile: dict[str, Any],
+    purchase_evidence: dict[str, Any],
     news_status: str,
 ) -> list[ProvenanceItem]:
     return [
@@ -266,6 +269,39 @@ def stock_provenance(
             source="Configured theme baskets and local scoring",
             method="Heuristic fundamental and relative-flow scoring.",
             limitation="公式セクター資金流入や企業ガイダンスの直接評価ではない。",
+            risk_level="high",
+        ),
+        _item(
+            f"stock.{ticker}.fundamental_profile",
+            "適応型ファンダメンタル評価",
+            ProvenanceKind.COMPUTED
+            if fundamental_profile
+            else ProvenanceKind.UNAVAILABLE,
+            source="Local 2026 industry benchmark snapshot and provider metrics",
+            method="Market-cap, value/growth, sector-profile adaptive scoring.",
+            limitation="無料データで取得できない専用KPIは補完せず算出不可または部分評価。",
+            risk_level="medium",
+        ),
+        _item(
+            f"stock.{ticker}.volume_profile",
+            "価格帯別出来高",
+            ProvenanceKind.PROXY
+            if volume_profile.get("status") == "available"
+            else ProvenanceKind.UNAVAILABLE,
+            source="Daily OHLCV",
+            method="126 sessions, 24 bins, uniform daily high-low volume allocation.",
+            limitation="取引所約定別の実測Volume Profileではない。",
+            risk_level="high",
+        ),
+        _item(
+            f"stock.{ticker}.purchase_evidence",
+            "購入根拠一致度",
+            ProvenanceKind.MODEL_OUTPUT
+            if purchase_evidence.get("status") == "available"
+            else ProvenanceKind.UNAVAILABLE,
+            source="Technical, Entry, adaptive fundamentals, and theme ranking",
+            method="Harmonic mean with explicit entry/risk/data caps.",
+            limitation="予測確率ではなく、複数根拠の一致度。単独の売買推奨ではない。",
             risk_level="high",
         ),
         _item(

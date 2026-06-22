@@ -9,12 +9,16 @@ import pandas as pd
 from src.log_config import get_logger
 from src.market_data import get_stock_data
 from src.market_volatility_intelligence import fetch_cboe_indices
+from src.services.volume_profile_service import build_volume_profile
 
 logger = get_logger(__name__)
 
 LEVEL_TICKERS = {
-    "S&P 500": "SPY",
-    "Nasdaq 100": "QQQ",
+    "US": {"S&P 500": "SPY", "Nasdaq 100": "QQQ"},
+    "JP": {
+        "TOPIX ETF proxy": "1306.T",
+        "Nikkei 225 ETF proxy": "1321.T",
+    },
 }
 
 DRIVER_TICKERS = {
@@ -39,12 +43,12 @@ def build_market_strategy_context(
 
     if market_type != "US":
         return {
-            "important_levels": {},
+            "important_levels": build_important_levels(market_type),
             "market_timeframes": {},
             "strategy_regime": {},
             "market_driver_monitor": {},
         }
-    levels = build_important_levels()
+    levels = build_important_levels(market_type)
     drivers = build_market_driver_monitor()
     timeframes = build_timeframe_outlooks(
         levels,
@@ -71,18 +75,23 @@ def build_market_strategy_context(
     }
 
 
-def build_important_levels() -> dict[str, Any]:
-    """Calculate key price levels and latest behavior for SPY and QQQ."""
+def build_important_levels(market_type: str = "US") -> dict[str, Any]:
+    """Calculate key price levels and daily-volume profiles for index ETF proxies."""
 
     items = []
     warnings = []
-    for label, ticker in LEVEL_TICKERS.items():
+    market = market_type.upper()
+    for label, ticker in LEVEL_TICKERS.get(market, LEVEL_TICKERS["US"]).items():
         try:
             frame = get_stock_data(ticker, "1y")
         except Exception as exc:
             logger.warning("[MarketStrategy] %s level fetch failed: %s", ticker, exc)
             frame = pd.DataFrame()
         payload = _level_payload(label, ticker, frame)
+        payload["volume_profile"] = build_volume_profile(frame)
+        payload["proxy_note"] = (
+            "指数連動ETF proxyによる評価。指数そのものの出来高ではありません。"
+        )
         if payload.get("data_quality") != "ok":
             warnings.append(f"{ticker} key levels unavailable.")
         items.append(payload)

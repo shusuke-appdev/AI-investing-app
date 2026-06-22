@@ -220,6 +220,12 @@ class ImportantLevelDisplay(BaseModel):
     change_1d_str: str = ""
     behavior: str = ""
     behavior_label: str = ""
+    volume_profile_summary: str = ""
+    poc_str: str = ""
+    value_area_str: str = ""
+    support_zone_str: str = ""
+    resistance_zone_str: str = ""
+    proxy_note: str = ""
     data_quality: str = "unavailable"
 
 
@@ -756,6 +762,7 @@ def _format_timeframes(raw: dict[str, Any]) -> list[TimeframeOutlookDisplay]:
 def _format_important_levels(raw: dict[str, Any]) -> list[ImportantLevelDisplay]:
     rows = []
     for item in raw.get("items", []) if raw else []:
+        profile = item.get("volume_profile") or {}
         rows.append(
             ImportantLevelDisplay(
                 label=item.get("label", ""),
@@ -770,6 +777,17 @@ def _format_important_levels(raw: dict[str, Any]) -> list[ImportantLevelDisplay]
                 change_1d_str=_pct_str(item.get("change_1d")),
                 behavior=item.get("behavior", ""),
                 behavior_label=item.get("behavior_label", ""),
+                volume_profile_summary=profile.get("summary", ""),
+                poc_str=_zone_str(profile.get("poc")),
+                value_area_str=(
+                    f"{_price_str((profile.get('value_area') or {}).get('val'))}～"
+                    f"{_price_str((profile.get('value_area') or {}).get('vah'))}"
+                    if profile.get("value_area")
+                    else ""
+                ),
+                support_zone_str=_zone_str(profile.get("support_zone")),
+                resistance_zone_str=_zone_str(profile.get("resistance_zone")),
+                proxy_note=item.get("proxy_note", ""),
                 data_quality=item.get("data_quality", "unavailable"),
             )
         )
@@ -899,6 +917,16 @@ def _format_flow_proxy_item(item: dict[str, Any]) -> FlowProxyItem:
 def _price_str(value: Any) -> str:
     number = _optional_float(value)
     return "-" if number is None else f"{number:,.2f}"
+
+
+def _zone_str(value: Any) -> str:
+    if not isinstance(value, dict):
+        return ""
+    low = _price_str(value.get("low"))
+    high = _price_str(value.get("high"))
+    if low == "-" or high == "-":
+        return ""
+    return f"{low}～{high}"
 
 
 def _pct_str(value: Any) -> str:

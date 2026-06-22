@@ -1,6 +1,7 @@
 import reflex as rx
 
 from frontend.components.fomo_volatility import fomo_volatility_panel
+from frontend.components.fundamental_profile import fundamental_profile_panel
 from frontend.components.metric_card import metric_card
 from frontend.components.probabilistic_signal import probabilistic_signal_panel
 from frontend.components.stock_trade_analysis import stock_trade_analysis_panel
@@ -433,6 +434,7 @@ def stock_page() -> rx.Component:
                             margin_bottom="2rem",
                         ),
                     ),
+                    fundamental_profile_panel(),
                     rx.cond(
                         StockState.sector_theme_rating != "",
                         rx.card(

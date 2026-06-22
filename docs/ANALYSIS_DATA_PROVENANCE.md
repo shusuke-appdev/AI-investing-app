@@ -59,6 +59,9 @@
 | Market / Stock / Portfolio | AI生成レポート・助言 | model_output | 画面で使用した構造化context | 明示操作時 | AI Recap / AI助言 | 事実・売買指示と誤認 | 使用来歴と制約をプロンプト・UIに常時表示 | 高 | 一部対応 |
 | Portfolio | 価格未取得銘柄の時価 `0` | unavailable | なし | 現在価格欠損時 | 旧実装ではゼロ時価として集計 | 構成比を過大・過小評価 | 集計対象から除外し警告表示 | 最優先 | 2026-06-11 修正 |
 | 各種provider / presentation | 欠損値の `0.0`・中立化 | unavailable | なし | provider失敗・値欠損 | 一部低レベル経路に残存 | 中立市場・ゼロ値と誤認 | `DataResult` と `ProvenanceItem` を全取得層へ拡張 | 最優先 | 継続対応 |
+| Market / Stock | 価格帯別出来高 | proxy | 直近126営業日の日足OHLCV | 最低60営業日、24価格帯 | POC・70% Value Area・支持/抵抗帯・横棒profile | 取引所約定別の実測Volume Profileと誤認 | 日足安値～高値への均等配分proxy、指数はETF proxyと常時表示 | 高 | 2026-06-23 追加 |
+| Stock / AI Recap | 適応型ファンダメンタル評価 | computed / proxy / unavailable | provider企業指標、J-Quants Scale Category、ローカル2026業種基準 | 時価総額・スタイル・必須業種KPI・60%以上の5軸充足が必要 | Stock要約・詳細・AI入力・既存sector/theme点 | 異業種KPIの誤適用、JP基準を直接値と誤認 | 銀行/REIT/赤字バイオの専用必須KPI、fallback・JP proxy・基準日・上限理由を表示 | 高 | 2026-06-23 追加 |
+| Stock / AI Recap | 購入根拠一致度 | model_output | テクニカル、Entry、適応型ファンダメンタル、テーマ順位 | 両側必須。Entry/FOMO/Stage/確率/部分評価で上限 | Stock上部・トレード分析・AI入力 | 将来確率や注文推奨と誤認 | 調和平均と上限理由を表示し、既存確率シグナルを置換しない | 高 | 2026-06-23 追加 |
 
 ## 運用ルール
 

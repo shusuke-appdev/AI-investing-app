@@ -49,6 +49,9 @@ def analyze_stock(
     trend_follow_context = _format_trend_follow_context(context)
     trade_setup_context = _format_trade_setup_context(context)
     sector_theme_context = _format_sector_theme_context(context)
+    adaptive_context = _format_adaptive_decision_context(context)
+    if adaptive_context:
+        sector_theme_context = f"{sector_theme_context}\n\n{adaptive_context}"
     data_quality_context = _format_data_quality_context(context)
     provenance_context = _format_provenance_context(context)
     if provenance_context:
@@ -173,7 +176,13 @@ def _format_smart_criteria(smart_res: dict) -> str:
     smart_lines = []
     for k in ["S", "M", "A", "R", "T"]:
         v = smart_res.get(k, {})
-        mark = "✅" if v.get("met") else "❌"
+        mark = (
+            "✅"
+            if v.get("met")
+            else "❓"
+            if v.get("status") in {"unknown", "not_applicable"}
+            else "❌"
+        )
         smart_lines.append(f"- {k}: {mark} {v.get('desc')} (現在: {v.get('value')})")
     return "\n".join(smart_lines)
 
@@ -347,6 +356,45 @@ def _format_sector_theme_context(stock_signal_context: dict | None) -> str:
 - Combined Rating: {context.get("combined_rating", "unknown")}
 - Rationale: {context.get("rationale", "N/A")}
 {chr(10).join(diagnostic_lines) if diagnostic_lines else "- Theme diagnostics: unavailable"}
+"""
+
+
+def _format_adaptive_decision_context(stock_signal_context: dict | None) -> str:
+    if not stock_signal_context:
+        return ""
+    fundamental = stock_signal_context.get("fundamental_profile") or {}
+    volume = stock_signal_context.get("volume_profile") or {}
+    purchase = stock_signal_context.get("purchase_evidence") or {}
+    if not any((fundamental, volume, purchase)):
+        return ""
+    size = fundamental.get("size") or {}
+    style = fundamental.get("style") or {}
+    sector = fundamental.get("sector_profile") or {}
+    benchmark = fundamental.get("benchmark") or {}
+    axes = fundamental.get("axis_scores") or {}
+    axis_text = "; ".join(
+        f"{item.get('label', key)}={item.get('score_display', '算出不可')}"
+        for key, item in axes.items()
+        if isinstance(item, dict)
+    )
+    missing = "; ".join(str(item) for item in fundamental.get("missing_reasons", []))
+    caps = "; ".join(str(item) for item in fundamental.get("cap_reasons", []))
+    purchase_caps = "; ".join(str(item) for item in purchase.get("cap_reasons", []))
+    return f"""Adaptive Fundamental / Purchase Evidence (local fixed rules; do not reinterpret, replace, or rescore):
+- Size: {size.get("label", "unavailable")} / source={size.get("source", "unavailable")} / borderline={size.get("borderline", False)}
+- Style: {style.get("label", "unavailable")} / value={style.get("value_score", "N/A")} / growth={style.get("growth_score", "N/A")}
+- Sector Profile: {sector.get("label", "unavailable")} / fallback={sector.get("fallback", False)}
+- Adaptive Score: {fundamental.get("score_display", "算出不可")} / coverage={fundamental.get("coverage_display", "0%")}
+- Five Axes: {axis_text or "unavailable"}
+- Benchmark: version={benchmark.get("version", "N/A")}, as_of={benchmark.get("as_of", "N/A")}, stale={benchmark.get("is_stale", False)}, JP_proxy={benchmark.get("jp_is_proxy", False)}
+- Missing / Unavailable: {missing or "None"}
+- Fundamental Caps: {caps or "None"}
+- Volume Profile: {volume.get("summary", "unavailable")}
+- Volume Method: {volume.get("method", "unavailable")} (daily high-low uniform allocation proxy)
+- Purchase Evidence: {purchase.get("label", "算出不可")} / {purchase.get("score_display", "算出不可")}
+- Purchase Components: technical={purchase.get("technical_score", "N/A")}, fundamental_theme={purchase.get("fundamental_theme_score", "N/A")}
+- Purchase Caps: {purchase_caps or "None"}
+Respect unavailable fields and every cap. SMART is only a growth-stock proxy and must not be added again to the adaptive score.
 """
 
 

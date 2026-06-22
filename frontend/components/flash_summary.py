@@ -99,7 +99,8 @@ def market_monitor() -> rx.Component:
                     _ibd_regime_panel(),
                     _playbook_panel(),
                     rx.cond(
-                        MarketState.strategy_regime.label != "",
+                        (MarketState.strategy_regime.label != "")
+                        | (MarketState.important_levels.length() > 0),
                         _strategy_regime_panel(),
                         rx.fragment(),
                     ),
@@ -239,46 +240,52 @@ def trend_ranking_panel() -> rx.Component:
 
 def _strategy_regime_panel() -> rx.Component:
     return rx.box(
-        rx.hstack(
-            rx.vstack(
-                rx.text("戦略レジーム", size="2", weight="bold"),
-                rx.hstack(
-                    rx.badge(
-                        MarketState.strategy_regime.label,
-                        color_scheme=_strategy_color(MarketState.strategy_regime.key),
-                        size="3",
+        rx.cond(
+            MarketState.strategy_regime.label != "",
+            rx.hstack(
+                rx.vstack(
+                    rx.text("戦略レジーム", size="2", weight="bold"),
+                    rx.hstack(
+                        rx.badge(
+                            MarketState.strategy_regime.label,
+                            color_scheme=_strategy_color(
+                                MarketState.strategy_regime.key
+                            ),
+                            size="3",
+                        ),
+                        rx.badge(
+                            "リスク枠 " + MarketState.strategy_regime.risk_budget,
+                            color_scheme="gray",
+                            variant="surface",
+                        ),
+                        spacing="2",
+                        wrap="wrap",
                     ),
-                    rx.badge(
-                        "リスク枠 " + MarketState.strategy_regime.risk_budget,
-                        color_scheme="gray",
-                        variant="surface",
+                    rx.text(
+                        MarketState.strategy_regime.rationale,
+                        size="2",
+                        color=rx.color("gray", 11),
                     ),
+                    rx.text(
+                        "無効化: " + MarketState.strategy_regime.invalidation,
+                        size="1",
+                        color=rx.color("gray", 10),
+                    ),
+                    align_items="start",
                     spacing="2",
-                    wrap="wrap",
+                    flex="1",
                 ),
-                rx.text(
-                    MarketState.strategy_regime.rationale,
-                    size="2",
-                    color=rx.color("gray", 11),
-                ),
-                rx.text(
-                    "無効化: " + MarketState.strategy_regime.invalidation,
-                    size="1",
-                    color=rx.color("gray", 10),
+                rx.grid(
+                    rx.foreach(MarketState.market_timeframes, _timeframe_card),
+                    columns=rx.breakpoints(initial="1", md="3"),
+                    spacing="2",
+                    flex="2",
                 ),
                 align_items="start",
-                spacing="2",
-                flex="1",
+                width="100%",
+                spacing="3",
             ),
-            rx.grid(
-                rx.foreach(MarketState.market_timeframes, _timeframe_card),
-                columns=rx.breakpoints(initial="1", md="3"),
-                spacing="2",
-                flex="2",
-            ),
-            align_items="start",
-            width="100%",
-            spacing="3",
+            rx.fragment(),
         ),
         rx.cond(
             MarketState.important_levels.length() > 0,
@@ -368,6 +375,25 @@ def _important_level_card(item) -> rx.Component:
                 + item.resistance_str,
                 size="1",
                 color=rx.color("gray", 10),
+            ),
+            rx.cond(
+                item.volume_profile_summary != "",
+                rx.text(
+                    "価格帯別出来高: " + item.volume_profile_summary,
+                    size="1",
+                    weight="medium",
+                    color=rx.color("blue", 10),
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                item.proxy_note != "",
+                rx.text(
+                    item.proxy_note,
+                    size="1",
+                    color=rx.color("gray", 9),
+                ),
+                rx.fragment(),
             ),
             rx.text(
                 "20MA "

@@ -19,24 +19,35 @@ def build_stock_trade_analysis(
     trend_follow = _dict(context.get("trend_follow_diagnostics"))
     probabilistic = _dict(context.get("probabilistic_signal"))
     stock_info = _dict(context.get("stock_info"))
+    volume_profile = _dict(context.get("volume_profile"))
+    purchase_evidence = _dict(context.get("purchase_evidence"))
+    support_zone = _dict(volume_profile.get("support_zone"))
+    resistance_zone = _dict(volume_profile.get("resistance_zone"))
 
     current_price = _first_number(
         setup.get("current_price"),
         _dict(technical.get("stage_data")).get("current_price"),
         stock_info.get("current_price"),
     )
-    support = _number(technical.get("support_price"))
-    resistance = _number(technical.get("resistance_price"))
+    support = _first_number(support_zone.get("high"), technical.get("support_price"))
+    resistance = _first_number(
+        resistance_zone.get("low"), technical.get("resistance_price")
+    )
     ma50 = _first_number(setup.get("ma50"), technical.get("ma_50"))
     ma200 = _first_number(setup.get("ma200"), technical.get("ma_200"))
     atr = _number(setup.get("atr") or technical.get("atr"))
     atr_percent = _number(setup.get("atr_percent") or technical.get("atr_percent"))
     breakout = _first_number(
+        resistance_zone.get("high"),
         setup.get("breakout_price"),
         _dict(technical.get("vcp_data")).get("breakout_price"),
         resistance,
     )
-    stop_loss = _first_number(technical.get("stop_loss"), _atr_stop(current_price, atr))
+    stop_loss = _first_number(
+        support_zone.get("low"),
+        technical.get("stop_loss"),
+        _atr_stop(current_price, atr),
+    )
 
     stance_key = _stance_key(technical, setup, sector_theme, fomo)
     stance_label = {
@@ -73,6 +84,24 @@ def build_stock_trade_analysis(
         atr_percent=atr_percent,
         technical=technical,
     )
+    profile_rows = []
+    if support_zone:
+        profile_rows.append(
+            {
+                "label": "出来高支持帯",
+                "value": _zone_text(support_zone),
+                "note": "価格帯別出来高の現値直下の集中帯。押し目・無効化を優先評価。",
+            }
+        )
+    if resistance_zone:
+        profile_rows.append(
+            {
+                "label": "出来高抵抗帯",
+                "value": _zone_text(resistance_zone),
+                "note": "価格帯別出来高の現値直上の集中帯。ブレイク判定を優先評価。",
+            }
+        )
+    key_levels[1:1] = profile_rows
     supply_demand = _supply_demand_rows(
         setup=setup,
         technical=technical,
@@ -96,6 +125,8 @@ def build_stock_trade_analysis(
         "stance_key": stance_key,
         "stance_label": stance_label,
         "stance_color": stance_color,
+        "volume_profile_summary": str(volume_profile.get("summary") or ""),
+        "purchase_evidence": purchase_evidence,
         "summary": _summary(stance_key, setup, technical, sector_theme),
         "timing": _timing_plan(
             stance_key=stance_key,
@@ -516,6 +547,14 @@ def _number(value: Any) -> float | None:
 
 def _price(value: float | None) -> str:
     return "-" if value is None else f"{value:,.2f}"
+
+
+def _zone_text(zone: dict[str, Any]) -> str:
+    low = _number(zone.get("low"))
+    high = _number(zone.get("high"))
+    if low is None or high is None:
+        return "N/A"
+    return f"{low:,.2f}～{high:,.2f}"
 
 
 def _percent(value: float | None) -> str:

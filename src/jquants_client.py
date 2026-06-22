@@ -230,6 +230,9 @@ def get_company_info(ticker: str) -> dict | None:
             "industry_name": info.get("S17Nm") or info.get("Sector17CodeName"),
             "market_code_name": info.get("MktNm") or info.get("MarketCodeName"),
             "margin_code_name": info.get("MgnNm") or info.get("MarginCodeName"),
+            "scale_category": info.get("ScaleCat")
+            or info.get("ScaleCategory")
+            or info.get("ScaleCategoryName"),
         }
     except Exception as e:
         logger.warning(f"J-Quants: Failed to get company info for {ticker}: {e}")

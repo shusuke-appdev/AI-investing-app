@@ -165,6 +165,7 @@ def evaluate_stock_sector_theme_context(
     info_provider: Callable[..., dict[str, Any]] | None = None,
     include_market_ranking: bool = False,
     include_theme_options: bool = False,
+    fundamental_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the sector/theme context used by the individual stock page and AI."""
 
@@ -189,7 +190,12 @@ def evaluate_stock_sector_theme_context(
             benchmark_price_df=benchmark_price_df,
         )
     }
-    stock_fundamental = _fundamental_score(stock_info)
+    adaptive_score = (fundamental_profile or {}).get("score")
+    stock_fundamental = (
+        float(adaptive_score) / 100 if adaptive_score is not None else None
+    )
+    if fundamental_profile is None:
+        stock_fundamental = _fundamental_score(stock_info)
     stock_flow = _flow_score(
         _normalize_history(stock_price_df)
         if stock_price_df is not None
@@ -246,6 +252,9 @@ def evaluate_stock_sector_theme_context(
         "stock_fundamental_score": _round_optional(stock_fundamental),
         "stock_flow_score": _round_optional(stock_flow),
         "stock_fundamental_score_display": _score_display(stock_fundamental),
+        "fundamental_profile_status": (fundamental_profile or {}).get(
+            "status", "legacy_proxy"
+        ),
         "stock_flow_score_display": _score_display(stock_flow),
         "fundamental_advantage": fundamentals_are_strong,
         "flow_advantage": flows_are_strong,

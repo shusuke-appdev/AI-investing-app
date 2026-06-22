@@ -159,3 +159,19 @@ UI
 - シグナルは当日終値で判定し、翌営業日の Open で約定したものとして評価する。Open欠損時だけ Close を実行価格プロキシにする
 - `diagnostic_rating` は売買推奨ではなく頑健性ラベル。既存の `overall_signal`、`Probabilistic Stock Signal`、SMART基準を置き換えない
 - `StockSignalContext.trend_follow_diagnostics` は StockページUIと AI Stock Recap の共通入力で、AIには「OOSや右テール除外が弱い場合はエッジを断定しない」前提を渡す
+
+## 適応型分析レイヤー（2026-06-23）
+
+- `volume_profile_service.py`: 取得済み日足OHLCVだけから126営業日・24帯の
+  POC/Value Area/支持抵抗帯を生成する純粋計算層。
+- `fundamental_profile_service.py`: 時価総額→バリュー/グロース→業種の三層分類と、
+  5評価軸の適応型スコアを生成する。基準は
+  `src/data/fundamental_benchmarks_2026.json`から読み、ランタイム通信しない。
+- `purchase_evidence_service.py`: テクニカル側とファンダメンタル・テーマ側の
+  調和平均を取り、既存Entry/Stage/FOMO/確率シグナルを上限制約として再利用する。
+- `StockSignalContext`が上記3 payloadの正本。Stock UI、オンデマンドトレード分析、
+  AI銘柄分析は同一payloadを読み、再取得・再採点しない。
+- `MarketContext.important_levels`はSPY/QQQまたは1306.T/1321.Tのprofileを保持する。
+  v1では`strategy_regime`の採点へ入力しない。
+- 詳細な計算契約、閾値、業種除外、出典は
+  `docs/ADAPTIVE_STOCK_ANALYSIS.md`を参照する。

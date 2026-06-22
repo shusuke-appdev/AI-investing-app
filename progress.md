@@ -338,3 +338,18 @@ streamlit run legacy_streamlit/app.py
 - Added strategy-regime selection (`積極的順張り` / `順張り` / `判断不能(待ち)` / `逆張り` / `積極的逆張り`), timeframe market direction, SPY/QQQ important levels, and macro/volatility drivers to Market Watch and AI context.
 - Extended Stock sector/theme context with theme ranking, parent sector, theme ETF proxy, and theme ETF option structure for US names.
 - Focused validation passed: `pytest tests\test_trend_ranking_service.py tests\test_market_strategy_service.py tests\test_sector_flow_service.py tests\test_sector_theme_diagnostics.py tests\test_option_data_provider_cache.py tests\test_market_presentation_service.py tests\test_market_context_service.py -q`.
+
+# Session update: 2026-06-23 adaptive fundamentals / volume profile / purchase evidence
+- Added daily price-by-volume profiles using 126 sessions, 24 bins, a 60-session minimum, POC, 70% Value Area, concentration zones, and nearest support/resistance zones.
+- Added US SPY/QQQ and JP 1306.T/1321.T market index ETF-proxy profiles without changing the v1 strategy-regime score.
+- Added adaptive three-layer fundamental classification: market-cap size, value/growth/blend style, and business-model sector profile.
+- Added a versioned January 2026 local benchmark snapshot with source URLs, market scope, stale-benchmark warning, and score caps.
+- Added bank, insurance, REIT, energy/materials, pharma/biotech, utilities/telecom, software, semiconductor, and general profiles with specialized KPI exclusions.
+- Preserved SMART as a growth-only proxy and derived the legacy sector/theme fundamental score from the adaptive score when available.
+- Added purchase-evidence confluence using the harmonic mean of technical/Entry and fundamental/theme sides, with Entry, Stage, FOMO, probability, and partial-data caps.
+- Extended `StockSignalContext` with `fundamental_profile`, `volume_profile`, and `purchase_evidence`; reused them in Stock UI, trade analysis, AI context, and provenance.
+- Added compact Stock classification/evaluation badges plus expandable metric, exclusion, cap, and 24-bin profile details.
+- Added unit and acceptance-contract tests for size/style/sector mapping, stale and missing data, bank/REIT/biotech guardrails, purchase caps, and US/JP proxy profiles.
+- Design and provenance: `docs/ADAPTIVE_STOCK_ANALYSIS.md` and `docs/ANALYSIS_DATA_PROVENANCE.md`.
+- Validation: compileall, ruff check, ruff format check, full pytest (`260 passed`), and Reflex frontend export passed.
+- Live classification smoke: NVDA=large/growth/semiconductor available, JPM=large/growth/bank partial-capped, O=REIT unavailable, 7203.T=large/value/general available, and 8306.T=bank unavailable; missing specialized/style inputs stayed unavailable instead of being treated as zero.

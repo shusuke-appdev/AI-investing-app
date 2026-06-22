@@ -47,6 +47,21 @@ class StockInfo(TypedDict, total=False):
     target_price: float | None
 
     share_outstanding: float | None
+    scale_category: str
+    totalRevenue: float | None
+    freeCashflow: float | None
+    operatingCashflow: float | None
+    totalCash: float | None
+    totalDebt: float | None
+    enterpriseValue: float | None
+    enterpriseToRevenue: float | None
+    enterpriseToEbitda: float | None
+    priceToSalesTrailing12Months: float | None
+    profitMargins: float | None
+    ebitdaMargins: float | None
+    bookValue: float | None
+    forwardEps: float | None
+    trailingEps: float | None
 
 
 class NewsItem(TypedDict):

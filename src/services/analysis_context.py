@@ -364,6 +364,9 @@ class StockSignalContext:
     fomo_regime: dict[str, Any] = field(default_factory=dict)
     trade_setup: TradeSetupContextDict = field(default_factory=dict)
     sector_theme_context: dict[str, Any] = field(default_factory=dict)
+    fundamental_profile: dict[str, Any] = field(default_factory=dict)
+    volume_profile: dict[str, Any] = field(default_factory=dict)
+    purchase_evidence: dict[str, Any] = field(default_factory=dict)
     news_headlines: list[str] = field(default_factory=list)
     news_source_status: str = ""
     news_error_reason: str = ""

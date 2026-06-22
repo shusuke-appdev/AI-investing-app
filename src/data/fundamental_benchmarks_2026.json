@@ -1,0 +1,23 @@
+{
+  "version": "2026.01-v1",
+  "as_of": "2026-01-01",
+  "markets": ["US", "JP"],
+  "sources": [
+    "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/roe.html",
+    "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/margin.html",
+    "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/pedata.html",
+    "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/dbtfund.html"
+  ],
+  "notes": "January 2026 NYU Stern industry tables condensed into local archetype medians. JP evaluation uses these global/US medians as a disclosed proxy until a free JP industry snapshot is available.",
+  "profiles": {
+    "general": {"revenue_growth": 8.0, "earnings_growth": 10.0, "gross_margin": 35.0, "operating_margin": 12.0, "roe": 15.0, "fcf_margin": 8.0, "debt_to_equity": 55.0, "current_ratio": 1.5, "forward_pe": 20.0, "price_to_book": 3.0, "fcf_yield": 4.0},
+    "software": {"revenue_growth": 15.0, "earnings_growth": 18.0, "gross_margin": 72.0, "operating_margin": 22.0, "roe": 20.0, "fcf_margin": 18.0, "debt_to_equity": 8.0, "current_ratio": 1.8, "forward_pe": 34.1, "price_to_book": 8.0, "fcf_yield": 2.5, "ev_to_sales": 7.0, "rule_of_40": 40.0, "sbc_ratio": 8.0},
+    "semiconductor": {"revenue_growth": 12.0, "earnings_growth": 16.0, "gross_margin": 52.0, "operating_margin": 35.3, "roe": 31.4, "fcf_margin": 20.0, "debt_to_equity": 3.0, "current_ratio": 2.5, "forward_pe": 37.3, "price_to_book": 7.0, "fcf_yield": 2.5},
+    "bank": {"revenue_growth": 5.0, "earnings_growth": 7.0, "book_value_growth": 6.0, "roe": 11.0, "rotce": 13.0, "cet1": 11.0, "nonperforming_assets": 1.0, "price_to_book": 1.4, "price_to_tangible_book": 1.6},
+    "insurance": {"revenue_growth": 6.0, "earnings_growth": 8.0, "book_value_growth": 7.0, "roe": 16.0, "combined_ratio": 96.0, "capital_adequacy": 150.0, "price_to_book": 1.8},
+    "reit": {"ffo_growth": 5.0, "affo_growth": 5.0, "noi_growth": 4.0, "occupancy": 94.0, "affo_margin": 35.0, "payout_ratio": 80.0, "net_debt_to_ebitda": 5.5, "price_to_affo": 17.0, "nav_premium": 0.0},
+    "energy_materials": {"revenue_growth": 4.0, "earnings_growth": 6.0, "operating_margin": 18.0, "roe": 12.0, "fcf_margin": 10.0, "debt_to_equity": 37.0, "forward_pe": 16.0, "fcf_yield": 7.0, "return_on_invested_capital": 10.0},
+    "pharma_biotech": {"revenue_growth": 8.0, "earnings_growth": 10.0, "gross_margin": 68.0, "operating_margin": 29.5, "roe": 24.0, "fcf_margin": 18.0, "debt_to_equity": 14.0, "forward_pe": 24.2, "price_to_book": 4.0, "cash_runway_years": 2.0, "pipeline_score": 50.0},
+    "utilities_telecom": {"revenue_growth": 4.0, "earnings_growth": 5.0, "operating_margin": 23.5, "roe": 10.4, "fcf_margin": 6.0, "debt_to_equity": 76.0, "forward_pe": 18.1, "price_to_book": 2.0, "interest_coverage": 3.0}
+  }
+}
