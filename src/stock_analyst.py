@@ -31,11 +31,11 @@ def analyze_stock(
     company_name = stock_info.get("name", ticker)
     sector = stock_info.get("sector", "不明")
     industry = stock_info.get("industry", "不明")
-    market_cap = stock_info.get("market_cap", 0)
-    pe_ratio = stock_info.get("pe_ratio", "N/A")
-    forward_pe = stock_info.get("forward_pe", "N/A")
-    price = stock_info.get("current_price", 0)
-    target_price = stock_info.get("target_price", "N/A")
+    market_cap_display = _market_cap_display(stock_info.get("market_cap"))
+    pe_ratio = _optional_display(stock_info.get("pe_ratio"))
+    forward_pe = _optional_display(stock_info.get("forward_pe"))
+    price_display = _price_display(stock_info.get("current_price"))
+    target_price_display = _price_display(stock_info.get("target_price"))
 
     context = stock_signal_context or {}
     technical_summary = _format_technical_context(context)
@@ -72,18 +72,16 @@ def analyze_stock(
     # プロンプト構築
     from src.prompts.analysis_prompts import STOCK_ANALYSIS_PROMPT_TEMPLATE
 
-    market_cap_b = market_cap / 1e9 if isinstance(market_cap, (int, float)) else 0
-
     prompt = STOCK_ANALYSIS_PROMPT_TEMPLATE.format(
         ticker=ticker,
         company_name=company_name,
         sector=sector,
         industry=industry,
-        market_cap_b=market_cap_b,
-        price=price,
+        market_cap_display=market_cap_display,
+        price_display=price_display,
         pe_ratio=pe_ratio,
         forward_pe=forward_pe,
-        target_price=target_price,
+        target_price_display=target_price_display,
         technical_summary=technical_summary,
         probabilistic_context=probabilistic_context,
         trend_follow_context=trend_follow_context,
@@ -109,10 +107,8 @@ def get_quick_summary(ticker: str, stock_info: dict) -> str:
     """
     company_name = stock_info.get("name", ticker)
     sector = stock_info.get("sector", "不明")
-    market_cap = stock_info.get("market_cap", 0)
-    pe_ratio = stock_info.get("pe_ratio", "N/A")
-
-    market_cap_b = market_cap / 1e9 if isinstance(market_cap, (int, float)) else 0
+    market_cap_display = _market_cap_display(stock_info.get("market_cap"))
+    pe_ratio = _optional_display(stock_info.get("pe_ratio"))
 
     from src.prompts.analysis_prompts import QUICK_SUMMARY_PROMPT_TEMPLATE
 
@@ -120,7 +116,7 @@ def get_quick_summary(ticker: str, stock_info: dict) -> str:
         ticker=ticker,
         company_name=company_name,
         sector=sector,
-        market_cap_b=market_cap_b,
+        market_cap_display=market_cap_display,
         pe_ratio=pe_ratio,
     )
 
@@ -128,6 +124,28 @@ def get_quick_summary(ticker: str, stock_info: dict) -> str:
     if result:
         return result.strip()
     return f"{company_name} ({ticker}) - {sector}"
+
+
+def _optional_display(value: object) -> str:
+    """Format an optional scalar without inventing a numeric zero."""
+
+    return "N/A" if value in (None, "") else str(value)
+
+
+def _price_display(value: object) -> str:
+    """Format an optional price for an AI prompt."""
+
+    if not isinstance(value, (int, float)) or value <= 0:
+        return "N/A"
+    return f"${value:,.2f}"
+
+
+def _market_cap_display(value: object) -> str:
+    """Format optional market capitalization for an AI prompt."""
+
+    if not isinstance(value, (int, float)) or value <= 0:
+        return "N/A"
+    return f"${value / 1e9:.2f}B"
 
 
 # 後方互換エイリアス: stock_state.py が参照する関数名

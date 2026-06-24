@@ -1,65 +1,73 @@
+"""Run the repository's read-only release checks."""
+
+from __future__ import annotations
+
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 
-def run_command(command, description):
-    print(f"\n[Code Factory] Executing: {description}...")
+def run_command(command: list[str], description: str) -> bool:
+    """Run one check without installing dependencies or rewriting files."""
+
+    print(f"\n[Code Factory] {description}: {' '.join(command)}")
     try:
-        # Run command and show output directly to user/agent
-        result = subprocess.run(command, shell=True, check=False, text=True)
-        if result.returncode != 0:
-            print(f"FAILED: {description} failed or found issues.")
-            return False
-        print(f"PASSED: {description} passed.")
-        return True
-    except Exception as e:
-        print(f"ERROR executing {description}: {e}")
+        completed = subprocess.run(command, check=False, text=True)
+    except OSError as exc:
+        print(f"ERROR: {description}: {exc}")
         return False
+    if completed.returncode != 0:
+        print(f"FAILED: {description} (exit={completed.returncode})")
+        return False
+    print(f"PASSED: {description}")
+    return True
 
 
-def main():
-    print("Starting Code Factory Lite checks...")
+def repo_local_tool(name: str) -> Path:
+    """Resolve a console script next to the active virtualenv Python."""
 
-    # Check if tools are installed
-    try:
-        subprocess.run(["ruff", "--version"], check=True, capture_output=True)
-        subprocess.run(["pytest", "--version"], check=True, capture_output=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("Tools not found. Installing dependencies...")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "ruff", "pytest"], check=True
-        )
+    suffix = ".exe" if os.name == "nt" else ""
+    return Path(sys.executable).resolve().parent / f"{name}{suffix}"
 
-    # 1. Format (Ruff)
-    run_command("ruff format .", "Formatting code")
 
-    # 2. Lint & Fix (Ruff)
-    lint_success = run_command("ruff check . --fix", "Linting & Fixing code")
+def main() -> int:
+    """Run the same non-mutating checks used for local release validation."""
 
-    # 3. Test (Pytest)
-    if os.path.isdir("tests"):
-        test_command = [sys.executable, "-m", "pytest"]
-        print(
-            f"\n[Code Factory] Executing: Running tests by {' '.join(test_command)}..."
-        )
-        try:
-            subprocess.run(test_command, check=True)
-            test_success = True
-        except subprocess.CalledProcessError:
-            print("FAILED: Running tests failed or found issues.")
-            test_success = False
-    else:
-        print("INFO: 'tests' directory not found. Skipping tests.")
-        test_success = True
+    reflex = repo_local_tool("reflex")
+    if not reflex.exists():
+        print(f"ERROR: Reflex executable not found beside Python: {reflex}")
+        print("Install the pinned dependencies before running this script.")
+        return 1
 
-    if not lint_success or not test_success:
-        print("\nChecks completed with issues.")
-        sys.exit(1)
-    else:
-        print("\nAll checks passed! Code is clean.")
-        sys.exit(0)
+    checks = [
+        ([sys.executable, "-m", "pip", "check"], "Dependency consistency"),
+        (
+            [sys.executable, "-m", "compileall", "-q", "src", "frontend", "tests"],
+            "Python compilation",
+        ),
+        ([sys.executable, "-m", "ruff", "check", "."], "Ruff lint"),
+        (
+            [sys.executable, "-m", "ruff", "format", "--check", "."],
+            "Ruff format check",
+        ),
+        ([sys.executable, "-m", "pytest", "-q"], "Pytest"),
+        (
+            [str(reflex), "export", "--frontend-only", "--no-zip"],
+            "Reflex frontend export",
+        ),
+    ]
+    failures = [
+        description
+        for command, description in checks
+        if not run_command(command, description)
+    ]
+    if failures:
+        print("\nChecks completed with issues: " + ", ".join(failures))
+        return 1
+    print("\nAll read-only release checks passed.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

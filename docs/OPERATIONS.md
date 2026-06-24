@@ -154,6 +154,11 @@ python tools/migrate_to_supabase.py --print-setup-sql
 `pytest` のキャッシュは、アクセス拒否が発生していた `.pytest_cache` ではなく `.states/pytest_cache` を使うように設定済みです。
 `ruff` のキャッシュも `.states/ruff_cache` を使います。
 
+Codex から一括検証する場合は、このリポジトリを workspace root として開いたスレッドで
+`.venv\Scripts\python.exe scripts\check.py` を実行します。このスクリプトは依存関係を
+自動インストールせず、コードも自動修正しません。別 workspace から実行したときの
+temp/cache/`.web` 書き込み拒否は、まず sandbox 境界として切り分けます。
+
 ローカルキャッシュを初期化したい場合は、アプリを停止してから `.states/http_cache`、`.states/yfinance_cache`、`.states/market_context_cache`、`.states/option_chain_cache`、`.states/marketdata_option_chain_cache`、`.states/analysis_jobs` を削除してください。`.states` 全体を削除すると pytest/ruff の作業キャッシュも消えますが、次回実行時に再作成されます。Reflexセッション状態だけを初期化する場合は `.reflex_states/` を削除します。
 
 Reflex のフロントエンド検証では、Codex アプリの WindowsApps 配下にある `node.EXE` が `WinError 5` で実行できないことがあります。`rxconfig.py` は、存在する場合に `C:\Users\<user>\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin` をPATH先頭へ入れ、実行可能な同梱Nodeを優先します。

@@ -278,8 +278,9 @@ class StockState(rx.State):
             )
             rank = self.sector_theme_context.get("best_theme_rank")
             self.sector_theme_best_rank = "" if rank in (None, "") else str(rank)
-            self.sector_theme_rank_points = str(
-                self.sector_theme_context.get("best_theme_rank_points", 0)
+            rank_points = self.sector_theme_context.get("best_theme_rank_points")
+            self.sector_theme_rank_points = (
+                "" if rank_points in (None, "") else str(rank_points)
             )
             self.sector_theme_ranking_summary = str(
                 self.sector_theme_context.get("ranking_summary", "")

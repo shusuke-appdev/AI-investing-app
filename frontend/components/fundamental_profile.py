@@ -8,9 +8,9 @@ from frontend.state.stock_state import StockState
 
 def _purchase_color() -> rx.Var:
     return rx.cond(
-        StockState.purchase_evidence_label == "購入候補",
+        StockState.purchase_evidence_label == "高",
         "green",
-        rx.cond(StockState.purchase_evidence_label == "条件待ち", "orange", "red"),
+        rx.cond(StockState.purchase_evidence_label == "中", "orange", "red"),
     )
 
 
@@ -83,7 +83,7 @@ def fundamental_profile_panel() -> rx.Component:
         rx.card(
             rx.vstack(
                 rx.hstack(
-                    rx.heading("適応型ファンダメンタル / 購入根拠一致度", size="4"),
+                    rx.heading("適応型ファンダメンタル / 根拠一致度", size="4"),
                     rx.spacer(),
                     evaluation_badge(
                         StockState.fundamental_score_display,

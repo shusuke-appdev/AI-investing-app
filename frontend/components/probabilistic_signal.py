@@ -79,12 +79,12 @@ def probabilistic_signal_panel() -> rx.Component:
                 ),
                 rx.card(
                     rx.vstack(
-                        rx.heading("リスクと配分上限", size="4"),
+                        rx.heading("リスク制約（参考）", size="4"),
                         rx.grid(
                             _metric("確信度", signal["confidence_display"].to(str)),
                             _metric("相場適合度", signal["regime_fit_display"].to(str)),
                             _metric(
-                                "最大配分",
+                                "モデル上限参考",
                                 signal["max_allocation_display"].to(str),
                             ),
                             _metric(
@@ -133,7 +133,8 @@ def probabilistic_signal_panel() -> rx.Component:
                             ),
                             _metric("トレンド環境", signal["trend_regime"].to(str)),
                             _metric(
-                                "行動目安", signal["suggested_action_display"].to(str)
+                                "調査スタンス",
+                                signal["suggested_action_display"].to(str),
                             ),
                             columns="2",
                             spacing="3",

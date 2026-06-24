@@ -22,6 +22,7 @@ def build_trend_ranking_context(
     sector_flow: dict[str, Any] | None = None,
     distortions: dict[str, Any] | None = None,
     include_options: bool = False,
+    option_cache_only: bool = False,
     top_n: int = 10,
 ) -> dict[str, Any]:
     """Build the app's unified trend ranking for one market."""
@@ -37,7 +38,9 @@ def build_trend_ranking_context(
 
     base_rows = _base_rows(market_type, period_maps, sector_flow, distortions)
     option_map = (
-        _option_asymmetry_map(base_rows[:MAX_OPTION_PROXIES])
+        _option_asymmetry_map(
+            base_rows[:MAX_OPTION_PROXIES], cache_only=option_cache_only
+        )
         if include_options and market_type == "US"
         else {}
     )
@@ -55,9 +58,16 @@ def build_trend_ranking_context(
     return {
         "market": market_type,
         "items": visible,
-        "summary": _summary(visible, include_options),
+        "summary": _summary(visible, include_options, option_cache_only),
         "quality_warnings": _ranking_warnings(period_maps, option_map, include_options),
         "option_updated": include_options,
+        "option_mode": (
+            "cache_only"
+            if include_options and option_cache_only
+            else "live"
+            if include_options
+            else "off"
+        ),
     }
 
 
@@ -66,12 +76,14 @@ def find_theme_rankings(
     themes: list[str],
     *,
     include_options: bool = False,
+    option_cache_only: bool = False,
 ) -> dict[str, Any]:
     """Return ranking rows for selected themes, used by stock analysis."""
 
     ranking = build_trend_ranking_context(
         market_type,
         include_options=include_options and market_type == "US",
+        option_cache_only=option_cache_only,
         top_n=50,
     )
     lookup = {str(item.get("theme")): item for item in ranking.get("items", [])}
@@ -83,7 +95,7 @@ def find_theme_rankings(
         "best_rank": best.get("rank"),
         "best_theme": best.get("theme", ""),
         "best_total_score": best.get("total_score"),
-        "best_rank_points": best.get("rank_points", 0),
+        "best_rank_points": best.get("rank_points") if best else None,
         "summary": _stock_summary(best)
         if best
         else "該当テーマは統合ランキング圏外です。",
@@ -197,14 +209,20 @@ def _base_rows(
     return rows
 
 
-def _option_asymmetry_map(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _option_asymmetry_map(
+    rows: list[dict[str, Any]], *, cache_only: bool = False
+) -> dict[str, dict[str, Any]]:
     result = {}
     for row in rows:
         proxy = str(row.get("option_proxy_ticker") or "").upper()
         if not proxy or proxy in result:
             continue
         try:
-            analysis = analyze_option_sentiment(proxy, allow_marketdata=True)
+            analysis = analyze_option_sentiment(
+                proxy,
+                allow_marketdata=True,
+                cache_only=cache_only,
+            )
         except Exception as exc:
             logger.warning("[TrendRanking] Option proxy %s failed: %s", proxy, exc)
             analysis = None
@@ -360,10 +378,18 @@ def _invalidation(item: dict[str, Any]) -> str:
     return f"{proxy}の50日線割れ、またはランキング20位以下への低下"
 
 
-def _summary(rows: list[dict[str, Any]], include_options: bool) -> str:
+def _summary(
+    rows: list[dict[str, Any]], include_options: bool, option_cache_only: bool
+) -> str:
     if not rows:
         return "統合トレンドランキングを算出できません。"
-    suffix = "MarketDataオプションを反映" if include_options else "価格/フロー中心"
+    suffix = (
+        "保存済みオプションを任意反映"
+        if include_options and option_cache_only
+        else "MarketDataオプションを反映"
+        if include_options
+        else "価格/フロー中心"
+    )
     return f"首位は {rows[0]['theme']}（{suffix}）。"
 
 

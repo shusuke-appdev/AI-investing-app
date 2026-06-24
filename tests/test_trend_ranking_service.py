@@ -2,6 +2,8 @@ from src.services import trend_ranking_service as service
 
 
 def test_trend_ranking_reflects_marketdata_option_asymmetry(monkeypatch):
+    option_calls = []
+
     def fake_ranked(periods, market_type):
         raw = {
             "1週間": {"AI半導体": 4.0, "石油・ガス": 1.0},
@@ -25,10 +27,10 @@ def test_trend_ranking_reflects_marketdata_option_asymmetry(monkeypatch):
             "石油・ガス": ["XOM", "CVX"],
         },
     )
-    monkeypatch.setattr(
-        service,
-        "analyze_option_sentiment",
-        lambda ticker, allow_marketdata=True: {
+
+    def fake_option_sentiment(ticker, *, allow_marketdata=True, cache_only=False):
+        option_calls.append((ticker, allow_marketdata, cache_only))
+        return {
             "source": "marketdata.app",
             "data_quality": "available",
             "data_as_of": "2026-06-16T00:00:00+00:00",
@@ -36,8 +38,9 @@ def test_trend_ranking_reflects_marketdata_option_asymmetry(monkeypatch):
             "gex": {"nearby_net_gex": -10_000_000},
             "skew": 0.0,
             "quality_warnings": [],
-        },
-    )
+        }
+
+    monkeypatch.setattr(service, "analyze_option_sentiment", fake_option_sentiment)
 
     result = service.build_trend_ranking_context(
         "US",
@@ -64,12 +67,16 @@ def test_trend_ranking_reflects_marketdata_option_asymmetry(monkeypatch):
             ]
         },
         include_options=True,
+        option_cache_only=True,
     )
 
     assert result["items"][0]["theme"] == "AI半導体"
     assert result["items"][0]["option_asymmetry"] == "upside_squeeze_candidate"
     assert result["items"][0]["option_source"] == "marketdata.app"
     assert result["items"][0]["rank_points"] == 10
+    assert result["option_mode"] == "cache_only"
+    assert option_calls
+    assert all(cache_only for _, _, cache_only in option_calls)
 
 
 def test_opportunity_themes_use_ranking_and_option_asymmetry():

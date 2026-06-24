@@ -156,7 +156,7 @@ def test_stock_sector_theme_context_can_include_trend_rank_and_theme_options(
     monkeypatch.setattr(
         diagnostics,
         "find_theme_rankings",
-        lambda market_type, themes, include_options=False: {
+        lambda market_type, themes, include_options=False, option_cache_only=False: {
             "items": [
                 {
                     "theme": "AI半導体",

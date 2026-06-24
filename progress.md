@@ -1,5 +1,13 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-06-24 P0 missing-data / research-contract remediation
+- Changed insufficient probabilistic outputs from numeric zeroes to unavailable values and added display-safe `算出不可` formatting.
+- Made theme rank a required purchase-evidence input, renamed the output to neutral `根拠一致度` high/medium/low labels, and prevented missing theme data from becoming a real zero score.
+- Kept Stock theme-option context on the cache-only path during normal stock loading, while preserving live option analysis for explicit update flows.
+- Reframed Stock AI and primary display labels from direct buy/sell/action language to research stance, confirmation, invalidation, and risk-reference language.
+- Added regression coverage for missing probabilistic values, missing theme ranks, cache-only option enrichment, display labels, and missing AI prompt metrics.
+- Validation: compileall passed, ruff check passed, ruff format check passed, full pytest passed (`264 passed`), and Reflex frontend export passed.
+
 ## Session update: 2026-06-18 stock trade integration / market cleanup / detail refresh staging
 - Removed the normal `/trading-plan` route and navigation entry while keeping the legacy trade plan storage/code for compatibility; Stock now exposes trade analysis only after the user presses the `トレード分析` button.
 - Added Stock trade analysis generation from existing `StockSignalContext` assets, including timing scenarios, key levels, invalidation/risk levels, supply-demand checks, and the existing entry-quality panel inside the expanded trade analysis surface.
@@ -353,3 +361,8 @@ streamlit run legacy_streamlit/app.py
 - Design and provenance: `docs/ADAPTIVE_STOCK_ANALYSIS.md` and `docs/ANALYSIS_DATA_PROVENANCE.md`.
 - Validation: compileall, ruff check, ruff format check, full pytest (`260 passed`), and Reflex frontend export passed.
 - Live classification smoke: NVDA=large/growth/semiconductor available, JPM=large/growth/bank partial-capped, O=REIT unavailable, 7203.T=large/value/general available, and 8306.T=bank unavailable; missing specialized/style inputs stayed unavailable instead of being treated as zero.
+
+# Session update: 2026-06-24 environment validation hardening
+- Replaced the mutating `scripts/check.py` workflow with a read-only release check that never installs packages, invokes a shell, formats files, or applies lint fixes.
+- Made yfinance cache initialization continue with the repo-local `.states/yfinance_cache` when Python cannot resolve a writable OS temp directory, with a regression test.
+- Documented that pytest/Reflex write failures against this repository from another Codex workspace are sandbox-scope failures, not application failures.

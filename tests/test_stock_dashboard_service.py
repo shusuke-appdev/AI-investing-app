@@ -207,6 +207,7 @@ def test_stock_dashboard_keeps_partial_results_when_optional_diagnostic_fails(
 
 def test_stock_dashboard_reuses_shared_target_and_benchmark_history(monkeypatch):
     calls: list[tuple[str, str]] = []
+    sector_kwargs = {}
 
     def history(ticker: str, period: str):
         calls.append((ticker, period))
@@ -236,12 +237,17 @@ def test_stock_dashboard_reuses_shared_target_and_benchmark_history(monkeypatch)
     )
     monkeypatch.setattr(service, "evaluate_trade_setup", lambda *args: {})
     monkeypatch.setattr(service, "trade_setup_to_dict", lambda value: value)
-    monkeypatch.setattr(
-        service, "evaluate_stock_sector_theme_context", lambda *args, **kwargs: {}
-    )
+
+    def sector_context(*args, **kwargs):
+        sector_kwargs.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(service, "evaluate_stock_sector_theme_context", sector_context)
 
     service.build_stock_dashboard_context("TEST")
 
     assert calls.count(("TEST", "5y")) == 1
     assert calls.count(("SPY", "5y")) == 1
     assert calls == [("TEST", "5y"), ("SPY", "5y")]
+    assert sector_kwargs["include_theme_options"] is True
+    assert sector_kwargs["theme_options_cache_only"] is True

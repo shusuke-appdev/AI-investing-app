@@ -6,6 +6,7 @@ from src.advisor.probabilistic_signal import (
     add_forward_outcomes,
     classify_signal_row,
     generate_probabilistic_stock_signal,
+    signal_to_dict,
 )
 from src.advisor.stock_feature_engine import build_stock_feature_frame
 from src.backtesting.walk_forward import run_walk_forward_validation
@@ -134,3 +135,17 @@ def test_generate_probabilistic_signal_with_mocked_data(monkeypatch):
         assert signal.suggested_action == "Watch"
         assert signal.max_allocation_pct == 0
     assert signal.max_allocation_pct in {0, 1, 2, 3, 5}
+
+
+def test_insufficient_data_is_unavailable_not_numeric_zero():
+    signal = generate_probabilistic_stock_signal("TEST", price_df=pd.DataFrame())
+    display = signal_to_dict(signal)
+
+    assert signal.expected_5d_return is None
+    assert signal.expected_20d_excess_return is None
+    assert signal.probability_up is None
+    assert signal.risk_adjusted_signal is None
+    assert display["expected_5d_return_display"] == "算出不可"
+    assert display["expected_20d_excess_return_display"] == "算出不可"
+    assert display["probability_up_display"] == "算出不可"
+    assert display["risk_adjusted_signal_display"] == "算出不可"

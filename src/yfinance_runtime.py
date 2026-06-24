@@ -69,7 +69,12 @@ def _candidate_cache_dirs() -> list[Path]:
     env_dir = os.environ.get("YFINANCE_CACHE_DIR")
     candidates = [Path(env_dir).expanduser()] if env_dir else []
     candidates.append(default_yfinance_cache_dir())
-    candidates.append(Path(tempfile.gettempdir()) / "ai_investing_yfinance_cache")
+    try:
+        system_temp = Path(tempfile.gettempdir())
+    except OSError as exc:
+        logger.warning("[YFinanceRuntime] System temp directory unavailable: %s", exc)
+    else:
+        candidates.append(system_temp / "ai_investing_yfinance_cache")
     return candidates
 
 

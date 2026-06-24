@@ -28,6 +28,19 @@ def test_default_yfinance_cache_dir_is_repo_local():
     )
 
 
+def test_candidate_cache_dirs_ignore_unavailable_system_temp(monkeypatch):
+    monkeypatch.delenv("YFINANCE_CACHE_DIR", raising=False)
+
+    def unavailable_temp() -> str:
+        raise FileNotFoundError("No usable temporary directory found")
+
+    monkeypatch.setattr(yfinance_runtime.tempfile, "gettempdir", unavailable_temp)
+
+    assert yfinance_runtime._candidate_cache_dirs() == [
+        yfinance_runtime.default_yfinance_cache_dir()
+    ]
+
+
 def test_yfinance_cache_info_reports_configured_path(monkeypatch, tmp_path):
     cache_dir = tmp_path / "yf-cache"
     monkeypatch.setenv("YFINANCE_CACHE_DIR", str(cache_dir))

@@ -34,6 +34,8 @@ def evaluate_purchase_evidence(
         missing.append("Entry Framework点")
     if fundamental_score is None:
         missing.append("適応型ファンダメンタル点")
+    if theme_score is None:
+        missing.append("テーマ順位")
     if missing:
         return {
             "status": "unavailable",
@@ -46,6 +48,7 @@ def evaluate_purchase_evidence(
             "cap_reasons": [],
         }
 
+    assert theme_score is not None
     technical_side = technical_score * 0.70 + entry_score * 0.30
     fundamental_theme_side = fundamental_score * 0.70 + theme_score * 0.30
     raw_score = _harmonic_mean(technical_side, fundamental_theme_side)
@@ -80,7 +83,7 @@ def evaluate_purchase_evidence(
         cap, cap_reasons = _cap(cap, 74, cap_reasons, "ファンダメンタル部分評価")
 
     score = round(min(raw_score, cap), 1)
-    label = "購入候補" if score >= 75 else "条件待ち" if score >= 55 else "見送り"
+    label = "高" if score >= 75 else "中" if score >= 55 else "低"
     return {
         "status": "available",
         "score": score,
@@ -106,9 +109,9 @@ def evaluate_purchase_evidence(
     }
 
 
-def _theme_score(sector_theme: dict[str, Any]) -> float:
+def _theme_score(sector_theme: dict[str, Any]) -> float | None:
     rank_points = _score(sector_theme.get("best_theme_rank_points"))
-    return min(100.0, rank_points * 10) if rank_points is not None else 0.0
+    return min(100.0, rank_points * 10) if rank_points is not None else None
 
 
 def _harmonic_mean(left: float, right: float) -> float:

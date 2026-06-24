@@ -30,12 +30,12 @@ ROUND_TRIP_COST = 0.002
 class ProbabilisticSignal:
     ticker: str
     signal_label: str
-    expected_5d_return: float
-    expected_20d_excess_return: float
-    probability_up: float
-    risk_adjusted_signal: float
+    expected_5d_return: float | None
+    expected_20d_excess_return: float | None
+    probability_up: float | None
+    risk_adjusted_signal: float | None
     confidence: str
-    regime_fit: float
+    regime_fit: float | None
     sample_size: int
     distribution: dict[str, float | int | None] = field(default_factory=dict)
     validation_summary: dict[str, Any] = field(default_factory=dict)
@@ -258,12 +258,12 @@ def _fallback_signal(ticker: str, reason: str) -> ProbabilisticSignal:
     return ProbabilisticSignal(
         ticker=ticker,
         signal_label="Insufficient data",
-        expected_5d_return=0.0,
-        expected_20d_excess_return=0.0,
-        probability_up=0.0,
-        risk_adjusted_signal=0.0,
+        expected_5d_return=None,
+        expected_20d_excess_return=None,
+        probability_up=None,
+        risk_adjusted_signal=None,
         confidence="Low",
-        regime_fit=0.0,
+        regime_fit=None,
         sample_size=0,
         risk_notes=[reason],
         suggested_action="Watch",
@@ -377,13 +377,19 @@ def signal_to_dict(signal: ProbabilisticSignal) -> dict[str, Any]:
         signal.suggested_action, ACTION_LABELS
     )
     data["confidence_display"] = display_label(signal.confidence, CONFIDENCE_LABELS)
-    data["expected_5d_return_display"] = f"{signal.expected_5d_return:+.2%}"
-    data["expected_20d_excess_return_display"] = (
-        f"{signal.expected_20d_excess_return:+.2%}"
+    data["expected_5d_return_display"] = _percent_display(
+        signal.expected_5d_return, digits=2, signed=True
     )
-    data["probability_up_display"] = f"{signal.probability_up:.1%}"
-    data["risk_adjusted_signal_display"] = f"{signal.risk_adjusted_signal:+.2f}"
-    data["regime_fit_display"] = f"{signal.regime_fit:.0f}%"
+    data["expected_20d_excess_return_display"] = _percent_display(
+        signal.expected_20d_excess_return, digits=2, signed=True
+    )
+    data["probability_up_display"] = _percent_display(signal.probability_up, digits=1)
+    data["risk_adjusted_signal_display"] = _number_display(
+        signal.risk_adjusted_signal, digits=2, signed=True
+    )
+    data["regime_fit_display"] = (
+        "算出不可" if signal.regime_fit is None else f"{signal.regime_fit:.0f}%"
+    )
     data["max_allocation_display"] = f"{signal.max_allocation_pct}%"
     data["sample_size_display"] = str(signal.sample_size)
     data["walk_forward_summary"] = signal.validation_summary.get(
@@ -402,3 +408,21 @@ def signal_to_dict(signal: ProbabilisticSignal) -> dict[str, Any]:
         f"- {item}" for item in signal.why_negative
     )
     return data
+
+
+def _percent_display(value: float | None, *, digits: int, signed: bool = False) -> str:
+    """Format a probability or return without inventing a numeric zero."""
+
+    if value is None:
+        return "算出不可"
+    sign = "+" if signed else ""
+    return f"{value:{sign}.{digits}%}"
+
+
+def _number_display(value: float | None, *, digits: int, signed: bool = False) -> str:
+    """Format a model value while preserving unavailable semantics."""
+
+    if value is None:
+        return "算出不可"
+    sign = "+" if signed else ""
+    return f"{value:{sign}.{digits}f}"

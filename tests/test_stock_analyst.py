@@ -153,3 +153,32 @@ def test_format_sector_theme_context_includes_advantage_flags():
 
 def test_format_provenance_context_handles_missing_data():
     assert _format_provenance_context({}) == ""
+
+
+def test_analyze_stock_keeps_missing_core_metrics_unavailable(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        stock_analyst,
+        "generate_content",
+        lambda prompt: captured.setdefault("prompt", prompt) and "ok",
+    )
+    monkeypatch.setattr(
+        "src.knowledge_storage.get_knowledge_for_ai_context",
+        lambda max_items=5: "",
+    )
+
+    result = stock_analyst.analyze_stock(
+        "TEST",
+        {"name": "Test Co", "sector": "Technology", "industry": "Software"},
+        stock_signal_context={
+            "technical_data": {"overall_signal": "Hold"},
+            "smart_criteria": {"S": {"status": "unknown", "value": "N/A"}},
+        },
+    )
+
+    assert result == "ok"
+    assert "時価総額: N/A" in captured["prompt"]
+    assert "現在株価: N/A" in captured["prompt"]
+    assert "アナリスト目標株価: N/A" in captured["prompt"]
+    assert "$0.00" not in captured["prompt"]

@@ -235,6 +235,7 @@ def build_stock_dashboard_context(
                 info_provider=inputs.info,
                 include_market_ranking=True,
                 include_theme_options=not normalized_ticker.endswith(".T"),
+                theme_options_cache_only=True,
                 fundamental_profile=fundamental_profile,
             )
         ),

@@ -1,18 +1,18 @@
 """Central Japanese display labels for analysis outputs."""
 
 TECHNICAL_LABELS = {
-    "Strong Buy": "強い買い優勢",
-    "Buy": "買い優勢",
-    "Hold": "中立・様子見",
-    "Sell": "売り優勢",
-    "Strong Sell": "強い売り優勢",
+    "Strong Buy": "強い強気",
+    "Buy": "強気",
+    "Hold": "中立",
+    "Sell": "弱気",
+    "Strong Sell": "強い弱気",
 }
 
 ACTION_LABELS = {
-    "Add small": "小さく追加を検討",
-    "Hold": "保有継続",
-    "Watch": "監視",
-    "Avoid": "見送り",
+    "Add small": "強気根拠あり",
+    "Hold": "中立継続",
+    "Watch": "確認継続",
+    "Avoid": "リスク警戒",
 }
 
 SIGNAL_LABELS = {

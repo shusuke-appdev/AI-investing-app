@@ -26,3 +26,8 @@ Use the repo-local `.venv` tools when available. The proven validation stack is:
 
 If one validation path is blocked by the local Windows/Codex environment, find a smaller real
 smoke test and report the exact blocker.
+
+Run these checks from a Codex thread rooted at this repository. If the repository is outside
+the active writable roots, pytest temp files, `__pycache__`, `.states`, and Reflex `.web`
+build output can fail even when the application is healthy. `python scripts/check.py` runs
+the complete release stack without installing packages or rewriting source files.

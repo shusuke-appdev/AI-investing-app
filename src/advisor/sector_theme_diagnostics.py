@@ -165,6 +165,7 @@ def evaluate_stock_sector_theme_context(
     info_provider: Callable[..., dict[str, Any]] | None = None,
     include_market_ranking: bool = False,
     include_theme_options: bool = False,
+    theme_options_cache_only: bool = True,
     fundamental_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the sector/theme context used by the individual stock page and AI."""
@@ -229,6 +230,7 @@ def evaluate_stock_sector_theme_context(
             market_type,
             themes,
             include_options=include_theme_options,
+            option_cache_only=theme_options_cache_only,
         )
         if include_market_ranking
         else {}
@@ -268,9 +270,12 @@ def evaluate_stock_sector_theme_context(
         "best_theme_rank": ranking_context.get("best_rank")
         if isinstance(ranking_context, dict)
         else None,
-        "best_theme_rank_points": ranking_context.get("best_rank_points", 0)
-        if isinstance(ranking_context, dict)
-        else 0,
+        "best_theme_rank_points": (
+            ranking_context.get("best_rank_points")
+            if isinstance(ranking_context, dict)
+            and ranking_context.get("best_rank") is not None
+            else None
+        ),
         "ranking_summary": ranking_context.get("summary", "")
         if isinstance(ranking_context, dict)
         else "",
@@ -363,18 +368,20 @@ def _stock_theme_ranking_context(
     themes: list[str],
     *,
     include_options: bool,
+    option_cache_only: bool,
 ) -> dict[str, Any]:
     try:
         return find_theme_rankings(
             market_type,
             themes,
             include_options=include_options and market_type == "US",
+            option_cache_only=option_cache_only,
         )
     except Exception as exc:
         return {
             "items": [],
             "best_rank": None,
-            "best_rank_points": 0,
+            "best_rank_points": None,
             "summary": f"統合トレンドランキングは取得できません: {exc}",
             "quality_warnings": [str(exc)],
         }

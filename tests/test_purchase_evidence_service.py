@@ -21,7 +21,7 @@ def _evaluate(**overrides):
 def test_purchase_evidence_requires_both_sides_and_can_be_candidate():
     result = _evaluate()
 
-    assert result["label"] == "購入候補"
+    assert result["label"] == "高"
     assert result["score"] >= 75
 
 
@@ -29,7 +29,7 @@ def test_entry_blocked_caps_purchase_evidence_at_54():
     result = _evaluate(trade_setup={"score": 90, "status": "blocked"})
 
     assert result["score"] <= 54
-    assert result["label"] == "見送り"
+    assert result["label"] == "低"
     assert "Entry禁止" in result["cap_reasons"]
 
 
@@ -40,7 +40,7 @@ def test_watch_or_partial_data_caps_at_74():
     )
 
     assert result["score"] <= 74
-    assert result["label"] == "条件待ち"
+    assert result["label"] == "中"
 
 
 def test_missing_fundamental_is_unavailable_not_zero():
@@ -48,3 +48,11 @@ def test_missing_fundamental_is_unavailable_not_zero():
 
     assert result["status"] == "unavailable"
     assert result["score"] is None
+
+
+def test_missing_theme_rank_is_unavailable_not_zero():
+    result = _evaluate(sector_theme={})
+
+    assert result["status"] == "unavailable"
+    assert result["score"] is None
+    assert "テーマ順位がありません。" in result["missing_reasons"]
