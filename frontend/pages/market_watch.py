@@ -1,5 +1,6 @@
 import reflex as rx
 
+from frontend.components.data_provenance import data_status_panel, provenance_panel
 from frontend.components.flash_summary import (
     market_distortion_panel,
     market_monitor,
@@ -39,6 +40,15 @@ def _stage_status_card(stage) -> rx.Component:
                 width="100%",
                 align_items="center",
             ),
+            rx.cond(
+                stage.target != "",
+                rx.text(
+                    "対象: " + stage.target,
+                    size="1",
+                    color=rx.color("gray", 10),
+                ),
+                rx.fragment(),
+            ),
             rx.text(stage.summary, size="1", color=rx.color("gray", 10)),
             rx.cond(
                 stage.cache_status != "",
@@ -46,6 +56,25 @@ def _stage_status_card(stage) -> rx.Component:
                     "source: " + stage.cache_status,
                     size="1",
                     color=rx.color("gray", 9),
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                stage.fetched_at != "",
+                rx.text(
+                    "updated: " + stage.fetched_at,
+                    size="1",
+                    color=rx.color("gray", 9),
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                stage.error_message != "",
+                rx.callout(
+                    stage.error_message,
+                    icon="triangle_alert",
+                    color_scheme="amber",
+                    width="100%",
                 ),
                 rx.fragment(),
             ),
@@ -77,18 +106,35 @@ def _stage_color(status) -> rx.Var:
     )
 
 
-@template
-def market_watch_page() -> rx.Component:
-    """市場監視ページ"""
-
-    return rx.vstack(
-        page_header(
-            "市場監視",
-            "市場スタンス、主要ドライバー、リスク要因を段階更新で確認します。",
+def _update_action_bar() -> rx.Component:
+    return rx.card(
+        rx.flex(
+            rx.text("更新対象", weight="bold", size="2"),
+            rx.button(
+                rx.icon("layers", size=16),
+                "全部更新",
+                on_click=MarketState.refresh_market_details,
+                loading=MarketState.is_fetching_details,
+                variant="surface",
+            ),
+            rx.button(
+                rx.icon("git-branch", size=16),
+                "Theme/Flow",
+                on_click=MarketState.refresh_theme_flow,
+                loading=MarketState.is_fetching_details,
+                variant="surface",
+            ),
             rx.button(
                 rx.icon("activity", size=16),
-                "詳細更新",
-                on_click=MarketState.refresh_market_details,
+                "Vol/Sentiment",
+                on_click=MarketState.refresh_volatility_sentiment,
+                loading=MarketState.is_fetching_details,
+                variant="surface",
+            ),
+            rx.button(
+                rx.icon("shield-alert", size=16),
+                "Credit/Risk",
+                on_click=MarketState.refresh_credit_distortion,
                 loading=MarketState.is_fetching_details,
                 variant="surface",
             ),
@@ -99,7 +145,172 @@ def market_watch_page() -> rx.Component:
                 loading=MarketState.is_fetching_options,
                 variant="surface",
             ),
+            gap="0.5rem",
+            wrap="wrap",
+            align="center",
+            width="100%",
         ),
+        width="100%",
+        margin_bottom="1rem",
+    )
+
+
+def _market_decision_summary() -> rx.Component:
+    return rx.grid(
+        _summary_tile(
+            "市場姿勢",
+            rx.cond(
+                MarketState.strategy_regime.label != "",
+                MarketState.strategy_regime.label,
+                rx.cond(
+                    MarketState.ibd_regime.label != "",
+                    MarketState.ibd_regime.label,
+                    "未判定",
+                ),
+            ),
+            rx.cond(
+                MarketState.strategy_regime.rationale != "",
+                MarketState.strategy_regime.rationale,
+                MarketState.ibd_regime.rationale,
+            ),
+            "blue",
+        ),
+        _summary_tile(
+            "リスク枠",
+            rx.cond(
+                MarketState.strategy_regime.risk_budget != "",
+                MarketState.strategy_regime.risk_budget,
+                MarketState.ibd_regime.exposure_level,
+            ),
+            rx.cond(
+                MarketState.regime_playbook.stance != "",
+                MarketState.regime_playbook.stance,
+                "詳細更新後に市場スタンスを表示します。",
+            ),
+            "green",
+        ),
+        _summary_tile(
+            "主要ドライバー",
+            rx.cond(
+                MarketState.market_drivers_summary != "",
+                MarketState.market_drivers_summary,
+                "未取得",
+            ),
+            rx.cond(
+                MarketState.volatility_summary != "",
+                MarketState.volatility_summary,
+                MarketState.trend_ranking_summary,
+            ),
+            "cyan",
+        ),
+        _summary_tile(
+            "未取得/要更新",
+            _complete_label(MarketState.option_complete_status),
+            rx.cond(
+                MarketState.option_fallback_reason != "",
+                MarketState.option_fallback_reason,
+                "ステージカードで更新状況を確認できます。",
+            ),
+            "amber",
+        ),
+        columns=rx.breakpoints(initial="1", md="2", xl="4"),
+        spacing="3",
+        width="100%",
+        margin_bottom="1rem",
+    )
+
+
+def _summary_tile(title: str, value, detail, color: str) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.text(title, size="1", color=rx.color("gray", 10), weight="bold"),
+            rx.heading(value, size="4"),
+            rx.text(detail, size="1", color=rx.color("gray", 10)),
+            spacing="1",
+            align_items="start",
+            width="100%",
+        ),
+        border_left=f"4px solid {rx.color(color, 8)}",
+        width="100%",
+    )
+
+
+def _details_accordion() -> rx.Component:
+    return rx.accordion.root(
+        rx.accordion.item(
+            header="概要",
+            content=rx.vstack(
+                watch_indices_strip(),
+                market_risk_intelligence_panel(),
+                market_monitor(),
+                width="100%",
+                spacing="4",
+            ),
+        ),
+        rx.accordion.item(
+            header="トレンド/テーマ",
+            content=rx.vstack(
+                trend_ranking_panel(),
+                momentum_monitor_component(),
+                theme_ranking_content(),
+                width="100%",
+                spacing="4",
+            ),
+        ),
+        rx.accordion.item(
+            header="リスク/信用",
+            content=rx.vstack(
+                market_distortion_panel(),
+                width="100%",
+                spacing="4",
+            ),
+        ),
+        rx.accordion.item(
+            header="オプション",
+            content=option_analysis_component(),
+        ),
+        rx.accordion.item(
+            header="データ状態",
+            content=rx.vstack(
+                data_status_panel(MarketState.data_status),
+                provenance_panel(MarketState.provenance),
+                width="100%",
+                spacing="3",
+            ),
+        ),
+        type="multiple",
+        default_value=["概要"],
+        width="100%",
+    )
+
+
+def _complete_label(value) -> rx.Var:
+    return rx.cond(
+        value == "complete",
+        "完全取得",
+        rx.cond(
+            value == "fallback",
+            "fallback中",
+            rx.cond(
+                value == "partial_greeks",
+                "Greeks一部欠損",
+                rx.cond(value == "failed", "取得失敗", "未取得"),
+            ),
+        ),
+    )
+
+
+@template
+def market_watch_page() -> rx.Component:
+    """市場監視ページ"""
+
+    return rx.vstack(
+        page_header(
+            "市場監視",
+            "市場スタンス、主要ドライバー、リスク要因を段階更新で確認します。",
+        ),
+        _market_decision_summary(),
+        _update_action_bar(),
         _stage_status_strip(),
         rx.cond(
             MarketState.error_msg != "",
@@ -113,18 +324,7 @@ def market_watch_page() -> rx.Component:
         rx.cond(
             MarketState.is_fetching,
             loading_state("市場監視データを取得中..."),
-            rx.vstack(
-                watch_indices_strip(),
-                market_risk_intelligence_panel(),
-                market_monitor(),
-                trend_ranking_panel(),
-                market_distortion_panel(),
-                momentum_monitor_component(),
-                option_analysis_component(),
-                theme_ranking_content(),
-                width="100%",
-                spacing="4",
-            ),
+            _details_accordion(),
         ),
         width="100%",
         max_width="1400px",

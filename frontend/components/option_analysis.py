@@ -31,9 +31,35 @@ def render_ticker_compact(opt) -> rx.Component:
                     color_scheme=_quality_color(opt.data_quality),
                     variant="surface",
                 ),
+                rx.badge(
+                    opt.complete_status_label,
+                    color_scheme=_complete_color(opt.complete_status),
+                    variant="surface",
+                ),
                 width="100%",
+                wrap="wrap",
             ),
             rx.divider(),
+            rx.hstack(
+                rx.badge(
+                    rx.cond(
+                        opt.provider_active,
+                        "MarketData.app active",
+                        "direct Greeksなし",
+                    ),
+                    color_scheme=rx.cond(opt.provider_active, "green", "gray"),
+                    variant="surface",
+                ),
+                rx.badge(
+                    "Gamma " + opt.gamma_coverage_str,
+                    color_scheme=rx.cond(
+                        opt.gamma_coverage_str == "100%", "green", "amber"
+                    ),
+                    variant="surface",
+                ),
+                spacing="2",
+                wrap="wrap",
+            ),
             rx.cond(
                 opt.source != "",
                 rx.text(
@@ -51,6 +77,16 @@ def render_ticker_compact(opt) -> rx.Component:
                     ),
                     size="1",
                     color="gray",
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                opt.fallback_reason != "",
+                rx.callout(
+                    opt.fallback_reason,
+                    icon="info",
+                    color_scheme="amber",
+                    width="100%",
                 ),
                 rx.fragment(),
             ),
@@ -134,9 +170,58 @@ def option_analysis_component() -> rx.Component:
                 color_scheme=_quality_color(MarketState.option_status),
                 variant="surface",
             ),
+            rx.badge(
+                _complete_label(MarketState.option_complete_status),
+                color_scheme=_complete_color(MarketState.option_complete_status),
+                variant="surface",
+            ),
             width="100%",
             align_items="center",
+            wrap="wrap",
             margin_bottom="1rem",
+        ),
+        rx.hstack(
+            rx.badge(
+                rx.cond(
+                    MarketState.option_provider_active,
+                    "MarketData.app active",
+                    "MarketData.app inactive",
+                ),
+                color_scheme=rx.cond(
+                    MarketState.option_provider_active, "green", "gray"
+                ),
+                variant="surface",
+            ),
+            rx.badge(
+                "Gamma " + MarketState.option_gamma_coverage,
+                color_scheme=rx.cond(
+                    MarketState.option_gamma_coverage == "100%", "green", "amber"
+                ),
+                variant="surface",
+            ),
+            rx.cond(
+                MarketState.option_fallback_reason != "",
+                rx.badge(
+                    "fallback",
+                    color_scheme="amber",
+                    variant="surface",
+                ),
+                rx.fragment(),
+            ),
+            spacing="2",
+            wrap="wrap",
+            margin_bottom="0.75rem",
+        ),
+        rx.cond(
+            MarketState.option_fallback_reason != "",
+            rx.callout(
+                MarketState.option_fallback_reason,
+                icon="info",
+                color_scheme="amber",
+                width="100%",
+                margin_bottom="0.75rem",
+            ),
+            rx.fragment(),
         ),
         rx.cond(
             MarketState.market_type == "JP",
@@ -182,5 +267,37 @@ def _quality_color(quality) -> rx.Var:
                 "amber",
                 rx.cond(quality == "stale_cache", "orange", "red"),
             ),
+        ),
+    )
+
+
+def _complete_label(value) -> rx.Var:
+    return rx.cond(
+        value == "complete",
+        "完全取得",
+        rx.cond(
+            value == "fallback",
+            "fallback中",
+            rx.cond(
+                value == "partial_greeks",
+                "Greeks一部欠損",
+                rx.cond(
+                    value == "provider_inactive",
+                    "直接Greeksなし",
+                    rx.cond(value == "failed", "取得失敗", "未取得"),
+                ),
+            ),
+        ),
+    )
+
+
+def _complete_color(value) -> rx.Var:
+    return rx.cond(
+        value == "complete",
+        "green",
+        rx.cond(
+            (value == "fallback") | (value == "partial_greeks"),
+            "amber",
+            rx.cond(value == "failed", "red", "gray"),
         ),
     )

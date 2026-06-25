@@ -182,6 +182,20 @@ def assess_option_data_quality(
     }
 
 
+def gamma_coverage(calls: pd.DataFrame, puts: pd.DataFrame) -> dict[str, Any]:
+    """Return direct Gamma coverage for the option contracts in both chains."""
+
+    total = int(len(calls) + len(puts))
+    with_gamma = _real_gamma_count(calls, puts)
+    coverage = with_gamma / total if total else 0.0
+    return {
+        "gamma_contracts": with_gamma,
+        "total_contracts": total,
+        "gamma_coverage": round(coverage, 4),
+        "gamma_coverage_display": f"{coverage:.0%}",
+    }
+
+
 def _missing_option_columns(calls: pd.DataFrame, puts: pd.DataFrame) -> list[str]:
     required = {"strike", "volume", "openInterest", "impliedVolatility"}
     missing = []
@@ -596,17 +610,24 @@ def analyze_option_sentiment(
     if fetched is None:
         return None
     calls, puts, current_price, fetched_at, metadata = fetched
+    source = str(metadata.get("source") or "yfinance")
+    provider_active = bool(metadata.get("provider_active")) or source.startswith(
+        "marketdata.app"
+    )
+    gamma_info = gamma_coverage(calls, puts)
 
     # === 各指標を事前取得済みデータで計算 ===
     pcr = calculate_pcr(ticker, calls=calls, puts=puts)
-    gex = calculate_gex(
-        ticker,
-        calls=calls,
-        puts=puts,
-        current_price=current_price,
-        allow_gamma_estimation=not str(metadata.get("source") or "").startswith(
-            "marketdata.app"
-        ),
+    gex = (
+        calculate_gex(
+            ticker,
+            calls=calls,
+            puts=puts,
+            current_price=current_price,
+            allow_gamma_estimation=False,
+        )
+        if provider_active
+        else None
     )
     iv = calculate_atm_iv(ticker, calls=calls, puts=puts, current_price=current_price)
     max_pain = calculate_max_pain(ticker, calls=calls, puts=puts)
@@ -619,6 +640,16 @@ def analyze_option_sentiment(
         iv=iv,
         max_pain=max_pain,
     )
+    if not provider_active:
+        quality["data_quality"] = _worse_quality(quality["data_quality"], "partial")
+        warning = (
+            "MarketData.app direct Greeks are unavailable; GEX is hidden."
+            if not metadata.get("fallback_reason")
+            else str(metadata.get("fallback_reason"))
+        )
+        quality["quality_warnings"] = _unique_warnings(
+            [*quality["quality_warnings"], warning]
+        )
 
     # DTE (Days to Expiry) 計算
     dte = 30.0
@@ -722,12 +753,23 @@ def analyze_option_sentiment(
         "shadow_data_mode": str(metadata.get("shadow_data_mode") or ""),
         "shadow_credits_consumed": metadata.get("shadow_credits_consumed"),
         "shadow_credits_remaining": metadata.get("shadow_credits_remaining"),
-        "source": metadata.get("source", "yfinance"),
+        "source": source,
         "is_stale": bool(metadata.get("is_stale", False)),
         "cache_status": metadata.get("cache_status", "live"),
         "cache_age_seconds": metadata.get("cache_age_seconds"),
         "data_quality": quality["data_quality"],
         "quality_warnings": quality["quality_warnings"],
+        "provider_active": provider_active,
+        "fallback_reason": str(metadata.get("fallback_reason") or ""),
+        "complete_status": _complete_status(
+            provider_active=provider_active,
+            gex=gex,
+            quality=quality["data_quality"],
+            is_stale=bool(metadata.get("is_stale", False)),
+            fallback_reason=str(metadata.get("fallback_reason") or ""),
+            gamma_coverage_value=float(gamma_info["gamma_coverage"]),
+        ),
+        **gamma_info,
     }
 
 
@@ -784,6 +826,10 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
             "cache_status": "not_applicable",
             "cache_age_seconds": None,
             "quality_warnings": [],
+            "provider_active": False,
+            "fallback_reason": "",
+            "gamma_coverage": None,
+            "complete_status": "not_applicable",
         }
 
     indices = ["SPY", "QQQ", "IWM"]
@@ -845,7 +891,35 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
         "data_mode": _aggregate_data_modes(results),
         "credits_consumed": _sum_optional_values(results, "credits_consumed"),
         "credits_remaining": _min_optional_values(results, "credits_remaining"),
+        "provider_active": any(bool(item.get("provider_active")) for item in results),
+        "fallback_reason": _first_value(results, "fallback_reason"),
+        "gamma_coverage": _aggregate_gamma_coverage(results),
+        "complete_status": _aggregate_complete_status(results, status),
     }
+
+
+def _complete_status(
+    *,
+    provider_active: bool,
+    gex: dict | None,
+    quality: str,
+    is_stale: bool,
+    fallback_reason: str,
+    gamma_coverage_value: float,
+) -> str:
+    if fallback_reason:
+        return "fallback"
+    if not provider_active:
+        return "provider_inactive"
+    if is_stale:
+        return "stale_cache"
+    if gamma_coverage_value < 1.0:
+        return "partial_greeks"
+    if gex is None:
+        return "gex_unavailable"
+    if quality == "available":
+        return "complete"
+    return quality or "partial"
 
 
 def _aggregate_quality_warnings(results: list[dict]) -> list[str]:
@@ -871,6 +945,14 @@ def _latest_fetched_at(results: list[dict]) -> str:
 def _latest_value(results: list[dict], key: str) -> str:
     values = [str(item.get(key) or "") for item in results if item.get(key)]
     return max(values) if values else ""
+
+
+def _first_value(results: list[dict], key: str) -> str:
+    for item in results:
+        value = str(item.get(key) or "")
+        if value:
+            return value
+    return ""
 
 
 def _aggregate_data_modes(results: list[dict]) -> str:
@@ -912,6 +994,33 @@ def _max_cache_age_seconds(results: list[dict]) -> float | None:
         if item.get("cache_age_seconds") is not None
     ]
     return max(ages) if ages else None
+
+
+def _aggregate_gamma_coverage(results: list[dict]) -> float | None:
+    total = sum(int(item.get("total_contracts") or 0) for item in results)
+    if total <= 0:
+        return None
+    covered = sum(int(item.get("gamma_contracts") or 0) for item in results)
+    return round(covered / total, 4)
+
+
+def _aggregate_complete_status(results: list[dict], status: str) -> str:
+    if status in {"failed", "not_applicable"}:
+        return status
+    statuses = [str(item.get("complete_status") or "") for item in results]
+    if statuses and all(item == "complete" for item in statuses):
+        return "complete"
+    if any(item == "fallback" for item in statuses):
+        return "fallback"
+    if any(item in {"partial_greeks", "gex_unavailable"} for item in statuses):
+        return "partial_greeks"
+    if any(item == "provider_inactive" for item in statuses):
+        return "provider_inactive"
+    if any(item == "stale_cache" for item in statuses):
+        return "stale_cache"
+    if status == "partial":
+        return "partial"
+    return statuses[0] if statuses else status
 
 
 def _option_underlying_price(calls: pd.DataFrame, puts: pd.DataFrame) -> float | None:

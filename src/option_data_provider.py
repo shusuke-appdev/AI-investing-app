@@ -166,9 +166,7 @@ def get_option_chain(
     if not _marketdata_allowed_for_ticker(ticker):
         mode = "off"
         requested_mode = "off"
-    marketdata_unconfigured = mode in {"preferred", "shadow"} and not (
-        marketdata_is_configured()
-    )
+    marketdata_unconfigured = allow_marketdata and not marketdata_is_configured()
     if marketdata_unconfigured:
         mode = "off"
     if cache_only:
@@ -190,6 +188,8 @@ def get_option_chain(
             quality_warnings=[
                 "通常の銘柄分析では保存済みオプションデータのみ使用しています。"
             ],
+            provider_active=False,
+            fallback_reason="通常の銘柄分析では保存済みオプションデータのみ使用しています。",
         )
         return calls, puts
 
@@ -202,19 +202,19 @@ def get_option_chain(
 
     yfinance_result = _get_yfinance_option_chain(ticker)
 
-    if requested_mode == "preferred":
+    if allow_marketdata and (requested_mode == "preferred" or marketdata_unconfigured):
         metadata = get_option_chain_metadata(ticker)
         warnings = list(metadata.get("quality_warnings") or [])
-        if marketdata_is_configured():
-            warnings.append(
-                "MarketData.app preferred fetch unavailable; yfinance fallback is active."
-            )
-        else:
-            warnings.append(
-                "MarketData.app token is not configured; yfinance fallback is active."
-            )
+        fallback_reason = (
+            "MarketData.app preferred fetch unavailable; yfinance fallback is active."
+            if marketdata_is_configured()
+            else "MarketData.app token is not configured; yfinance fallback is active."
+        )
+        warnings.append(fallback_reason)
         metadata["quality_warnings"] = warnings
         metadata["marketdata_options_mode"] = requested_mode
+        metadata["provider_active"] = False
+        metadata["fallback_reason"] = fallback_reason
         _replace_metadata(ticker, metadata)
 
     if requested_mode == "shadow":
@@ -253,6 +253,8 @@ def get_option_chain(
             )
         metadata["quality_warnings"] = warnings
         metadata["marketdata_options_mode"] = requested_mode
+        metadata["provider_active"] = False
+        metadata.setdefault("fallback_reason", "")
         _replace_metadata(ticker, metadata)
 
     return yfinance_result
@@ -276,6 +278,8 @@ def _get_yfinance_option_chain(
             quality_warnings=[],
             cache_status=cache_status,
             cache_age_seconds=cache_age_seconds,
+            provider_active=False,
+            fallback_reason="",
         )
         return calls, puts
 
@@ -303,6 +307,8 @@ def _get_yfinance_option_chain(
                     ],
                     cache_status="memory_cache",
                     cache_age_seconds=None,
+                    provider_active=False,
+                    fallback_reason="Market is likely closed; using in-memory option cache.",
                 )
                 return _fallback_cache[ticker]
         if cached_stale is not None:
@@ -319,6 +325,10 @@ def _get_yfinance_option_chain(
                 ],
                 cache_status=cache_status,
                 cache_age_seconds=cache_age_seconds,
+                provider_active=False,
+                fallback_reason=(
+                    f"Market is likely closed; using cached option data from {fetched_at}."
+                ),
             )
             return calls, puts
 
@@ -342,6 +352,8 @@ def _get_yfinance_option_chain(
                     quality_warnings=[],
                     cache_status="live",
                     cache_age_seconds=None,
+                    provider_active=False,
+                    fallback_reason="",
                 )
                 return result
         except Exception as e:
@@ -372,6 +384,8 @@ def _get_yfinance_option_chain(
                 ],
                 cache_status="memory_cache",
                 cache_age_seconds=None,
+                provider_active=False,
+                fallback_reason="Option refresh failed; using in-memory option cache.",
             )
             return _fallback_cache[ticker]
 
@@ -389,6 +403,8 @@ def _get_yfinance_option_chain(
             ],
             cache_status=cache_status,
             cache_age_seconds=cache_age_seconds,
+            provider_active=False,
+            fallback_reason=f"Option refresh failed; using cached option data from {fetched_at}.",
         )
         return calls, puts
 
@@ -405,6 +421,8 @@ def _get_yfinance_option_chain(
         quality_warnings=["Option data unavailable and no cache exists."],
         cache_status="failed",
         cache_age_seconds=None,
+        provider_active=False,
+        fallback_reason="Option data unavailable and no cache exists.",
     )
     return None
 
@@ -451,6 +469,8 @@ def _fetch_marketdata_chain(
         return None
     metadata = result.metadata()
     metadata["marketdata_options_mode"] = _marketdata_options_mode()
+    metadata["provider_active"] = True
+    metadata["fallback_reason"] = ""
     return result.calls, result.puts, metadata
 
 

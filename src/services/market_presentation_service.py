@@ -35,6 +35,12 @@ class OptionSummary(BaseModel):
     source: str = ""
     data_as_of: str = ""
     data_mode: str = ""
+    provider_active: bool = False
+    fallback_reason: str = ""
+    gamma_coverage: float | None = None
+    gamma_coverage_str: str = ""
+    complete_status: str = "unavailable"
+    complete_status_label: str = "未取得"
 
 
 class MicrostructureData(BaseModel):
@@ -286,6 +292,8 @@ class StageStatusDisplay(BaseModel):
     cache_status: str = ""
     fetched_at: str = ""
     summary: str = ""
+    target: str = ""
+    error_message: str = ""
     quality_warnings: list[str] = []
 
 
@@ -468,6 +476,14 @@ def format_option_summaries(option_data: list[dict[str, Any]]) -> list[dict[str,
                 "source": str(opt.get("source") or ""),
                 "data_as_of": str(opt.get("data_as_of") or ""),
                 "data_mode": str(opt.get("data_mode") or ""),
+                "provider_active": bool(opt.get("provider_active", False)),
+                "fallback_reason": str(opt.get("fallback_reason") or ""),
+                "gamma_coverage": _optional_float(opt.get("gamma_coverage")),
+                "gamma_coverage_str": _coverage_str(opt.get("gamma_coverage")),
+                "complete_status": str(opt.get("complete_status") or "unavailable"),
+                "complete_status_label": _option_complete_label(
+                    opt.get("complete_status")
+                ),
             }
         )
     return formatted
@@ -601,11 +617,6 @@ def _optional_score(value: Any) -> str:
     return f"{number:.2f}" if number is not None else "算出不可"
 
 
-def _coverage_str(value: Any) -> str:
-    number = _optional_float(value)
-    return f"{number:.0%}" if number is not None else "0%"
-
-
 def _format_sector_flow(raw: dict[str, Any]) -> list[SectorFlowGroup]:
     groups = []
     markets = raw.get("markets", {}) if raw else {}
@@ -645,7 +656,7 @@ def _format_sector_flow(raw: dict[str, Any]) -> list[SectorFlowGroup]:
 
 def _format_japan_conditions(raw: dict[str, Any]) -> list[JapanConditionDisplay]:
     result = []
-    for item in raw.get("items", []) if raw else []:
+    for item in (raw.get("items", []) if raw else [])[:5]:
         result.append(
             JapanConditionDisplay(
                 condition_no=int(item.get("condition_no", 0)),
@@ -813,7 +824,7 @@ def _format_market_drivers(raw: dict[str, Any]) -> list[MarketDriverDisplay]:
 
 def _format_trend_ranking(raw: dict[str, Any]) -> list[TrendRankingDisplay]:
     rows = []
-    for item in raw.get("items", []) if raw else []:
+    for item in (raw.get("items", []) if raw else [])[:5]:
         total_score = float(item.get("total_score", 0.0))
         rows.append(
             TrendRankingDisplay(
@@ -887,6 +898,8 @@ def _format_detail_stages(raw: dict[str, dict[str, Any]]) -> list[StageStatusDis
                 cache_status=item.get("cache_status", ""),
                 fetched_at=item.get("fetched_at", ""),
                 summary=item.get("summary", ""),
+                target=item.get("target", ""),
+                error_message=item.get("error_message", ""),
                 quality_warnings=list(item.get("quality_warnings", [])),
             )
         )
@@ -917,6 +930,26 @@ def _format_flow_proxy_item(item: dict[str, Any]) -> FlowProxyItem:
 def _price_str(value: Any) -> str:
     number = _optional_float(value)
     return "-" if number is None else f"{number:,.2f}"
+
+
+def _coverage_str(value: Any) -> str:
+    number = _optional_float(value)
+    return "-" if number is None else f"{number:.0%}"
+
+
+def _option_complete_label(value: Any) -> str:
+    return {
+        "complete": "完全取得",
+        "partial": "一部取得",
+        "partial_greeks": "Greeks一部欠損",
+        "gex_unavailable": "GEX不可",
+        "fallback": "fallback中",
+        "provider_inactive": "直接Greeksなし",
+        "stale_cache": "古いキャッシュ",
+        "failed": "取得失敗",
+        "not_applicable": "対象外",
+        "unavailable": "未取得",
+    }.get(str(value or "unavailable"), str(value or "未取得"))
 
 
 def _zone_str(value: Any) -> str:

@@ -203,18 +203,21 @@ def trend_ranking_panel() -> rx.Component:
                 ),
                 rx.cond(
                     MarketState.opportunity_theme_items.length() > 0,
-                    rx.box(
-                        rx.text("注目セクター/テーマ", weight="bold", size="2"),
-                        rx.grid(
-                            rx.foreach(
-                                MarketState.opportunity_theme_items,
-                                _opportunity_theme_card,
+                    rx.accordion.root(
+                        rx.accordion.item(
+                            header="注目セクター/テーマを表示",
+                            content=rx.grid(
+                                rx.foreach(
+                                    MarketState.opportunity_theme_items,
+                                    _opportunity_theme_card,
+                                ),
+                                columns=rx.breakpoints(initial="1", md="2", xl="3"),
+                                spacing="2",
+                                width="100%",
                             ),
-                            columns=rx.breakpoints(initial="1", md="2", xl="3"),
-                            spacing="2",
-                            width="100%",
-                            margin_top="0.5rem",
                         ),
+                        type="single",
+                        collapsible=True,
                         width="100%",
                     ),
                     rx.fragment(),

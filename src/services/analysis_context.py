@@ -182,6 +182,10 @@ class OptionContext:
     data_mode: str = ""
     credits_consumed: int | None = None
     credits_remaining: int | None = None
+    provider_active: bool = False
+    fallback_reason: str = ""
+    gamma_coverage: float | None = None
+    complete_status: str = "unavailable"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -309,6 +313,10 @@ class MarketContext:
                 data_mode=str(options.get("data_mode") or ""),
                 credits_consumed=_optional_int(options.get("credits_consumed")),
                 credits_remaining=_optional_int(options.get("credits_remaining")),
+                provider_active=bool(options.get("provider_active", False)),
+                fallback_reason=str(options.get("fallback_reason") or ""),
+                gamma_coverage=_optional_float(options.get("gamma_coverage")),
+                complete_status=str(options.get("complete_status") or "unavailable"),
             ),
             evaluation=value.get("evaluation") or {},
             ibd_regime=value.get("ibd_regime") or {},

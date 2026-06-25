@@ -1,5 +1,14 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-06-25 Market/Stock data completeness and UI reorganization
+- Added option completeness metadata across provider, analysis, context, presentation, Market/Stock state, and trend/theme diagnostics: direct MarketData.app status, fallback reason, Gamma coverage, and complete/fallback/partial status now travel together.
+- Hid GEX unless MarketData.app direct Greeks are active; yfinance fallback and token-unconfigured states are explicit limitations instead of being treated as complete option acquisition.
+- Reworked Market detail refresh into visible stage actions for Theme/Flow, Vol/Sentiment, Credit/Risk, Options, and all stages, with target descriptions, per-stage timestamps, and per-stage errors.
+- Reorganized Market and Stock initial screens around compact summary tiles, update/data-status surfaces, and accordions for deeper analysis, while preserving the existing detailed panels.
+- Made adaptive fundamentals easier to read by separating score summary, missing/cap reasons, KPI table, and volume profile; added Stock data_status entries for fundamentals, volume profile, purchase evidence, and SMART criteria.
+- Validation: targeted option/market/stock regression tests passed (`22 passed`), full read-only release check passed (`267 passed` plus Reflex frontend export). MarketData.app live smoke is still skipped locally because `MARKETDATA_TOKEN` is not configured.
+- UI smoke: static export pages for Market and Stock rendered over local HTTP. Reflex dev-server browser smoke is blocked in this Windows/Codex surface by `PermissionError: [WinError 5]` during multiprocessing startup; classified with `codex_env_triage.py`.
+
 ## Session update: 2026-06-24 P0 missing-data / research-contract remediation
 - Changed insufficient probabilistic outputs from numeric zeroes to unavailable values and added display-safe `算出不可` formatting.
 - Made theme rank a required purchase-evidence input, renamed the output to neutral `根拠一致度` high/medium/low labels, and prevented missing theme data from becoming a real zero score.
@@ -366,3 +375,4 @@ streamlit run legacy_streamlit/app.py
 - Replaced the mutating `scripts/check.py` workflow with a read-only release check that never installs packages, invokes a shell, formats files, or applies lint fixes.
 - Made yfinance cache initialization continue with the repo-local `.states/yfinance_cache` when Python cannot resolve a writable OS temp directory, with a regression test.
 - Documented that pytest/Reflex write failures against this repository from another Codex workspace are sandbox-scope failures, not application failures.
+- Validation: dependency check, compileall, full Ruff lint/format, full pytest (`264 passed`), and Reflex frontend export all passed through the new read-only script. A first export hit a transient `.web/build` lock; no competing process remained and both the standalone retry and final full-script retry passed.

@@ -237,6 +237,10 @@ def _option_payload(proxy: str, analysis: dict[str, Any] | None) -> dict[str, An
             "option_asymmetry": "unavailable",
             "option_score": 0.0,
             "option_summary": "テーマETFオプションは取得できません。",
+            "option_complete_status": "unavailable",
+            "option_provider_active": False,
+            "option_fallback_reason": "",
+            "option_gamma_coverage": None,
         }
     gex = analysis.get("gex") or {}
     nearby_gex = _float(gex.get("nearby_net_gex"))
@@ -265,6 +269,10 @@ def _option_payload(proxy: str, analysis: dict[str, Any] | None) -> dict[str, An
         "option_source": analysis.get("source", ""),
         "option_data_as_of": analysis.get("data_as_of", ""),
         "option_data_quality": analysis.get("data_quality", ""),
+        "option_complete_status": analysis.get("complete_status", ""),
+        "option_provider_active": analysis.get("provider_active", False),
+        "option_fallback_reason": analysis.get("fallback_reason", ""),
+        "option_gamma_coverage": analysis.get("gamma_coverage"),
         "option_credits_consumed": analysis.get("credits_consumed"),
         "option_credits_remaining": analysis.get("credits_remaining"),
         "quality_warnings": analysis.get("quality_warnings", []),

@@ -52,6 +52,11 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
         lambda ticker, info, trend: {
             "all_met": False,
             "S": {"met": False, "desc": "Sales", "value": "データなし"},
+            "T": {
+                "met": False,
+                "status": "unknown",
+                "value": "市場状態未更新",
+            },
         },
     )
     monkeypatch.setattr(
@@ -101,6 +106,31 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
             "rationale": "No edge.",
         },
     )
+    monkeypatch.setattr(
+        service,
+        "evaluate_fundamental_profile",
+        lambda *args, **kwargs: {
+            "status": "partial",
+            "smart_applicability": "growth_proxy",
+            "missing_reasons": ["ROE missing"],
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "build_volume_profile",
+        lambda *args, **kwargs: {
+            "status": "insufficient_data",
+            "reason": "needs 60 sessions",
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "evaluate_purchase_evidence",
+        lambda **kwargs: {
+            "status": "insufficient_data",
+            "missing_reasons": ["fundamental missing"],
+        },
+    )
 
     context = service.build_stock_dashboard_context("PLTR")
 
@@ -131,6 +161,16 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
         item for item in context.data_status if item.name == "stock_profile"
     )
     assert profile_status.is_partial is True
+    status_by_name = {item.name: item for item in context.data_status}
+    assert status_by_name["smart_criteria"].source == "local_smart_proxy"
+    assert status_by_name["smart_criteria"].is_partial is True
+    assert "市場状態未更新" in status_by_name["smart_criteria"].error
+    assert status_by_name["fundamental_profile"].is_partial is True
+    assert "ROE missing" in status_by_name["fundamental_profile"].error
+    assert status_by_name["volume_profile"].is_partial is True
+    assert "needs 60 sessions" in status_by_name["volume_profile"].error
+    assert status_by_name["purchase_evidence"].is_partial is True
+    assert "fundamental missing" in status_by_name["purchase_evidence"].error
 
 
 def test_stock_dashboard_display_info_formats_core_metrics():

@@ -285,6 +285,12 @@ def evaluate_stock_sector_theme_context(
         "theme_option_source": best_ranking.get("option_source", ""),
         "theme_option_data_as_of": best_ranking.get("option_data_as_of", ""),
         "theme_option_data_quality": best_ranking.get("option_data_quality", ""),
+        "theme_option_complete_status": best_ranking.get("option_complete_status", ""),
+        "theme_option_provider_active": bool(
+            best_ranking.get("option_provider_active", False)
+        ),
+        "theme_option_fallback_reason": best_ranking.get("option_fallback_reason", ""),
+        "theme_option_gamma_coverage": best_ranking.get("option_gamma_coverage"),
         "rationale": _stock_context_rationale(
             combined_rating,
             fundamentals_are_strong,

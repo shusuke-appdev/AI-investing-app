@@ -121,12 +121,13 @@ def build_stock_dashboard_context(
 
     info_dict = to_plain_value(info_data) if info_data else {}
     technical_dict = _technical_to_dict(tech_data)
+    smart_market_status = _cached_market_status_for_smart(normalized_ticker)
     smart_res = _safe_analysis(
         "smart_criteria",
         lambda: evaluate_smart_criteria(
             normalized_ticker,
             dict(info_dict) if info_dict else {},
-            "Unknown",
+            smart_market_status,
         ),
         {},
         diagnostic_errors,
@@ -277,6 +278,10 @@ def build_stock_dashboard_context(
         trend_follow_dict,
         trade_setup_dict,
         sector_theme_context,
+        to_plain_value(smart_res),
+        fundamental_profile,
+        volume_profile,
+        purchase_evidence,
     )
     _apply_diagnostic_errors(data_status, diagnostic_errors)
     provenance = stock_provenance(
@@ -479,6 +484,25 @@ def _build_display_info(ticker: str, info: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _cached_market_status_for_smart(ticker: str) -> str:
+    market_type = "JP" if ticker.upper().endswith(".T") else "US"
+    try:
+        from src.services.market_dashboard_service import (
+            load_cached_market_full_context,
+        )
+
+        context = load_cached_market_full_context(market_type)
+    except Exception:
+        context = None
+    if context and context.ibd_regime:
+        return str(
+            context.ibd_regime.get("label")
+            or context.ibd_regime.get("status_key")
+            or ""
+        )
+    return ""
+
+
 def _display_text(value: Any, default: str = "") -> str:
     if value is None:
         return default
@@ -544,6 +568,10 @@ def _build_data_status(
     trend_follow: dict[str, Any],
     trade_setup: dict[str, Any],
     sector_theme_context: dict[str, Any],
+    smart_criteria: dict[str, Any],
+    fundamental_profile: dict[str, Any],
+    volume_profile: dict[str, Any],
+    purchase_evidence: dict[str, Any],
 ) -> list[DataResult]:
     trend_quality = (
         trend_follow.get("data_quality") if isinstance(trend_follow, dict) else {}
@@ -615,7 +643,62 @@ def _build_data_status(
             error="" if sector_theme_context else "Sector/theme context unavailable.",
             cache_status="computed",
         ),
+        DataResult(
+            name="smart_criteria",
+            source="local_smart_proxy",
+            is_partial=_smart_has_unknowns(smart_criteria),
+            error=_smart_error_message(smart_criteria),
+            cache_status="computed",
+        ),
+        DataResult(
+            name="fundamental_profile",
+            source="fundamental_profile_service",
+            is_partial=fundamental_profile.get("status") != "available",
+            error="; ".join(
+                str(item) for item in (fundamental_profile.get("missing_reasons") or [])
+            ),
+            cache_status="computed",
+        ),
+        DataResult(
+            name="volume_profile",
+            source="volume_profile_service",
+            is_partial=volume_profile.get("status") != "available",
+            error=str(volume_profile.get("reason") or "")
+            if volume_profile.get("status") != "available"
+            else "",
+            cache_status="computed",
+        ),
+        DataResult(
+            name="purchase_evidence",
+            source="purchase_evidence_service",
+            is_partial=purchase_evidence.get("status") != "available",
+            error="; ".join(
+                str(item) for item in (purchase_evidence.get("missing_reasons") or [])
+            ),
+            cache_status="computed",
+        ),
     ]
+
+
+def _smart_has_unknowns(value: dict[str, Any]) -> bool:
+    if not value:
+        return True
+    return any(
+        isinstance(value.get(key), dict)
+        and str(value[key].get("status") or "") == "unknown"
+        for key in ("S", "M", "A", "R", "T")
+    )
+
+
+def _smart_error_message(value: dict[str, Any]) -> str:
+    if not value:
+        return "SMART criteria unavailable."
+    missing = []
+    for key in ("S", "M", "A", "R", "T"):
+        item = value.get(key)
+        if isinstance(item, dict) and str(item.get("status") or "") == "unknown":
+            missing.append(f"{key}: {item.get('value') or '入力データ不足'}")
+    return "; ".join(missing)
 
 
 def _is_limited_profile(info: dict[str, Any]) -> bool:

@@ -66,6 +66,10 @@ class MarketState(rx.State):
     option_error_msg: str = ""
     option_status: str = "unavailable"
     option_failed_tickers: list[str] = []
+    option_provider_active: bool = False
+    option_fallback_reason: str = ""
+    option_gamma_coverage: str = "-"
+    option_complete_status: str = "unavailable"
 
     indices_data: list[dict[str, Any]] = []
     sectors_data: list[dict[str, Any]] = []
@@ -161,6 +165,10 @@ class MarketState(rx.State):
             self.option_analysis = []
             self.option_status = "failed"
             self.option_failed_tickers = []
+            self.option_provider_active = False
+            self.option_fallback_reason = ""
+            self.option_gamma_coverage = "-"
+            self.option_complete_status = "failed"
             self.market_signals = []
         finally:
             self.is_fetching = False
@@ -198,8 +206,9 @@ class MarketState(rx.State):
             base_context = self.market_context or None
             yield
         except Exception as exc:
-            self._set_stage_status("theme_flow", "failed", str(exc))
-            self.error_msg = f"Theme/flow stage failed: {exc}"
+            self._set_stage_status(
+                "theme_flow", "failed", "Theme/Flowの更新に失敗しました。", str(exc)
+            )
             yield
 
         try:
@@ -218,8 +227,12 @@ class MarketState(rx.State):
             base_context = self.market_context or None
             yield
         except Exception as exc:
-            self._set_stage_status("volatility_sentiment", "failed", str(exc))
-            self.error_msg = f"Volatility/sentiment stage failed: {exc}"
+            self._set_stage_status(
+                "volatility_sentiment",
+                "failed",
+                "Vol/Sentimentの更新に失敗しました。",
+                str(exc),
+            )
             yield
 
         try:
@@ -238,8 +251,12 @@ class MarketState(rx.State):
             base_context = self.market_context or None
             yield
         except Exception as exc:
-            self._set_stage_status("credit_distortion", "failed", str(exc))
-            self.error_msg = f"Credit/risk stage failed: {exc}"
+            self._set_stage_status(
+                "credit_distortion",
+                "failed",
+                "Credit/Riskの更新に失敗しました。",
+                str(exc),
+            )
             yield
 
         try:
@@ -254,7 +271,85 @@ class MarketState(rx.State):
         except Exception as exc:
             self.option_status = "failed"
             self.option_error_msg = f"Failed to refresh option data: {exc}"
-            self._set_stage_status("options", "failed", str(exc))
+            self._set_stage_status(
+                "options", "failed", "Optionsの更新に失敗しました。", str(exc)
+            )
+        finally:
+            self.is_fetching_details = False
+            yield
+
+    async def refresh_theme_flow(self):
+        self.is_fetching_details = True
+        self.error_msg = ""
+        self._set_stage_status(
+            "theme_flow", "loading", "市場状態、テーマ、資金フローを取得中..."
+        )
+        yield
+        try:
+            context = await asyncio.to_thread(
+                build_market_theme_flow_context,
+                self.market_type,
+                self.market_context or None,
+            )
+            self._apply_market_context(context)
+        except Exception as exc:
+            self._set_stage_status(
+                "theme_flow", "failed", "Theme/Flowの更新に失敗しました。", str(exc)
+            )
+        finally:
+            self.is_fetching_details = False
+            yield
+
+    async def refresh_volatility_sentiment(self):
+        self.is_fetching_details = True
+        self.error_msg = ""
+        self._set_stage_status(
+            "volatility_sentiment",
+            "loading",
+            "ボラティリティ・レジームと独自Fear & Greedを取得中...",
+        )
+        yield
+        try:
+            context = await asyncio.to_thread(
+                build_market_volatility_sentiment_context,
+                self.market_type,
+                self.market_context or None,
+            )
+            self._apply_market_context(context)
+        except Exception as exc:
+            self._set_stage_status(
+                "volatility_sentiment",
+                "failed",
+                "Vol/Sentimentの更新に失敗しました。",
+                str(exc),
+            )
+        finally:
+            self.is_fetching_details = False
+            yield
+
+    async def refresh_credit_distortion(self):
+        self.is_fetching_details = True
+        self.error_msg = ""
+        self._set_stage_status(
+            "credit_distortion",
+            "loading",
+            "信用ストレス、歪み検知、天井警戒を取得中...",
+        )
+        yield
+        try:
+            context = await asyncio.to_thread(
+                build_market_high_context,
+                self.market_type,
+                self.market_context or None,
+            )
+            self._apply_market_context(context)
+        except Exception as exc:
+            self._set_stage_status(
+                "credit_distortion",
+                "failed",
+                "Credit/Riskの更新に失敗しました。",
+                str(exc),
+            )
         finally:
             self.is_fetching_details = False
             yield
@@ -276,7 +371,9 @@ class MarketState(rx.State):
         except Exception as exc:
             self.option_status = "failed"
             self.option_error_msg = f"Failed to refresh option data: {exc}"
-            self._set_stage_status("options", "failed", str(exc))
+            self._set_stage_status(
+                "options", "failed", "Optionsの更新に失敗しました。", str(exc)
+            )
         finally:
             self.is_fetching_options = False
             yield
@@ -384,6 +481,14 @@ class MarketState(rx.State):
         self.option_error_msg = context.options.error_message
         self.option_status = context.options.status
         self.option_failed_tickers = list(context.options.failed_tickers)
+        self.option_provider_active = context.options.provider_active
+        self.option_fallback_reason = context.options.fallback_reason
+        self.option_gamma_coverage = (
+            "-"
+            if context.options.gamma_coverage is None
+            else f"{context.options.gamma_coverage:.0%}"
+        )
+        self.option_complete_status = context.options.complete_status
         self.option_analysis = display.option_analysis
         if not self.option_analysis and not self.option_error_msg:
             self.option_error_msg = "Option data is currently unavailable."
@@ -433,13 +538,35 @@ class MarketState(rx.State):
     def _has_visible_market_data(self) -> bool:
         return bool(self.indices_data or self.sectors_data or self.others_data)
 
-    def _set_stage_status(self, key: str, status: str, summary: str = "") -> None:
+    def _set_stage_status(
+        self, key: str, status: str, summary: str = "", error_message: str = ""
+    ) -> None:
         defaults = {
-            "core": ("Core: 市場概要/キャッシュ", "低"),
-            "theme_flow": ("Theme/Flow: 市場状態/資金流入", "中"),
-            "volatility_sentiment": ("Vol/Sentiment: ボラ/センチメント", "中"),
-            "credit_distortion": ("Credit/Risk: 信用/歪み/天井警戒", "高"),
-            "options": ("高: オプション", "高"),
+            "core": (
+                "Core: 市場概要/キャッシュ",
+                "低",
+                "主要指数、設定、前回成功キャッシュ",
+            ),
+            "theme_flow": (
+                "Theme/Flow: 市場状態/資金流入",
+                "中",
+                "IBD式市場状態、モメンタム、統合トレンド、セクター/テーマ資金流入",
+            ),
+            "volatility_sentiment": (
+                "Vol/Sentiment: ボラ/センチメント",
+                "中",
+                "ボラティリティ・レジーム、独自Fear & Greed、時間軸別方向感",
+            ),
+            "credit_distortion": (
+                "Credit/Risk: 信用/歪み/天井警戒",
+                "高",
+                "FRED信用ストレス、市場の歪み検知、天井警戒サインポスト",
+            ),
+            "options": (
+                "高: オプション",
+                "高",
+                "SPY/QQQ/IWMと上位テーマETF proxyのPCR、IV、Greeks、GEX可否",
+            ),
         }
         existing = {item.key: item for item in self.detail_stages}
         rows: list[StageStatusDisplay] = []
@@ -451,7 +578,7 @@ class MarketState(rx.State):
             "options",
         ):
             current = existing.get(stage_key)
-            label, difficulty = defaults[stage_key]
+            label, difficulty, target = defaults[stage_key]
             if current:
                 row = StageStatusDisplay(
                     key=current.key,
@@ -462,6 +589,8 @@ class MarketState(rx.State):
                     cache_status=current.cache_status,
                     fetched_at=current.fetched_at,
                     summary=current.summary,
+                    target=current.target,
+                    error_message=current.error_message,
                     quality_warnings=current.quality_warnings,
                 )
             else:
@@ -469,6 +598,7 @@ class MarketState(rx.State):
                     key=stage_key,
                     label=label,
                     difficulty=difficulty,
+                    target=target,
                     status="pending",
                     status_label="未取得",
                 )
@@ -476,6 +606,7 @@ class MarketState(rx.State):
                 row.status = status
                 row.status_label = self._stage_status_label(status)
                 row.summary = summary or row.summary
+                row.error_message = error_message
             rows.append(row)
         self.detail_stages = rows
 

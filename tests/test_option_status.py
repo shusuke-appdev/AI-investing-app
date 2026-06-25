@@ -1,3 +1,5 @@
+import pytest
+
 from src import option_analyst
 
 
@@ -77,3 +79,45 @@ def test_major_indices_option_status_passes_marketdata_flag(monkeypatch):
     assert result["status"] == "available"
     assert [ticker for ticker, _ in seen] == ["SPY", "QQQ", "IWM"]
     assert all(kwargs["allow_marketdata"] is True for _, kwargs in seen)
+
+
+def test_major_indices_option_status_aggregates_provider_completeness(monkeypatch):
+    payloads = {
+        "SPY": {
+            "ticker": "SPY",
+            "data_quality": "available",
+            "provider_active": True,
+            "complete_status": "complete",
+            "gamma_contracts": 2,
+            "total_contracts": 2,
+        },
+        "QQQ": {
+            "ticker": "QQQ",
+            "data_quality": "available",
+            "provider_active": True,
+            "complete_status": "partial_greeks",
+            "gamma_contracts": 1,
+            "total_contracts": 2,
+        },
+        "IWM": {
+            "ticker": "IWM",
+            "data_quality": "available",
+            "provider_active": True,
+            "complete_status": "complete",
+            "gamma_contracts": 2,
+            "total_contracts": 2,
+        },
+    }
+
+    monkeypatch.setattr(
+        option_analyst,
+        "analyze_option_sentiment",
+        lambda ticker, **kwargs: payloads[ticker],
+    )
+
+    result = option_analyst.get_major_indices_option_status("US")
+
+    assert result["status"] == "available"
+    assert result["provider_active"] is True
+    assert result["complete_status"] == "partial_greeks"
+    assert result["gamma_coverage"] == pytest.approx(5 / 6, abs=0.0001)

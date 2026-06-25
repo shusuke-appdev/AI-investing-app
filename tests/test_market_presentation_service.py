@@ -25,6 +25,9 @@ def test_market_display_context_formats_market_context_for_reflex_state():
                     "iv": 0.18,
                     "max_pain": 525,
                     "data_quality": "partial",
+                    "provider_active": True,
+                    "gamma_coverage": 1.0,
+                    "complete_status": "complete",
                 }
             ]
         ),
@@ -103,16 +106,17 @@ def test_market_display_context_formats_market_context_for_reflex_state():
             "summary": "首位は AI半導体。",
             "items": [
                 {
-                    "rank": 1,
-                    "theme": "AI半導体",
+                    "rank": rank,
+                    "theme": f"AI半導体{rank}",
                     "parent_sector": "情報技術",
                     "proxy_ticker": "SMH",
                     "option_proxy_ticker": "SMH",
-                    "total_score": 50.0,
+                    "total_score": 50.0 - rank,
                     "rank_points": 10,
                     "option_asymmetry": "upside_squeeze_candidate",
                     "representative_tickers": ["NVDA"],
                 }
+                for rank in range(1, 8)
             ],
         },
         opportunity_themes={
@@ -136,6 +140,8 @@ def test_market_display_context_formats_market_context_for_reflex_state():
                 "cache_status": "persistent_cache",
                 "fetched_at": "2026-01-01T00:00:00+00:00",
                 "summary": "cached",
+                "target": "市場概要とキャッシュ復元",
+                "error_message": "",
                 "quality_warnings": [],
             }
         },
@@ -149,6 +155,9 @@ def test_market_display_context_formats_market_context_for_reflex_state():
     assert display.sectors_data[0]["name"] == "Technology"
     assert display.others_data[0]["price"] == "$68.0K"
     assert display.option_analysis[0].net_gex_str == "+12M"
+    assert display.option_analysis[0].complete_status_label == "完全取得"
+    assert display.option_analysis[0].gamma_coverage_str == "100%"
+    assert display.option_analysis[0].provider_active is True
     assert display.market_signals[0].category == "bullish"
     assert display.momentum_data[0].themes[0].performance_str == "+3.2%"
     assert display.bullish_distortions[0].tickers == ["NVDA", "MSFT"]
@@ -157,9 +166,12 @@ def test_market_display_context_formats_market_context_for_reflex_state():
     assert display.strategy_regime.label == "順張り"
     assert display.market_timeframes[0].direction_label == "上昇相場"
     assert display.important_levels[0].behavior_label == "突破"
+    assert len(display.trend_ranking_items) == 5
     assert display.trend_ranking_items[0].option_asymmetry == "upside_squeeze_candidate"
+    assert display.trend_ranking_items[-1].rank == 5
     assert display.opportunity_theme_items[0].theme == "AI半導体"
     assert display.detail_stages[0].status_label == "キャッシュ"
+    assert display.detail_stages[0].target == "市場概要とキャッシュ復元"
 
 
 def test_market_display_context_uses_configured_market_order():

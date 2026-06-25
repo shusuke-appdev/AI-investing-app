@@ -147,60 +147,85 @@ def fundamental_profile_panel() -> rx.Component:
                     rx.accordion.item(
                         header="評価内訳・除外理由・価格帯別出来高を見る",
                         content=rx.vstack(
-                            _reason_list(
-                                "算出不可・欠損",
-                                StockState.fundamental_missing_reasons,
-                                "red",
-                            ),
-                            _reason_list(
-                                "上限理由",
-                                StockState.fundamental_cap_reasons,
-                                "orange",
-                            ),
-                            _reason_list(
-                                "業種上の除外指標",
-                                StockState.fundamental_excluded_metrics,
-                            ),
-                            _reason_list(
-                                "購入判断の上限理由",
-                                StockState.purchase_evidence_cap_reasons,
-                                "orange",
+                            rx.box(
+                                rx.text("算出不可・上限理由", weight="bold", size="3"),
+                                _reason_list(
+                                    "算出不可・欠損",
+                                    StockState.fundamental_missing_reasons,
+                                    "red",
+                                ),
+                                _reason_list(
+                                    "上限理由",
+                                    StockState.fundamental_cap_reasons,
+                                    "orange",
+                                ),
+                                _reason_list(
+                                    "業種上の除外指標",
+                                    StockState.fundamental_excluded_metrics,
+                                ),
+                                _reason_list(
+                                    "購入判断の上限理由",
+                                    StockState.purchase_evidence_cap_reasons,
+                                    "orange",
+                                ),
+                                width="100%",
+                                padding="0.75rem",
+                                border=f"1px solid {rx.color('gray', 4)}",
+                                border_radius="8px",
                             ),
                             rx.cond(
                                 StockState.fundamental_metrics.length() > 0,
-                                rx.vstack(
-                                    rx.grid(
-                                        rx.text("評価軸", size="1", weight="bold"),
-                                        rx.text("指標", size="1", weight="bold"),
-                                        rx.text("実績", size="1", weight="bold"),
-                                        rx.text("基準", size="1", weight="bold"),
-                                        rx.text("点", size="1", weight="bold"),
-                                        columns="5",
-                                        spacing="2",
+                                rx.box(
+                                    rx.vstack(
+                                        rx.text("KPI表", weight="bold", size="3"),
+                                        rx.grid(
+                                            rx.text("評価軸", size="1", weight="bold"),
+                                            rx.text("指標", size="1", weight="bold"),
+                                            rx.text("実績", size="1", weight="bold"),
+                                            rx.text("基準", size="1", weight="bold"),
+                                            rx.text("点", size="1", weight="bold"),
+                                            columns="5",
+                                            spacing="2",
+                                            width="100%",
+                                        ),
+                                        rx.foreach(
+                                            StockState.fundamental_metrics, _metric_row
+                                        ),
                                         width="100%",
-                                    ),
-                                    rx.foreach(
-                                        StockState.fundamental_metrics, _metric_row
+                                        spacing="1",
                                     ),
                                     width="100%",
-                                    spacing="1",
+                                    padding="0.75rem",
+                                    border=f"1px solid {rx.color('gray', 4)}",
+                                    border_radius="8px",
                                 ),
                                 rx.fragment(),
                             ),
                             rx.cond(
                                 StockState.volume_profile_bins.length() > 0,
-                                rx.vstack(
-                                    rx.text(
-                                        "価格帯別出来高（126営業日・24帯・日足均等配分proxy）",
-                                        size="2",
-                                        weight="bold",
-                                    ),
-                                    rx.foreach(
-                                        StockState.volume_profile_bins, _volume_bin
+                                rx.box(
+                                    rx.vstack(
+                                        rx.text(
+                                            "価格帯別出来高",
+                                            size="3",
+                                            weight="bold",
+                                        ),
+                                        rx.text(
+                                            "126営業日・24帯・日足均等配分proxy",
+                                            size="1",
+                                            color=rx.color("gray", 10),
+                                        ),
+                                        rx.foreach(
+                                            StockState.volume_profile_bins, _volume_bin
+                                        ),
+                                        width="100%",
+                                        align_items="start",
+                                        spacing="1",
                                     ),
                                     width="100%",
-                                    align_items="start",
-                                    spacing="1",
+                                    padding="0.75rem",
+                                    border=f"1px solid {rx.color('gray', 4)}",
+                                    border_radius="8px",
                                 ),
                                 rx.fragment(),
                             ),

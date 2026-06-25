@@ -132,6 +132,10 @@ class StockState(rx.State):
     sector_theme_option_score: str = ""
     sector_theme_option_summary: str = ""
     sector_theme_option_source: str = ""
+    sector_theme_option_complete_status: str = ""
+    sector_theme_option_provider_active: bool = False
+    sector_theme_option_fallback_reason: str = ""
+    sector_theme_option_gamma_coverage: str = "-"
     fundamental_profile: dict[str, Any] = {}
     fundamental_size_label: str = ""
     fundamental_size_borderline: bool = False
@@ -162,6 +166,7 @@ class StockState(rx.State):
     trade_analysis_error: str = ""
     data_status: list[DataStatusDisplay] = []
     provenance: list[ProvenanceDisplay] = []
+    data_issue_summary: str = ""
 
     def prepare_page(self):
         """Normalize transient flags before the stock page renders."""
@@ -298,6 +303,21 @@ class StockState(rx.State):
             self.sector_theme_option_source = str(
                 self.sector_theme_context.get("theme_option_source", "")
             )
+            self.sector_theme_option_complete_status = str(
+                self.sector_theme_context.get("theme_option_complete_status", "")
+            )
+            self.sector_theme_option_provider_active = bool(
+                self.sector_theme_context.get("theme_option_provider_active", False)
+            )
+            self.sector_theme_option_fallback_reason = str(
+                self.sector_theme_context.get("theme_option_fallback_reason", "")
+            )
+            gamma_coverage = self.sector_theme_context.get(
+                "theme_option_gamma_coverage"
+            )
+            self.sector_theme_option_gamma_coverage = (
+                "-" if gamma_coverage is None else f"{float(gamma_coverage):.0%}"
+            )
             self.sector_theme_option_data_as_of = str(
                 self.sector_theme_context.get("theme_option_data_as_of", "")
             )
@@ -376,6 +396,7 @@ class StockState(rx.State):
             self.stock_signal_context = plain_state_value(context.stock_signal_context)
             self.data_status = data_status_display_items(context.data_status)
             self.provenance = provenance_display_items(context.provenance)
+            self.data_issue_summary = self._data_issue_summary()
             from src.services.provider_health import record_data_results
 
             record_data_results(context.data_status, scope=f"stock.{self.ticker}")
@@ -450,12 +471,17 @@ class StockState(rx.State):
             self.purchase_evidence_cap_reasons = []
             self.purchase_evidence_available = False
             self.sector_theme_option_source = ""
+            self.sector_theme_option_complete_status = ""
+            self.sector_theme_option_provider_active = False
+            self.sector_theme_option_fallback_reason = ""
+            self.sector_theme_option_gamma_coverage = "-"
             self.sector_theme_option_data_as_of = ""
             self.sector_theme_option_data_quality = ""
             self.stock_signal_context = {}
             self._reset_trade_analysis()
             self.data_status = []
             self.provenance = []
+            self.data_issue_summary = ""
             self.smart_criteria = SmartCriteria()
         finally:
             self.is_fetching = False
@@ -507,3 +533,13 @@ class StockState(rx.State):
         self.trade_analysis_visible = False
         self.trade_analysis = {}
         self.trade_analysis_error = ""
+
+    def _data_issue_summary(self) -> str:
+        issues = [
+            f"{item.name}: {item.error or item.status_label}"
+            for item in self.data_status
+            if item.status_key in {"partial", "failed", "stale"}
+        ]
+        if not issues:
+            return "主要データは取得済みです。"
+        return " / ".join(issues[:4])

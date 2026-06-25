@@ -75,26 +75,31 @@ DETAIL_STAGE_DEFAULTS = {
     "core": {
         "label": "Core: 市場概要/キャッシュ",
         "difficulty": "低",
+        "target": "主要指数、設定、前回成功キャッシュ",
         "summary": "主要指数と前回成功した監視結果を先に表示します。",
     },
     "theme_flow": {
         "label": "Theme/Flow: 市場状態/資金流入",
         "difficulty": "中",
+        "target": "IBD式市場状態、モメンタム、統合トレンド、セクター/テーマ資金流入",
         "summary": "IBD式市場状態、モメンタム、ETF proxy、セクター資金流入を更新します。",
     },
     "volatility_sentiment": {
         "label": "Vol/Sentiment: ボラ/センチメント",
         "difficulty": "中",
+        "target": "ボラティリティ・レジーム、独自Fear & Greed、時間軸別方向感",
         "summary": "ボラティリティ・レジームと独自Fear & Greedを更新します。",
     },
     "credit_distortion": {
         "label": "Credit/Risk: 信用/歪み/天井警戒",
         "difficulty": "高",
+        "target": "FRED信用ストレス、市場の歪み検知、天井警戒サインポスト",
         "summary": "FRED信用ストレス、市場の歪み検知、天井警戒サインポストを更新します。",
     },
     "options": {
         "label": "高: オプション",
         "difficulty": "高",
+        "target": "SPY/QQQ/IWMと上位テーマETF proxyのPCR、IV、Greeks、GEX可否",
         "summary": "主要ETFのオプション分析を更新します。",
     },
 }
@@ -1416,6 +1421,10 @@ def _build_option_context(market_type: str) -> OptionContext:
             data_mode=str(result.get("data_mode") or ""),
             credits_consumed=_optional_int(result.get("credits_consumed")),
             credits_remaining=_optional_int(result.get("credits_remaining")),
+            provider_active=bool(result.get("provider_active", False)),
+            fallback_reason=str(result.get("fallback_reason") or ""),
+            gamma_coverage=_optional_float(result.get("gamma_coverage")),
+            complete_status=str(result.get("complete_status") or "unavailable"),
         )
     except Exception as exc:
         return OptionContext(
@@ -1675,6 +1684,7 @@ def _updated_stage_statuses(
     cache_status: str = "",
     fetched_at: str = "",
     summary: str = "",
+    error_message: str = "",
     warnings: list[str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     stages = _default_stage_statuses()
@@ -1687,11 +1697,13 @@ def _updated_stage_statuses(
         "key": key,
         "label": default.get("label", key),
         "difficulty": default.get("difficulty", ""),
+        "target": default.get("target", ""),
         "status": status,
         "status_label": _stage_status_label(status),
         "cache_status": cache_status,
         "fetched_at": fetched_at,
         "summary": summary or default.get("summary", ""),
+        "error_message": error_message,
         "quality_warnings": _merge_warnings(warnings or []),
     }
     return {stage_key: stages[stage_key] for stage_key in DETAIL_STAGE_ORDER}
@@ -1703,11 +1715,13 @@ def _default_stage_statuses() -> dict[str, dict[str, Any]]:
             "key": key,
             "label": payload["label"],
             "difficulty": payload["difficulty"],
+            "target": payload["target"],
             "status": "pending",
             "status_label": "未取得",
             "cache_status": "",
             "fetched_at": "",
             "summary": payload["summary"],
+            "error_message": "",
             "quality_warnings": [],
         }
         for key, payload in DETAIL_STAGE_DEFAULTS.items()

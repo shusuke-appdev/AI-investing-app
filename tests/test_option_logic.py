@@ -139,6 +139,49 @@ class TestOptionAnalyst:
         assert result["data_quality"] == "partial"
         assert any("GEX is hidden" in w for w in result["quality_warnings"])
 
+    @patch("src.option_analyst.DataProvider.get_current_price", return_value=100.0)
+    @patch(
+        "src.option_analyst.get_option_chain_metadata",
+        return_value={
+            "source": "yfinance",
+            "provider_active": False,
+            "fallback_reason": "MarketData.app token unavailable; yfinance fallback active.",
+        },
+    )
+    @patch("src.option_analyst.get_option_chain")
+    def test_analyze_option_sentiment_hides_gex_without_marketdata_direct_greeks(
+        self, mock_get_chain, _mock_metadata, _mock_price, mock_option_data
+    ):
+        mock_get_chain.return_value = mock_option_data
+
+        result = analyze_option_sentiment("TEST")
+
+        assert result is not None
+        assert result["gex"] is None
+        assert result["provider_active"] is False
+        assert result["gamma_coverage"] == pytest.approx(1.0)
+        assert result["complete_status"] == "fallback"
+        assert any("yfinance fallback" in w for w in result["quality_warnings"])
+
+    @patch("src.option_analyst.DataProvider.get_current_price", return_value=100.0)
+    @patch(
+        "src.option_analyst.get_option_chain_metadata",
+        return_value={"source": "marketdata.app", "provider_active": True},
+    )
+    @patch("src.option_analyst.get_option_chain")
+    def test_analyze_option_sentiment_marks_complete_for_marketdata_direct_greeks(
+        self, mock_get_chain, _mock_metadata, _mock_price, mock_option_data
+    ):
+        mock_get_chain.return_value = mock_option_data
+
+        result = analyze_option_sentiment("TEST")
+
+        assert result is not None
+        assert result["gex"] is not None
+        assert result["provider_active"] is True
+        assert result["gamma_coverage"] == pytest.approx(1.0)
+        assert result["complete_status"] == "complete"
+
     def test_assess_option_data_quality_flags_zero_oi(self):
         calls = pd.DataFrame(
             {

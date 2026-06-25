@@ -91,6 +91,8 @@ def evaluate_smart_criteria(
         if earn_growth >= 30.0:
             results["A"]["met"] = True
             results["A"]["status"] = "met"
+    else:
+        results["A"]["value"] = "入力データ不足: EPS成長加速を取得できません。"
 
     # R (ROE) - yfinanceの returnOnEquity を使用
     # infoディクショナリに入っていない可能性があるため、必要に応じて取得（既存infoにある前提）
@@ -113,6 +115,8 @@ def evaluate_smart_criteria(
         if roa is not None:
             results["R"]["value"] = f"ROA: {roa:.1f}% (ROE不明)"
             results["R"]["value"] += "・参考値のため判定不能"
+        else:
+            results["R"]["value"] = "入力データ不足: ROEを取得できません。"
 
     # T (Timing)
     # market_state_status に "強気相場入り確認" や "UPTREND" などの文字が含まれていればOK
@@ -123,6 +127,11 @@ def evaluate_smart_criteria(
     ):
         results["T"]["met"] = True
         results["T"]["status"] = "met"
+    elif not market_state_status or market_state_status.lower() in {
+        "unknown",
+        "不明",
+    }:
+        results["T"]["value"] = "市場状態未更新: Market詳細更新後に判定します。"
     elif market_state_status and market_state_status.lower() not in {"unknown", "不明"}:
         results["T"]["status"] = "not_met"
 

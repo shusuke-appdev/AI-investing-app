@@ -1,5 +1,6 @@
 import reflex as rx
 
+from frontend.components.data_provenance import data_status_panel, provenance_panel
 from frontend.components.fomo_volatility import fomo_volatility_panel
 from frontend.components.fundamental_profile import fundamental_profile_panel
 from frontend.components.metric_card import metric_card
@@ -45,6 +46,203 @@ def _option_signal_color(value) -> rx.Var:
             "red",
             rx.cond(value == "pinning_resistance", "orange", "gray"),
         ),
+    )
+
+
+def _stock_summary_tile(title: str, value, detail, color: str) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.text(title, size="1", color=rx.color("gray", 10), weight="bold"),
+            rx.heading(value, size="4"),
+            rx.text(detail, size="1", color=rx.color("gray", 10)),
+            spacing="1",
+            align_items="start",
+            width="100%",
+        ),
+        border_left=f"4px solid {rx.color(color, 8)}",
+        width="100%",
+    )
+
+
+def _stock_decision_summary() -> rx.Component:
+    tech = StockState.technical_data
+    return rx.grid(
+        _stock_summary_tile(
+            "テクニカル",
+            rx.cond(
+                tech.contains("overall_signal_display"),
+                tech["overall_signal_display"].to(str)
+                + " "
+                + tech["overall_score"].to(str)
+                + "点",
+                "未取得",
+            ),
+            rx.cond(
+                tech.contains("analysis_mode"),
+                "分析モード: " + tech["analysis_mode"].to(str),
+                "データ取得後に表示します。",
+            ),
+            "blue",
+        ),
+        _stock_summary_tile(
+            "根拠一致度",
+            StockState.purchase_evidence_label
+            + " "
+            + StockState.purchase_evidence_score_display,
+            rx.cond(
+                StockState.purchase_evidence_summary != "",
+                StockState.purchase_evidence_summary,
+                "算出不可の場合は詳細内の欠損理由を確認します。",
+            ),
+            "green",
+        ),
+        _stock_summary_tile(
+            "適応型ファンダメンタル",
+            StockState.fundamental_score_display,
+            "充足率 " + StockState.fundamental_coverage_display,
+            "cyan",
+        ),
+        _stock_summary_tile(
+            "データ不足",
+            rx.cond(
+                StockState.data_issue_summary == "主要データは取得済みです。",
+                "主要データOK",
+                "要確認",
+            ),
+            StockState.data_issue_summary,
+            "amber",
+        ),
+        columns=rx.breakpoints(initial="1", md="2", xl="4"),
+        spacing="3",
+        width="100%",
+        margin_bottom="1rem",
+    )
+
+
+def _ai_recap_panel() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.heading("AI銘柄要約", size="5", margin_bottom="1rem"),
+            rx.spacer(),
+            rx.button(
+                rx.icon("sparkles", size=16),
+                "AI銘柄分析生成",
+                on_click=StockState.generate_ai_analysis,
+                loading=StockState.is_generating_analysis,
+                color_scheme="indigo",
+                disabled=not ai_generation_enabled(),
+            ),
+            width="100%",
+            align_items="center",
+        ),
+        rx.card(
+            rx.cond(
+                StockState.ai_analysis != "",
+                rx.markdown(StockState.ai_analysis),
+                rx.center(
+                    rx.text(
+                        (
+                            "公開モードではAI銘柄分析を利用できません。"
+                            if not ai_generation_enabled()
+                            else "AI銘柄分析レポートを生成して投資判断をサポートします。"
+                        ),
+                        color="gray",
+                    ),
+                    height="100px",
+                ),
+            ),
+            width="100%",
+            padding="1.5rem",
+        ),
+        width="100%",
+    )
+
+
+def _news_panel() -> rx.Component:
+    return rx.box(
+        rx.heading("最新ニュース", size="5", margin_bottom="1rem"),
+        rx.cond(
+            StockState.news.length() > 0,
+            rx.grid(
+                rx.foreach(
+                    StockState.news,
+                    lambda news_item: rx.card(
+                        rx.vstack(
+                            rx.text(
+                                news_item["headline"],
+                                weight="bold",
+                                margin_bottom="0.5rem",
+                            ),
+                            rx.text(
+                                news_item["summary"],
+                                size="2",
+                                color="gray",
+                                margin_bottom="1rem",
+                            ),
+                            rx.link(
+                                "続きを読む",
+                                href=news_item["url"],
+                                is_external=True,
+                                size="2",
+                                color="blue",
+                            ),
+                            align_items="start",
+                        ),
+                        width="100%",
+                    ),
+                ),
+                columns=rx.breakpoints(initial="1", md="2"),
+                spacing="4",
+                width="100%",
+            ),
+            rx.text("ニュースデータがありません", color="gray"),
+        ),
+        width="100%",
+    )
+
+
+def _stock_detail_accordion() -> rx.Component:
+    return rx.accordion.root(
+        rx.accordion.item(
+            header="テクニカル / Entry / 確率",
+            content=rx.vstack(
+                technical_analysis(),
+                stock_trade_analysis_panel(),
+                probabilistic_signal_panel(),
+                width="100%",
+                spacing="4",
+            ),
+        ),
+        rx.accordion.item(
+            header="FOMO / トレンド堅牢性",
+            content=rx.vstack(
+                fomo_volatility_panel(),
+                trend_follow_diagnostics_panel(),
+                width="100%",
+                spacing="4",
+            ),
+        ),
+        rx.accordion.item(
+            header="AI / ニュース",
+            content=rx.vstack(
+                _ai_recap_panel(),
+                _news_panel(),
+                width="100%",
+                spacing="4",
+            ),
+        ),
+        rx.accordion.item(
+            header="データ状態",
+            content=rx.vstack(
+                data_status_panel(StockState.data_status),
+                provenance_panel(StockState.provenance),
+                width="100%",
+                spacing="3",
+            ),
+        ),
+        type="multiple",
+        default_value=["テクニカル / Entry / 確率"],
+        width="100%",
     )
 
 
@@ -208,6 +406,7 @@ def stock_page() -> rx.Component:
                             margin_bottom="1rem",
                         ),
                     ),
+                    _stock_decision_summary(),
                     # メトリックカード（主要指標）
                     rx.grid(
                         metric_card(
@@ -567,6 +766,30 @@ def stock_page() -> rx.Component:
                                                 ),
                                                 variant="surface",
                                             ),
+                                            rx.badge(
+                                                rx.cond(
+                                                    StockState.sector_theme_option_provider_active,
+                                                    "MarketData.app active",
+                                                    "direct Greeksなし",
+                                                ),
+                                                color_scheme=rx.cond(
+                                                    StockState.sector_theme_option_provider_active,
+                                                    "green",
+                                                    "gray",
+                                                ),
+                                                variant="surface",
+                                            ),
+                                            rx.badge(
+                                                "Gamma "
+                                                + StockState.sector_theme_option_gamma_coverage,
+                                                color_scheme=rx.cond(
+                                                    StockState.sector_theme_option_gamma_coverage
+                                                    == "100%",
+                                                    "green",
+                                                    "amber",
+                                                ),
+                                                variant="surface",
+                                            ),
                                             rx.cond(
                                                 StockState.sector_theme_option_score
                                                 != "",
@@ -579,6 +802,18 @@ def stock_page() -> rx.Component:
                                             spacing="2",
                                             wrap="wrap",
                                             align_items="center",
+                                        ),
+                                        rx.cond(
+                                            StockState.sector_theme_option_fallback_reason
+                                            != "",
+                                            rx.callout(
+                                                StockState.sector_theme_option_fallback_reason,
+                                                icon="info",
+                                                color_scheme="amber",
+                                                width="100%",
+                                                margin_top="0.5rem",
+                                            ),
+                                            rx.fragment(),
                                         ),
                                         rx.cond(
                                             StockState.sector_theme_option_summary
@@ -639,88 +874,7 @@ def stock_page() -> rx.Component:
                             margin_bottom="2rem",
                         ),
                     ),
-                    # テクニカル分析
-                    technical_analysis(),
-                    stock_trade_analysis_panel(),
-                    probabilistic_signal_panel(),
-                    fomo_volatility_panel(),
-                    trend_follow_diagnostics_panel(),
-                    # AI Recap (Gemini)
-                    rx.box(
-                        rx.hstack(
-                            rx.heading("AI銘柄要約", size="5", margin_bottom="1rem"),
-                            rx.spacer(),
-                            rx.button(
-                                rx.icon("sparkles", size=16),
-                                "AI銘柄分析生成",
-                                on_click=StockState.generate_ai_analysis,
-                                loading=StockState.is_generating_analysis,
-                                color_scheme="indigo",
-                                disabled=not ai_generation_enabled(),
-                            ),
-                            width="100%",
-                            align_items="center",
-                        ),
-                        rx.card(
-                            rx.cond(
-                                StockState.ai_analysis != "",
-                                rx.markdown(StockState.ai_analysis),
-                                rx.center(
-                                    rx.text(
-                                        (
-                                            "公開モードではAI銘柄分析を利用できません。"
-                                            if not ai_generation_enabled()
-                                            else "AI銘柄分析レポートを生成して投資判断をサポートします。"
-                                        ),
-                                        color="gray",
-                                    ),
-                                    height="100px",
-                                ),
-                            ),
-                            width="100%",
-                            padding="1.5rem",
-                        ),
-                        width="100%",
-                        margin_bottom="2rem",
-                    ),
-                    # 最新ニュース
-                    rx.heading("最新ニュース", size="5", margin_bottom="1rem"),
-                    rx.cond(
-                        StockState.news.length() > 0,
-                        rx.grid(
-                            rx.foreach(
-                                StockState.news,
-                                lambda news_item: rx.card(
-                                    rx.vstack(
-                                        rx.text(
-                                            news_item["headline"],
-                                            weight="bold",
-                                            margin_bottom="0.5rem",
-                                        ),
-                                        rx.text(
-                                            news_item["summary"],
-                                            size="2",
-                                            color="gray",
-                                            margin_bottom="1rem",
-                                        ),
-                                        rx.link(
-                                            "続きを読む",
-                                            href=news_item["url"],
-                                            is_external=True,
-                                            size="2",
-                                            color="blue",
-                                        ),
-                                        align_items="start",
-                                    ),
-                                    width="100%",
-                                ),
-                            ),
-                            columns=rx.breakpoints(initial="1", md="2"),
-                            spacing="4",
-                            width="100%",
-                        ),
-                        rx.text("ニュースデータがありません", color="gray"),
-                    ),
+                    _stock_detail_accordion(),
                     width="100%",
                 ),
                 # 初期状態またはデータなし
