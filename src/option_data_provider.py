@@ -9,7 +9,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -50,7 +50,44 @@ def _is_market_likely_closed() -> bool:
     return now.weekday() in (5, 6)
 
 
-def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+def _select_yfinance_expirations(
+    expirations: list[str],
+    *,
+    target_dte: int | None,
+    min_dte: int,
+    max_expirations: int,
+) -> list[str]:
+    today = datetime.now(timezone.utc).date()
+    parsed: list[tuple[str, date]] = []
+    for value in expirations:
+        try:
+            parsed.append((value, datetime.fromisoformat(str(value)).date()))
+        except ValueError:
+            logger.debug("[OptionProvider] Ignoring unparseable expiration: %s", value)
+    if not parsed:
+        return []
+
+    minimum_date = today + timedelta(days=max(min_dte, 0))
+    candidates = [(raw, exp) for raw, exp in parsed if exp >= minimum_date]
+    if not candidates:
+        candidates = [(raw, exp) for raw, exp in parsed if exp >= today]
+    if not candidates:
+        return []
+
+    if target_dte is None:
+        selected = sorted(candidates, key=lambda item: item[1])
+    else:
+        target_date = today + timedelta(days=max(target_dte, 0))
+        selected = sorted(
+            candidates,
+            key=lambda item: (abs((item[1] - target_date).days), item[1]),
+        )
+    return [raw for raw, _ in selected[: max(1, max_expirations)]]
+
+
+def _fetch_option_chain_raw(
+    ticker: str, *, target_dte: int | None = None, min_dte: int = 0
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """yfinanceからオプションチェーンを取得する内部関数（タイムアウトなし）"""
     stock = yf.Ticker(ticker)
     try:
@@ -67,9 +104,19 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
 
     all_calls = []
     all_puts = []
-    # yfinance API負荷を制御: 起動時・更新時とも直近期限だけを取得する
-    max_expirations = min(MAX_EXPIRATIONS, len(expirations))
-    for i, exp in enumerate(expirations[:max_expirations]):
+    selected_expirations = _select_yfinance_expirations(
+        list(expirations),
+        target_dte=target_dte,
+        min_dte=min_dte,
+        max_expirations=MAX_EXPIRATIONS,
+    )
+    if not selected_expirations:
+        logger.warning(
+            f"[OptionProvider] yfinance returned no valid expirations for {ticker}"
+        )
+        return None
+
+    for i, exp in enumerate(selected_expirations):
         try:
             opt = stock.option_chain(exp)
             if opt.calls is None or opt.puts is None:
@@ -94,7 +141,7 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
             )
             continue
         # yfinance Rate Limit対策: 期限間に短い待機
-        if i < max_expirations - 1:
+        if i < len(selected_expirations) - 1:
             time.sleep(0.3)
 
     if not all_calls or not all_puts:
@@ -126,11 +173,20 @@ def _fetch_option_chain_raw(ticker: str) -> tuple[pd.DataFrame, pd.DataFrame] | 
 
 
 def _fetch_with_timeout(
-    ticker: str, timeout: int = FETCH_TIMEOUT
+    ticker: str,
+    timeout: int = FETCH_TIMEOUT,
+    *,
+    target_dte: int | None = None,
+    min_dte: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """タイムアウト付きでオプションデータを取得"""
     executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(_fetch_option_chain_raw, ticker)
+    future = executor.submit(
+        _fetch_option_chain_raw,
+        ticker,
+        target_dte=target_dte,
+        min_dte=min_dte,
+    )
     try:
         return future.result(timeout=timeout)
     except FuturesTimeoutError:
@@ -146,7 +202,12 @@ def _fetch_with_timeout(
 
 
 def get_option_chain(
-    ticker: str, *, allow_marketdata: bool = False, cache_only: bool = False
+    ticker: str,
+    *,
+    allow_marketdata: bool = False,
+    cache_only: bool = False,
+    target_dte: int | None = None,
+    min_dte: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """
     オプションチェーンデータを取得する。
@@ -161,6 +222,7 @@ def get_option_chain(
         (calls_df, puts_df) のタプル。取得不可の場合はNone。
     """
     ticker = ticker.upper()
+    cache_key = _option_cache_key(ticker, target_dte)
     requested_mode = _marketdata_options_mode() if allow_marketdata else "off"
     mode = requested_mode
     if not _marketdata_allowed_for_ticker(ticker):
@@ -170,13 +232,14 @@ def get_option_chain(
     if marketdata_unconfigured:
         mode = "off"
     if cache_only:
-        cached = _load_persistent_cache(ticker, max_age_seconds=OPTION_STALE_TTL)
+        cached = _load_persistent_cache(cache_key, max_age_seconds=OPTION_STALE_TTL)
         if cached is None:
             return None
         calls, puts, fetched_at, cache_status, cache_age_seconds = cached
-        _remember_success(ticker, calls, puts)
+        _remember_success(cache_key, calls, puts)
         _set_metadata(
             ticker,
+            target_dte=target_dte,
             source="yfinance",
             fetched_at=fetched_at,
             cache_status=cache_status,
@@ -194,16 +257,18 @@ def get_option_chain(
         return calls, puts
 
     if mode == "preferred":
-        marketdata_result = _fetch_marketdata_chain(ticker)
+        marketdata_result = _call_marketdata_chain(ticker, target_dte, min_dte)
         if marketdata_result is not None:
             calls, puts, metadata = marketdata_result
-            _set_metadata(ticker, **metadata)
+            metadata = dict(metadata)
+            metadata.pop("target_dte", None)
+            _set_metadata(ticker, target_dte=target_dte, **metadata)
             return calls, puts
 
-    yfinance_result = _get_yfinance_option_chain(ticker)
+    yfinance_result = _call_yfinance_chain(ticker, target_dte, min_dte)
 
     if allow_marketdata and (requested_mode == "preferred" or marketdata_unconfigured):
-        metadata = get_option_chain_metadata(ticker)
+        metadata = get_option_chain_metadata(ticker, target_dte=target_dte)
         warnings = list(metadata.get("quality_warnings") or [])
         fallback_reason = (
             "MarketData.app preferred fetch unavailable; yfinance fallback is active."
@@ -215,13 +280,16 @@ def get_option_chain(
         metadata["marketdata_options_mode"] = requested_mode
         metadata["provider_active"] = False
         metadata["fallback_reason"] = fallback_reason
-        _replace_metadata(ticker, metadata)
+        metadata["target_dte"] = target_dte
+        _replace_metadata(ticker, metadata, target_dte=target_dte)
 
     if requested_mode == "shadow":
         marketdata_result = (
-            None if marketdata_unconfigured else _fetch_marketdata_chain(ticker)
+            None
+            if marketdata_unconfigured
+            else _call_marketdata_chain(ticker, target_dte, min_dte)
         )
-        metadata = get_option_chain_metadata(ticker)
+        metadata = get_option_chain_metadata(ticker, target_dte=target_dte)
         warnings = list(metadata.get("quality_warnings") or [])
         if marketdata_unconfigured:
             warnings.append(
@@ -234,8 +302,9 @@ def get_option_chain(
         else:
             _, _, shadow_metadata = marketdata_result
             warnings.append(
-                "MarketData.app 0DTE shadow comparison succeeded; "
+                "MarketData.app shadow comparison succeeded; "
                 "yfinance nearest-expiry result retained. "
+                f"expiration={shadow_metadata.get('resolved_expiration') or 'unknown'}, "
                 f"as_of={shadow_metadata.get('data_as_of') or 'unknown'}, "
                 f"mode={shadow_metadata.get('data_mode') or 'unknown'}, "
                 f"credits={shadow_metadata.get('credits_consumed')}."
@@ -249,28 +318,54 @@ def get_option_chain(
                     "shadow_credits_remaining": shadow_metadata.get(
                         "credits_remaining"
                     ),
+                    "shadow_resolved_expiration": shadow_metadata.get(
+                        "resolved_expiration", ""
+                    ),
+                    "shadow_resolved_dte": shadow_metadata.get("resolved_dte"),
                 }
             )
         metadata["quality_warnings"] = warnings
         metadata["marketdata_options_mode"] = requested_mode
         metadata["provider_active"] = False
+        metadata["target_dte"] = target_dte
         metadata.setdefault("fallback_reason", "")
-        _replace_metadata(ticker, metadata)
+        _replace_metadata(ticker, metadata, target_dte=target_dte)
 
     return yfinance_result
 
 
+def _call_marketdata_chain(
+    ticker: str, target_dte: int | None, min_dte: int
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]] | None:
+    if target_dte is None and min_dte == 0:
+        return _fetch_marketdata_chain(ticker)
+    return _fetch_marketdata_chain(ticker, target_dte=target_dte, min_dte=min_dte)
+
+
+def _call_yfinance_chain(
+    ticker: str, target_dte: int | None, min_dte: int
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    if target_dte is None and min_dte == 0:
+        return _get_yfinance_option_chain(ticker)
+    return _get_yfinance_option_chain(ticker, target_dte=target_dte, min_dte=min_dte)
+
+
 def _get_yfinance_option_chain(
     ticker: str,
+    *,
+    target_dte: int | None = None,
+    min_dte: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """Return the existing yfinance/cache option path."""
 
-    cached_fresh = _load_persistent_cache(ticker, max_age_seconds=OPTION_CACHE_TTL)
+    cache_key = _option_cache_key(ticker, target_dte)
+    cached_fresh = _load_persistent_cache(cache_key, max_age_seconds=OPTION_CACHE_TTL)
     if cached_fresh is not None:
         calls, puts, fetched_at, cache_status, cache_age_seconds = cached_fresh
-        _remember_success(ticker, calls, puts)
+        _remember_success(cache_key, calls, puts)
         _set_metadata(
             ticker,
+            target_dte=target_dte,
             source="persistent_cache",
             fetched_at=fetched_at,
             is_stale=False,
@@ -284,7 +379,7 @@ def _get_yfinance_option_chain(
         return calls, puts
 
     cached_stale = _load_persistent_cache(
-        ticker,
+        cache_key,
         max_age_seconds=OPTION_STALE_TTL,
         fresh_seconds=OPTION_CACHE_TTL,
     )
@@ -292,12 +387,13 @@ def _get_yfinance_option_chain(
     # 市場閉場時はフォールバックキャッシュを優先
     if _is_market_likely_closed():
         with _fallback_lock:
-            if ticker in _fallback_cache:
+            if cache_key in _fallback_cache:
                 logger.info(
                     f"[OptionProvider] Market closed, using fallback cache for {ticker}"
                 )
                 _set_metadata(
                     ticker,
+                    target_dte=target_dte,
                     source="memory_fallback",
                     fetched_at="",
                     is_stale=True,
@@ -310,12 +406,13 @@ def _get_yfinance_option_chain(
                     provider_active=False,
                     fallback_reason="Market is likely closed; using in-memory option cache.",
                 )
-                return _fallback_cache[ticker]
+                return _fallback_cache[cache_key]
         if cached_stale is not None:
             calls, puts, fetched_at, cache_status, cache_age_seconds = cached_stale
-            _remember_success(ticker, calls, puts)
+            _remember_success(cache_key, calls, puts)
             _set_metadata(
                 ticker,
+                target_dte=target_dte,
                 source="persistent_cache",
                 fetched_at=fetched_at,
                 is_stale=True,
@@ -336,15 +433,20 @@ def _get_yfinance_option_chain(
     last_error = None
     for attempt in range(MAX_RETRIES):
         try:
-            result = _fetch_with_timeout(ticker)
+            result = _fetch_with_timeout(
+                ticker,
+                target_dte=target_dte,
+                min_dte=min_dte,
+            )
             if result is not None:
                 # 成功 → フォールバックキャッシュに保存
                 calls, puts = result
-                _remember_success(ticker, calls, puts)
+                _remember_success(cache_key, calls, puts)
                 fetched_at = utc_now_iso()
-                _save_persistent_cache(ticker, calls, puts, fetched_at)
+                _save_persistent_cache(cache_key, calls, puts, fetched_at)
                 _set_metadata(
                     ticker,
+                    target_dte=target_dte,
                     source="yfinance",
                     fetched_at=fetched_at,
                     is_stale=False,
@@ -369,12 +471,13 @@ def _get_yfinance_option_chain(
 
     # 全リトライ失敗 → フォールバックキャッシュ
     with _fallback_lock:
-        if ticker in _fallback_cache:
+        if cache_key in _fallback_cache:
             logger.info(
                 f"[OptionProvider] All retries failed for {ticker}, using fallback cache"
             )
             _set_metadata(
                 ticker,
+                target_dte=target_dte,
                 source="memory_fallback",
                 fetched_at="",
                 is_stale=True,
@@ -387,13 +490,14 @@ def _get_yfinance_option_chain(
                 provider_active=False,
                 fallback_reason="Option refresh failed; using in-memory option cache.",
             )
-            return _fallback_cache[ticker]
+            return _fallback_cache[cache_key]
 
     if cached_stale is not None:
         calls, puts, fetched_at, cache_status, cache_age_seconds = cached_stale
-        _remember_success(ticker, calls, puts)
+        _remember_success(cache_key, calls, puts)
         _set_metadata(
             ticker,
+            target_dte=target_dte,
             source="persistent_cache",
             fetched_at=fetched_at,
             is_stale=True,
@@ -414,6 +518,7 @@ def _get_yfinance_option_chain(
     )
     _set_metadata(
         ticker,
+        target_dte=target_dte,
         source="yfinance",
         fetched_at="",
         is_stale=False,
@@ -445,6 +550,9 @@ def marketdata_options_status() -> dict[str, Any]:
         "effective_mode": effective_mode,
         "is_active": configured and effective_mode in {"preferred", "shadow"},
         "allowed_tickers": sorted(MARKETDATA_OPTION_TICKERS),
+        "expiration_policy": "auto",
+        "smoke_min_dte": 1,
+        "horizon_target_dtes": [7, 30],
     }
 
 
@@ -457,11 +565,16 @@ def _marketdata_allowed_for_ticker(ticker: str) -> bool:
 
 def _fetch_marketdata_chain(
     ticker: str,
+    *,
+    target_dte: int | None = None,
+    min_dte: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]] | None:
     try:
         from src.marketdata_option_provider import fetch_marketdata_option_chain
 
-        result = fetch_marketdata_option_chain(ticker)
+        result = fetch_marketdata_option_chain(
+            ticker, target_dte=target_dte, min_dte=min_dte
+        )
     except Exception as exc:
         logger.warning(f"[OptionProvider] MarketData.app failed for {ticker}: {exc}")
         return None
@@ -474,11 +587,13 @@ def _fetch_marketdata_chain(
     return result.calls, result.puts, metadata
 
 
-def get_option_chain_metadata(ticker: str) -> dict[str, Any]:
+def get_option_chain_metadata(
+    ticker: str, *, target_dte: int | None = None
+) -> dict[str, Any]:
     """Return metadata for the most recent option-chain lookup."""
 
     with _metadata_lock:
-        return dict(_metadata_cache.get(ticker.upper(), {}))
+        return dict(_metadata_cache.get(_metadata_key(ticker, target_dte), {}))
 
 
 def _remember_success(ticker: str, calls: pd.DataFrame, puts: pd.DataFrame) -> None:
@@ -489,6 +604,7 @@ def _remember_success(ticker: str, calls: pd.DataFrame, puts: pd.DataFrame) -> N
 def _set_metadata(
     ticker: str,
     *,
+    target_dte: int | None = None,
     source: str,
     fetched_at: str,
     is_stale: bool,
@@ -498,22 +614,41 @@ def _set_metadata(
     cache_age_seconds: float | None,
     **extra: Any,
 ) -> None:
+    payload = {
+        "source": source,
+        "fetched_at": fetched_at,
+        "is_stale": is_stale,
+        "data_quality": data_quality,
+        "quality_warnings": quality_warnings,
+        "cache_status": cache_status,
+        "cache_age_seconds": cache_age_seconds,
+        "target_dte": target_dte,
+        **extra,
+    }
     with _metadata_lock:
-        _metadata_cache[ticker.upper()] = {
-            "source": source,
-            "fetched_at": fetched_at,
-            "is_stale": is_stale,
-            "data_quality": data_quality,
-            "quality_warnings": quality_warnings,
-            "cache_status": cache_status,
-            "cache_age_seconds": cache_age_seconds,
-            **extra,
-        }
+        _metadata_cache[_metadata_key(ticker, target_dte)] = dict(payload)
+        if target_dte is None:
+            _metadata_cache[ticker.upper()] = dict(payload)
 
 
-def _replace_metadata(ticker: str, metadata: dict[str, Any]) -> None:
+def _replace_metadata(
+    ticker: str, metadata: dict[str, Any], *, target_dte: int | None = None
+) -> None:
+    payload = {**metadata, "target_dte": target_dte}
     with _metadata_lock:
-        _metadata_cache[ticker.upper()] = dict(metadata)
+        _metadata_cache[_metadata_key(ticker, target_dte)] = dict(payload)
+        if target_dte is None:
+            _metadata_cache[ticker.upper()] = dict(payload)
+
+
+def _metadata_key(ticker: str, target_dte: int | None = None) -> str:
+    return (
+        ticker.upper() if target_dte is None else f"{ticker.upper()}::dte{target_dte}"
+    )
+
+
+def _option_cache_key(ticker: str, target_dte: int | None = None) -> str:
+    return ticker.upper() if target_dte is None else f"{ticker.upper()}_dte{target_dte}"
 
 
 def _cache_file(ticker: str) -> Path:

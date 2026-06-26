@@ -180,12 +180,18 @@ class OptionContext:
     cache_age_seconds: float | None = None
     data_as_of: str = ""
     data_mode: str = ""
+    resolved_expiration: str = ""
+    resolved_dte: int | None = None
+    expiration_policy: str = ""
+    expiration_fallback_reason: str = ""
     credits_consumed: int | None = None
     credits_remaining: int | None = None
     provider_active: bool = False
     fallback_reason: str = ""
     gamma_coverage: float | None = None
     complete_status: str = "unavailable"
+    horizons: list[dict[str, Any]] = field(default_factory=list)
+    term_structure: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -311,12 +317,20 @@ class MarketContext:
                 cache_age_seconds=_optional_float(options.get("cache_age_seconds")),
                 data_as_of=str(options.get("data_as_of") or ""),
                 data_mode=str(options.get("data_mode") or ""),
+                resolved_expiration=str(options.get("resolved_expiration") or ""),
+                resolved_dte=_optional_int(options.get("resolved_dte")),
+                expiration_policy=str(options.get("expiration_policy") or ""),
+                expiration_fallback_reason=str(
+                    options.get("expiration_fallback_reason") or ""
+                ),
                 credits_consumed=_optional_int(options.get("credits_consumed")),
                 credits_remaining=_optional_int(options.get("credits_remaining")),
                 provider_active=bool(options.get("provider_active", False)),
                 fallback_reason=str(options.get("fallback_reason") or ""),
                 gamma_coverage=_optional_float(options.get("gamma_coverage")),
                 complete_status=str(options.get("complete_status") or "unavailable"),
+                horizons=list(options.get("horizons") or []),
+                term_structure=dict(options.get("term_structure") or {}),
             ),
             evaluation=value.get("evaluation") or {},
             ibd_regime=value.get("ibd_regime") or {},

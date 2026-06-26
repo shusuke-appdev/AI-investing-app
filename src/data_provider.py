@@ -23,6 +23,7 @@ from src.stock_data_provider import (
     get_earnings_surprises,
     get_financials_reported,
     get_historical_data,
+    get_historical_data_with_status,
     get_quote,
     get_stock_info,
 )
@@ -34,12 +35,15 @@ class DataProviderProtocol(Protocol):
 
     def get_current_price(self, ticker: str) -> float: ...
     def get_historical_data(self, ticker: str, period: str = "1mo") -> pd.DataFrame: ...
+    def get_historical_data_with_status(self, ticker: str, period: str = "1mo"): ...
     def get_option_chain(
         self,
         ticker: str,
         *,
         allow_marketdata: bool = False,
         cache_only: bool = False,
+        target_dte: int | None = None,
+        min_dte: int = 0,
     ) -> tuple[pd.DataFrame, pd.DataFrame] | None: ...
     def get_market_indices(self, market_type: str = "US") -> dict[str, MarketIndex]: ...
     def get_stock_news(self, ticker: str, max_items: int = 10) -> list[NewsItem]: ...
@@ -71,15 +75,24 @@ class DefaultDataProvider:
     def get_historical_data(self, ticker: str, period: str = "1mo") -> pd.DataFrame:
         return get_historical_data(ticker, period)
 
+    def get_historical_data_with_status(self, ticker: str, period: str = "1mo"):
+        return get_historical_data_with_status(ticker, period)
+
     def get_option_chain(
         self,
         ticker: str,
         *,
         allow_marketdata: bool = False,
         cache_only: bool = False,
+        target_dte: int | None = None,
+        min_dte: int = 0,
     ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
         return get_option_chain(
-            ticker, allow_marketdata=allow_marketdata, cache_only=cache_only
+            ticker,
+            allow_marketdata=allow_marketdata,
+            cache_only=cache_only,
+            target_dte=target_dte,
+            min_dte=min_dte,
         )
 
     def get_market_indices(self, market_type: str = "US") -> dict[str, MarketIndex]:
@@ -155,14 +168,24 @@ class DataProvider:
         return _global_provider.get_historical_data(ticker, period)
 
     @staticmethod
+    def get_historical_data_with_status(ticker: str, period: str = "1mo"):
+        return _global_provider.get_historical_data_with_status(ticker, period)
+
+    @staticmethod
     def get_option_chain(
         ticker: str,
         *,
         allow_marketdata: bool = False,
         cache_only: bool = False,
+        target_dte: int | None = None,
+        min_dte: int = 0,
     ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
         return _global_provider.get_option_chain(
-            ticker, allow_marketdata=allow_marketdata, cache_only=cache_only
+            ticker,
+            allow_marketdata=allow_marketdata,
+            cache_only=cache_only,
+            target_dte=target_dte,
+            min_dte=min_dte,
         )
 
     @staticmethod

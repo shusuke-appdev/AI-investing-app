@@ -1,6 +1,6 @@
 # 分析データ来歴台帳
 
-更新日: 2026-06-18
+更新日: 2026-06-26
 
 ## 目的
 
@@ -35,8 +35,9 @@
 | Market Watch / AI Recap | 日経理論値上方修正 | proxy | 日経20日・60日価格トレンド | EPS/PER改定データなし | 日経6条件内で代理表示 | 業績上方修正と誤認 | 指数EPS、予想PER、業績改定幅を取得 | 高 | 既存表示あり |
 | Market Watch / AI Recap | 海外投資家買い | proxy | 原油安、日本テーマflow | 手入力の海外投資家買越額なし | 日経6条件内で代理表示 | 海外投資家の直接買越と誤認 | 投資部門別売買状況を自動取得 | 高 | 既存表示あり |
 | Market Watch / Stock | GEX | estimated / computed | オプションOI、Gamma、株価 | yfinanceは一部Gamma欠損時に推定、全欠損時は非表示。MarketData.appは主要ETF/テーマETF proxyで直接Gammaを使用 | Optionカードとデータ品質ページでquality warning表示。通常のMarket上部エラーには混ぜない | 直接GammaでもCall正・Put負はディーラー方向の簡易仮定 | 直接ディーラー建玉データを取得できる場合は別指標として追加 | 高 | MarketData.app preferredへ昇格 |
-| Market Watch / Stock | オプションIV・Greeks・OI・Volume | direct / stale_cache | MarketData.app 0DTE限定チェーン、またはyfinance/cache | `preferred`ではMarketData.appを優先、204/API失敗/トークン未設定時にyfinance/cacheへフォールバック。`shadow`は比較検証用 | 取得元・基準時刻・mode・品質警告を表示 | Free/Trial遅延値を現在値と誤認 | updated時刻と契約プランを表示し、source/as_ofをAI入力にも渡す | 高 | 2026-06-16 preferred標準 |
-| Market Watch | IV想定価格帯 | estimated | 現在価格、IV、満期日数 | オプションデータ取得時 | オプション分析内 | 予測レンジと誤認 | 想定変動幅として明示し実績比較を追加 | 中 | 台帳化済み |
+| Market Watch / Stock | オプションIV・Greeks・OI・Volume | direct / stale_cache | MarketData.appの解決済み満期チェーン、またはyfinance/cache | `preferred`ではMarketData.appを優先、204/API失敗/必須列不足/トークン未設定/満期解決失敗時にyfinance/cacheへフォールバック。`shadow`は比較検証用。current / 1W / 1M は満期別cache keyで保持 | 取得元・解決済み満期・基準時刻・mode・品質警告を表示 | Free/Trial遅延値や0DTE期限切れを現在値と誤認 | updated時刻、解決済み満期、契約プランを表示し、source/as_ofをAI入力にも渡す | 高 | 2026-06-26 期間別満期解決を追加 |
+| Market Watch / AI Recap | オプション期間構造 | computed / direct / stale_cache | current / 1W / 1M のIV、PCR、Skew、Max Pain、GEX、想定変動幅 | MarketData.app preferredまたはyfinance/cacheの満期別チェーン取得時 | Optionカードの期間別行、Market timeframe、AI Recap promptへ渡す | 1週間・1か月の市場予測を確定値と誤認 | 「織り込み」「想定変動幅」として表示し、source/as_of/cache_statusを併記 | 高 | 2026-06-26 追加 |
+| Market Watch | IV想定価格帯 | estimated | 現在価格、IV、満期日数 | current / 1W / 1M の各オプションデータ取得時 | オプション分析内 | 予測レンジと誤認 | 想定変動幅として明示し実績比較を追加 | 中 | 期間別表示対応 |
 | Market Watch | Max Pain | computed | オプションOIと権利行使価格 | オプションチェーン取得時 | オプション分析内 | 価格目標と誤認 | 算出定義と制約を個別表示 | 中 | 台帳化済み |
 | Market Watch / AI Recap | PCR欠損時 `0.8` | fixed_fallback | なし | オプション欠損時 | 旧実装では中立値として内部利用 | データ取得成功と誤認 | 欠損時は利用不可にする | 最優先 | 2026-06-11 廃止 |
 | Market Watch / AI Recap | 米10年債利回り欠損時 `4.0%` | fixed_fallback | なし | TNX欠損時 | 旧実装では現在値として内部利用 | 現在利回りと誤認 | 欠損時はイールドスプレッド利用不可 | 最優先 | 2026-06-11 廃止 |

@@ -237,9 +237,17 @@ class TestDataProvider:
 
         class FakeProvider:
             def get_option_chain(
-                self, ticker, *, allow_marketdata=False, cache_only=False
+                self,
+                ticker,
+                *,
+                allow_marketdata=False,
+                cache_only=False,
+                target_dte=None,
+                min_dte=0,
             ):
-                calls.append((ticker, allow_marketdata, cache_only))
+                calls.append(
+                    (ticker, allow_marketdata, cache_only, target_dte, min_dte)
+                )
                 return None
 
         try:
@@ -254,4 +262,4 @@ class TestDataProvider:
         finally:
             set_data_provider(DefaultDataProvider())
 
-        assert calls == [("SPY", True, True)]
+            assert calls == [("SPY", True, True, None, 0)]

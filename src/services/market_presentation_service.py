@@ -17,6 +17,20 @@ class MarketSignal(BaseModel):
     category: str = "neutral"
 
 
+class OptionHorizonSummary(BaseModel):
+    key: str = ""
+    label: str = ""
+    dte: str = "-"
+    expiration: str = ""
+    iv: str = "-"
+    expected_move: str = "-"
+    price_range: str = "-"
+    pcr_vol: str = "-"
+    skew: str = "-"
+    gex: str = "-"
+    data_quality: str = "unavailable"
+
+
 class OptionSummary(BaseModel):
     ticker: str = ""
     sentiment: str = "Neutral"
@@ -41,6 +55,8 @@ class OptionSummary(BaseModel):
     gamma_coverage_str: str = ""
     complete_status: str = "unavailable"
     complete_status_label: str = "未取得"
+    horizons: list[OptionHorizonSummary] = []
+    term_structure_summary: str = ""
 
 
 class MicrostructureData(BaseModel):
@@ -484,9 +500,39 @@ def format_option_summaries(option_data: list[dict[str, Any]]) -> list[dict[str,
                 "complete_status_label": _option_complete_label(
                     opt.get("complete_status")
                 ),
+                "horizons": _format_option_horizons(list(opt.get("horizons") or [])),
+                "term_structure_summary": str(
+                    (opt.get("term_structure") or {}).get("summary") or ""
+                ),
             }
         )
     return formatted
+
+
+def _format_option_horizons(horizons: list[dict[str, Any]]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for item in horizons[:3]:
+        price_range = item.get("price_range")
+        lower = item.get("price_range_lower")
+        upper = item.get("price_range_upper")
+        if isinstance(price_range, (list, tuple)) and len(price_range) >= 2:
+            lower, upper = price_range[0], price_range[1]
+        rows.append(
+            {
+                "key": str(item.get("key") or ""),
+                "label": str(item.get("label") or ""),
+                "dte": _days_str(item.get("dte")),
+                "expiration": str(item.get("resolved_expiration") or ""),
+                "iv": _ratio_percent_str(item.get("iv")),
+                "expected_move": _ratio_percent_str(item.get("expected_move_pct")),
+                "price_range": _range_str(lower, upper),
+                "pcr_vol": _number_str((item.get("pcr") or {}).get("volume_pcr")),
+                "skew": _ratio_percent_str(item.get("skew")),
+                "gex": _gex_direction((item.get("gex") or {}).get("nearby_net_gex")),
+                "data_quality": str(item.get("data_quality") or "unavailable"),
+            }
+        )
+    return rows
 
 
 def _format_signals(evaluation: dict[str, Any]) -> list[MarketSignal]:
@@ -935,6 +981,31 @@ def _price_str(value: Any) -> str:
 def _coverage_str(value: Any) -> str:
     number = _optional_float(value)
     return "-" if number is None else f"{number:.0%}"
+
+
+def _days_str(value: Any) -> str:
+    number = _optional_float(value)
+    return "-" if number is None else f"{number:.0f}日"
+
+
+def _number_str(value: Any) -> str:
+    number = _optional_float(value)
+    return "-" if number is None else f"{number:.2f}"
+
+
+def _range_str(lower: Any, upper: Any) -> str:
+    low = _optional_float(lower)
+    high = _optional_float(upper)
+    if low is None or high is None:
+        return "-"
+    return f"${low:,.2f}～${high:,.2f}"
+
+
+def _gex_direction(value: Any) -> str:
+    number = _optional_float(value)
+    if number is None:
+        return "-"
+    return "正" if number > 0 else "負"
 
 
 def _option_complete_label(value: Any) -> str:

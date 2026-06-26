@@ -79,10 +79,10 @@ UI
 2. 軽量サマリーは `market_data.get_market_indices()` と `market_config.get_market_config()` のみを取得し、起動時にオプション取得を行わない
 3. `MarketState.refresh_market_details()` が、既存の `MarketContext` を再利用しながら市場環境、IBD式市場状態、マイクロストラクチャー、テーマ、監視指標、信用ストレス、セクター/テーマ歪みを更新する
 4. 詳細更新では `sector_flow_service` が米国セクターETFと日本テーマバスケットから資金流入セクター、確信度、継続性、調査判断を計算し、`japan_market_conditions` が日経平均上昇の6条件を直接データまたは代理指標として評価する
-5. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、取得結果、キャッシュ鮮度、品質警告を `OptionContext` に保存する
+5. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、current / 1W / 1M の満期別チェーン、想定変動幅、Skew、GEX、キャッシュ鮮度、品質警告を `OptionContext.items` と `OptionContext.horizons` に保存する
 6. Reflex state に整形済みデータを保存し、画面が再描画される
 7. 表示用の整形は `services.market_presentation_service.build_market_display_context()` が担い、`MarketState` はイベント、loading/error、表示モデル保持に集中する
-8. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、通常経路では既に取得済みの `MarketContext`、オプション品質情報、日米セクター流入、日経6条件、ユーザー指定の追加分析項目をプロンプトに含める。レポートは米国市場を主軸にし、日本市場は米国との連動・乖離を読む補助コーナーとして扱う
+8. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、通常経路では既に取得済みの `MarketContext`、オプション品質情報、オプション期間構造、日米セクター流入、日経6条件、ユーザー指定の追加分析項目をプロンプトに含める。レポートは米国市場を主軸にし、日本市場は米国との連動・乖離を読む補助コーナーとして扱う
 
 ### 市場監視
 
@@ -129,7 +129,7 @@ UI
 - `src/data_provider.py` は facade と依存性注入の入口を兼ねており、テスト時に外部APIを差し替えられる
 - `src/cache.py` は Streamlit 依存を避けるためのフレームワーク非依存TTLキャッシュ。エントリごとに `created_at`、`expires_at`、`ttl`、`namespace` を持ち、関数単位の `.clear_cache()` と名前空間単位のクリアに対応する
 - `src/persistent_cache.py` は `.states` 配下のJSONキャッシュ共通基盤。schema/version付きの原子的書き込み、破損JSON無視、fresh/stale/expired判定、ファイル名安全化を担う
-- yfinance系の重い取得は、メモリTTLに加えて `.states/market_context_cache` と `.states/option_chain_cache` のJSONキャッシュを使う。`source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` をUIとAIプロンプトへ渡す
+- yfinance系の重い取得は、メモリTTLに加えて `.states/market_context_cache` と `.states/option_chain_cache` のJSONキャッシュを使う。オプションは ticker だけでなく target DTE 別のcache keyを使い、current / 1W / 1M が混線しないようにする。`source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` をUIとAIプロンプトへ渡す
 - Market AI Recap は `MarketContext` がある場合に市場監視やテーマランキングを再取得せず、context 内の monitoring / momentum / option 情報を優先する。context 構築に失敗した互換パスだけ旧取得ロジックへフォールバックする
 - Stock AI Recap は `StockSignalContext` がある場合に表示済みのテクニカル、SMART基準、ニュース見出し、確率シグナルを使い、UIとAIの材料ズレを避ける
 - Entry Frameworkは日足専用で、LoD、ORH、寄付き後30分、1-2時間確認などの分足依存ルールを成立済みと仮定しない。`blocked`判定はAIが上書きしない
@@ -138,7 +138,8 @@ UI
 - HTTPキャッシュは `src/network.py` が `.states/http_cache` 配下で用途別セッションとして管理し、ルート直下にSQLiteを作らない
 - yfinanceオプションデータはGreeks欠損が多いため、Gammaが取得できない場合はGEXを非表示にし、`data_quality` と `quality_warnings` でUIとAIに明示する
 - MarketData.appは米国オプションのpreferred経路として使う。対象はSPY / QQQ / IWM、統合トレンドランキング上位のテーマETF proxy、個別銘柄分析で所属テーマのETF option proxyを明示分析する場合に限定する。`off`ではyfinanceのみ、`shadow`ではyfinance表示を維持しながら比較取得、`preferred`ではMarketData.appを優先して失敗時にyfinance/cacheへフォールバックする。起動時や単なる描画時にはMarketData.appを呼ばない
-- MarketData.appの0DTEチェーンは専用キャッシュへ保存し、IV・Greeks・OI・Volumeを直接値として扱う。PCR、Max Pain、GEXはローカル算出であり、GEXのディーラー方向は簡易仮定として来歴へ残す
+- MarketData.appの解決済み満期チェーンは専用キャッシュへ保存し、IV・Greeks・OI・Volumeを直接値として扱う。同日満期は米国東部時間の有効時間帯だけ使い、引け後・週末・live smokeでは次回有効満期へ切り替える。1W / 1M は満期一覧から目標DTEに最も近い有効満期を選ぶ。PCR、Max Pain、GEXはローカル算出であり、GEXのディーラー方向は簡易仮定として来歴へ残す
+- `src/services/data_fetch_manifest.py` は画面・分析ごとの必須/任意データ、許容鮮度、fallback/cache方針を定義する軽量マニフェスト。欠損監査やlive smoke拡張時はここを基準にする
 - Reflex state では `dict[str, Any]` の深いアクセスが壊れやすいため、`pydantic.BaseModel` でUI表示用モデルを定義している
 - 外部APIの失敗はアプリ全体を止めず、機能単位で degraded mode に落とす設計が多い
 - Two Sigma OSSからは依存ではなく設計要素を取り込む。`temporal_alignment.py` は Flint 型の許容時間差付き as-of join を pandas で提供し、`AnalysisRun` は BeakerX 型の再現可能な分析成果物、`analysis_jobs.py` は Cook 型の重い分析ジョブ状態管理、`analysis_diagnostics.py` は Marbles 型の説明的テスト失敗メッセージを担う

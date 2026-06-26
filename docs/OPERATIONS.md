@@ -83,7 +83,7 @@ python -m ruff format --check .
 ```
 
 任意保存先が未設定の場合も失敗にするには `--require-optional` を付けます。
-MarketData.app の live オプション取得を必須検証にするには、`.env` に `MARKETDATA_TOKEN=<token>` を設定したうえで `--require-marketdata` を付けます。token 未設定の状態は `SKIP` とし、アプリ本体は yfinance/cache fallback で継続します。
+MarketData.app の live オプション取得を必須検証にするには、`.env` に `MARKETDATA_TOKEN=<token>` を設定したうえで `--require-marketdata` を付けます。token 未設定の状態は `SKIP` とし、アプリ本体は yfinance/cache fallback で継続します。live smoke は 0DTE の時刻依存を避けるため、既定で `--marketdata-min-dte 1` の次回有効満期を確認し、追加で `--marketdata-horizon-dtes 7,30` の満期別チェーンも確認します。
 
 2026-06-12時点の本番確認:
 
@@ -122,7 +122,8 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - MarketData.appは `/market-watch` の明示的なOptions更新、統合トレンドランキングのテーマETFオプション更新、個別銘柄分析の所属テーマETFオプション確認時に利用します。起動時・単なる描画時・市場マイクロストラクチャー更新からは呼び出さず、APIクレジット消費を抑えます
 - 標準運用は `MARKETDATA_OPTIONS_MODE=preferred` です。MarketData.appを優先し、204 no data、認証/HTTP/API失敗、必須列不足、トークン未設定時だけyfinance/cacheへ戻します。トークン未設定のローカル環境は「MarketData未設定」として扱い、アプリ全体の失敗にはしません
 - `MARKETDATA_OPTIONS_MODE=shadow` は比較検証用として残します。画面表示と分析は従来のyfinance結果を維持し、MarketData.appの取得可否・基準時刻・契約既定mode・クレジット情報を品質警告へ記録します
-- MarketData.app経路では0DTE、`strikeLimit=100`、標準契約、必要列だけを取得します。GEXのCall正・Put負は実ディーラー建玉を直接観測したものではなく、簡易な符号仮定です
+- MarketData.app経路では満期一覧を確認し、米国東部時間の同日満期が有効な時間帯だけ0DTEを使い、引け後・週末・live smokeでは次回有効満期へ切り替えます。1W / 1M は `target_dte` に最も近い有効満期を選び、yfinance fallbackも同じ満期選択を使います。`strikeLimit=100`、標準契約、必要列だけを取得します。GEXのCall正・Put負は実ディーラー建玉を直接観測したものではなく、簡易な符号仮定です
+- Market Watch のオプション分析は current / 1W / 1M の期間別行を表示し、AI Market Recap と `market_timeframes` も同じ `OptionContext.horizons` を参照します。これは価格予測の断定ではなく、オプション市場が織り込む想定変動幅・歪みの入力です
 - MarketData.appの鮮度modeはAPIへ強制指定せず、アカウント契約の既定値を使います。リアルタイムとは断定せず、各カードの`updated`由来の基準時刻を確認してください
 - データ信頼度・来歴は通常分析画面の上部には常時出さず、サイドバー/モバイルドロワー最下部の「データ品質」ページでProvider設定、最後の成功状態、失敗理由、stale cache/proxy/unavailableを集約確認します
 - キャッシュ由来のデータは `source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` としてUI/AIへ渡します。`stale_cache` 表示がある場合は、外部API失敗時に最後の成功データを使っています

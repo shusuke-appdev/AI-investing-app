@@ -292,6 +292,7 @@ def build_market_theme_flow_context(
         lambda: build_market_strategy_context(
             market_type,
             options=options.items,
+            option_horizons=options.horizons,
             ibd_regime=ibd_regime,
             evaluation=evaluation,
             volatility_regime=volatility_regime,
@@ -479,6 +480,7 @@ def build_market_volatility_sentiment_context(
         lambda: build_market_strategy_context(
             market_type,
             options=base.options.items,
+            option_horizons=base.options.horizons,
             ibd_regime=base.ibd_regime,
             evaluation=base.evaluation,
             volatility_regime=volatility_regime,
@@ -646,6 +648,7 @@ def build_market_high_context(
         lambda: build_market_strategy_context(
             market_type,
             options=base.options.items,
+            option_horizons=base.options.horizons,
             ibd_regime=base.ibd_regime,
             evaluation=base.evaluation,
             volatility_regime=volatility_regime,
@@ -846,6 +849,7 @@ def build_market_options_context(
         lambda: build_market_strategy_context(
             market_type,
             options=options.items,
+            option_horizons=options.horizons,
             ibd_regime=base.ibd_regime,
             evaluation=evaluation,
             volatility_regime=base.volatility_regime,
@@ -1107,6 +1111,34 @@ def format_market_context_for_ai(context: MarketContext) -> str:
         parts.append(
             "- Options data quality: " + "; ".join(context.options.quality_warnings[:6])
         )
+    if context.options.horizons:
+        parts.append("[Options term structure]")
+        if context.options.term_structure.get("summary"):
+            parts.append(f"- {context.options.term_structure.get('summary')}")
+        for item in context.options.horizons[:3]:
+            details = [
+                f"{item.get('label', item.get('key', ''))}",
+            ]
+            if item.get("iv") is not None:
+                details.append(f"IV={_display_percent(item.get('iv'))}")
+            if item.get("expected_move_pct") is not None:
+                details.append(
+                    f"1sigma_move={_display_percent(item.get('expected_move_pct'))}"
+                )
+            if item.get("pcr_volume") is not None:
+                details.append(f"PCR={float(item.get('pcr_volume')):.2f}")
+            if item.get("skew") is not None:
+                details.append(f"skew={_display_percent(item.get('skew'))}")
+            if item.get("nearby_net_gex") is not None:
+                details.append(
+                    "nearby_gex="
+                    + (
+                        "positive"
+                        if float(item.get("nearby_net_gex")) > 0
+                        else "negative"
+                    )
+                )
+            parts.append("- " + ", ".join(details))
     if context.volatility_regime:
         volatility = context.volatility_regime
         parts.append("[Market volatility regime]")
@@ -1419,12 +1451,20 @@ def _build_option_context(market_type: str) -> OptionContext:
             cache_age_seconds=_optional_float(result.get("cache_age_seconds")),
             data_as_of=str(result.get("data_as_of") or ""),
             data_mode=str(result.get("data_mode") or ""),
+            resolved_expiration=str(result.get("resolved_expiration") or ""),
+            resolved_dte=_optional_int(result.get("resolved_dte")),
+            expiration_policy=str(result.get("expiration_policy") or ""),
+            expiration_fallback_reason=str(
+                result.get("expiration_fallback_reason") or ""
+            ),
             credits_consumed=_optional_int(result.get("credits_consumed")),
             credits_remaining=_optional_int(result.get("credits_remaining")),
             provider_active=bool(result.get("provider_active", False)),
             fallback_reason=str(result.get("fallback_reason") or ""),
             gamma_coverage=_optional_float(result.get("gamma_coverage")),
             complete_status=str(result.get("complete_status") or "unavailable"),
+            horizons=list(result.get("horizons") or []),
+            term_structure=dict(result.get("term_structure") or {}),
         )
     except Exception as exc:
         return OptionContext(

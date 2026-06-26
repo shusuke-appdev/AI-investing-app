@@ -1,5 +1,25 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-06-26 Option horizon structure and data-fetch reliability contract
+- Added current / 1W / 1M option horizon analysis for SPY / QQQ / IWM and option-capable ETF proxies. Existing top-level option fields stay compatible and are populated from the current horizon, while `horizons` and `term_structure` carry the forward-looking option-implied structure.
+- Extended MarketData.app and yfinance option retrieval with target-DTE expiration selection. MarketData.app caches expirations briefly and uses resolved expiration requests; yfinance no longer relies on the first listed expiration when 1W/1M analysis is requested.
+- Added horizon-specific option cache/metadata keys so current, one-week, and one-month chains do not overwrite each other.
+- Connected `OptionContext.horizons` to `market_strategy_service`, Market Watch option cards, and AI Market Recap prompt formatting. One-week and one-month market outlook evidence now includes option-implied IV, expected move, PCR, skew, and GEX direction when available.
+- Added `src/services/data_fetch_manifest.py` as a lightweight manifest for user-visible data dependencies, required/optional status, freshness, and fallback/cache policy.
+- Added status-aware historical price retrieval (`get_historical_data_with_status`) while preserving the existing DataFrame-returning compatibility API.
+- Updated live smoke to validate MarketData.app target horizons via `--marketdata-horizon-dtes 7,30` in addition to the min-DTE next-valid expiration check.
+- Updated provenance, architecture, operations, options comparison, and tests docs for option term structure and data-fetch contracts.
+- Validation: targeted horizon/data-fetch tests passed, full pytest passed (`279 passed`), compileall passed, ruff check passed, ruff format check passed, full `scripts/check.py` passed including Reflex export, and live smoke with `--require-marketdata --marketdata-tickers SPY --marketdata-min-dte 1 --marketdata-horizon-dtes 7,30` passed. Supabase live smoke skipped because credentials are not configured.
+
+## Session update: 2026-06-26 MarketData expiration resolution and data-fetch hardening
+- Replaced the fragile MarketData.app 0DTE-fixed option request path with expiration resolution: the provider now checks MarketData.app expirations, uses same-day expiry only before the US/Eastern cutoff, and otherwise selects the next valid expiration.
+- Updated MarketData.app metadata across provider, option analysis, Market OptionContext, and shadow comparison warnings with resolved expiration, resolved DTE, expiration policy, fallback reason, and classified error code.
+- Changed `scripts/live_smoke.py --require-marketdata` to validate with `--marketdata-min-dte 1` by default and configurable tickers, preventing timing failures from expired 0DTE contracts.
+- Expanded MarketData.app client handling for current rate-limit header names and classified auth/plan/rate-limit/expired/no-data/server errors.
+- Added a status-aware quote helper so stock quote retrieval can distinguish unavailable fields from real zeroes while preserving existing `get_current_price()` compatibility.
+- Updated operations, architecture, provenance, options comparison, and tests docs to describe MarketData.app as a US options-specific preferred/complement source, not a general data source or 0DTE-only source.
+- Validation: targeted MarketData/option/provider tests passed (`42 passed`), full pytest passed (`270 passed`), compileall passed, ruff check passed, ruff format check passed, full `scripts/check.py` passed including Reflex export, and live smoke with `--require-marketdata --marketdata-tickers SPY --marketdata-min-dte 1` passed. Supabase live smoke skipped because credentials are not configured.
+
 ## Session update: 2026-06-25 Market/Stock data completeness and UI reorganization
 - Added option completeness metadata across provider, analysis, context, presentation, Market/Stock state, and trend/theme diagnostics: direct MarketData.app status, fallback reason, Gamma coverage, and complete/fallback/partial status now travel together.
 - Hid GEX unless MarketData.app direct Greeks are active; yfinance fallback and token-unconfigured states are explicit limitations instead of being treated as complete option acquisition.

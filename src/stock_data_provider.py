@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -30,6 +31,34 @@ YFINANCE_PROFILE_FRESH_SECONDS = 12 * 60 * 60
 YFINANCE_PROFILE_STALE_SECONDS = 7 * 24 * 60 * 60
 YFINANCE_RATE_LIMIT_COOLDOWN_SECONDS = 15 * 60
 _rate_limited_until: datetime | None = None
+
+
+@dataclass
+class QuoteResult:
+    """Quote payload plus retrieval status metadata."""
+
+    data: dict[str, Any] | None = None
+    source: str = "yfinance"
+    fetched_at: str = ""
+    is_stale: bool = False
+    is_partial: bool = False
+    cache_status: str = "live"
+    warnings: list[str] = field(default_factory=list)
+    error: str = ""
+
+
+@dataclass
+class HistoryResult:
+    """Historical price payload plus retrieval status metadata."""
+
+    data: pd.DataFrame = field(default_factory=pd.DataFrame)
+    source: str = "yfinance"
+    fetched_at: str = ""
+    is_stale: bool = False
+    is_partial: bool = False
+    cache_status: str = "live"
+    warnings: list[str] = field(default_factory=list)
+    error: str = ""
 
 
 def is_japanese_stock(ticker: str) -> bool:
@@ -254,30 +283,63 @@ def _build_yfinance_quote(ticker: str) -> dict | None:
         change_percent = change / previous_close * 100
 
     return {
-        "c": current or 0,
+        "c": current,
         "d": change,
         "dp": change_percent,
-        "h": high or 0,
-        "l": low or 0,
-        "o": open_price or 0,
-        "pc": previous_close or 0,
+        "h": high,
+        "l": low,
+        "o": open_price,
+        "pc": previous_close,
     }
+
+
+def get_quote_with_status(ticker: str) -> QuoteResult:
+    """Return a quote without conflating unavailable fields with real zeroes."""
+
+    try:
+        quote = _build_yfinance_quote(ticker)
+    except Exception as exc:
+        logger.warning(f"Quote fetch error for {ticker}: {exc}")
+        return QuoteResult(
+            source="yfinance",
+            fetched_at=utc_now_iso(),
+            is_partial=True,
+            cache_status="failed",
+            error=str(exc),
+        )
+    if quote is None:
+        return QuoteResult(
+            source="yfinance",
+            fetched_at=utc_now_iso(),
+            is_partial=True,
+            cache_status="failed",
+            error="Quote unavailable.",
+        )
+    warnings = []
+    if quote.get("c") is None:
+        warnings.append("Current price is unavailable.")
+    return QuoteResult(
+        data=quote,
+        source="yfinance",
+        fetched_at=utc_now_iso(),
+        is_partial=bool(warnings),
+        warnings=warnings,
+    )
 
 
 @ttl_cache(ttl=CACHE_TTL_SHORT)
 def get_current_price(ticker: str) -> float:
-    try:
-        q = _build_yfinance_quote(ticker)
-        price = _safe_float(q.get("c") if q else None)
-        if price is not None:
-            return price
-    except Exception as exc:
-        logger.warning(f"Failed to get current price for {ticker}: {exc}")
+    result = get_quote_with_status(ticker)
+    price = _safe_float(result.data.get("c") if result.data else None)
+    if price is not None:
+        return price
     return 0.0
 
 
 @ttl_cache(ttl=CACHE_TTL_MEDIUM)
-def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
+def get_historical_data_with_status(ticker: str, period: str = "1mo") -> HistoryResult:
+    """Return historical prices without hiding live/cache/failed status."""
+
     cache = repo_state_cache(YFINANCE_HISTORY_CACHE_NAMESPACE)
     key = _history_cache_key(ticker, period)
     cached = cache.read(
@@ -286,19 +348,41 @@ def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
         stale_seconds=YFINANCE_HISTORY_STALE_SECONDS,
     )
     if cached.status == "fresh":
-        return _history_from_payload(cached.payload)
+        return HistoryResult(
+            data=_history_from_payload(cached.payload),
+            source=str(cached.payload.get("source") or "yfinance_cache"),
+            fetched_at=cached.fetched_at,
+            cache_status="persistent_cache",
+        )
 
     stock = yf.Ticker(ticker)
     live = _normalize_history(_get_history(stock, period))
     if not live.empty:
         cache.write(key, _history_payload(live))
-        return live
+        return HistoryResult(data=live, fetched_at=utc_now_iso())
     if cached.is_available:
         logger.warning(
             "yfinance live fetch failed; using cached history for %s", ticker
         )
-        return _history_from_payload(cached.payload)
-    return pd.DataFrame()
+        return HistoryResult(
+            data=_history_from_payload(cached.payload),
+            source=str(cached.payload.get("source") or "yfinance_cache"),
+            fetched_at=cached.fetched_at,
+            is_stale=True,
+            cache_status="stale_cache",
+            warnings=["yfinance live history failed; using cached data."],
+        )
+    return HistoryResult(
+        fetched_at=utc_now_iso(),
+        is_partial=True,
+        cache_status="failed",
+        error="Historical price data unavailable.",
+    )
+
+
+@ttl_cache(ttl=CACHE_TTL_MEDIUM)
+def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
+    return get_historical_data_with_status(ticker, period).data
 
 
 def _extract_yfinance_profile(
@@ -519,11 +603,7 @@ def get_stock_info(
 
 @ttl_cache(ttl=CACHE_TTL_SHORT)
 def get_quote(ticker: str) -> dict | None:
-    try:
-        return _build_yfinance_quote(ticker)
-    except Exception as exc:
-        logger.warning(f"Quote fetch error for {ticker}: {exc}")
-    return None
+    return get_quote_with_status(ticker).data
 
 
 @ttl_cache(ttl=CACHE_TTL_DAILY)

@@ -123,6 +123,20 @@ def render_ticker_compact(opt) -> rx.Component:
                 spacing="2",
                 width="100%",
             ),
+            rx.cond(
+                opt.term_structure_summary != "",
+                rx.text(opt.term_structure_summary, size="1", color="gray"),
+                rx.fragment(),
+            ),
+            rx.cond(
+                opt.horizons.length() > 0,
+                rx.vstack(
+                    rx.foreach(opt.horizons, render_horizon_row),
+                    spacing="1",
+                    width="100%",
+                ),
+                rx.fragment(),
+            ),
             rx.divider(),
             rx.cond(
                 opt.analysis.length() > 0,
@@ -155,6 +169,25 @@ def render_ticker_compact(opt) -> rx.Component:
             spacing="3",
         ),
         width="100%",
+    )
+
+
+def render_horizon_row(horizon) -> rx.Component:
+    """Compact term-structure row for one option horizon."""
+
+    return rx.grid(
+        rx.text(horizon.label, weight="bold", size="1"),
+        rx.text("DTE ", horizon.dte, size="1", color="gray"),
+        rx.text("IV ", horizon.iv, size="1"),
+        rx.text("1σ ", horizon.expected_move, size="1"),
+        rx.text("PCR ", horizon.pcr_vol, size="1"),
+        rx.text("Skew ", horizon.skew, size="1"),
+        rx.text("GEX ", horizon.gex, size="1"),
+        columns=rx.breakpoints(initial="2", sm="4", lg="7"),
+        spacing="2",
+        width="100%",
+        padding="0.35rem 0",
+        border_bottom="1px solid var(--gray-4)",
     )
 
 

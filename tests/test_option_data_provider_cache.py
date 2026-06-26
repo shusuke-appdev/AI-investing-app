@@ -73,6 +73,62 @@ def test_option_provider_cache_only_never_refreshes(monkeypatch, tmp_path):
     )
 
 
+def test_yfinance_expiration_selection_uses_target_dte():
+    today = datetime.now(timezone.utc).date()
+    expirations = [
+        (today + timedelta(days=1)).isoformat(),
+        (today + timedelta(days=8)).isoformat(),
+        (today + timedelta(days=31)).isoformat(),
+    ]
+
+    assert option_data_provider._select_yfinance_expirations(
+        expirations, target_dte=7, min_dte=1, max_expirations=1
+    ) == [expirations[1]]
+    assert option_data_provider._select_yfinance_expirations(
+        expirations, target_dte=30, min_dte=1, max_expirations=1
+    ) == [expirations[2]]
+
+
+def test_horizon_metadata_uses_target_specific_key(monkeypatch):
+    calls = pd.DataFrame({"strike": [100]})
+    puts = pd.DataFrame({"strike": [100]})
+
+    monkeypatch.setattr(
+        option_data_provider,
+        "_get_yfinance_option_chain",
+        lambda ticker, **kwargs: (
+            option_data_provider._set_metadata(
+                ticker,
+                target_dte=kwargs.get("target_dte"),
+                source="yfinance",
+                fetched_at="now",
+                is_stale=False,
+                data_quality="available",
+                quality_warnings=[],
+                cache_status="live",
+                cache_age_seconds=None,
+            )
+            or (calls, puts)
+        ),
+    )
+
+    option_data_provider.get_option_chain("SPY", target_dte=7, min_dte=1)
+    option_data_provider.get_option_chain("SPY", target_dte=30, min_dte=1)
+
+    assert (
+        option_data_provider.get_option_chain_metadata("SPY", target_dte=7)[
+            "target_dte"
+        ]
+        == 7
+    )
+    assert (
+        option_data_provider.get_option_chain_metadata("SPY", target_dte=30)[
+            "target_dte"
+        ]
+        == 30
+    )
+
+
 def test_marketdata_is_only_used_when_explicitly_allowed(monkeypatch):
     calls = pd.DataFrame({"strike": [100]})
     puts = pd.DataFrame({"strike": [100]})

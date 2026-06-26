@@ -3,6 +3,33 @@ from types import SimpleNamespace
 import pandas as pd
 
 
+def test_historical_data_status_reports_failed_without_zero_fallback(
+    monkeypatch, tmp_path
+):
+    from src import stock_data_provider
+    from src.persistent_cache import PersistentJsonCache
+
+    stock_data_provider.get_historical_data.clear_cache()
+    stock_data_provider.get_historical_data_with_status.clear_cache()
+    monkeypatch.setattr(
+        stock_data_provider,
+        "repo_state_cache",
+        lambda namespace: PersistentJsonCache(tmp_path, namespace),
+    )
+    monkeypatch.setattr(
+        stock_data_provider,
+        "_get_history",
+        lambda stock, period: pd.DataFrame(),
+    )
+
+    result = stock_data_provider.get_historical_data_with_status("SPY", "1mo")
+
+    assert result.data.empty
+    assert result.cache_status == "failed"
+    assert result.is_partial is True
+    assert result.error
+
+
 def test_get_stock_info_can_skip_gemini_translation(monkeypatch):
     from src import stock_data_provider
 

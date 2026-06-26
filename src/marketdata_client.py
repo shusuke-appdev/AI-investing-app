@@ -12,6 +12,13 @@ import requests
 class MarketDataError(Exception):
     """Base error for MarketData.app requests."""
 
+    def __init__(
+        self, message: str, *, code: str = "api_error", status_code: int | None = None
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.status_code = status_code
+
 
 class MarketDataConfigError(MarketDataError):
     """Raised when MarketData.app authentication is not configured."""
@@ -73,7 +80,9 @@ class MarketDataClient:
             )
         if response.status_code not in (200, 203):
             raise MarketDataError(
-                f"MarketData.app HTTP {response.status_code}: {response.text[:500]}"
+                f"MarketData.app HTTP {response.status_code}: {response.text[:500]}",
+                code=_classify_error(response.status_code, response.text),
+                status_code=response.status_code,
             )
 
         try:
@@ -83,9 +92,8 @@ class MarketDataClient:
         if not isinstance(data, dict):
             raise MarketDataError("MarketData.app returned a non-object response.")
         if data.get("s") == "error":
-            raise MarketDataError(
-                str(data.get("errmsg") or "MarketData.app API error.")
-            )
+            message = str(data.get("errmsg") or "MarketData.app API error.")
+            raise MarketDataError(message, code=_classify_error(200, message))
 
         return MarketDataResponse(
             data=data,
@@ -108,6 +116,7 @@ def _credit_metadata(headers: dict[str, str]) -> dict[str, Any]:
             _first_header(
                 lowered,
                 "x-api-credits-consumed",
+                "x-api-ratelimit-consumed",
                 "x-credits-consumed",
                 "x-ratelimit-used",
             )
@@ -116,6 +125,7 @@ def _credit_metadata(headers: dict[str, str]) -> dict[str, Any]:
             _first_header(
                 lowered,
                 "x-api-credits-remaining",
+                "x-api-ratelimit-remaining",
                 "x-credits-remaining",
                 "x-ratelimit-remaining",
             )
@@ -123,10 +133,28 @@ def _credit_metadata(headers: dict[str, str]) -> dict[str, Any]:
         "credits_reset_at": _first_header(
             lowered,
             "x-api-credits-reset",
+            "x-api-ratelimit-reset",
             "x-credits-reset",
             "x-ratelimit-reset",
         ),
     }
+
+
+def _classify_error(status_code: int, message: str) -> str:
+    text = f"{status_code} {message}".lower()
+    if status_code in {401, 403} or "unauthorized" in text or "forbidden" in text:
+        return "auth"
+    if status_code == 402 or "payment" in text or "subscription" in text:
+        return "plan"
+    if status_code == 429 or "rate limit" in text or "ratelimit" in text:
+        return "rate_limit"
+    if "expired" in text or "expiration" in text:
+        return "expired_option"
+    if "no data" in text or "not found" in text:
+        return "no_data"
+    if status_code >= 500:
+        return "server"
+    return "api_error"
 
 
 def _first_header(headers: dict[str, str], *names: str) -> str:

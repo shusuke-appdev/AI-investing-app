@@ -17,13 +17,24 @@ from .option_data_provider import get_option_chain_metadata
 
 logger = get_logger(__name__)
 
+OPTION_HORIZON_SPECS: tuple[dict[str, Any], ...] = (
+    {"key": "current", "label": "現在", "target_dte": None, "min_dte": 0},
+    {"key": "one_week", "label": "1週間", "target_dte": 7, "min_dte": 1},
+    {"key": "one_month", "label": "1か月", "target_dte": 30, "min_dte": 1},
+)
+
 # ============================================================
 # 内部ヘルパー: データ取得（1回だけ実行）
 # ============================================================
 
 
 def _fetch_option_data(
-    ticker: str, *, allow_marketdata: bool = False, cache_only: bool = False
+    ticker: str,
+    *,
+    allow_marketdata: bool = False,
+    cache_only: bool = False,
+    target_dte: int | None = None,
+    min_dte: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame, float, str, dict[str, Any]] | None:
     """
     オプションチェーンと現在価格を1回で取得する内部ヘルパー。
@@ -32,7 +43,11 @@ def _fetch_option_data(
         (calls_df, puts_df, current_price, fetched_at, metadata) のタプル、またはNone
     """
     option_data = get_option_chain(
-        ticker, allow_marketdata=allow_marketdata, cache_only=cache_only
+        ticker,
+        allow_marketdata=allow_marketdata,
+        cache_only=cache_only,
+        target_dte=target_dte,
+        min_dte=min_dte,
     )
     if option_data is None:
         return None
@@ -44,7 +59,8 @@ def _fetch_option_data(
         logger.warning(f"[OptionAnalyst] {ticker}: Empty option chain data")
         return None
 
-    metadata = get_option_chain_metadata(ticker)
+    metadata = get_option_chain_metadata(ticker, target_dte=target_dte)
+    metadata["target_dte"] = target_dte
     current_price = _option_underlying_price(calls, puts)
     if current_price is None:
         # MarketData.app以外の既存経路では従来どおりquoteを取得する。
@@ -585,30 +601,46 @@ def estimate_price_range(
     return lower_bound, upper_bound
 
 
-# ============================================================
-# 統合分析（データを1回取得し、各関数に渡す）
-# ============================================================
-
-
-def analyze_option_sentiment(
-    ticker: str, *, allow_marketdata: bool = False, cache_only: bool = False
-) -> dict | None:
-    """
-    オプションセンチメント分析を行います。
-    option_chain と quote を1回だけ取得し、全計算に共有します。
-
-    Args:
-        ticker: 銘柄コード
-
-    Returns:
-        センチメント分析結果
-    """
-    # === データ取得（1回のみ） ===
-    fetched = _fetch_option_data(
-        ticker, allow_marketdata=allow_marketdata, cache_only=cache_only
-    )
-    if fetched is None:
+def _expected_move_pct(atm_iv: float | None, days_to_expiry: float) -> float | None:
+    if atm_iv is None or atm_iv <= 0:
         return None
+    return float(atm_iv * np.sqrt(max(1.0, days_to_expiry) / 365.0))
+
+
+def _chain_dte(
+    calls: pd.DataFrame, puts: pd.DataFrame, metadata: dict[str, Any]
+) -> float:
+    resolved = metadata.get("resolved_dte")
+    if resolved is not None:
+        try:
+            return max(1.0, float(resolved))
+        except (TypeError, ValueError):
+            pass
+    for frame in (calls, puts):
+        if "dte" in frame.columns:
+            values = pd.to_numeric(frame["dte"], errors="coerce").dropna()
+            if not values.empty:
+                return max(1.0, float(values.iloc[0]))
+        if "expiration" in frame.columns and not frame.empty:
+            exp_date_str = frame["expiration"].iloc[0]
+            try:
+                exp_date = datetime.strptime(str(exp_date_str), "%Y-%m-%d").replace(
+                    tzinfo=timezone.utc
+                )
+                return max(1.0, float((exp_date - datetime.now(timezone.utc)).days))
+            except Exception:
+                continue
+    return 30.0
+
+
+def _analyze_fetched_option_data(
+    ticker: str,
+    fetched: tuple[pd.DataFrame, pd.DataFrame, float, str, dict[str, Any]],
+    *,
+    horizon_key: str,
+    horizon_label: str,
+    target_dte: int | None,
+) -> dict[str, Any] | None:
     calls, puts, current_price, fetched_at, metadata = fetched
     source = str(metadata.get("source") or "yfinance")
     provider_active = bool(metadata.get("provider_active")) or source.startswith(
@@ -616,7 +648,6 @@ def analyze_option_sentiment(
     )
     gamma_info = gamma_coverage(calls, puts)
 
-    # === 各指標を事前取得済みデータで計算 ===
     pcr = calculate_pcr(ticker, calls=calls, puts=puts)
     gex = (
         calculate_gex(
@@ -651,27 +682,13 @@ def analyze_option_sentiment(
             [*quality["quality_warnings"], warning]
         )
 
-    # DTE (Days to Expiry) 計算
-    dte = 30.0
-    if not calls.empty and "expiration" in calls.columns:
-        exp_date_str = calls["expiration"].iloc[0]
-        try:
-            exp_date = datetime.strptime(exp_date_str, "%Y-%m-%d").replace(
-                tzinfo=timezone.utc
-            )
-            now_utc = datetime.now(timezone.utc)
-            dte = max(1.0, (exp_date - now_utc).days)
-        except Exception:
-            pass
+    dte = _chain_dte(calls, puts, metadata)
+    price_range = estimate_price_range(current_price, iv, dte) if iv else None
+    expected_move_pct = _expected_move_pct(iv, dte)
 
-    price_range = None
-    if iv:
-        price_range = estimate_price_range(current_price, iv, dte)
-
-    if pcr is None and gex is None:
+    if pcr is None and gex is None and iv is None:
         return None
 
-    # OIが極端に少ない場合はGEXの信頼性が低い
     if pcr and (pcr["total_call_oi"] + pcr["total_put_oi"] < 1000):
         gex = None
 
@@ -683,24 +700,24 @@ def analyze_option_sentiment(
         if vol_pcr > 1.2:
             sentiment = "弱気"
             analysis.append(
-                f"PCR(Vol) ({vol_pcr:.2f}) が高く、プット取引活発 (弱気示唆)"
+                f"{horizon_label} PCR(Vol) ({vol_pcr:.2f}) が高く、プット取引活発"
             )
         elif vol_pcr < 0.7:
             sentiment = "強気"
             analysis.append(
-                f"PCR(Vol) ({vol_pcr:.2f}) が低く、コール取引活発 (強気示唆)"
+                f"{horizon_label} PCR(Vol) ({vol_pcr:.2f}) が低く、コール取引活発"
             )
         else:
-            analysis.append(f"PCR(Vol) ({vol_pcr:.2f}) は中立水準")
+            analysis.append(f"{horizon_label} PCR(Vol) ({vol_pcr:.2f}) は中立水準")
 
         if gex is None:
             analysis.append("※ Greeks/OIデータ不足のためGEX分析は非表示")
 
     if gex:
         if gex["nearby_net_gex"] > 0:
-            analysis.append("近傍GEX: 正 (値動き抑制)")
+            analysis.append(f"{horizon_label} 近傍GEX: 正 (値動き抑制)")
         else:
-            analysis.append("近傍GEX: 負 (ボラ拡大警戒)")
+            analysis.append(f"{horizon_label} 近傍GEX: 負 (ボラ拡大警戒)")
 
         if gex["positive_wall"]:
             analysis.append(f"+Wall (${gex['positive_wall']['strike']:.0f}): 上値抵抗")
@@ -710,7 +727,7 @@ def analyze_option_sentiment(
             analysis.append("※ 一部Gammaは推定値のためGEX信頼度は限定的")
 
     if iv:
-        analysis.append(f"ATM IV: {iv:.1%}")
+        analysis.append(f"{horizon_label} ATM IV: {iv:.1%}")
         if price_range:
             lower, upper = price_range
             analysis.append(
@@ -719,16 +736,29 @@ def analyze_option_sentiment(
 
     if skew is not None:
         if skew > 0.05:
-            analysis.append(f"Skew: {skew:.1%} (下落警戒強め)")
+            analysis.append(f"{horizon_label} Skew: {skew:.1%} (下落警戒強め)")
         elif skew < -0.05:
-            analysis.append(f"Skew: {skew:.1%} (上昇警戒強め)")
+            analysis.append(f"{horizon_label} Skew: {skew:.1%} (上昇警戒強め)")
         else:
-            analysis.append(f"Skew: {skew:.1%} (中立水準)")
+            analysis.append(f"{horizon_label} Skew: {skew:.1%} (中立水準)")
 
     if max_pain:
-        analysis.append(f"Max Pain: ${max_pain:.0f}")
+        analysis.append(f"{horizon_label} Max Pain: ${max_pain:.0f}")
 
+    complete_status = _complete_status(
+        provider_active=provider_active,
+        gex=gex,
+        quality=quality["data_quality"],
+        is_stale=bool(metadata.get("is_stale", False)),
+        fallback_reason=str(metadata.get("fallback_reason") or ""),
+        gamma_coverage_value=float(gamma_info["gamma_coverage"]),
+    )
+    lower = price_range[0] if price_range else None
+    upper = price_range[1] if price_range else None
     return {
+        "key": horizon_key,
+        "label": horizon_label,
+        "target_dte": target_dte,
         "ticker": ticker,
         "current_price": current_price,
         "sentiment": sentiment,
@@ -737,12 +767,21 @@ def analyze_option_sentiment(
         "iv": iv,
         "skew": skew,
         "dte": dte,
+        "expected_move_pct": expected_move_pct,
         "price_range": price_range,
+        "price_range_lower": lower,
+        "price_range_upper": upper,
         "max_pain": max_pain,
         "analysis": analysis,
         "fetched_at": fetched_at,
         "data_as_of": str(metadata.get("data_as_of") or ""),
         "data_mode": str(metadata.get("data_mode") or ""),
+        "resolved_expiration": str(metadata.get("resolved_expiration") or ""),
+        "resolved_dte": metadata.get("resolved_dte"),
+        "expiration_policy": str(metadata.get("expiration_policy") or ""),
+        "expiration_fallback_reason": str(
+            metadata.get("expiration_fallback_reason") or ""
+        ),
         "marketdata_options_mode": str(
             metadata.get("marketdata_options_mode") or "off"
         ),
@@ -753,6 +792,10 @@ def analyze_option_sentiment(
         "shadow_data_mode": str(metadata.get("shadow_data_mode") or ""),
         "shadow_credits_consumed": metadata.get("shadow_credits_consumed"),
         "shadow_credits_remaining": metadata.get("shadow_credits_remaining"),
+        "shadow_resolved_expiration": str(
+            metadata.get("shadow_resolved_expiration") or ""
+        ),
+        "shadow_resolved_dte": metadata.get("shadow_resolved_dte"),
         "source": source,
         "is_stale": bool(metadata.get("is_stale", False)),
         "cache_status": metadata.get("cache_status", "live"),
@@ -761,15 +804,164 @@ def analyze_option_sentiment(
         "quality_warnings": quality["quality_warnings"],
         "provider_active": provider_active,
         "fallback_reason": str(metadata.get("fallback_reason") or ""),
-        "complete_status": _complete_status(
-            provider_active=provider_active,
-            gex=gex,
-            quality=quality["data_quality"],
-            is_stale=bool(metadata.get("is_stale", False)),
-            fallback_reason=str(metadata.get("fallback_reason") or ""),
-            gamma_coverage_value=float(gamma_info["gamma_coverage"]),
-        ),
+        "complete_status": complete_status,
         **gamma_info,
+    }
+
+
+def analyze_option_horizons(
+    ticker: str, *, allow_marketdata: bool = False, cache_only: bool = False
+) -> list[dict[str, Any]]:
+    """Analyze option-implied structure for current, one-week, and one-month horizons."""
+
+    rows: list[dict[str, Any]] = []
+    for spec in OPTION_HORIZON_SPECS:
+        fetched = _fetch_option_data(
+            ticker,
+            allow_marketdata=allow_marketdata,
+            cache_only=cache_only,
+            target_dte=spec["target_dte"],
+            min_dte=int(spec["min_dte"]),
+        )
+        if fetched is None:
+            continue
+        analysis = _analyze_fetched_option_data(
+            ticker,
+            fetched,
+            horizon_key=str(spec["key"]),
+            horizon_label=str(spec["label"]),
+            target_dte=spec["target_dte"],
+        )
+        if analysis is not None:
+            rows.append(analysis)
+    return rows
+
+
+def _build_term_structure(horizons: list[dict[str, Any]]) -> dict[str, Any]:
+    lookup = {str(item.get("key")): item for item in horizons}
+    current = lookup.get("current") or {}
+    one_week = lookup.get("one_week") or {}
+    one_month = lookup.get("one_month") or {}
+    week_iv = _float_or_none(one_week.get("iv"))
+    month_iv = _float_or_none(one_month.get("iv"))
+    current_iv = _float_or_none(current.get("iv"))
+    slope = (
+        round(month_iv - week_iv, 4)
+        if month_iv is not None and week_iv is not None
+        else None
+    )
+    summary_parts = []
+    if current_iv is not None:
+        summary_parts.append(f"現在IV={current_iv:.1%}")
+    if week_iv is not None:
+        summary_parts.append(f"1W IV={week_iv:.1%}")
+    if month_iv is not None:
+        summary_parts.append(f"1M IV={month_iv:.1%}")
+    if slope is not None:
+        if slope > 0.03:
+            slope_label = "先の満期ほど不確実性が高い"
+        elif slope < -0.03:
+            slope_label = "短期満期にストレスが集中"
+        else:
+            slope_label = "期間構造はおおむねフラット"
+        summary_parts.append(slope_label)
+    return {
+        "current_iv": current_iv,
+        "one_week_iv": week_iv,
+        "one_month_iv": month_iv,
+        "iv_slope_1w_1m": slope,
+        "summary": " / ".join(summary_parts),
+    }
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        if value is None or pd.isna(value):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+# ============================================================
+# 統合分析（データを1回取得し、各関数に渡す）
+# ============================================================
+
+
+def analyze_option_sentiment(
+    ticker: str, *, allow_marketdata: bool = False, cache_only: bool = False
+) -> dict | None:
+    """
+    オプションセンチメント分析を行います。
+    option_chain と quote を1回だけ取得し、全計算に共有します。
+
+    Args:
+        ticker: 銘柄コード
+
+    Returns:
+        センチメント分析結果
+    """
+    horizons = analyze_option_horizons(
+        ticker, allow_marketdata=allow_marketdata, cache_only=cache_only
+    )
+    if not horizons:
+        return None
+
+    primary = next(
+        (item for item in horizons if item.get("key") == "current"), horizons[0]
+    )
+    term_structure = _build_term_structure(horizons)
+    return {
+        "ticker": ticker,
+        "current_price": primary.get("current_price", 0.0),
+        "sentiment": primary.get("sentiment", "中立"),
+        "pcr": primary.get("pcr"),
+        "gex": primary.get("gex"),
+        "iv": primary.get("iv"),
+        "skew": primary.get("skew"),
+        "dte": primary.get("dte"),
+        "expected_move_pct": primary.get("expected_move_pct"),
+        "price_range": primary.get("price_range"),
+        "max_pain": primary.get("max_pain"),
+        "analysis": list(primary.get("analysis") or []),
+        "horizons": horizons,
+        "term_structure": term_structure,
+        "fetched_at": primary.get("fetched_at", ""),
+        "data_as_of": primary.get("data_as_of", ""),
+        "data_mode": primary.get("data_mode", ""),
+        "resolved_expiration": primary.get("resolved_expiration", ""),
+        "resolved_dte": primary.get("resolved_dte"),
+        "expiration_policy": primary.get("expiration_policy", ""),
+        "expiration_fallback_reason": primary.get("expiration_fallback_reason", ""),
+        "marketdata_options_mode": primary.get("marketdata_options_mode", "off"),
+        "credits_consumed": primary.get("credits_consumed"),
+        "credits_remaining": primary.get("credits_remaining"),
+        "shadow_source": primary.get("shadow_source", ""),
+        "shadow_data_as_of": primary.get("shadow_data_as_of", ""),
+        "shadow_data_mode": primary.get("shadow_data_mode", ""),
+        "shadow_credits_consumed": primary.get("shadow_credits_consumed"),
+        "shadow_credits_remaining": primary.get("shadow_credits_remaining"),
+        "shadow_resolved_expiration": primary.get("shadow_resolved_expiration", ""),
+        "shadow_resolved_dte": primary.get("shadow_resolved_dte"),
+        "source": primary.get("source", ""),
+        "is_stale": any(bool(item.get("is_stale")) for item in horizons),
+        "cache_status": _aggregate_cache_status(horizons),
+        "cache_age_seconds": _max_cache_age_seconds(horizons),
+        "data_quality": primary.get("data_quality", "unavailable"),
+        "quality_warnings": _unique_warnings(
+            [
+                warning
+                for item in horizons
+                for warning in list(item.get("quality_warnings") or [])
+            ]
+        ),
+        "provider_active": any(bool(item.get("provider_active")) for item in horizons),
+        "fallback_reason": primary.get("fallback_reason", ""),
+        "complete_status": primary.get("complete_status", "unavailable"),
+        "gamma_contracts": primary.get("gamma_contracts", 0),
+        "total_contracts": primary.get("total_contracts", 0),
+        "gamma_coverage": primary.get("gamma_coverage"),
+        "gamma_coverage_display": primary.get("gamma_coverage_display", ""),
     }
 
 
@@ -830,6 +1022,8 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
             "fallback_reason": "",
             "gamma_coverage": None,
             "complete_status": "not_applicable",
+            "horizons": [],
+            "term_structure": {},
         }
 
     indices = ["SPY", "QQQ", "IWM"]
@@ -889,12 +1083,20 @@ def get_major_indices_option_status(market_type: str = "US") -> dict:
         "quality_warnings": quality_warnings,
         "data_as_of": _latest_value(results, "data_as_of"),
         "data_mode": _aggregate_data_modes(results),
+        "resolved_expiration": _latest_value(results, "resolved_expiration"),
+        "resolved_dte": _min_optional_values(results, "resolved_dte"),
+        "expiration_policy": _aggregate_value_set(results, "expiration_policy"),
+        "expiration_fallback_reason": _first_value(
+            results, "expiration_fallback_reason"
+        ),
         "credits_consumed": _sum_optional_values(results, "credits_consumed"),
         "credits_remaining": _min_optional_values(results, "credits_remaining"),
         "provider_active": any(bool(item.get("provider_active")) for item in results),
         "fallback_reason": _first_value(results, "fallback_reason"),
         "gamma_coverage": _aggregate_gamma_coverage(results),
         "complete_status": _aggregate_complete_status(results, status),
+        "horizons": _aggregate_option_horizons(results),
+        "term_structure": _aggregate_term_structure(results),
     }
 
 
@@ -930,6 +1132,127 @@ def _aggregate_quality_warnings(results: list[dict]) -> list[str]:
     return _unique_warnings(warnings)
 
 
+def _aggregate_option_horizons(results: list[dict]) -> list[dict[str, Any]]:
+    buckets: dict[str, dict[str, Any]] = {}
+    for item in results:
+        ticker = str(item.get("ticker") or "")
+        for horizon in item.get("horizons", []) or []:
+            key = str(horizon.get("key") or "")
+            if not key:
+                continue
+            bucket = buckets.setdefault(
+                key,
+                {
+                    "key": key,
+                    "label": str(horizon.get("label") or key),
+                    "target_dte": horizon.get("target_dte"),
+                    "tickers": [],
+                    "iv_values": [],
+                    "expected_move_values": [],
+                    "pcr_values": [],
+                    "skew_values": [],
+                    "gex_values": [],
+                    "gamma_values": [],
+                    "sources": set(),
+                    "warnings": [],
+                    "resolved_expirations": [],
+                    "dte_values": [],
+                },
+            )
+            if ticker:
+                bucket["tickers"].append(ticker)
+            _append_number(bucket["iv_values"], horizon.get("iv"))
+            _append_number(
+                bucket["expected_move_values"], horizon.get("expected_move_pct")
+            )
+            _append_number(
+                bucket["pcr_values"], (horizon.get("pcr") or {}).get("volume_pcr")
+            )
+            _append_number(bucket["skew_values"], horizon.get("skew"))
+            _append_number(
+                bucket["gex_values"], (horizon.get("gex") or {}).get("nearby_net_gex")
+            )
+            _append_number(bucket["gamma_values"], horizon.get("gamma_coverage"))
+            _append_number(bucket["dte_values"], horizon.get("dte"))
+            if horizon.get("source"):
+                bucket["sources"].add(str(horizon.get("source")))
+            if horizon.get("resolved_expiration"):
+                bucket["resolved_expirations"].append(
+                    str(horizon.get("resolved_expiration"))
+                )
+            bucket["warnings"].extend(list(horizon.get("quality_warnings") or []))
+
+    ordered = []
+    order = {str(spec["key"]): idx for idx, spec in enumerate(OPTION_HORIZON_SPECS)}
+    for key, bucket in sorted(buckets.items(), key=lambda item: order.get(item[0], 99)):
+        iv = _avg(bucket["iv_values"])
+        expected_move = _avg(bucket["expected_move_values"])
+        pcr = _avg(bucket["pcr_values"])
+        skew = _avg(bucket["skew_values"])
+        nearby_gex = _avg(bucket["gex_values"])
+        gamma = _avg(bucket["gamma_values"])
+        dte = _avg(bucket["dte_values"])
+        ordered.append(
+            {
+                "key": key,
+                "label": bucket["label"],
+                "target_dte": bucket["target_dte"],
+                "tickers": sorted(set(bucket["tickers"])),
+                "dte": round(dte, 1) if dte is not None else None,
+                "iv": iv,
+                "expected_move_pct": expected_move,
+                "pcr_volume": pcr,
+                "skew": skew,
+                "nearby_net_gex": nearby_gex,
+                "gamma_coverage": gamma,
+                "source": ", ".join(sorted(bucket["sources"])),
+                "resolved_expirations": sorted(set(bucket["resolved_expirations"])),
+                "quality_warnings": _unique_warnings(bucket["warnings"])[:8],
+                "summary": _horizon_summary(
+                    str(bucket["label"]), iv, expected_move, pcr, skew, nearby_gex
+                ),
+            }
+        )
+    return ordered
+
+
+def _aggregate_term_structure(results: list[dict]) -> dict[str, Any]:
+    horizons = _aggregate_option_horizons(results)
+    return _build_term_structure(horizons)
+
+
+def _append_number(values: list[float], value: Any) -> None:
+    number = _float_or_none(value)
+    if number is not None:
+        values.append(number)
+
+
+def _avg(values: list[float]) -> float | None:
+    return round(sum(values) / len(values), 4) if values else None
+
+
+def _horizon_summary(
+    label: str,
+    iv: float | None,
+    expected_move: float | None,
+    pcr: float | None,
+    skew: float | None,
+    nearby_gex: float | None,
+) -> str:
+    parts = [label]
+    if iv is not None:
+        parts.append(f"IV={iv:.1%}")
+    if expected_move is not None:
+        parts.append(f"1σ={expected_move:.1%}")
+    if pcr is not None:
+        parts.append(f"PCR={pcr:.2f}")
+    if skew is not None:
+        parts.append(f"Skew={skew:.1%}")
+    if nearby_gex is not None:
+        parts.append("GEX=" + ("正" if nearby_gex > 0 else "負"))
+    return " / ".join(parts)
+
+
 def _aggregate_sources(results: list[dict]) -> str:
     sources = sorted({str(item.get("source") or "yfinance") for item in results})
     return ", ".join(sources) if sources else "yfinance"
@@ -960,6 +1283,11 @@ def _aggregate_data_modes(results: list[dict]) -> str:
         {str(item.get("data_mode") or "") for item in results if item.get("data_mode")}
     )
     return ", ".join(modes)
+
+
+def _aggregate_value_set(results: list[dict], key: str) -> str:
+    values = sorted({str(item.get(key) or "") for item in results if item.get(key)})
+    return ", ".join(values)
 
 
 def _sum_optional_values(results: list[dict], key: str) -> int | None:

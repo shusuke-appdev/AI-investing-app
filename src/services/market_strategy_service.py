@@ -33,6 +33,7 @@ def build_market_strategy_context(
     market_type: str = "US",
     *,
     options: list[dict[str, Any]] | None = None,
+    option_horizons: list[dict[str, Any]] | None = None,
     ibd_regime: dict[str, Any] | None = None,
     evaluation: dict[str, Any] | None = None,
     volatility_regime: dict[str, Any] | None = None,
@@ -54,6 +55,7 @@ def build_market_strategy_context(
         levels,
         drivers,
         options=options,
+        option_horizons=option_horizons,
         ibd_regime=ibd_regime,
         evaluation=evaluation,
         volatility_regime=volatility_regime,
@@ -64,6 +66,7 @@ def build_market_strategy_context(
         levels,
         timeframes,
         options=options,
+        option_horizons=option_horizons,
         ibd_regime=ibd_regime,
         volatility_regime=volatility_regime,
     )
@@ -139,6 +142,7 @@ def build_timeframe_outlooks(
     drivers: dict[str, Any],
     *,
     options: list[dict[str, Any]] | None = None,
+    option_horizons: list[dict[str, Any]] | None = None,
     ibd_regime: dict[str, Any] | None = None,
     evaluation: dict[str, Any] | None = None,
     volatility_regime: dict[str, Any] | None = None,
@@ -148,9 +152,14 @@ def build_timeframe_outlooks(
     """Classify current, one-week, and one-month market direction."""
 
     current_score = _current_score(levels, ibd_regime, evaluation)
-    week_score = current_score * 0.45 + _option_score(options) + _driver_score(drivers)
+    week_option_score = _option_horizon_score(option_horizons, "one_week")
+    if week_option_score is None:
+        week_option_score = _option_score(options)
+    month_option_score = _option_horizon_score(option_horizons, "one_month") or 0.0
+    week_score = current_score * 0.45 + week_option_score + _driver_score(drivers)
     month_score = (
         current_score * 0.35
+        + month_option_score
         + _trend_ranking_score(trend_ranking)
         + _credit_score(credit_stress)
         + _volatility_score(volatility_regime)
@@ -159,12 +168,17 @@ def build_timeframe_outlooks(
         _outlook(
             "現在時点", "current", current_score, _current_evidence(levels, ibd_regime)
         ),
-        _outlook("1週間先", "one_week", week_score, _week_evidence(options, drivers)),
+        _outlook(
+            "1週間先",
+            "one_week",
+            week_score,
+            _week_evidence(options, drivers, option_horizons),
+        ),
         _outlook(
             "1ヶ月先",
             "one_month",
             month_score,
-            _month_evidence(trend_ranking, credit_stress),
+            _month_evidence(trend_ranking, credit_stress, option_horizons),
         ),
     ]
     return {
@@ -180,6 +194,7 @@ def select_strategy_regime(
     timeframes: dict[str, Any],
     *,
     options: list[dict[str, Any]] | None = None,
+    option_horizons: list[dict[str, Any]] | None = None,
     ibd_regime: dict[str, Any] | None = None,
     volatility_regime: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -189,7 +204,9 @@ def select_strategy_regime(
     current = float(outlooks.get("current", {}).get("score", 0.0))
     one_week = float(outlooks.get("one_week", {}).get("score", 0.0))
     behavior = _dominant_behavior(levels)
-    option_score = _option_score(options)
+    option_score = _option_horizon_score(option_horizons, "one_week")
+    if option_score is None:
+        option_score = _option_score(options)
     ibd_key = str((ibd_regime or {}).get("status_key") or "")
     vol_label = str((volatility_regime or {}).get("regime") or "")
 
@@ -372,6 +389,45 @@ def _option_score(options: list[dict[str, Any]] | None) -> float:
     return sum(scores) / max(len(scores), 1)
 
 
+def _option_horizon_score(
+    option_horizons: list[dict[str, Any]] | None, key: str
+) -> float | None:
+    horizon = _option_horizon(option_horizons, key)
+    if not horizon:
+        return None
+    score = 0.0
+    pcr = _float(horizon.get("pcr_volume"))
+    skew = _float(horizon.get("skew"))
+    gex = _float(horizon.get("nearby_net_gex"))
+    expected_move = _float(horizon.get("expected_move_pct")) or 0.0
+    iv = _float(horizon.get("iv")) or 0.0
+
+    if pcr is not None and pcr < 0.75:
+        score += 0.1
+    elif pcr is not None and pcr > 1.25:
+        score -= 0.1
+    if skew is not None and skew > 0.05:
+        score -= 0.12
+    elif skew is not None and skew < -0.05:
+        score += 0.08
+    if gex is not None and gex < 0:
+        score += -0.06 if skew is not None and skew > 0.03 else 0.05
+    elif gex is not None and gex > 0:
+        score -= 0.03
+    if key == "one_month" and iv >= 0.28 and expected_move >= 0.06:
+        score -= 0.08
+    return _clamp(score)
+
+
+def _option_horizon(
+    option_horizons: list[dict[str, Any]] | None, key: str
+) -> dict[str, Any]:
+    for item in option_horizons or []:
+        if item.get("key") == key:
+            return item
+    return {}
+
+
 def _driver_score(drivers: dict[str, Any]) -> float:
     lookup = {item.get("label"): item for item in drivers.get("items", [])}
     vix_change = _float((lookup.get("VIX") or {}).get("change_5d")) or 0.0
@@ -445,10 +501,15 @@ def _current_evidence(
 
 
 def _week_evidence(
-    options: list[dict[str, Any]] | None, drivers: dict[str, Any]
+    options: list[dict[str, Any]] | None,
+    drivers: dict[str, Any],
+    option_horizons: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     evidence = []
-    if options:
+    horizon = _option_horizon(option_horizons, "one_week")
+    if horizon:
+        evidence.append(_horizon_evidence("1Wオプション", horizon))
+    elif options:
         evidence.append("主要ETFオプション構造を反映")
     if drivers.get("summary"):
         evidence.append(drivers["summary"])
@@ -456,14 +517,36 @@ def _week_evidence(
 
 
 def _month_evidence(
-    trend_ranking: dict[str, Any] | None, credit_stress: dict[str, Any] | None
+    trend_ranking: dict[str, Any] | None,
+    credit_stress: dict[str, Any] | None,
+    option_horizons: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     evidence = []
+    horizon = _option_horizon(option_horizons, "one_month")
+    if horizon:
+        evidence.append(_horizon_evidence("1Mオプション", horizon))
     if trend_ranking and trend_ranking.get("summary"):
         evidence.append(trend_ranking["summary"])
     if credit_stress and credit_stress.get("summary"):
         evidence.append(credit_stress["summary"])
     return evidence
+
+
+def _horizon_evidence(label: str, horizon: dict[str, Any]) -> str:
+    parts = [label]
+    iv = _float(horizon.get("iv"))
+    move = _float(horizon.get("expected_move_pct"))
+    pcr = _float(horizon.get("pcr_volume"))
+    skew = _float(horizon.get("skew"))
+    if iv is not None:
+        parts.append(f"IV={iv:.1%}")
+    if move is not None:
+        parts.append(f"1σ={move:.1%}")
+    if pcr is not None:
+        parts.append(f"PCR={pcr:.2f}")
+    if skew is not None:
+        parts.append(f"Skew={skew:.1%}")
+    return " / ".join(parts)
 
 
 def _dominant_behavior(levels: dict[str, Any]) -> str:

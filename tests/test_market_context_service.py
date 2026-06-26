@@ -338,6 +338,32 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     assert "kind=proxy" in service.format_market_context_for_ai(context)
 
 
+def test_market_ai_prompt_includes_option_term_structure():
+    context = MarketContext(
+        market_type="US",
+        options=OptionContext(
+            horizons=[
+                {
+                    "key": "one_week",
+                    "label": "1週間",
+                    "iv": 0.22,
+                    "expected_move_pct": 0.018,
+                    "pcr_volume": 1.2,
+                    "skew": 0.04,
+                    "nearby_net_gex": -1_000_000,
+                }
+            ],
+            term_structure={"summary": "1W IV=22.0% / 1M IV=25.0%"},
+        ),
+    )
+
+    prompt = service.format_market_context_for_ai(context)
+
+    assert "[Options term structure]" in prompt
+    assert "1sigma_move" in prompt
+    assert "nearby_gex=negative" in prompt
+
+
 def test_build_market_context_keeps_partial_data_when_options_fail(monkeypatch):
     _patch_new_market_layers(monkeypatch)
     monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)

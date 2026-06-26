@@ -216,3 +216,46 @@ class TestOptionAnalyst:
         iv = calculate_atm_iv("TEST")
 
         assert iv == pytest.approx(0.19)
+
+    @patch("src.option_analyst.DataProvider.get_current_price", return_value=100.0)
+    @patch("src.option_analyst.get_option_chain_metadata")
+    @patch("src.option_analyst.get_option_chain")
+    def test_analyze_option_sentiment_adds_horizon_structure(
+        self, mock_get_chain, mock_metadata, _mock_price, mock_option_data
+    ):
+        calls, puts = mock_option_data
+
+        def chain(_ticker, **kwargs):
+            target_dte = kwargs.get("target_dte")
+            calls_copy = calls.copy()
+            puts_copy = puts.copy()
+            dte = 1 if target_dte is None else target_dte
+            calls_copy["dte"] = dte
+            puts_copy["dte"] = dte
+            calls_copy["underlyingPrice"] = 100.0
+            puts_copy["underlyingPrice"] = 100.0
+            return calls_copy, puts_copy
+
+        def metadata(_ticker, *, target_dte=None):
+            return {
+                "source": "marketdata.app",
+                "provider_active": True,
+                "resolved_dte": 1 if target_dte is None else target_dte,
+                "resolved_expiration": f"2026-07-{1 if target_dte is None else target_dte:02d}",
+            }
+
+        mock_get_chain.side_effect = chain
+        mock_metadata.side_effect = metadata
+
+        result = analyze_option_sentiment("TEST", allow_marketdata=True)
+
+        assert result is not None
+        assert [item["key"] for item in result["horizons"]] == [
+            "current",
+            "one_week",
+            "one_month",
+        ]
+        assert result["iv"] == pytest.approx(result["horizons"][0]["iv"])
+        assert result["term_structure"]["one_week_iv"] is not None
+        assert result["horizons"][1]["target_dte"] == 7
+        assert result["horizons"][2]["target_dte"] == 30

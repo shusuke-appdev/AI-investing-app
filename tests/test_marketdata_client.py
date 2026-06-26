@@ -43,7 +43,11 @@ def test_marketdata_client_accepts_203_and_bearer_header():
         FakeResponse(
             203,
             {"s": "ok", "strike": [100]},
-            {"X-Api-Credits-Consumed": "2", "X-Api-Credits-Remaining": "98"},
+            {
+                "X-Api-Ratelimit-Consumed": "2",
+                "X-Api-Ratelimit-Remaining": "98",
+                "X-Api-Ratelimit-Reset": "2026-06-26T20:00:00Z",
+            },
         )
     )
     client = MarketDataClient("secret", session=session)
@@ -54,6 +58,7 @@ def test_marketdata_client_accepts_203_and_bearer_header():
     assert result.status_code == 203
     assert result.credits_consumed == 2
     assert result.credits_remaining == 98
+    assert result.credits_reset_at == "2026-06-26T20:00:00Z"
 
 
 def test_marketdata_client_treats_204_as_no_data():
@@ -74,5 +79,21 @@ def test_marketdata_client_raises_api_error():
         client.get("/options/chain/SPY/")
     except MarketDataError as exc:
         assert "bad request" in str(exc)
+        assert exc.code == "api_error"
     else:
         raise AssertionError("Expected API error")
+
+
+def test_marketdata_client_classifies_expired_option_error():
+    client = MarketDataClient(
+        "secret",
+        session=FakeSession(FakeResponse(400, text="expired option")),
+    )
+
+    try:
+        client.get("/options/chain/SPY/")
+    except MarketDataError as exc:
+        assert exc.code == "expired_option"
+        assert exc.status_code == 400
+    else:
+        raise AssertionError("Expected HTTP error")

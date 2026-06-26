@@ -76,3 +76,35 @@ def test_timeframe_outlooks_expose_direction_labels():
     labels = {item["key"]: item["direction_label"] for item in result["items"]}
     assert labels["current"] == "上昇相場"
     assert labels["one_month"] in {"上昇相場", "レンジ相場", "下落相場"}
+
+
+def test_timeframe_outlooks_use_option_horizons_as_evidence():
+    result = service.build_timeframe_outlooks(
+        _levels("range"),
+        {"items": []},
+        option_horizons=[
+            {
+                "key": "one_week",
+                "label": "1週間",
+                "iv": 0.22,
+                "expected_move_pct": 0.018,
+                "pcr_volume": 1.4,
+                "skew": 0.08,
+                "nearby_net_gex": -1_000_000,
+            },
+            {
+                "key": "one_month",
+                "label": "1か月",
+                "iv": 0.3,
+                "expected_move_pct": 0.07,
+                "pcr_volume": 1.1,
+                "skew": 0.03,
+                "nearby_net_gex": 500_000,
+            },
+        ],
+    )
+
+    lookup = {item["key"]: item for item in result["items"]}
+    assert any("1Wオプション" in item for item in lookup["one_week"]["evidence"])
+    assert any("1Mオプション" in item for item in lookup["one_month"]["evidence"])
+    assert lookup["one_week"]["score"] < lookup["current"]["score"]

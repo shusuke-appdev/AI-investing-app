@@ -86,46 +86,67 @@ def _finnhub_check() -> str:
     return f"status={status}, items={len(result.get('items') or [])}"
 
 
-def _marketdata_options_check() -> str:
+def _marketdata_options_check(
+    *,
+    tickers: list[str] | None = None,
+    min_dte: int = 1,
+    horizon_dtes: list[int] | None = None,
+) -> str:
     mode = os.getenv("MARKETDATA_OPTIONS_MODE", "<unset>") or "<unset>"
     if not os.getenv("MARKETDATA_TOKEN"):
         return f"SKIP: MARKETDATA_TOKEN is not configured; mode={mode}"
 
-    from src.marketdata_client import MarketDataClient
     from src.marketdata_option_provider import (
-        DEFAULT_DTE,
         DEFAULT_STRIKE_LIMIT,
-        OPTION_COLUMNS,
-        normalize_option_chain_response,
+        SMOKE_EXPIRATION_POLICY,
+        fetch_marketdata_option_chain,
     )
 
-    client = MarketDataClient()
-    targets = ["SPY", "QQQ", "IWM", "SMH", "SOXX", "IGV"]
+    targets = tickers or ["SPY", "QQQ", "IWM"]
     summaries = []
     failures = []
+    horizons = horizon_dtes or [7, 30]
     for ticker in targets:
-        response = client.get(
-            f"/options/chain/{ticker}/",
-            params={
-                "dte": DEFAULT_DTE,
-                "strikeLimit": DEFAULT_STRIKE_LIMIT,
-                "nonstandard": "false",
-                "columns": OPTION_COLUMNS,
-            },
+        result = fetch_marketdata_option_chain(
+            ticker,
+            min_dte=min_dte,
+            expiration_policy=SMOKE_EXPIRATION_POLICY,
+            strike_limit=DEFAULT_STRIKE_LIMIT,
+            allow_stale=False,
+            force_refresh=True,
         )
-        frame = normalize_option_chain_response(response.data)
-        if frame.empty:
-            failures.append(f"{ticker}:HTTP{response.status_code} no_rows")
+        if result is None or result.calls.empty or result.puts.empty:
+            failures.append(f"{ticker}:no_rows")
             continue
-        calls = int((frame["side"] == "call").sum())
-        puts = int((frame["side"] == "put").sum())
+        calls = len(result.calls)
+        puts = len(result.puts)
         summaries.append(
-            f"{ticker}:HTTP{response.status_code} calls={calls} puts={puts} "
-            f"as_of={_latest_updated_timestamp(frame.get('updated')) or 'unknown'} "
-            f"credits={response.credits_consumed}/{response.credits_remaining}"
+            f"{ticker}:expiration={result.resolved_expiration or 'unknown'} "
+            f"dte={result.resolved_dte} calls={calls} puts={puts} "
+            f"as_of={result.data_as_of or 'unknown'} "
+            f"credits={result.credits_consumed}/{result.credits_remaining}"
         )
+        for target_dte in horizons:
+            horizon = fetch_marketdata_option_chain(
+                ticker,
+                target_dte=target_dte,
+                min_dte=min_dte,
+                expiration_policy=SMOKE_EXPIRATION_POLICY,
+                strike_limit=DEFAULT_STRIKE_LIMIT,
+                allow_stale=False,
+                force_refresh=True,
+            )
+            if horizon is None or horizon.calls.empty or horizon.puts.empty:
+                failures.append(f"{ticker}:target_dte={target_dte}:no_rows")
+                continue
+            summaries.append(
+                f"{ticker}:target_dte={target_dte} "
+                f"expiration={horizon.resolved_expiration or 'unknown'} "
+                f"dte={horizon.resolved_dte} calls={len(horizon.calls)} "
+                f"puts={len(horizon.puts)}"
+            )
 
-    detail = f"mode={mode}; " + "; ".join(summaries)
+    detail = f"mode={mode}; min_dte={min_dte}; " + "; ".join(summaries)
     if failures and not summaries:
         raise RuntimeError("MarketData.app option chains empty: " + "; ".join(failures))
     if failures:
@@ -198,12 +219,45 @@ def main() -> int:
         action="store_true",
         help="Treat MarketData.app options skip/degraded as a failure.",
     )
+    parser.add_argument(
+        "--marketdata-tickers",
+        default="SPY,QQQ,IWM",
+        help="Comma-separated tickers for the MarketData.app live option smoke.",
+    )
+    parser.add_argument(
+        "--marketdata-min-dte",
+        type=int,
+        default=1,
+        help="Minimum DTE for MarketData.app smoke. Defaults to 1 to avoid 0DTE timing failures.",
+    )
+    parser.add_argument(
+        "--marketdata-horizon-dtes",
+        default="7,30",
+        help="Comma-separated target DTEs for MarketData.app horizon smoke.",
+    )
     args = parser.parse_args()
+    marketdata_tickers = [
+        item.strip().upper()
+        for item in args.marketdata_tickers.split(",")
+        if item.strip()
+    ]
+    marketdata_horizon_dtes = [
+        int(item.strip())
+        for item in args.marketdata_horizon_dtes.split(",")
+        if item.strip()
+    ]
     checks = [
         _run("external_market", _external_market_check),
         _run("fred", _fred_check),
         _run("finnhub", _finnhub_check),
-        _run("marketdata_options", _marketdata_options_check),
+        _run(
+            "marketdata_options",
+            lambda: _marketdata_options_check(
+                tickers=marketdata_tickers,
+                min_dte=max(0, args.marketdata_min_dte),
+                horizon_dtes=marketdata_horizon_dtes,
+            ),
+        ),
         _run("public_readonly", _public_readonly_check),
         _run("supabase", _supabase_check),
     ]
