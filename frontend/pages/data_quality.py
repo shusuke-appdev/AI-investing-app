@@ -1,6 +1,10 @@
 import reflex as rx
 
-from frontend.components.data_provenance import data_status_panel, provenance_panel
+from frontend.components.data_provenance import (
+    data_status_panel,
+    feature_health_panel,
+    provenance_panel,
+)
 from frontend.components.ui_primitives import page_header, section_heading
 from frontend.state.data_quality_state import DataQualityState
 from frontend.state.market_state import MarketState
@@ -200,6 +204,11 @@ def data_quality_page() -> rx.Component:
         ),
         section_heading("Stock", "個別銘柄分析で最後に取得した状態です。"),
         data_status_panel(StockState.data_status),
+        feature_health_panel(
+            StockState.purchase_evidence_health,
+            title="根拠一致度の機能別ヘルス",
+            empty_text="個別銘柄分析を一度実行すると、根拠一致度の入力ヘルスが表示されます。",
+        ),
         provenance_panel(StockState.provenance),
         section_heading("Portfolio", "ポートフォリオ分析で最後に作成した来歴です。"),
         _warning_list(PortfolioState.analysis_warnings),

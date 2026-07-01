@@ -3,6 +3,8 @@
 テクニカル分析を統合した詳細な銘柄分析を提供します。
 """
 
+from typing import Any
+
 from src.advisor.technical import get_technical_summary_for_ai
 from src.gemini_client import generate_content
 
@@ -383,6 +385,7 @@ def _format_adaptive_decision_context(stock_signal_context: dict | None) -> str:
     fundamental = stock_signal_context.get("fundamental_profile") or {}
     volume = stock_signal_context.get("volume_profile") or {}
     purchase = stock_signal_context.get("purchase_evidence") or {}
+    purchase_health = stock_signal_context.get("purchase_evidence_health") or []
     if not any((fundamental, volume, purchase)):
         return ""
     size = fundamental.get("size") or {}
@@ -398,6 +401,7 @@ def _format_adaptive_decision_context(stock_signal_context: dict | None) -> str:
     missing = "; ".join(str(item) for item in fundamental.get("missing_reasons", []))
     caps = "; ".join(str(item) for item in fundamental.get("cap_reasons", []))
     purchase_caps = "; ".join(str(item) for item in purchase.get("cap_reasons", []))
+    purchase_health_text = _format_purchase_health_context(purchase_health)
     return f"""Adaptive Fundamental / Purchase Evidence (local fixed rules; do not reinterpret, replace, or rescore):
 - Size: {size.get("label", "unavailable")} / source={size.get("source", "unavailable")} / borderline={size.get("borderline", False)}
 - Style: {style.get("label", "unavailable")} / value={style.get("value_score", "N/A")} / growth={style.get("growth_score", "N/A")}
@@ -411,9 +415,28 @@ def _format_adaptive_decision_context(stock_signal_context: dict | None) -> str:
 - Volume Method: {volume.get("method", "unavailable")} (daily high-low uniform allocation proxy)
 - Purchase Evidence: {purchase.get("label", "算出不可")} / {purchase.get("score_display", "算出不可")}
 - Purchase Components: technical={purchase.get("technical_score", "N/A")}, fundamental_theme={purchase.get("fundamental_theme_score", "N/A")}
+- Purchase Health: {purchase_health_text}
 - Purchase Caps: {purchase_caps or "None"}
 Respect unavailable fields and every cap. SMART is only a growth-stock proxy and must not be added again to the adaptive score.
 """
+
+
+def _format_purchase_health_context(items: Any) -> str:
+    if not isinstance(items, list) or not items:
+        return "unavailable"
+    lines = []
+    for item in items[:8]:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label") or item.get("feature") or "input"
+        status = item.get("status_label") or item.get("status_key") or "unknown"
+        value = item.get("value") or "N/A"
+        detail = item.get("detail") or ""
+        parts = [f"{label}={status}", f"value={value}"]
+        if detail:
+            parts.append(f"detail={detail}")
+        lines.append("(" + ", ".join(str(part) for part in parts) + ")")
+    return "; ".join(lines) if lines else "unavailable"
 
 
 def _optional_score_text(value) -> str:

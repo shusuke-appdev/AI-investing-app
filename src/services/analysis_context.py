@@ -389,6 +389,7 @@ class StockSignalContext:
     fundamental_profile: dict[str, Any] = field(default_factory=dict)
     volume_profile: dict[str, Any] = field(default_factory=dict)
     purchase_evidence: dict[str, Any] = field(default_factory=dict)
+    purchase_evidence_health: list[dict[str, Any]] = field(default_factory=list)
     news_headlines: list[str] = field(default_factory=list)
     news_source_status: str = ""
     news_error_reason: str = ""

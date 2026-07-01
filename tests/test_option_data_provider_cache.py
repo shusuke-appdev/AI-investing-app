@@ -139,12 +139,12 @@ def test_marketdata_is_only_used_when_explicitly_allowed(monkeypatch):
     monkeypatch.setattr(
         option_data_provider,
         "_get_yfinance_option_chain",
-        lambda ticker: (calls, puts),
+        lambda ticker, **_kwargs: (calls, puts),
     )
     monkeypatch.setattr(
         option_data_provider,
         "_fetch_marketdata_chain",
-        lambda ticker: (
+        lambda ticker, **_kwargs: (
             marketdata_calls.append(ticker)
             or (
                 calls,
@@ -186,7 +186,7 @@ def test_theme_etf_proxy_can_use_marketdata_preferred(monkeypatch):
     monkeypatch.setattr(
         option_data_provider,
         "_fetch_marketdata_chain",
-        lambda ticker: (
+        lambda ticker, **_kwargs: (
             marketdata_calls.append(ticker)
             or (
                 calls,
@@ -221,7 +221,7 @@ def test_shadow_mode_retains_yfinance_and_records_comparison(monkeypatch):
     monkeypatch.setattr(
         option_data_provider,
         "_get_yfinance_option_chain",
-        lambda ticker: (
+        lambda ticker, **_kwargs: (
             option_data_provider._set_metadata(
                 ticker,
                 source="yfinance",
@@ -238,7 +238,7 @@ def test_shadow_mode_retains_yfinance_and_records_comparison(monkeypatch):
     monkeypatch.setattr(
         option_data_provider,
         "_fetch_marketdata_chain",
-        lambda ticker: (
+        lambda ticker, **_kwargs: (
             m_calls,
             m_puts,
             {
@@ -266,12 +266,12 @@ def test_preferred_mode_marks_yfinance_fallback(monkeypatch):
 
     monkeypatch.setenv("MARKETDATA_OPTIONS_MODE", "preferred")
     monkeypatch.setattr(
-        option_data_provider, "_fetch_marketdata_chain", lambda ticker: None
+        option_data_provider, "_fetch_marketdata_chain", lambda ticker, **_kwargs: None
     )
     monkeypatch.setattr(
         option_data_provider,
         "_get_yfinance_option_chain",
-        lambda ticker: (
+        lambda ticker, **_kwargs: (
             option_data_provider._set_metadata(
                 ticker,
                 source="yfinance",
@@ -301,12 +301,12 @@ def test_preferred_mode_without_token_reports_unconfigured_fallback(monkeypatch)
     monkeypatch.delenv("MARKETDATA_TOKEN", raising=False)
     monkeypatch.setenv("MARKETDATA_OPTIONS_MODE", "preferred")
     monkeypatch.setattr(
-        option_data_provider, "_fetch_marketdata_chain", lambda ticker: None
+        option_data_provider, "_fetch_marketdata_chain", lambda ticker, **_kwargs: None
     )
     monkeypatch.setattr(
         option_data_provider,
         "_get_yfinance_option_chain",
-        lambda ticker: (
+        lambda ticker, **_kwargs: (
             option_data_provider._set_metadata(
                 ticker,
                 source="yfinance",
@@ -339,14 +339,14 @@ def test_preferred_mode_without_token_skips_marketdata_fetch(monkeypatch):
     monkeypatch.setattr(
         option_data_provider,
         "_fetch_marketdata_chain",
-        lambda ticker: (_ for _ in ()).throw(
+        lambda ticker, **_kwargs: (_ for _ in ()).throw(
             AssertionError("MarketData fetch should be skipped")
         ),
     )
     monkeypatch.setattr(
         option_data_provider,
         "_get_yfinance_option_chain",
-        lambda ticker: (
+        lambda ticker, **_kwargs: (
             option_data_provider._set_metadata(
                 ticker,
                 source="yfinance",

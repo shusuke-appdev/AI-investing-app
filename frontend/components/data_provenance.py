@@ -31,6 +31,18 @@ class DataStatusDisplay(BaseModel):
     error: str = ""
 
 
+class FeatureHealthDisplay(BaseModel):
+    feature: str = ""
+    label: str = ""
+    source: str = ""
+    value: str = ""
+    detail: str = ""
+    status_key: str = "ok"
+    status_label: str = "OK"
+    effect: str = ""
+    required: bool = False
+
+
 def provenance_display_items(items: Iterable[Any]) -> list[ProvenanceDisplay]:
     result = []
     for item in items:
@@ -82,6 +94,30 @@ def data_status_display_items(items: Iterable[Any]) -> list[DataStatusDisplay]:
     return result
 
 
+def feature_health_display_items(items: Iterable[Any]) -> list[FeatureHealthDisplay]:
+    result = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        result.append(
+            FeatureHealthDisplay(
+                feature=str(item.get("feature") or ""),
+                label=str(item.get("label") or ""),
+                source=str(item.get("source") or ""),
+                value=str(_display_value(item.get("value"))),
+                detail=str(item.get("detail") or ""),
+                status_key=str(item.get("status_key") or "ok"),
+                status_label=str(
+                    item.get("status_label")
+                    or _status_label(str(item.get("status_key") or "ok"))
+                ),
+                effect=str(item.get("effect") or ""),
+                required=bool(item.get("required", False)),
+            )
+        )
+    return result
+
+
 def provenance_panel(items, *, title: str = "データの来歴・信頼性") -> rx.Component:
     """Show where displayed analysis values came from and their limitations."""
 
@@ -121,6 +157,41 @@ def provenance_panel(items, *, title: str = "データの来歴・信頼性") ->
     )
 
 
+def feature_health_panel(
+    items,
+    *,
+    title: str = "機能別ヘルス",
+    empty_text: str = "ヘルス情報はまだありません。",
+) -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.icon("activity", size=18, color=rx.color("blue", 9)),
+                rx.text(title, weight="bold", size="3"),
+                width="100%",
+                align_items="center",
+            ),
+            rx.cond(
+                items.length() > 0,
+                rx.grid(
+                    rx.foreach(items, _feature_health_item),
+                    columns=rx.breakpoints(initial="1", md="2"),
+                    spacing="2",
+                    width="100%",
+                ),
+                rx.text(empty_text, size="2", color="gray"),
+            ),
+            width="100%",
+            align_items="start",
+            spacing="3",
+        ),
+        width="100%",
+        padding="0.75rem",
+        border=f"1px solid {rx.color('gray', 4)}",
+        border_radius="8px",
+    )
+
+
 def data_status_panel(items, *, title: str = "取得ステータス") -> rx.Component:
     return rx.card(
         rx.vstack(
@@ -141,6 +212,50 @@ def data_status_panel(items, *, title: str = "取得ステータス") -> rx.Comp
         ),
         width="100%",
         variant="surface",
+    )
+
+
+def _feature_health_item(item) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(item.label, weight="bold", size="2", flex="1"),
+            rx.badge(
+                item.status_label,
+                color_scheme=_status_color(item.status_key),
+                variant="surface",
+            ),
+            rx.cond(
+                item.required,
+                rx.badge("必須", color_scheme="gray", variant="outline"),
+                rx.fragment(),
+            ),
+            width="100%",
+            align_items="center",
+        ),
+        rx.cond(
+            item.value != "",
+            rx.text(item.value, size="2", weight="medium"),
+            rx.fragment(),
+        ),
+        rx.cond(
+            item.detail != "",
+            rx.text(item.detail, size="1", color=rx.color("gray", 10)),
+            rx.fragment(),
+        ),
+        rx.cond(
+            item.effect != "",
+            rx.text(item.effect, size="1", color=rx.color("blue", 10)),
+            rx.fragment(),
+        ),
+        rx.cond(
+            item.source != "",
+            rx.text("source: " + item.source, size="1", color=rx.color("gray", 9)),
+            rx.fragment(),
+        ),
+        padding="0.75rem",
+        border=f"1px solid {rx.color('gray', 4)}",
+        border_radius="8px",
+        width="100%",
     )
 
 
@@ -310,7 +425,9 @@ def _status_label(status_key: str) -> str:
     return {
         "ok": "OK",
         "partial": "一部取得",
+        "capped": "上限あり",
         "stale": "古いデータ",
+        "unavailable": "算出不可",
         "failed": "失敗",
     }.get(status_key, status_key)
 
@@ -327,13 +444,21 @@ def _cache_age_label(value: Any) -> str:
     return f"{seconds / 3600:.1f}h"
 
 
+def _display_value(value: Any) -> str:
+    return "" if value is None else str(value)
+
+
 def _status_color(status_key) -> rx.Var:
     return rx.cond(
         status_key == "ok",
         "green",
         rx.cond(
-            status_key == "partial",
+            (status_key == "partial") | (status_key == "capped"),
             "amber",
-            rx.cond(status_key == "stale", "orange", "red"),
+            rx.cond(
+                status_key == "stale",
+                "orange",
+                rx.cond(status_key == "unavailable", "red", "red"),
+            ),
         ),
     )

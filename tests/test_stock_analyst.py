@@ -1,5 +1,6 @@
 from src import stock_analyst
 from src.stock_analyst import (
+    _format_adaptive_decision_context,
     _format_provenance_context,
     _format_sector_theme_context,
     _format_trade_setup_context,
@@ -149,6 +150,39 @@ def test_format_sector_theme_context_includes_advantage_flags():
     assert "Sector/Theme Context" in text
     assert "Combined Rating: high" in text
     assert "fundamental=True" in text or "Stock Fundamental Advantage: True" in text
+
+
+def test_format_adaptive_decision_context_includes_purchase_health():
+    text = _format_adaptive_decision_context(
+        {
+            "fundamental_profile": {
+                "status": "available",
+                "score_display": "78/100",
+                "coverage_display": "90%",
+                "score": 78,
+            },
+            "volume_profile": {"summary": "出来高支持帯あり", "method": "proxy"},
+            "purchase_evidence": {
+                "label": "中",
+                "score_display": "68/100",
+                "technical_score": 70,
+                "fundamental_theme_score": 66,
+            },
+            "purchase_evidence_health": [
+                {
+                    "feature": "entry_framework",
+                    "label": "Entry Framework点",
+                    "status_label": "一部評価",
+                    "value": "62/100",
+                    "detail": "Entry未成立",
+                }
+            ],
+        }
+    )
+
+    assert "Purchase Health:" in text
+    assert "Entry Framework点=一部評価" in text
+    assert "Entry未成立" in text
 
 
 def test_format_provenance_context_handles_missing_data():

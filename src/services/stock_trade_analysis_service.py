@@ -21,6 +21,18 @@ def build_stock_trade_analysis(
     stock_info = _dict(context.get("stock_info"))
     volume_profile = _dict(context.get("volume_profile"))
     purchase_evidence = _dict(context.get("purchase_evidence"))
+    if not purchase_evidence:
+        purchase_evidence = {
+            "status": "unavailable",
+            "label": "算出不可",
+            "score_display": "算出不可",
+            "summary": "根拠一致度は未算出です。",
+        }
+    purchase_evidence_health = [
+        item
+        for item in context.get("purchase_evidence_health", [])
+        if isinstance(item, dict)
+    ]
     support_zone = _dict(volume_profile.get("support_zone"))
     resistance_zone = _dict(volume_profile.get("resistance_zone"))
 
@@ -127,6 +139,7 @@ def build_stock_trade_analysis(
         "stance_color": stance_color,
         "volume_profile_summary": str(volume_profile.get("summary") or ""),
         "purchase_evidence": purchase_evidence,
+        "purchase_evidence_health": purchase_evidence_health,
         "summary": _summary(stance_key, setup, technical, sector_theme),
         "timing": _timing_plan(
             stance_key=stance_key,

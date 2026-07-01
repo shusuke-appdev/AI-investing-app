@@ -2,6 +2,7 @@
 
 import reflex as rx
 
+from frontend.components.data_provenance import feature_health_panel
 from frontend.components.ui_primitives import evaluation_badge
 from frontend.state.stock_state import StockState
 
@@ -172,6 +173,10 @@ def fundamental_profile_panel() -> rx.Component:
                                 padding="0.75rem",
                                 border=f"1px solid {rx.color('gray', 4)}",
                                 border_radius="8px",
+                            ),
+                            feature_health_panel(
+                                StockState.purchase_evidence_health,
+                                title="根拠一致度の入力ヘルス",
                             ),
                             rx.cond(
                                 StockState.fundamental_metrics.length() > 0,

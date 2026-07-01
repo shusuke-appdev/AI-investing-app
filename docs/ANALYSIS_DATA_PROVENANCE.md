@@ -62,7 +62,7 @@
 | 各種provider / presentation | 欠損値の `0.0`・中立化 | unavailable | なし | provider失敗・値欠損 | 一部低レベル経路に残存 | 中立市場・ゼロ値と誤認 | `DataResult` と `ProvenanceItem` を全取得層へ拡張 | 最優先 | 継続対応 |
 | Market / Stock | 価格帯別出来高 | proxy | 直近126営業日の日足OHLCV | 最低60営業日、24価格帯 | POC・70% Value Area・支持/抵抗帯・横棒profile | 取引所約定別の実測Volume Profileと誤認 | 日足安値～高値への均等配分proxy、指数はETF proxyと常時表示 | 高 | 2026-06-23 追加 |
 | Stock / AI Recap | 適応型ファンダメンタル評価 | computed / proxy / unavailable | provider企業指標、J-Quants Scale Category、ローカル2026業種基準 | 時価総額・スタイル・必須業種KPI・60%以上の5軸充足が必要 | Stock要約・詳細・AI入力・既存sector/theme点 | 異業種KPIの誤適用、JP基準を直接値と誤認 | 銀行/REIT/赤字バイオの専用必須KPI、fallback・JP proxy・基準日・上限理由を表示 | 高 | 2026-06-23 追加 |
-| Stock / AI Recap | 根拠一致度 | model_output / unavailable | テクニカル、Entry、適応型ファンダメンタル、テーマ順位 | 4入力必須。いずれか欠損時は算出不可。Entry/FOMO/Stage/確率/部分評価で上限 | Stock上部・トレード分析・AI入力 | 将来確率や購入推奨と誤認 | 高/中/低の調査ラベル、調和平均、上限理由を表示し、既存確率シグナルを置換しない | 高 | 2026-06-24 欠損契約修正 |
+| Stock / AI Recap | 根拠一致度 | model_output / unavailable | テクニカル、Entry、適応型ファンダメンタル、テーマ順位 | 4入力必須。いずれか欠損時は算出不可。Entry/FOMO/Stage/確率/部分評価で上限 | Stock上部・詳細ヘルス、Data Quality、トレード分析、AI入力 | 将来確率や購入推奨と誤認 | 高/中/低の調査ラベル、調和平均、上限理由、入力別ヘルスを表示し、既存確率シグナルを置換しない | 高 | 2026-07-01 機能別ヘルス表示追加 |
 
 ## 運用ルール
 

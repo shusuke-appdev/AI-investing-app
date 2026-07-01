@@ -52,6 +52,24 @@ def test_stock_trade_analysis_uses_existing_dashboard_payload():
             "fomo_regime": {"risk_level": "normal", "label": "通常"},
             "trend_follow_diagnostics": {"summary": "上昇トレンドは堅調。"},
             "probabilistic_signal": {"label": "上昇優位", "probability": 0.62},
+            "purchase_evidence": {
+                "status": "available",
+                "label": "高",
+                "score_display": "82/100",
+                "summary": "高 82点。",
+            },
+            "purchase_evidence_health": [
+                {
+                    "feature": "theme_rank",
+                    "label": "テーマ順位",
+                    "status_key": "ok",
+                    "status_label": "OK",
+                    "value": "10pt -> 100/100",
+                    "detail": "AI半導体は首位。",
+                    "effect": "ファンダメンタル・テーマ側の30%。",
+                    "required": True,
+                }
+            ],
         }
     )
 
@@ -62,6 +80,8 @@ def test_stock_trade_analysis_uses_existing_dashboard_payload():
     assert any(item["label"] == "Minerviniステージ" for item in result["timing_checks"])
     assert any(item["label"] == "テーマフロー" for item in result["supply_demand"])
     assert result["risk"]["final_stop"] == "850.00"
+    assert result["purchase_evidence"]["score_display"] == "82/100"
+    assert result["purchase_evidence_health"][0]["feature"] == "theme_rank"
 
 
 def test_stock_trade_analysis_blocks_stage4_even_when_setup_waits():

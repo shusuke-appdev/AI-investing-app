@@ -1,5 +1,12 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-07-01 根拠一致度ヘルスと機能間連携の総点検
+- `purchase_evidence_health` をStock dashboard payload、`StockSignalContext`、Stock State、Stock詳細、Data Quality、トレード分析、AI Stock Recap promptへ接続し、根拠一致度の必須4入力と上限判定を機能横断で同じ表示にした。
+- トレード分析で既に受け取っていた根拠一致度をUIに表示し、古い/簡略contextでも表示が壊れないよう未算出デフォルトを追加した。
+- Option target-DTE追加後に古い1引数のままだったテストダブルを更新し、検証ゲート上のMarketData/yfinance horizon引数不整合を解消した。
+- Updated docs: `docs/DATA_ANALYSIS_REVIEW.md`, `docs/ANALYSIS_DATA_PROVENANCE.md`, `docs/ADAPTIVE_STOCK_ANALYSIS.md`。
+- Validation: targeted Stock/Option/AI regression tests passed (`39 passed` and time-sensitive MarketData test smoke `26 passed`), full `scripts/check.py` passed (`280 passed`, compileall, ruff check, ruff format check, Reflex frontend export).
+
 ## Session update: 2026-06-26 Option horizon structure and data-fetch reliability contract
 - Added current / 1W / 1M option horizon analysis for SPY / QQQ / IWM and option-capable ETF proxies. Existing top-level option fields stay compatible and are populated from the current horizon, while `horizons` and `term_structure` carry the forward-looking option-implied structure.
 - Extended MarketData.app and yfinance option retrieval with target-DTE expiration selection. MarketData.app caches expirations briefly and uses resolved expiration requests; yfinance no longer relies on the first listed expiration when 1W/1M analysis is requested.

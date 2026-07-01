@@ -53,6 +53,7 @@ class StockDashboardContext:
     fundamental_profile: dict[str, Any] = field(default_factory=dict)
     volume_profile: dict[str, Any] = field(default_factory=dict)
     purchase_evidence: dict[str, Any] = field(default_factory=dict)
+    purchase_evidence_health: list[dict[str, Any]] = field(default_factory=list)
     stock_signal_context: dict[str, Any] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
     provenance: list[ProvenanceItem] = field(default_factory=list)
@@ -256,6 +257,15 @@ def build_stock_dashboard_context(
         {},
         diagnostic_errors,
     )
+    purchase_evidence_health = _build_purchase_evidence_health(
+        technical=technical_dict,
+        trade_setup=trade_setup_dict,
+        fundamental_profile=fundamental_profile,
+        sector_theme_context=sector_theme_context,
+        probabilistic_signal=probabilistic_dict,
+        fomo_regime=fomo_regime,
+        purchase_evidence=purchase_evidence,
+    )
     news_items = news_result.get("items", []) if isinstance(news_result, dict) else []
     news_source_status = (
         str(news_result.get("source_status", ""))
@@ -314,6 +324,7 @@ def build_stock_dashboard_context(
         fundamental_profile=fundamental_profile,
         volume_profile=volume_profile,
         purchase_evidence=purchase_evidence,
+        purchase_evidence_health=purchase_evidence_health,
         data_status=data_status,
         provenance=provenance,
     ).to_dict()
@@ -339,6 +350,7 @@ def build_stock_dashboard_context(
         fundamental_profile=fundamental_profile,
         volume_profile=volume_profile,
         purchase_evidence=purchase_evidence,
+        purchase_evidence_health=purchase_evidence_health,
         profile_warning=_profile_warning_message(info_dict),
         quality_warnings=list(diagnostic_errors.values()),
         error_message=_dashboard_error_message(info_dict, history_df),
@@ -678,6 +690,211 @@ def _build_data_status(
             cache_status="computed",
         ),
     ]
+
+
+def _build_purchase_evidence_health(
+    *,
+    technical: dict[str, Any],
+    trade_setup: dict[str, Any],
+    fundamental_profile: dict[str, Any],
+    sector_theme_context: dict[str, Any],
+    probabilistic_signal: dict[str, Any],
+    fomo_regime: dict[str, Any],
+    purchase_evidence: dict[str, Any],
+) -> list[dict[str, Any]]:
+    technical_score = _coerce_float(technical.get("overall_score"))
+    entry_score = _coerce_float(trade_setup.get("score"))
+    fundamental_score = _coerce_float(fundamental_profile.get("score"))
+    theme_rank_points = _coerce_float(
+        sector_theme_context.get("best_theme_rank_points")
+    )
+    theme_score = (
+        min(100.0, theme_rank_points * 10) if theme_rank_points is not None else None
+    )
+    setup_status = str(trade_setup.get("status") or "")
+    fundamental_status = str(fundamental_profile.get("status") or "")
+    purchase_status = str(purchase_evidence.get("status") or "")
+    cap_reasons = [str(item) for item in purchase_evidence.get("cap_reasons", [])]
+    missing_reasons = [
+        str(item) for item in purchase_evidence.get("missing_reasons", [])
+    ]
+
+    return [
+        _feature_health_item(
+            "technical_score",
+            "テクニカル総合点",
+            "local_technical_analysis",
+            _score_display(technical_score),
+            "OK" if technical_score is not None else "算出不可",
+            "ok" if technical_score is not None else "unavailable",
+            "テクニカル側の70%として使用。",
+            True,
+        ),
+        _feature_health_item(
+            "entry_framework",
+            "Entry Framework点",
+            "local_daily_entry_framework",
+            str(trade_setup.get("score_display") or _score_display(entry_score)),
+            _entry_health_detail(setup_status, trade_setup),
+            _entry_health_status(setup_status, entry_score),
+            "テクニカル側の30%。blocked/未成立時は根拠一致度に上限。",
+            True,
+        ),
+        _feature_health_item(
+            "adaptive_fundamental",
+            "適応型ファンダメンタル点",
+            "fundamental_profile_service",
+            str(
+                fundamental_profile.get("score_display")
+                or _score_display(fundamental_score)
+            ),
+            _fundamental_health_detail(fundamental_status, fundamental_profile),
+            _fundamental_health_status(fundamental_status, fundamental_score),
+            "ファンダメンタル・テーマ側の70%。部分評価時は上限。",
+            True,
+        ),
+        _feature_health_item(
+            "theme_rank",
+            "テーマ順位",
+            "sector_theme_diagnostics",
+            "算出不可"
+            if theme_score is None
+            else f"{theme_score:.0f}/100"
+            if theme_rank_points is None
+            else f"{theme_rank_points:.0f}pt -> {theme_score:.0f}/100",
+            str(sector_theme_context.get("ranking_summary") or "")
+            or ("OK" if theme_score is not None else "テーマ順位がありません。"),
+            "ok" if theme_score is not None else "unavailable",
+            "ファンダメンタル・テーマ側の30%。欠損時は根拠一致度を算出しない。",
+            True,
+        ),
+        _feature_health_item(
+            "probability_and_risk_caps",
+            "確率/FOMO/Stage上限",
+            "purchase_evidence_service",
+            purchase_evidence.get("score_display") or "算出不可",
+            "; ".join(cap_reasons) or "上限理由なし",
+            "capped" if cap_reasons else "ok",
+            _cap_effect_detail(probabilistic_signal, fomo_regime, technical),
+            False,
+        ),
+        _feature_health_item(
+            "purchase_evidence_result",
+            "根拠一致度 結果",
+            "purchase_evidence_service",
+            str(purchase_evidence.get("score_display") or "算出不可"),
+            _purchase_health_detail(purchase_status, missing_reasons, cap_reasons),
+            "ok" if purchase_status == "available" else "unavailable",
+            str(purchase_evidence.get("method") or "4入力必須の調和平均。"),
+            True,
+        ),
+    ]
+
+
+def _feature_health_item(
+    feature: str,
+    label: str,
+    source: str,
+    value: Any,
+    detail: str,
+    status_key: str,
+    effect: str,
+    required: bool,
+) -> dict[str, Any]:
+    return {
+        "feature": feature,
+        "label": label,
+        "source": source,
+        "value": "算出不可" if value in (None, "") else str(value),
+        "detail": detail,
+        "status_key": status_key,
+        "status_label": _feature_status_label(status_key),
+        "effect": effect,
+        "required": required,
+    }
+
+
+def _feature_status_label(status_key: str) -> str:
+    return {
+        "ok": "OK",
+        "partial": "一部評価",
+        "capped": "上限あり",
+        "unavailable": "算出不可",
+    }.get(status_key, status_key)
+
+
+def _score_display(value: float | None) -> str:
+    return "算出不可" if value is None else f"{value:.0f}/100"
+
+
+def _entry_health_status(status: str, score: float | None) -> str:
+    if score is None or status == "insufficient_data":
+        return "unavailable"
+    if status == "blocked":
+        return "capped"
+    if status and status != "ready":
+        return "partial"
+    return "ok"
+
+
+def _entry_health_detail(status: str, trade_setup: dict[str, Any]) -> str:
+    if not trade_setup:
+        return "Entry Frameworkがありません。"
+    blocked = [str(item) for item in trade_setup.get("blocked_reasons", [])]
+    warnings = [str(item) for item in trade_setup.get("warnings", [])]
+    if blocked:
+        return "; ".join(blocked)
+    if warnings:
+        return "; ".join(warnings[:3])
+    return str(trade_setup.get("summary") or status or "OK")
+
+
+def _fundamental_health_status(status: str, score: float | None) -> str:
+    if score is None or status not in {"available", "partial"}:
+        return "unavailable"
+    return "partial" if status == "partial" else "ok"
+
+
+def _fundamental_health_detail(status: str, profile: dict[str, Any]) -> str:
+    missing = [str(item) for item in profile.get("missing_reasons", [])]
+    caps = [str(item) for item in profile.get("cap_reasons", [])]
+    if missing:
+        return "; ".join(missing[:3])
+    if caps:
+        return "; ".join(caps[:3])
+    return str(profile.get("summary") or status or "OK")
+
+
+def _cap_effect_detail(
+    probabilistic_signal: dict[str, Any],
+    fomo_regime: dict[str, Any],
+    technical: dict[str, Any],
+) -> str:
+    parts = []
+    action = str(probabilistic_signal.get("suggested_action") or "")
+    confidence = str(probabilistic_signal.get("confidence") or "")
+    risk = str(fomo_regime.get("risk_level") or "")
+    stage_data = technical.get("stage_data")
+    stage = stage_data.get("stage") if isinstance(stage_data, dict) else None
+    if action:
+        parts.append(f"確率={action}")
+    if confidence:
+        parts.append(f"信頼度={confidence}")
+    if risk:
+        parts.append(f"FOMO={risk}")
+    if stage not in (None, ""):
+        parts.append(f"Stage={stage}")
+    return " / ".join(parts) if parts else "上限判定の補助入力。"
+
+
+def _purchase_health_detail(
+    status: str, missing_reasons: list[str], cap_reasons: list[str]
+) -> str:
+    if missing_reasons:
+        return "; ".join(missing_reasons)
+    if cap_reasons:
+        return "上限: " + "; ".join(cap_reasons)
+    return "OK" if status == "available" else "根拠一致度を算出できません。"
 
 
 def _smart_has_unknowns(value: dict[str, Any]) -> bool:

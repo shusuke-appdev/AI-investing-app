@@ -7,8 +7,10 @@ from pydantic import BaseModel
 
 from frontend.components.data_provenance import (
     DataStatusDisplay,
+    FeatureHealthDisplay,
     ProvenanceDisplay,
     data_status_display_items,
+    feature_health_display_items,
     provenance_display_items,
 )
 from src.display_labels import SECTOR_RATING_LABELS, display_label
@@ -158,6 +160,7 @@ class StockState(rx.State):
     purchase_evidence_summary: str = ""
     purchase_evidence_cap_reasons: list[str] = []
     purchase_evidence_available: bool = False
+    purchase_evidence_health: list[FeatureHealthDisplay] = []
     sector_theme_option_data_as_of: str = ""
     sector_theme_option_data_quality: str = ""
     stock_signal_context: dict[str, Any] = {}
@@ -393,6 +396,9 @@ class StockState(rx.State):
             self.purchase_evidence_available = (
                 self.purchase_evidence.get("status") == "available"
             )
+            self.purchase_evidence_health = feature_health_display_items(
+                context.purchase_evidence_health
+            )
             self.stock_signal_context = plain_state_value(context.stock_signal_context)
             self.data_status = data_status_display_items(context.data_status)
             self.provenance = provenance_display_items(context.provenance)
@@ -470,6 +476,7 @@ class StockState(rx.State):
             self.purchase_evidence_summary = ""
             self.purchase_evidence_cap_reasons = []
             self.purchase_evidence_available = False
+            self.purchase_evidence_health = []
             self.sector_theme_option_source = ""
             self.sector_theme_option_complete_status = ""
             self.sector_theme_option_provider_active = False

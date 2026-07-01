@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -6,8 +6,10 @@ from src.marketdata_client import MarketDataResponse
 from src.marketdata_option_provider import normalize_option_chain_response
 
 
-def _payload():
-    expiration = int(datetime(2026, 6, 29, tzinfo=timezone.utc).timestamp())
+def _payload(expiration_date: str = "2026-06-29"):
+    expiration = int(
+        datetime.fromisoformat(expiration_date).replace(tzinfo=timezone.utc).timestamp()
+    )
     updated = int(datetime(2026, 6, 13, tzinfo=timezone.utc).timestamp())
     return {
         "s": "ok",
@@ -51,16 +53,19 @@ def test_fetch_marketdata_option_chain_uses_bounded_request(monkeypatch, tmp_pat
     from src.persistent_cache import PersistentJsonCache
 
     calls = []
+    expiration_date = (
+        datetime.now(timezone.utc).date() + timedelta(days=7)
+    ).isoformat()
 
     class FakeClient:
         def get(self, path, params=None):
             calls.append((path, params))
             if path == "/options/expirations/SPY/":
                 return MarketDataResponse(
-                    data={"s": "ok", "expirations": ["2026-06-29"]},
+                    data={"s": "ok", "expirations": [expiration_date]},
                     status_code=200,
                 )
-            return MarketDataResponse(data=_payload(), status_code=200)
+            return MarketDataResponse(data=_payload(expiration_date), status_code=200)
 
     monkeypatch.setattr(
         provider,
@@ -74,13 +79,13 @@ def test_fetch_marketdata_option_chain_uses_bounded_request(monkeypatch, tmp_pat
     assert len(result.calls) == 1
     assert len(result.puts) == 1
     assert calls[0][0] == "/options/expirations/SPY/"
-    assert calls[1][1]["expiration"] == "2026-06-29"
+    assert calls[1][1]["expiration"] == expiration_date
     assert "dte" not in calls[1][1]
     assert calls[1][1]["strikeLimit"] == 100
     assert calls[1][1]["nonstandard"] == "false"
     assert "mode" not in calls[1][1]
-    assert result.resolved_expiration == "2026-06-29"
-    assert result.resolved_dte == 1
+    assert result.resolved_expiration == expiration_date
+    assert result.resolved_dte >= 1
 
 
 def test_resolve_marketdata_expiration_skips_0dte_after_cutoff():

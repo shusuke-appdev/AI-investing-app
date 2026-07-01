@@ -171,6 +171,16 @@ def test_stock_dashboard_profile_gap_is_warning_not_fatal(monkeypatch):
     assert "needs 60 sessions" in status_by_name["volume_profile"].error
     assert status_by_name["purchase_evidence"].is_partial is True
     assert "fundamental missing" in status_by_name["purchase_evidence"].error
+    health_by_feature = {
+        item["feature"]: item for item in context.purchase_evidence_health
+    }
+    assert health_by_feature["technical_score"]["status_key"] == "unavailable"
+    assert health_by_feature["adaptive_fundamental"]["status_key"] == "unavailable"
+    assert health_by_feature["theme_rank"]["status_key"] == "unavailable"
+    assert (
+        context.stock_signal_context["purchase_evidence_health"]
+        == context.purchase_evidence_health
+    )
 
 
 def test_stock_dashboard_display_info_formats_core_metrics():
