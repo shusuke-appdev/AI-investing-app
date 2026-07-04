@@ -180,6 +180,24 @@ def _format_technical_context(stock_signal_context: dict | None) -> str:
     for key, label in field_map:
         if key in technical and technical.get(key) not in {None, ""}:
             lines.append(f"- {label}: {technical.get(key)}")
+    strategy = technical.get("strategy_context") or {}
+    if isinstance(strategy, dict) and strategy:
+        lines.append(f"- 戦略別テクニカル: {strategy.get('summary', '未算出')}")
+        for item in (strategy.get("items") or [])[:5]:
+            if isinstance(item, dict):
+                lines.append(
+                    f"  - {item.get('label')}: {item.get('status')} / {item.get('detail')}"
+                )
+    supply = stock_signal_context.get("japan_supply_demand") or {}
+    if isinstance(supply, dict) and supply:
+        lines.append(f"- 日本株需給/半年期日: {supply.get('summary', '未算出')}")
+        if supply.get("quality_warnings"):
+            lines.append(
+                "  - 需給データ制約: "
+                + "; ".join(
+                    str(item) for item in supply.get("quality_warnings", [])[:3]
+                )
+            )
     return "\n".join(lines)
 
 

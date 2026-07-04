@@ -58,6 +58,7 @@ from src.services.trend_ranking_service import (
     build_opportunity_themes,
     build_trend_ranking_context,
 )
+from src.services.vix_sq_alert_service import build_vix_sq_alert_context
 from src.stock_data_provider import get_valuation_metrics
 
 MARKET_SUMMARY_FRESH_SECONDS = 300
@@ -393,6 +394,7 @@ def build_market_theme_flow_context(
         flow_alignment=flow_alignment,
         cross_market=cross_market,
         volatility_regime=volatility_regime,
+        vix_sq_alert=base.vix_sq_alert,
         sentiment=sentiment,
         top_risk_signposts=base.top_risk_signposts,
         fomo_scan=base.fomo_scan,
@@ -476,6 +478,7 @@ def build_market_volatility_sentiment_context(
         volatility_sentiment.get("volatility_regime") or base.volatility_regime
     )
     sentiment = volatility_sentiment.get("sentiment") or base.sentiment
+    vix_sq_alert = volatility_sentiment.get("vix_sq_alert") or base.vix_sq_alert
     strategy_bundle = _safe_call(
         lambda: build_market_strategy_context(
             market_type,
@@ -519,6 +522,7 @@ def build_market_volatility_sentiment_context(
         flow_alignment=base.flow_alignment,
         cross_market=base.cross_market,
         volatility_regime=volatility_regime,
+        vix_sq_alert=vix_sq_alert,
         sentiment=sentiment,
         top_risk_signposts=base.top_risk_signposts,
         fomo_scan=base.fomo_scan,
@@ -543,6 +547,15 @@ def build_market_volatility_sentiment_context(
                 cache_status="computed",
             ),
             DataResult(
+                name="vix_sq_alert",
+                source="vix_sq_alert_service",
+                fetched_at=_utc_now(),
+                is_partial=vix_sq_alert.get("status")
+                in {"unavailable", "insufficient_data"},
+                error="; ".join(vix_sq_alert.get("quality_warnings", [])),
+                cache_status="computed",
+            ),
+            DataResult(
                 name="market_strategy_regime",
                 source="market_strategy_service",
                 fetched_at=_utc_now(),
@@ -560,6 +573,7 @@ def build_market_volatility_sentiment_context(
             base.quality_warnings,
             volatility_regime.get("warnings", []),
             sentiment.get("quality_warnings", []),
+            vix_sq_alert.get("quality_warnings", []),
             strategy_bundle.get("important_levels", {}).get("quality_warnings", []),
             strategy_bundle.get("market_driver_monitor", {}).get(
                 "quality_warnings", []
@@ -578,6 +592,7 @@ def build_market_volatility_sentiment_context(
             warnings=_merge_warnings(
                 volatility_regime.get("warnings", []),
                 sentiment.get("quality_warnings", []),
+                vix_sq_alert.get("quality_warnings", []),
                 errors,
             ),
         ),
@@ -687,6 +702,7 @@ def build_market_high_context(
         flow_alignment=base.flow_alignment,
         cross_market=base.cross_market,
         volatility_regime=volatility_regime,
+        vix_sq_alert=base.vix_sq_alert,
         sentiment=sentiment,
         top_risk_signposts=top_risk_signposts,
         fomo_scan=base.fomo_scan,
@@ -889,6 +905,7 @@ def build_market_options_context(
         flow_alignment=base.flow_alignment,
         cross_market=base.cross_market,
         volatility_regime=base.volatility_regime,
+        vix_sq_alert=base.vix_sq_alert,
         sentiment=base.sentiment,
         top_risk_signposts=base.top_risk_signposts,
         fomo_scan=base.fomo_scan,
@@ -1153,6 +1170,15 @@ def format_market_context_for_ai(context: MarketContext) -> str:
                 f"mean={_display_percent(outcomes.get('mean_return'))}, "
                 f"probability_up={_display_percent(outcomes.get('probability_up'))}"
             )
+    if context.vix_sq_alert:
+        vix_sq = context.vix_sq_alert
+        parts.append("[VIX x SQ week alert]")
+        parts.append(
+            f"- {vix_sq.get('summary', '')}; "
+            f"status={vix_sq.get('status', 'unknown')}, "
+            f"in_sq_week={vix_sq.get('in_sq_week', False)}, "
+            f"expiration={vix_sq.get('monthly_expiration', '')}"
+        )
     if context.sentiment:
         parts.append(
             "[Local sentiment composite] "
@@ -1516,6 +1542,7 @@ def _build_volatility_sentiment_context(
             credit_stress=credit_stress,
             ibd_regime=ibd_regime,
         ),
+        "vix_sq_alert": build_vix_sq_alert_context(cboe.data if cboe else None),
         "sentiment": build_local_sentiment_composite(
             spy,
             tlt,

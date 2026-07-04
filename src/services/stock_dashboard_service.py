@@ -27,10 +27,12 @@ from src.display_labels import TECHNICAL_LABELS, display_label
 from src.market_data import get_stock_data, get_stock_info, get_stock_news_with_status
 from src.services.analysis_context import DataResult, ProvenanceItem, StockSignalContext
 from src.services.fundamental_profile_service import evaluate_fundamental_profile
+from src.services.japan_supply_demand_service import build_japan_supply_demand_context
 from src.services.provenance_service import stock_provenance
 from src.services.purchase_evidence_service import evaluate_purchase_evidence
 from src.services.stock_analysis_inputs import StockAnalysisInputs
 from src.services.volume_profile_service import build_volume_profile
+from src.stock_data_provider import normalize_ticker
 
 
 @dataclass
@@ -54,6 +56,7 @@ class StockDashboardContext:
     volume_profile: dict[str, Any] = field(default_factory=dict)
     purchase_evidence: dict[str, Any] = field(default_factory=dict)
     purchase_evidence_health: list[dict[str, Any]] = field(default_factory=list)
+    japan_supply_demand: dict[str, Any] = field(default_factory=dict)
     stock_signal_context: dict[str, Any] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
     provenance: list[ProvenanceItem] = field(default_factory=list)
@@ -68,7 +71,7 @@ def build_stock_dashboard_context(
 ) -> StockDashboardContext:
     """Fetch and prepare all non-AI stock dashboard data."""
 
-    normalized_ticker = ticker.strip().upper()
+    normalized_ticker = normalize_ticker(ticker)
     inputs = inputs or StockAnalysisInputs(
         normalized_ticker,
         history_provider=get_stock_data,
@@ -244,6 +247,12 @@ def build_stock_dashboard_context(
         {},
         diagnostic_errors,
     )
+    japan_supply_demand = _safe_analysis(
+        "japan_supply_demand",
+        lambda: build_japan_supply_demand_context(normalized_ticker, history_df),
+        {},
+        diagnostic_errors,
+    )
     purchase_evidence = _safe_analysis(
         "purchase_evidence",
         lambda: evaluate_purchase_evidence(
@@ -292,6 +301,7 @@ def build_stock_dashboard_context(
         fundamental_profile,
         volume_profile,
         purchase_evidence,
+        japan_supply_demand,
     )
     _apply_diagnostic_errors(data_status, diagnostic_errors)
     provenance = stock_provenance(
@@ -325,6 +335,7 @@ def build_stock_dashboard_context(
         volume_profile=volume_profile,
         purchase_evidence=purchase_evidence,
         purchase_evidence_health=purchase_evidence_health,
+        japan_supply_demand=japan_supply_demand,
         data_status=data_status,
         provenance=provenance,
     ).to_dict()
@@ -351,6 +362,7 @@ def build_stock_dashboard_context(
         volume_profile=volume_profile,
         purchase_evidence=purchase_evidence,
         purchase_evidence_health=purchase_evidence_health,
+        japan_supply_demand=japan_supply_demand,
         profile_warning=_profile_warning_message(info_dict),
         quality_warnings=list(diagnostic_errors.values()),
         error_message=_dashboard_error_message(info_dict, history_df),
@@ -584,6 +596,7 @@ def _build_data_status(
     fundamental_profile: dict[str, Any],
     volume_profile: dict[str, Any],
     purchase_evidence: dict[str, Any],
+    japan_supply_demand: dict[str, Any],
 ) -> list[DataResult]:
     trend_quality = (
         trend_follow.get("data_quality") if isinstance(trend_follow, dict) else {}
@@ -686,6 +699,20 @@ def _build_data_status(
             is_partial=purchase_evidence.get("status") != "available",
             error="; ".join(
                 str(item) for item in (purchase_evidence.get("missing_reasons") or [])
+            ),
+            cache_status="computed",
+        ),
+        DataResult(
+            name="japan_supply_demand",
+            source="japan_supply_demand_service",
+            is_partial=japan_supply_demand.get("status")
+            not in {
+                "available",
+                "not_applicable",
+            },
+            error="; ".join(
+                str(item)
+                for item in (japan_supply_demand.get("quality_warnings") or [])
             ),
             cache_status="computed",
         ),

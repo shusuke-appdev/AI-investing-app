@@ -232,6 +232,7 @@ class TechnicalScore:
     entry_signal: str = ""
     stop_loss: float | None = None
     profit_line: float | None = None
+    strategy_context: dict = field(default_factory=dict)
 
 
 @dataclass

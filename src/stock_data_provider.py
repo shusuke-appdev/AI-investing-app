@@ -70,6 +70,16 @@ def is_japanese_stock(ticker: str) -> bool:
     )
 
 
+def normalize_ticker(ticker: str) -> str:
+    """Normalize user-entered tickers for provider lookups."""
+
+    normalized = str(ticker or "").strip().upper()
+    digits = "".join(filter(str.isdigit, normalized))
+    if normalized == digits and len(digits) == 4:
+        return f"{digits}.T"
+    return normalized
+
+
 def _first(source: dict[str, Any], key: str, default: Any = None) -> Any:
     value = source.get(key, default)
     if isinstance(value, list):

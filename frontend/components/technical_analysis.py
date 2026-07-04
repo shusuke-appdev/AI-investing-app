@@ -162,6 +162,136 @@ def _render_detail_section() -> rx.Component:
     )
 
 
+def _strategy_item_row(item: dict) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(item["label"], size="2", weight="bold", flex="1"),
+            rx.badge(
+                item["status"],
+                color_scheme=rx.cond(
+                    (item["status"] == "triggered")
+                    | (item["status"] == "confirmed")
+                    | (item["status"] == "red_zone"),
+                    "red",
+                    rx.cond(item["status"] == "watch", "amber", "gray"),
+                ),
+            ),
+            width="100%",
+            align_items="center",
+        ),
+        rx.text(item["detail"], size="1", color=rx.color("gray", 10)),
+        rx.cond(
+            item.contains("warning") & (item["warning"].to(str) != ""),
+            rx.text(item["warning"], size="1", color=rx.color("amber", 11)),
+            rx.fragment(),
+        ),
+        width="100%",
+        padding_y="0.35rem",
+        border_bottom=f"1px solid {rx.color('gray', 3)}",
+    )
+
+
+def _supply_item_row(item: dict) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(item["label"], size="2", weight="bold", flex="1"),
+            rx.badge(
+                item["status"],
+                color_scheme=rx.cond(
+                    (item["status"] == "triggered")
+                    | (item["status"] == "active")
+                    | (item["status"] == "improving")
+                    | (item["status"] == "met"),
+                    "green",
+                    rx.cond(item["status"] == "alert", "red", "gray"),
+                ),
+            ),
+            width="100%",
+            align_items="center",
+        ),
+        rx.text(item["detail"], size="1", color=rx.color("gray", 10)),
+        width="100%",
+        padding_y="0.35rem",
+        border_bottom=f"1px solid {rx.color('gray', 3)}",
+    )
+
+
+def _render_japan_supply_demand_section() -> rx.Component:
+    supply = StockState.japan_supply_demand.to(dict[str, Any])
+    items = supply["items"].to(list[dict])
+    warnings = supply["quality_warnings"].to(list[str])
+    return rx.cond(
+        StockState.japan_supply_demand.contains("summary")
+        & (supply["status"].to(str) != "not_applicable"),
+        rx.box(
+            rx.hstack(
+                rx.heading("日本株 需給期日", size="4"),
+                rx.badge(supply["label"].to(str), color_scheme="blue"),
+                width="100%",
+                align_items="center",
+                margin_bottom="0.5rem",
+            ),
+            rx.text(supply["summary"].to(str), size="2", color=rx.color("gray", 11)),
+            rx.vstack(
+                rx.foreach(items, _supply_item_row),
+                width="100%",
+                spacing="1",
+                margin_top="0.75rem",
+            ),
+            rx.cond(
+                warnings.length() > 0,
+                rx.text(
+                    "データ注意: ",
+                    warnings[0],
+                    size="1",
+                    color=rx.color("amber", 11),
+                    margin_top="0.5rem",
+                ),
+                rx.fragment(),
+            ),
+            width="100%",
+            padding="1rem",
+            bg=rx.color("gray", 2),
+            border=f"1px solid {rx.color('gray', 4)}",
+            border_radius="8px",
+            margin_bottom="1rem",
+        ),
+        rx.fragment(),
+    )
+
+
+def _render_strategy_context_section() -> rx.Component:
+    tech = StockState.technical_data
+    strategy = tech["strategy_context"].to(dict[str, Any])
+    items = strategy["items"].to(list[dict])
+    return rx.cond(
+        tech.contains("strategy_context"),
+        rx.box(
+            rx.hstack(
+                rx.heading("戦略別テクニカル", size="4"),
+                rx.badge(strategy["status"].to(str), color_scheme="blue"),
+                width="100%",
+                align_items="center",
+                margin_bottom="0.5rem",
+            ),
+            rx.text(strategy["summary"].to(str), size="2", color=rx.color("gray", 11)),
+            rx.vstack(
+                rx.foreach(items, _strategy_item_row),
+                width="100%",
+                spacing="1",
+                margin_top="0.75rem",
+            ),
+            width="100%",
+            padding="1rem",
+            bg=rx.color("gray", 2),
+            border=f"1px solid {rx.color('gray', 4)}",
+            border_radius="8px",
+            margin_bottom="1rem",
+        ),
+        rx.fragment(),
+    )
+
+
 def _stage_condition_row(item: dict) -> rx.Component:
     return rx.hstack(
         evaluation_badge(
@@ -318,6 +448,8 @@ def technical_analysis() -> rx.Component:
             ),
             _render_score_row(),
             _render_minervini_section(),
+            _render_japan_supply_demand_section(),
+            _render_strategy_context_section(),
             _render_detail_section(),
             width="100%",
         ),

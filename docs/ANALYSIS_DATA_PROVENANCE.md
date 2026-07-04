@@ -1,6 +1,6 @@
 # 分析データ来歴台帳
 
-更新日: 2026-06-26
+更新日: 2026-07-05
 
 ## 目的
 
@@ -37,6 +37,7 @@
 | Market Watch / Stock | GEX | estimated / computed | オプションOI、Gamma、株価 | yfinanceは一部Gamma欠損時に推定、全欠損時は非表示。MarketData.appは主要ETF/テーマETF proxyで直接Gammaを使用 | Optionカードとデータ品質ページでquality warning表示。通常のMarket上部エラーには混ぜない | 直接GammaでもCall正・Put負はディーラー方向の簡易仮定 | 直接ディーラー建玉データを取得できる場合は別指標として追加 | 高 | MarketData.app preferredへ昇格 |
 | Market Watch / Stock | オプションIV・Greeks・OI・Volume | direct / stale_cache | MarketData.appの解決済み満期チェーン、またはyfinance/cache | `preferred`ではMarketData.appを優先、204/API失敗/必須列不足/トークン未設定/満期解決失敗時にyfinance/cacheへフォールバック。`shadow`は比較検証用。current / 1W / 1M は満期別cache keyで保持 | 取得元・解決済み満期・基準時刻・mode・品質警告を表示 | Free/Trial遅延値や0DTE期限切れを現在値と誤認 | updated時刻、解決済み満期、契約プランを表示し、source/as_ofをAI入力にも渡す | 高 | 2026-06-26 期間別満期解決を追加 |
 | Market Watch / AI Recap | オプション期間構造 | computed / direct / stale_cache | current / 1W / 1M のIV、PCR、Skew、Max Pain、GEX、想定変動幅 | MarketData.app preferredまたはyfinance/cacheの満期別チェーン取得時 | Optionカードの期間別行、Market timeframe、AI Recap promptへ渡す | 1週間・1か月の市場予測を確定値と誤認 | 「織り込み」「想定変動幅」として表示し、source/as_of/cache_statusを併記 | 高 | 2026-06-26 追加 |
+| Market Watch / AI Recap | VIX×SQ週アラート | computed / direct / unavailable | CBOE VIX履歴、MACD、パラボリックSAR、米国月次オプションSQ週 | CBOE履歴が取得でき、60営業日以上ある場合だけ判定。VIX履歴なしは未取得 | Market Watchの信用/フロー欄とAI Recap promptへ渡す | SQ週の暴落・底打ちを確定イベントと誤認 | `status`、SQ期日、VIX、MACD/PSAR状態、データ不足を併記し、ヘッジ警戒/底打ち候補の研究シグナルに限定 | 高 | 2026-07-05 追加 |
 | Market Watch | IV想定価格帯 | estimated | 現在価格、IV、満期日数 | current / 1W / 1M の各オプションデータ取得時 | オプション分析内 | 予測レンジと誤認 | 想定変動幅として明示し実績比較を追加 | 中 | 期間別表示対応 |
 | Market Watch | Max Pain | computed | オプションOIと権利行使価格 | オプションチェーン取得時 | オプション分析内 | 価格目標と誤認 | 算出定義と制約を個別表示 | 中 | 台帳化済み |
 | Market Watch / AI Recap | PCR欠損時 `0.8` | fixed_fallback | なし | オプション欠損時 | 旧実装では中立値として内部利用 | データ取得成功と誤認 | 欠損時は利用不可にする | 最優先 | 2026-06-11 廃止 |
@@ -48,6 +49,8 @@
 | Stock | セクター・テーマ評価 | proxy | テーマ構成銘柄、企業指標、相対収益、MA | 直接フローなし | データ品質ページでproxy表示 | 実資金流入・公式分類と誤認 | 直接フローと分類ソースを追加 | 高 | 専用ページへ移動 |
 | Stock | トレード分析 | model_output / computed | StockSignalContext、technical_data、trade_setup、sector_theme_context、fomo_regime、trend_follow_diagnostics、probabilistic_signal | Stock画面で銘柄分析後にユーザーが「トレード分析」を押した場合だけ生成。追加取得なし | Stock内の展開パネル。初期表示には出さない | 売買命令・保証されたタイミングと誤認 | 売買助言ではなく、条件・無効化・リスク水準の整理として表示し続ける | 高 | 2026-06-18 追加 |
 | Stock | Minerviniステージ分析 | computed | 日足終値、50/150/200日線、200日線20営業日傾き、52週高値/安値、VCP検出 | 200営業日未満は判定不能 | Stockテクニカル分析内に常時表示 | Minervini公式データや裁量判断と誤認 | 条件ごとの達成/未達、データ不足、VCPの水準を併記 | 中 | 2026-06-18 表示拡張 |
+| Stock / AI Recap | 戦略別テクニカル | computed / unavailable | 日足OHLCV、25日ボリンジャーバンド、パラボリックSAR、MACD、フィボナッチ拡張、一目雲、ダウ理論、ダイバージェンス | 80営業日未満は算出不可 | Stockテクニカル分析とAI Stock Recap promptへ渡す | 売買シグナルや将来下落率の断定と誤認 | バンドウォーク終了、天井圏、ダウ理論などの条件別statusとtarget/riskを表示し、研究用の警戒材料に限定 | 高 | 2026-07-05 追加 |
+| Stock / AI Recap | 日本株需給期日 | direct / computed / unavailable | 日足OHLCV、手入力または環境変数の制度信用買い残・売り残、貸株注意喚起/逆日歩フラグ | 日本株のみ対象。制度信用データがない場合はデータ不足。一般信用は含めない前提 | Stockテクニカル分析、DataResult、AI Stock Recap promptへ渡す | 信用倍率が一般信用込みまたは推定値と誤認 | `JP_MARGIN_ROWS_<ticker>` と `JP_LOAN_ALERT_<ticker>` の入力元、未取得警告、急落時買い残増加の無効化条件を表示 | 高 | 2026-07-05 追加 |
 | Stock / Market | 総合テクニカル・市場環境スコア | model_output | 複数テクニカル指標と固定重み | 指標算出時 | 総合評価として表示 | 客観的確率と誤認 | 構成指標、重み、欠損寄与を表示 | 中 | 台帳化済み |
 | Stock | Trend-Follow約定価格 | proxy | 翌日Open、欠損時Close | Open欠損時 | warningへ記録 | 実約定可能価格と誤認 | 欠損ケースを検証対象外にする選択肢を追加 | 中 | 既存警告あり |
 | Stock | forward return / walk-forward | computed / model_output | 過去価格、固定取引コスト | バックテスト時 | 診断パネル | 実運用成績と誤認 | スリッページ感応度と期間外検証を追加 | 高 | 台帳化済み |

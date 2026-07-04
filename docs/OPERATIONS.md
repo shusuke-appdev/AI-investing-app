@@ -20,6 +20,8 @@
 | `NIKKEI_JSF_SHORT_BALANCE_BILLION` | 任意 | 日経6条件の条件1を直接判定するための、日証金合計売り残（億円） |
 | `NIKKEI_LEVERAGE_MARGIN_RATIO` | 任意 | 日経6条件の条件2を直接判定するための、日経レバ1570信用倍率 |
 | `NIKKEI_FOREIGN_INVESTOR_NET_BUY_BILLION` | 任意 | 日経6条件の条件6を直接判定するための、海外投資家買越額（億円） |
+| `JP_MARGIN_ROWS_<ticker>` | 日本株需給期日では任意 | 個別日本株の制度信用残高。例: `JP_MARGIN_ROWS_7203_T` に `[{"date":"2026-06-01","system_buy_balance":900000,"system_sell_balance":1000000}]` のJSON配列を設定 |
+| `JP_LOAN_ALERT_<ticker>` | 日本株需給期日では任意 | 個別日本株の貸株注意喚起・逆日歩フラグ。例: `JP_LOAN_ALERT_7203_T=active` |
 | `SUPABASE_URL` | Supabase保存時に必須 | ポートフォリオ・知識DB保存先 |
 | `SUPABASE_SECRET_KEY` | Supabase保存時に推奨 | サーバー側 Supabase Data API 用の secret key。クライアントへ公開しない |
 | `SUPABASE_SERVICE_ROLE_KEY` | 任意 | 旧 service role key との互換用。`SUPABASE_SECRET_KEY` が未設定の場合だけ使う |
@@ -123,6 +125,8 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - 「詳細更新」では、ETFリーダーシップproxyを市場全体の確認、選択市場ごとのセクター/テーマ資金流入判定を具体候補の抽出として扱います。US表示では日本株テーマを混ぜず、JP表示では日本株条件を扱います。これは売買命令ではなく、市場分析の入力です
 - Market概要の株式指数・金利、商品、FX、暗号資産はUS/JPで同じ構成です。JPのセクター指数だけは、野村アセットマネジメントのNEXT FUNDS TOPIX-17 ETF（1617.T〜1633.T）を価格proxyとして表示します
 - 日経平均上昇の6条件は、無料で自動取得できるデータを優先し、直接データがない条件は `データ不足` または `代理達成/代理未達` として表示します。上記の任意環境変数を設定すると、一部条件を直接値として評価できます
+- 個別日本株の「需給期日」カードは4桁コードを自動で `.T` へ正規化し、制度信用の買い残・売り残を使える場合だけ信用倍率を判定します。データがない場合は `0` や中立値を入れず、`データ不足` としてAI入力にも渡します。一般信用込みの信用倍率はこの戦略の直接入力として扱いません
+- 米国市場の VIX×SQ週アラートは、既存のCBOE VIX履歴取得を使い、MACDとパラボリックSARの同方向転換、および米国月次オプションSQ週への残存を研究用シグナルとして表示します。CBOE履歴がない、または60営業日未満の場合は未取得/データ不足として扱います
 - AI Market Recap は米国市場を主軸にし、日本市場は米国市場との相対強弱、日経6条件、ドル円・原油・資金流入の文脈で補助的に扱います
 - yfinanceオプションデータにGreeks/Gammaがない場合、GEXは非表示になります。UIの `data_quality` バッジと品質警告を確認してください
 - MarketData.appは `/market-watch` の明示的なOptions更新、統合トレンドランキングのテーマETFオプション更新、個別銘柄分析の所属テーマETFオプション確認時に利用します。起動時・単なる描画時・市場マイクロストラクチャー更新からは呼び出さず、APIクレジット消費を抑えます

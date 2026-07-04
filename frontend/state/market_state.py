@@ -42,6 +42,7 @@ from src.services.market_presentation_service import (
     StrategyRegimeDisplay,
     TimeframeOutlookDisplay,
     TrendRankingDisplay,
+    VixSqAlertDisplay,
     build_market_display_context,
 )
 
@@ -91,6 +92,7 @@ class MarketState(rx.State):
     cross_market_stance: str = ""
     credit_stress: CreditStressDisplay = CreditStressDisplay()
     flow_monitor: FlowProxyDisplay = FlowProxyDisplay()
+    vix_sq_alert: VixSqAlertDisplay = VixSqAlertDisplay()
     flow_alignment: FlowAlignmentDisplay = FlowAlignmentDisplay()
     strategy_regime: StrategyRegimeDisplay = StrategyRegimeDisplay()
     market_timeframes: list[TimeframeOutlookDisplay] = []
@@ -507,6 +509,7 @@ class MarketState(rx.State):
         self.cross_market_stance = display.cross_market_stance
         self.credit_stress = display.credit_stress
         self.flow_monitor = display.flow_monitor
+        self.vix_sq_alert = display.vix_sq_alert
         self.flow_alignment = display.flow_alignment
         self.strategy_regime = display.strategy_regime
         self.market_timeframes = display.market_timeframes

@@ -52,6 +52,8 @@ from src.advisor.technical_scoring import (
     calc_trend_score,
 )
 from src.market_data import get_stock_data
+from src.services.technical_strategy_service import build_technical_strategy_context
+from src.stock_data_provider import is_japanese_stock
 
 # スコアリングの重み付け定数
 SCORE_WEIGHTS_DEFAULT = {
@@ -187,6 +189,11 @@ def analyze_technical(
     # Mean Reversion 分析
     mr_analyzer = MeanReversionAnalyzer(ticker)
     mr_data = mr_analyzer.analyze(df)
+    strategy_context = build_technical_strategy_context(
+        ticker,
+        df,
+        market_type="JP" if is_japanese_stock(ticker) else "US",
+    )
 
     # 拡張下落判定 (Pinbar, Climax, Patterns, LongTerm MA)
     pinbar_data = detect_pinbar(open_, high, low, close)
@@ -344,6 +351,7 @@ def analyze_technical(
         entry_signal=entry_signal,
         stop_loss=stop_loss,
         profit_line=profit_line,
+        strategy_context=strategy_context,
     )
 
 
@@ -436,6 +444,7 @@ def get_technical_summary_for_ai(ticker: str) -> str:
 - 下落時判定・特殊シグナル: {drop_str if drop_str else "特になし"}
 - AVWAP(YTD): ${tech.avwap_ytd:.2f} (乖離 {tech.avwap_deviation:+.1f}%)
 - ベース認識: {base_str}
+- 戦略別テクニカル: {tech.strategy_context.get("summary", "未算出")}
 - エントリーシグナル: {tech.entry_signal if tech.entry_signal else "なし"}
 - 売買価格の判断: 売買計画機能で確認
 """

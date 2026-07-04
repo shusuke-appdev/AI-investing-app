@@ -225,6 +225,7 @@ class MarketContext:
     flow_alignment: dict[str, Any] = field(default_factory=dict)
     cross_market: dict[str, Any] = field(default_factory=dict)
     volatility_regime: dict[str, Any] = field(default_factory=dict)
+    vix_sq_alert: dict[str, Any] = field(default_factory=dict)
     sentiment: dict[str, Any] = field(default_factory=dict)
     top_risk_signposts: dict[str, Any] = field(default_factory=dict)
     fomo_scan: dict[str, Any] = field(default_factory=dict)
@@ -266,6 +267,7 @@ class MarketContext:
             "flow_alignment": self.flow_alignment,
             "cross_market": self.cross_market,
             "volatility_regime": self.volatility_regime,
+            "vix_sq_alert": self.vix_sq_alert,
             "sentiment": self.sentiment,
             "top_risk_signposts": self.top_risk_signposts,
             "fomo_scan": self.fomo_scan,
@@ -352,6 +354,7 @@ class MarketContext:
             flow_alignment=value.get("flow_alignment") or {},
             cross_market=value.get("cross_market") or {},
             volatility_regime=value.get("volatility_regime") or {},
+            vix_sq_alert=value.get("vix_sq_alert") or {},
             sentiment=value.get("sentiment") or {},
             top_risk_signposts=value.get("top_risk_signposts") or {},
             fomo_scan=value.get("fomo_scan") or {},
@@ -390,6 +393,7 @@ class StockSignalContext:
     volume_profile: dict[str, Any] = field(default_factory=dict)
     purchase_evidence: dict[str, Any] = field(default_factory=dict)
     purchase_evidence_health: list[dict[str, Any]] = field(default_factory=list)
+    japan_supply_demand: dict[str, Any] = field(default_factory=dict)
     news_headlines: list[str] = field(default_factory=list)
     news_source_status: str = ""
     news_error_reason: str = ""

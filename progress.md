@@ -1,5 +1,13 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-07-05 Japanese stock and technical strategy expansion
+- Added Japanese ticker normalization so 4-digit inputs such as `7203` resolve to `7203.T` before provider and analysis paths run.
+- Added `japan_supply_demand_service` for Japanese individual stocks: six-month high/low expiry timing, system margin ratio from制度信用買い残/売り残, loan-stock alert flag, and the invalidation case where a sharp drop coincides with buy-balance expansion. Missing margin/loan data remains explicit `insufficient_data`, not a neutral zero.
+- Added strategy-level technical diagnostics from daily OHLCV: 25-day Bollinger bandwalk reversal, Parabolic SAR, MACD cross, MACD divergence, Dow theory, Fibonacci 361.8/423.6 red-zone, 5/25 dead cross, and Ichimoku cloud-wall crash pattern. The output is connected to `TechnicalScore`, Stock UI, and Stock AI prompt context.
+- Added US VIX×SQ-week diagnostics using the existing CBOE VIX history path, MACD, Parabolic SAR, and monthly option expiration week. The signal is connected to MarketContext, Market display state, Market Watch UI, DataResult, and Market AI prompt context.
+- Updated provenance and operations docs with the new computed/direct/unavailable contracts and optional local env inputs `JP_MARGIN_ROWS_<ticker>` / `JP_LOAN_ALERT_<ticker>`.
+- Validation: compileall passed, ruff check passed, ruff format passed after formatting, targeted new tests passed (`8 passed`), and Reflex frontend export passed.
+
 ## Session update: 2026-07-04 Supabase project restore and live path verification
 - Restored Supabase project `pbdwzpktugztklejzvhn` from `INACTIVE` to `ACTIVE_HEALTHY` via Supabase MCP; database host DNS resolved after restoration.
 - Confirmed public tables `user_settings`, `portfolios`, `knowledge_items`, and `trade_plans` exist, have RLS enabled, and grant Data API privileges to `service_role` only, matching `docs/SUPABASE_DATA_API_GRANTS.md`.

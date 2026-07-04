@@ -877,7 +877,8 @@ def _credit_and_flow_panel() -> rx.Component:
         rx.grid(
             _credit_stress_card(),
             _flow_proxy_card(),
-            columns=rx.breakpoints(initial="1", md="2"),
+            _vix_sq_alert_card(),
+            columns=rx.breakpoints(initial="1", md="3"),
             spacing="2",
             width="100%",
         ),
@@ -886,6 +887,64 @@ def _credit_and_flow_panel() -> rx.Component:
         padding="0.75rem",
         border=f"1px solid {rx.color('gray', 4)}",
         border_radius="8px",
+    )
+
+
+def _vix_sq_alert_card() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text("VIX×SQ週", weight="bold", size="1"),
+            rx.spacer(),
+            rx.badge(
+                MarketState.vix_sq_alert.status_label,
+                color_scheme=_level_color(MarketState.vix_sq_alert.level),
+            ),
+            width="100%",
+            align_items="center",
+        ),
+        rx.text(
+            MarketState.vix_sq_alert.summary,
+            size="1",
+            color=rx.color("gray", 10),
+            margin_top="0.25rem",
+        ),
+        rx.vstack(
+            rx.hstack(
+                rx.text("VIX", size="1", color=rx.color("gray", 10)),
+                rx.spacer(),
+                rx.text(MarketState.vix_sq_alert.vix, size="1", weight="bold"),
+                width="100%",
+            ),
+            rx.hstack(
+                rx.text("SQ期日", size="1", color=rx.color("gray", 10)),
+                rx.spacer(),
+                rx.text(
+                    MarketState.vix_sq_alert.monthly_expiration,
+                    size="1",
+                    weight="bold",
+                ),
+                width="100%",
+            ),
+            rx.hstack(
+                rx.text("MACD / PSAR", size="1", color=rx.color("gray", 10)),
+                rx.spacer(),
+                rx.text(
+                    MarketState.vix_sq_alert.macd_cross,
+                    " / ",
+                    MarketState.vix_sq_alert.psar_trend,
+                    size="1",
+                    weight="bold",
+                ),
+                width="100%",
+            ),
+            width="100%",
+            spacing="1",
+            margin_top="0.5rem",
+        ),
+        width="100%",
+        padding="0.65rem",
+        border=f"1px solid {rx.color('gray', 3)}",
+        border_radius="6px",
     )
 
 

@@ -358,6 +358,19 @@ class YieldSpreadData(BaseModel):
     warnings: list[str] = []
 
 
+class VixSqAlertDisplay(BaseModel):
+    status: str = ""
+    status_label: str = "未判定"
+    summary: str = ""
+    score: float = 0.0
+    level: str = "neutral"
+    in_sq_week: bool = False
+    monthly_expiration: str = ""
+    vix: str = "-"
+    macd_cross: str = ""
+    psar_trend: str = ""
+
+
 class MarketMonitorData(BaseModel):
     distribution_spy: DistributionData = DistributionData()
     distribution_ndx: DistributionData = DistributionData()
@@ -381,6 +394,7 @@ class MarketDisplayContext(BaseModel):
     cross_market_stance: str = ""
     credit_stress: CreditStressDisplay = CreditStressDisplay()
     flow_monitor: FlowProxyDisplay = FlowProxyDisplay()
+    vix_sq_alert: VixSqAlertDisplay = VixSqAlertDisplay()
     flow_alignment: FlowAlignmentDisplay = FlowAlignmentDisplay()
     strategy_regime: StrategyRegimeDisplay = StrategyRegimeDisplay()
     market_timeframes: list[TimeframeOutlookDisplay] = []
@@ -431,6 +445,7 @@ def build_market_display_context(context: MarketContext) -> MarketDisplayContext
         cross_market_stance=context.cross_market.get("stance", ""),
         credit_stress=_format_credit_stress(context.credit_stress),
         flow_monitor=_format_flow_monitor(context.flow_monitor),
+        vix_sq_alert=_format_vix_sq_alert(context.vix_sq_alert),
         flow_alignment=_format_flow_alignment(context.flow_alignment),
         strategy_regime=_format_strategy_regime(context.strategy_regime),
         market_timeframes=_format_timeframes(context.market_timeframes),
@@ -757,6 +772,39 @@ def _format_credit_indicator(item: dict[str, Any]) -> CreditStressIndicator:
         is_hot=bool(item.get("is_hot", False)),
         level=item.get("level", "gray"),
         warning=item.get("warning", ""),
+    )
+
+
+def _format_vix_sq_alert(raw: dict[str, Any]) -> VixSqAlertDisplay:
+    if not raw:
+        return VixSqAlertDisplay(summary="VIX×SQ週アラートは未取得です。")
+    status = str(raw.get("status") or "")
+    level = {
+        "hedge_alert": "red",
+        "bottoming_candidate": "yellow",
+        "vix_uptrend_watch": "yellow",
+        "neutral": "green",
+    }.get(status, "neutral")
+    status_label = {
+        "hedge_alert": "ヘッジ警戒",
+        "bottoming_candidate": "底打ち候補",
+        "vix_uptrend_watch": "VIX上昇監視",
+        "neutral": "中立",
+        "insufficient_data": "データ不足",
+        "unavailable": "未取得",
+    }.get(status, status or "未判定")
+    vix = raw.get("vix")
+    return VixSqAlertDisplay(
+        status=status,
+        status_label=status_label,
+        summary=str(raw.get("summary") or ""),
+        score=float(raw.get("score") or 0.0),
+        level=level,
+        in_sq_week=bool(raw.get("in_sq_week", False)),
+        monthly_expiration=str(raw.get("monthly_expiration") or ""),
+        vix="-" if vix in (None, "") else f"{float(vix):.2f}",
+        macd_cross=str(raw.get("macd_cross") or "none"),
+        psar_trend=str(raw.get("psar_trend") or ""),
     )
 
 
