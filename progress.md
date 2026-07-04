@@ -7,6 +7,7 @@
 - Verified the live database path through Supabase MCP SQL with temporary rows across all 4 app tables: insert/select/update/delete passed and cleanup left 0 remaining rows.
 - Security Advisor still reports `RLS Enabled No Policy` INFO for the 4 tables; this is documented as expected for the repo's server-side service-role-only configuration.
 - Follow-up local `.env` verification found `SUPABASE_URL` and `SUPABASE_SECRET_KEY` configured, but `scripts/live_smoke.py --require-optional` still failed Supabase with API 401 `Invalid API key`; the configured key must be rechecked against project `pbdwzpktugztklejzvhn`.
+- After replacing the local `SUPABASE_SECRET_KEY`, direct REST access to `user_settings` returned HTTP 200 and full `scripts/live_smoke.py --require-optional` passed, including Supabase `user_settings` insert/select/delete.
 
 ## Session update: 2026-07-04 MarketData strict term-structure verification
 - Local `.env` has `MARKETDATA_TOKEN` configured and `MARKETDATA_OPTIONS_MODE=preferred`; `.env` remains ignored by Git.
