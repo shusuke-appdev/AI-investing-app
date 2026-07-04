@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+import time
+from collections.abc import Callable
+from concurrent.futures import (
+    ThreadPoolExecutor,
+    as_completed,
+)
+from concurrent.futures import (
+    TimeoutError as FutureTimeoutError,
+)
+from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
@@ -65,6 +74,8 @@ MARKET_SUMMARY_FRESH_SECONDS = 300
 MARKET_SUMMARY_STALE_SECONDS = 86400
 MARKET_DETAILS_STALE_SECONDS = 3 * 86400
 MARKET_CONTEXT_CACHE_NAMESPACE = "market_context_cache"
+MARKET_STAGE_TASK_TIMEOUT_SECONDS = 10.0
+MARKET_STAGE_TOTAL_TIMEOUT_SECONDS = 20.0
 DETAIL_STAGE_ORDER = (
     "core",
     "theme_flow",
@@ -104,6 +115,16 @@ DETAIL_STAGE_DEFAULTS = {
         "summary": "主要ETFのオプション分析を更新します。",
     },
 }
+
+
+@dataclass(frozen=True)
+class StageTaskResult:
+    """Bounded background task result for detailed market stages."""
+
+    value: Any = None
+    status: str = "ok"
+    error: str = ""
+    timed_out: bool = False
 
 
 def load_cached_market_summary_context(
@@ -235,19 +256,22 @@ def build_market_theme_flow_context(
     def flow_monitor_task() -> dict[str, Any]:
         return build_sector_flow_monitor(market_type)
 
-    with ThreadPoolExecutor(max_workers=7) as executor:
-        futures = {
-            "evaluation": executor.submit(evaluation_task),
-            "ibd_regime": executor.submit(ibd_task),
-            "microstructure": executor.submit(microstructure_task),
-            "momentum": executor.submit(momentum_task),
-            "monitor": executor.submit(monitor_task),
-            "sector_flow": executor.submit(sector_flow_task),
-            "flow_monitor": executor.submit(flow_monitor_task),
-        }
-        results = {
-            name: _future_result(future, errors) for name, future in futures.items()
-        }
+    results = _stage_task_values(
+        _run_stage_tasks(
+            {
+                "evaluation": evaluation_task,
+                "ibd_regime": ibd_task,
+                "microstructure": microstructure_task,
+                "momentum": momentum_task,
+                "monitor": monitor_task,
+                "sector_flow": sector_flow_task,
+                "flow_monitor": flow_monitor_task,
+            },
+            errors,
+            stage_name="theme_flow",
+            max_workers=7,
+        )
+    )
     sector_flow = results.get("sector_flow") or base.sector_flow
     flow_monitor = results.get("flow_monitor") or base.flow_monitor
     japan_conditions = (
@@ -619,14 +643,17 @@ def build_market_high_context(
             return {}
         return detect_market_distortions(market_type, max_themes=30, top_n=5)
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {
-            "credit_stress": executor.submit(credit_stress_task),
-            "market_distortions": executor.submit(distortions_task),
-        }
-        results = {
-            name: _future_result(future, errors) for name, future in futures.items()
-        }
+    results = _stage_task_values(
+        _run_stage_tasks(
+            {
+                "credit_stress": credit_stress_task,
+                "market_distortions": distortions_task,
+            },
+            errors,
+            stage_name="credit_distortion",
+            max_workers=2,
+        )
+    )
 
     credit_stress = results.get("credit_stress") or base.credit_stress
     market_distortions = results.get("market_distortions") or base.market_distortions
@@ -835,14 +862,17 @@ def build_market_options_context(
     def monitor_task() -> dict[str, Any]:
         return build_market_monitor_context(options.items)
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {
-            "evaluation": executor.submit(evaluation_task),
-            "monitor": executor.submit(monitor_task),
-        }
-        results = {
-            name: _future_result(future, errors) for name, future in futures.items()
-        }
+    results = _stage_task_values(
+        _run_stage_tasks(
+            {
+                "evaluation": evaluation_task,
+                "monitor": monitor_task,
+            },
+            errors,
+            stage_name="options",
+            max_workers=2,
+        )
+    )
     evaluation = _merge_ibd_signal(
         results.get("evaluation") or base.evaluation,
         base.ibd_regime,
@@ -1509,6 +1539,81 @@ def _safe_call(callback, fallback, errors: list[str]):
     except Exception as exc:
         errors.append(str(exc))
         return fallback
+
+
+def _run_stage_tasks(
+    tasks: dict[str, Callable[[], Any]],
+    errors: list[str],
+    *,
+    stage_name: str,
+    max_workers: int,
+    task_timeout_seconds: float = MARKET_STAGE_TASK_TIMEOUT_SECONDS,
+    total_timeout_seconds: float = MARKET_STAGE_TOTAL_TIMEOUT_SECONDS,
+) -> dict[str, StageTaskResult]:
+    """Run stage tasks without allowing one provider to block the whole UI."""
+
+    if not tasks:
+        return {}
+
+    executor = ThreadPoolExecutor(max_workers=max_workers)
+    futures = {executor.submit(callback): name for name, callback in tasks.items()}
+    pending = set(futures)
+    results: dict[str, StageTaskResult] = {}
+    deadline = time.monotonic() + total_timeout_seconds
+
+    try:
+        while pending:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                completed = as_completed(
+                    tuple(pending), timeout=min(task_timeout_seconds, remaining)
+                )
+                for future in completed:
+                    name = futures[future]
+                    pending.discard(future)
+                    try:
+                        results[name] = StageTaskResult(value=future.result())
+                    except Exception as exc:
+                        error = f"{stage_name}.{name} failed: {exc}"
+                        errors.append(error)
+                        results[name] = StageTaskResult(
+                            status="failed",
+                            error=error,
+                        )
+            except FutureTimeoutError:
+                break
+
+        for future in tuple(pending):
+            name = futures[future]
+            future.cancel()
+            error = f"{stage_name}.{name} timed out after {task_timeout_seconds:g}s"
+            errors.append(error)
+            results[name] = StageTaskResult(
+                status="timed_out",
+                error=error,
+                timed_out=True,
+            )
+
+        return {
+            name: results.get(
+                name,
+                StageTaskResult(
+                    status="failed",
+                    error=f"{stage_name}.{name} did not return a result.",
+                ),
+            )
+            for name in tasks
+        }
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _stage_task_values(results: dict[str, StageTaskResult]) -> dict[str, Any]:
+    return {
+        name: result.value for name, result in results.items() if result.status == "ok"
+    }
 
 
 def _future_result(future, errors: list[str]):

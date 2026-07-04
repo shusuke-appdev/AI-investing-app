@@ -24,17 +24,5 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -r requirements.txt -c constraints.txt
 
-      - name: Lint
-        run: python -m ruff check .
-
-      - name: Format check
-        run: python -m ruff format --check .
-
-      - name: Compile
-        run: python -m compileall src frontend tests
-
-      - name: Test
-        run: python -m pytest -q
-
-      - name: Reflex frontend export
-        run: reflex export --frontend-only --no-zip
+      - name: Read-only release checks
+        run: python scripts/check.py

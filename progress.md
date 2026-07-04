@@ -1,5 +1,14 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-07-05 product resilience implementation
+- Added bounded timeout handling for Market Watch detail-stage background tasks so one slow provider/diagnostic records a partial failure instead of blocking the whole stage indefinitely.
+- Added bounded timeout handling for optional Stock diagnostics while keeping profile, price history, chart data, and core technical analysis available when optional analysis times out or fails.
+- Corrected Data Quality Supabase configuration semantics: `SUPABASE_URL` alone is no longer shown as configured; secret-key and legacy-key modes are distinguished.
+- Updated `.env.example` and GitHub Actions to match the documented release path: MarketData preferred mode, `SUPABASE_SECRET_KEY`, and `scripts/check.py` as the CI release gate.
+- Added public-route guarded loaders for Portfolio and Knowledge so `APP_MODE=public_readonly` direct URL access does not trigger personal storage reads.
+- Validation: focused regression tests passed (`26 passed`) and full `scripts/check.py` passed (`295 passed`, pip check, compileall, ruff check, ruff format check, Reflex frontend export).
+- Live/browser validation: strict MarketData SPY smoke passed with current / 1W / 1M term structure from MarketData.app cache, `scripts/live_smoke.py --require-optional` passed including Supabase `user_settings` insert/select/delete, and static-export browser smoke rendered `/`, `/market-watch`, `/stock`, `/theme`, `/data-quality`, `/portfolio`, and `/knowledge` with no console errors. Reflex dev-server startup remains blocked in this Windows/Codex surface by `PermissionError: [WinError 5]` during multiprocessing startup and was classified with `codex_env_triage.py`; static export HTTP smoke was used as the UI fallback.
+
 ## Session update: 2026-07-05 Japanese stock and technical strategy expansion
 - Added Japanese ticker normalization so 4-digit inputs such as `7203` resolve to `7203.T` before provider and analysis paths run.
 - Added `japan_supply_demand_service` for Japanese individual stocks: six-month high/low expiry timing, system margin ratio from制度信用買い残/売り残, loan-stock alert flag, and the invalidation case where a sharp drop coincides with buy-balance expansion. Missing margin/loan data remains explicit `insufficient_data`, not a neutral zero.

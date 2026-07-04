@@ -51,3 +51,12 @@ def test_invalid_app_mode_fails_closed(monkeypatch):
 
     with pytest.raises(ValueError, match="APP_MODE"):
         writes_enabled()
+
+
+def test_public_readonly_route_load_guards_disable_personal_loads(monkeypatch):
+    from frontend.state import knowledge_state, portfolio_state
+
+    monkeypatch.setenv("APP_MODE", "public_readonly")
+
+    assert not portfolio_state._personal_data_route_enabled()
+    assert not knowledge_state._personal_data_route_enabled()

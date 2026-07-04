@@ -49,11 +49,11 @@ app.add_page(
     portfolio_page,
     route="/portfolio",
     title="Portfolio Advisor | AI Investing",
-    on_load=PortfolioState.load_portfolio_list,
+    on_load=PortfolioState.load_portfolio_list_for_route,
 )
 app.add_page(
     knowledge_page,
     route="/knowledge",
     title="Knowledge DB | AI Investing",
-    on_load=KnowledgeState.load_items,
+    on_load=KnowledgeState.load_items_for_route,
 )

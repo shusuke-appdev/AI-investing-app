@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypedDict
 
 import pandas as pd
 from pydantic import BaseModel
@@ -33,6 +35,14 @@ from src.services.purchase_evidence_service import evaluate_purchase_evidence
 from src.services.stock_analysis_inputs import StockAnalysisInputs
 from src.services.volume_profile_service import build_volume_profile
 from src.stock_data_provider import normalize_ticker
+
+STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS = 8.0
+
+
+class StockDiagnosticError(TypedDict):
+    status: str
+    error: str
+    timed_out: bool
 
 
 @dataclass
@@ -79,7 +89,7 @@ def build_stock_dashboard_context(
         news_provider=get_stock_news_with_status,
     )
     benchmark = inputs.benchmark
-    diagnostic_errors: dict[str, str] = {}
+    diagnostic_errors: dict[str, StockDiagnosticError] = {}
     info_data = _safe_analysis(
         "stock_profile",
         lambda: inputs.info(normalized_ticker),
@@ -115,6 +125,7 @@ def build_stock_dashboard_context(
         lambda: inputs.news(normalized_ticker, 5),
         {"items": [], "source_status": "failed", "error_reason": "News unavailable."},
         diagnostic_errors,
+        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
     tech_data = _safe_analysis(
         "technical_analysis",
@@ -154,6 +165,7 @@ def build_stock_dashboard_context(
         ),
         {},
         diagnostic_errors,
+        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
     trend_follow_dict = _safe_analysis(
         "trend_follow_diagnostics",
@@ -169,6 +181,7 @@ def build_stock_dashboard_context(
         ),
         {},
         diagnostic_errors,
+        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
     fomo_regime = _safe_analysis(
         "fomo_regime",
@@ -177,6 +190,7 @@ def build_stock_dashboard_context(
         ),
         {},
         diagnostic_errors,
+        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
     trade_setup_dict = _safe_analysis(
         "trade_setup",
@@ -194,6 +208,7 @@ def build_stock_dashboard_context(
         ),
         {},
         diagnostic_errors,
+        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
     fundamental_profile = _safe_analysis(
         "fundamental_profile",
@@ -204,6 +219,7 @@ def build_stock_dashboard_context(
         ),
         {},
         diagnostic_errors,
+        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
     if fundamental_profile.get("smart_applicability") != "growth_proxy":
         smart_res = to_plain_value(smart_res)
@@ -226,6 +242,7 @@ def build_stock_dashboard_context(
         ),
         {},
         diagnostic_errors,
+        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
     sector_theme_context = _safe_analysis(
         "sector_theme_context",
@@ -246,12 +263,14 @@ def build_stock_dashboard_context(
         ),
         {},
         diagnostic_errors,
+        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
     japan_supply_demand = _safe_analysis(
         "japan_supply_demand",
         lambda: build_japan_supply_demand_context(normalized_ticker, history_df),
         {},
         diagnostic_errors,
+        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
     purchase_evidence = _safe_analysis(
         "purchase_evidence",
@@ -265,6 +284,7 @@ def build_stock_dashboard_context(
         ),
         {},
         diagnostic_errors,
+        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
     purchase_evidence_health = _build_purchase_evidence_health(
         technical=technical_dict,
@@ -364,7 +384,7 @@ def build_stock_dashboard_context(
         purchase_evidence_health=purchase_evidence_health,
         japan_supply_demand=japan_supply_demand,
         profile_warning=_profile_warning_message(info_dict),
-        quality_warnings=list(diagnostic_errors.values()),
+        quality_warnings=[item["error"] for item in diagnostic_errors.values()],
         error_message=_dashboard_error_message(info_dict, history_df),
     )
 
@@ -389,20 +409,87 @@ def _safe_analysis(
     name: str,
     callback,
     fallback: Any,
-    errors: dict[str, str],
+    errors: dict[str, StockDiagnosticError],
+    *,
+    timeout_seconds: float | None = None,
 ) -> Any:
+    if timeout_seconds is not None:
+        return _safe_analysis_with_timeout(
+            name,
+            callback,
+            fallback,
+            errors,
+            timeout_seconds=timeout_seconds,
+        )
     try:
         return callback()
     except Exception as exc:
-        errors[name] = f"{name} failed: {exc}"
+        _record_diagnostic_error(
+            errors,
+            name,
+            status="failed",
+            error=f"{name} failed: {exc}",
+            timed_out=False,
+        )
         return fallback
 
 
+def _safe_analysis_with_timeout(
+    name: str,
+    callback,
+    fallback: Any,
+    errors: dict[str, StockDiagnosticError],
+    *,
+    timeout_seconds: float,
+) -> Any:
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(callback)
+    try:
+        return future.result(timeout=timeout_seconds)
+    except FutureTimeoutError:
+        future.cancel()
+        _record_diagnostic_error(
+            errors,
+            name,
+            status="timed_out",
+            error=f"{name} timed out after {timeout_seconds:g}s",
+            timed_out=True,
+        )
+        return fallback
+    except Exception as exc:
+        _record_diagnostic_error(
+            errors,
+            name,
+            status="failed",
+            error=f"{name} failed: {exc}",
+            timed_out=False,
+        )
+        return fallback
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _record_diagnostic_error(
+    errors: dict[str, StockDiagnosticError],
+    name: str,
+    *,
+    status: str,
+    error: str,
+    timed_out: bool,
+) -> None:
+    errors[name] = {
+        "status": status,
+        "error": error,
+        "timed_out": timed_out,
+    }
+
+
 def _apply_diagnostic_errors(
-    statuses: list[DataResult], errors: dict[str, str]
+    statuses: list[DataResult], errors: dict[str, StockDiagnosticError]
 ) -> None:
     by_name = {item.name: item for item in statuses}
-    for name, error in errors.items():
+    for name, error_detail in errors.items():
+        error = error_detail["error"]
         status = by_name.get(name)
         if status is None:
             statuses.append(

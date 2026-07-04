@@ -69,3 +69,45 @@ def test_data_quality_state_reads_provider_health(monkeypatch, tmp_path):
     assert rows[0].name == "market.US.options"
     assert rows[0].status_key == "stale"
     assert rows[0].cache_age_label == "2.0h"
+
+
+def test_data_quality_supabase_status_requires_url_and_key(monkeypatch):
+    from frontend.state import data_quality_state
+
+    for name in (
+        "SUPABASE_URL",
+        "SUPABASE_SECRET_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    missing_url = data_quality_state._supabase_provider_status()
+    assert missing_url.status == "optional_missing"
+    assert missing_url.mode == "missing_url"
+
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    missing_key = data_quality_state._supabase_provider_status()
+    assert missing_key.status == "not_configured"
+    assert missing_key.mode == "missing_key"
+    assert "SUPABASE_SECRET_KEY" in missing_key.detail
+
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "secret")
+    configured_secret = data_quality_state._supabase_provider_status()
+    assert configured_secret.status == "configured"
+    assert configured_secret.mode == "configured_secret"
+
+
+def test_data_quality_supabase_status_marks_legacy_key(monkeypatch):
+    from frontend.state import data_quality_state
+
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.delenv("SUPABASE_SECRET_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.setenv("SUPABASE_KEY", "legacy")
+
+    configured_legacy = data_quality_state._supabase_provider_status()
+
+    assert configured_legacy.status == "configured"
+    assert configured_legacy.mode == "configured_legacy"
+    assert "SUPABASE_SECRET_KEY" in configured_legacy.detail

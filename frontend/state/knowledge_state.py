@@ -54,6 +54,19 @@ class KnowledgeState(rx.State):
             self.extracted_content = ""
 
     async def load_items(self):
+        async for update in self._load_items_impl():
+            yield update
+
+    async def load_items_for_route(self):
+        if not _personal_data_route_enabled():
+            self.items = []
+            self.is_loading = False
+            self.error_msg = ""
+            return
+        async for update in self._load_items_impl():
+            yield update
+
+    async def _load_items_impl(self):
         self.is_loading = True
         self.error_msg = ""
         yield
@@ -224,3 +237,9 @@ class KnowledgeState(rx.State):
         finally:
             self.is_extracting = False
             yield
+
+
+def _personal_data_route_enabled() -> bool:
+    from src.app_mode import personal_data_enabled
+
+    return personal_data_enabled()

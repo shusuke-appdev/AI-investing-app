@@ -1,3 +1,5 @@
+import time
+
 import pandas as pd
 
 from src.persistent_cache import PersistentJsonCache
@@ -541,6 +543,35 @@ def test_market_detail_stages_can_update_sequentially(monkeypatch):
     assert volatility.detail_stages["volatility_sentiment"]["status"] == "live"
     assert high.detail_stages["credit_distortion"]["status"] == "live"
     assert high.market_distortions["bullish"][0]["tickers"] == ["NVDA", "MSFT"]
+
+
+def test_market_stage_task_timeout_records_partial_result():
+    errors: list[str] = []
+
+    def slow_task():
+        time.sleep(0.2)
+        return {"late": True}
+
+    started = time.perf_counter()
+    results = service._run_stage_tasks(
+        {
+            "fast": lambda: {"ok": True},
+            "slow": slow_task,
+        },
+        errors,
+        stage_name="test_stage",
+        max_workers=2,
+        task_timeout_seconds=0.01,
+        total_timeout_seconds=0.05,
+    )
+
+    assert time.perf_counter() - started < 0.15
+    assert results["fast"].value == {"ok": True}
+    assert results["fast"].status == "ok"
+    assert results["slow"].status == "timed_out"
+    assert results["slow"].timed_out is True
+    assert "test_stage.slow timed out" in results["slow"].error
+    assert any("test_stage.slow timed out" in error for error in errors)
 
 
 def test_market_ai_report_reuses_supplied_market_context(monkeypatch):

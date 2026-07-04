@@ -7,6 +7,8 @@ from pydantic import BaseModel
 class ProviderStatus(BaseModel):
     name: str = ""
     status: str = ""
+    mode: str = ""
+    message: str = ""
     detail: str = ""
 
 
@@ -87,13 +89,7 @@ def _provider_statuses() -> list[ProviderStatus]:
             else "optional_missing",
             detail="日本株財務補完用。",
         ),
-        ProviderStatus(
-            name="Supabase",
-            status="configured"
-            if _env_configured("SUPABASE_URL")
-            else "optional_missing",
-            detail="個人データの任意同期先。未設定時はローカルJSONを使います。",
-        ),
+        _supabase_provider_status(),
         ProviderStatus(
             name="yfinance",
             status="best_effort",
@@ -104,6 +100,56 @@ def _provider_statuses() -> list[ProviderStatus]:
 
 def _env_configured(name: str) -> bool:
     return bool(os.getenv(name, "").strip())
+
+
+def _supabase_provider_status() -> ProviderStatus:
+    has_url = _env_configured("SUPABASE_URL")
+    key_mode = _supabase_key_mode()
+    if not has_url:
+        return ProviderStatus(
+            name="Supabase",
+            status="optional_missing",
+            mode="missing_url",
+            message="SUPABASE_URL未設定",
+            detail="SUPABASE_URL未設定。個人データはローカルJSON保存になります。",
+        )
+    if key_mode == "missing_key":
+        return ProviderStatus(
+            name="Supabase",
+            status="not_configured",
+            mode="missing_key",
+            message="Supabase key未設定",
+            detail=(
+                "SUPABASE_URLはありますが、SUPABASE_SECRET_KEY / "
+                "SUPABASE_SERVICE_ROLE_KEY / SUPABASE_KEY が未設定です。"
+            ),
+        )
+    if key_mode == "configured_secret":
+        return ProviderStatus(
+            name="Supabase",
+            status="configured",
+            mode=key_mode,
+            message="secret key設定済み",
+            detail="SUPABASE_URLとSUPABASE_SECRET_KEYを使って個人データを同期できます。",
+        )
+    return ProviderStatus(
+        name="Supabase",
+        status="configured",
+        mode=key_mode,
+        message="legacy key設定済み",
+        detail=(
+            "SUPABASE_URLと互換キーを検出しました。新規環境では "
+            "SUPABASE_SECRET_KEY を推奨します。"
+        ),
+    )
+
+
+def _supabase_key_mode() -> str:
+    if _env_configured("SUPABASE_SECRET_KEY"):
+        return "configured_secret"
+    if _env_configured("SUPABASE_SERVICE_ROLE_KEY") or _env_configured("SUPABASE_KEY"):
+        return "configured_legacy"
+    return "missing_key"
 
 
 def _provider_health() -> list[ProviderHealthDisplay]:

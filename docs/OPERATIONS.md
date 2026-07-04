@@ -115,6 +115,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 
 - `APP_MODE=public_readonly` ではPortfolio・Knowledge・Trading Plan互換データの読み書き、AI生成、URL・YouTube取り込みを拒否します。個人機能のナビゲーションも表示しません
 - 外部APIの制限により、オプション分析とニュース集約は一時的に空になることがあります
+- Market Watch の詳細更新とStockの補助診断は、外部取得や重い計算が所定時間を超えた場合、その項目だけを `partial` / `failed` として扱い、取得済みの基本情報を表示します。失敗理由は各画面のデータ状態と「データ品質」ページの provider health で確認します
 - 市場指数・セクター等の取得失敗は価格 `0.0` として表示せず、その項目を利用不可として省略します
 - Theme Rankingは指定期間を満たす構成銘柄だけを使い、2銘柄以上かつ構成銘柄の40%以上を取得できたテーマだけを表示します
 - 日本株の汎用現在値・価格履歴はyfinanceを使います。J-Quants Freeの価格系列は遅延するため現在値として扱わず、企業マスター・財務情報の補完に限定します

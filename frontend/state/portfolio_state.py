@@ -90,6 +90,16 @@ class PortfolioState(rx.State):
         except Exception as e:
             self.error_msg = f"ポートフォリオ一覧の取得に失敗: {e}"
 
+    async def load_portfolio_list_for_route(self):
+        """Load route data only when personal-data pages are enabled."""
+
+        if not _personal_data_route_enabled():
+            self._sync_storage_type()
+            self.portfolio_names = []
+            self.error_msg = ""
+            return
+        await self.load_portfolio_list()
+
     async def change_storage_type(self, value: str | list[str]):
         """共通ストレージ設定を変更し、選択先のポートフォリオ一覧を読み直す"""
 
@@ -362,3 +372,9 @@ def get_active_storage_type() -> str:
 
 def storage_type_label(value: str) -> str:
     return {"local": "ローカルJSON", "supabase": "Supabase"}.get(value, value)
+
+
+def _personal_data_route_enabled() -> bool:
+    from src.app_mode import personal_data_enabled
+
+    return personal_data_enabled()
