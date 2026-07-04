@@ -101,6 +101,7 @@ def _marketdata_options_check(
         SMOKE_EXPIRATION_POLICY,
         fetch_marketdata_option_chain,
     )
+    from src.option_analyst import analyze_option_sentiment
 
     targets = tickers or ["SPY", "QQQ", "IWM"]
     summaries = []
@@ -120,9 +121,15 @@ def _marketdata_options_check(
             continue
         calls = len(result.calls)
         puts = len(result.puts)
+        cap_note = (
+            "side_cap_reached=true"
+            if calls >= DEFAULT_STRIKE_LIMIT or puts >= DEFAULT_STRIKE_LIMIT
+            else "side_cap_reached=false"
+        )
         summaries.append(
             f"{ticker}:expiration={result.resolved_expiration or 'unknown'} "
-            f"dte={result.resolved_dte} calls={calls} puts={puts} "
+            f"dte={result.resolved_dte} calls={calls}/{DEFAULT_STRIKE_LIMIT} "
+            f"puts={puts}/{DEFAULT_STRIKE_LIMIT} {cap_note} "
             f"as_of={result.data_as_of or 'unknown'} "
             f"credits={result.credits_consumed}/{result.credits_remaining}"
         )
@@ -142,8 +149,49 @@ def _marketdata_options_check(
             summaries.append(
                 f"{ticker}:target_dte={target_dte} "
                 f"expiration={horizon.resolved_expiration or 'unknown'} "
-                f"dte={horizon.resolved_dte} calls={len(horizon.calls)} "
-                f"puts={len(horizon.puts)}"
+                f"dte={horizon.resolved_dte} "
+                f"calls={len(horizon.calls)}/{DEFAULT_STRIKE_LIMIT} "
+                f"puts={len(horizon.puts)}/{DEFAULT_STRIKE_LIMIT}"
+            )
+        analysis = analyze_option_sentiment(ticker, allow_marketdata=True)
+        term_horizons = list(analysis.get("horizons") or [])
+        by_key = {str(item.get("key")): item for item in term_horizons}
+        missing_terms = [
+            key for key in ("current", "one_week", "one_month") if key not in by_key
+        ]
+        inactive_terms = [
+            key
+            for key, item in by_key.items()
+            if key in {"current", "one_week", "one_month"}
+            and not bool(item.get("provider_active"))
+        ]
+        non_marketdata_terms = [
+            key
+            for key, item in by_key.items()
+            if key in {"current", "one_week", "one_month"}
+            and "marketdata.app" not in str(item.get("source") or "")
+        ]
+        if missing_terms:
+            failures.append(
+                f"{ticker}:term_structure_missing={','.join(missing_terms)}"
+            )
+        if inactive_terms:
+            failures.append(
+                f"{ticker}:term_structure_inactive={','.join(inactive_terms)}"
+            )
+        if non_marketdata_terms:
+            failures.append(
+                f"{ticker}:term_structure_non_marketdata="
+                + ",".join(non_marketdata_terms)
+            )
+        if not missing_terms and not inactive_terms and not non_marketdata_terms:
+            summaries.append(
+                f"{ticker}:term_structure="
+                f"{analysis.get('term_structure', {}).get('summary') or 'available'}"
+            )
+            summaries.append(
+                f"{ticker}:term_horizons="
+                + ",".join(_term_horizon_detail(item) for item in term_horizons)
             )
 
     detail = f"mode={mode}; min_dte={min_dte}; " + "; ".join(summaries)
@@ -152,6 +200,20 @@ def _marketdata_options_check(
     if failures:
         return "DEGRADED: " + detail + "; failures=" + ", ".join(failures)
     return detail
+
+
+def _term_horizon_detail(item: dict[str, Any]) -> str:
+    key = str(item.get("key") or "unknown")
+    expiration = str(item.get("resolved_expiration") or "unknown")
+    dte = item.get("resolved_dte")
+    iv = item.get("iv")
+    as_of = str(item.get("data_as_of") or "unknown")
+    source = str(item.get("source") or "unknown")
+    try:
+        iv_text = f"{float(iv):.1%}"
+    except (TypeError, ValueError):
+        iv_text = "unknown"
+    return f"{key}@{expiration}/dte={dte}/iv={iv_text}/as_of={as_of}/source={source}"
 
 
 def _latest_updated_timestamp(values: Any) -> str:

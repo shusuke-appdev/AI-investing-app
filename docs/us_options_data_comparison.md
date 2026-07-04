@@ -15,7 +15,7 @@
 - Hugging Face Secretsに `MARKETDATA_TOKEN`、Variablesまたは環境変数に `MARKETDATA_OPTIONS_MODE=preferred` を設定する
 - MarketData.appを米国オプションの主ソースにし、204 no data、API失敗、必須列不足、トークン未設定時だけyfinance/cacheへフォールバックする
 - current / 1W / 1M は満期一覧から有効満期を選ぶ。1W / 1M は目標DTEに最も近い満期を使い、同じtickerでも満期別cache keyで保存する
-- 検証用途では0DTE固定にせず、`--marketdata-min-dte 1` の次回有効満期と `--marketdata-horizon-dtes 7,30` で確認する。アプリ本体は米国東部時間の同日満期が有効な時間帯だけ0DTEを使い、それ以外は次回有効満期へ切り替える
+- 検証用途では0DTE固定にせず、`--marketdata-min-dte 1` の次回有効満期と `--marketdata-horizon-dtes 7,30` で確認する。strict live smoke はチェーン取得に加えて、アプリ層の current / 1W / 1M `term_structure` が MarketData.app 系 source で組み立てられたことも確認する。アプリ本体は米国東部時間の同日満期が有効な時間帯だけ0DTEを使い、それ以外は次回有効満期へ切り替える
 - `MARKETDATA_OPTIONS_MODE=shadow` は比較検証用として残し、yfinance表示を維持したまま直接Greeks、データ基準時刻、クレジット消費を確認する用途に限定する
 
 ### B. IB証券(米国)の口座をお持ちなら → **IBKR API**

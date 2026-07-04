@@ -1,5 +1,22 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-07-04 Supabase project restore and live path verification
+- Restored Supabase project `pbdwzpktugztklejzvhn` from `INACTIVE` to `ACTIVE_HEALTHY` via Supabase MCP; database host DNS resolved after restoration.
+- Confirmed public tables `user_settings`, `portfolios`, `knowledge_items`, and `trade_plans` exist, have RLS enabled, and grant Data API privileges to `service_role` only, matching `docs/SUPABASE_DATA_API_GRANTS.md`.
+- Ran repo `scripts/live_smoke.py --require-optional` with project URL and publishable key: non-Supabase live checks passed, but Supabase failed with permission denied because this repo intentionally requires `SUPABASE_SECRET_KEY` / service-role access for writes.
+- Verified the live database path through Supabase MCP SQL with temporary rows across all 4 app tables: insert/select/update/delete passed and cleanup left 0 remaining rows.
+- Security Advisor still reports `RLS Enabled No Policy` INFO for the 4 tables; this is documented as expected for the repo's server-side service-role-only configuration.
+- Follow-up local `.env` verification found `SUPABASE_URL` and `SUPABASE_SECRET_KEY` configured, but `scripts/live_smoke.py --require-optional` still failed Supabase with API 401 `Invalid API key`; the configured key must be rechecked against project `pbdwzpktugztklejzvhn`.
+
+## Session update: 2026-07-04 MarketData strict term-structure verification
+- Local `.env` has `MARKETDATA_TOKEN` configured and `MARKETDATA_OPTIONS_MODE=preferred`; `.env` remains ignored by Git.
+- Tightened `scripts/live_smoke.py --require-marketdata` so the MarketData smoke now validates both live option-chain retrieval and the app-level `analyze_option_sentiment()` current / 1W / 1M `term_structure` built from MarketData.app source.
+- Clarified the smoke output after review: `calls=100/100` and `puts=100/100` now show `strikeLimit=100` side-cap usage, not full-chain completeness, and term horizon details include expiration, DTE, IV, `as_of`, and source.
+- Added regression tests for the strict smoke path so missing or non-MarketData term-structure horizons degrade the check instead of silently passing on raw chain rows.
+- Updated README and operations/options docs with the required local `.env` settings and the strict SPY command.
+- Live validation passed: `SPY` current expiration `2026-07-06` (`dte=4`, 100 calls / 100 puts), 1W target expiration `2026-07-10` (`dte=8`), 1M target expiration `2026-07-31` (`dte=29`), and app term structure `現在IV=7.2% / 1W IV=11.0% / 1M IV=13.7% / 期間構造はおおむねフラット`.
+- Validation: targeted MarketData/live-smoke regression tests passed (`31 passed`), strict MarketData live smoke passed, and full `scripts/check.py` passed (`282 passed`, compileall, ruff check, ruff format check, Reflex frontend export).
+
 ## Session update: 2026-07-01 根拠一致度ヘルスと機能間連携の総点検
 - `purchase_evidence_health` をStock dashboard payload、`StockSignalContext`、Stock State、Stock詳細、Data Quality、トレード分析、AI Stock Recap promptへ接続し、根拠一致度の必須4入力と上限判定を機能横断で同じ表示にした。
 - トレード分析で既に受け取っていた根拠一致度をUIに表示し、古い/簡略contextでも表示が壊れないよう未算出デフォルトを追加した。
