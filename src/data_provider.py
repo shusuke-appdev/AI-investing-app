@@ -9,14 +9,16 @@ from typing import Protocol, runtime_checkable
 import pandas as pd
 
 # 実際の実装モジュールから関数をインポート
-from src.market_index_provider import get_market_indices
+from src.market_index_provider import get_market_indices, get_market_indices_result
 from src.models import MarketIndex, NewsItem, StockInfo
 from src.news_provider import (
     get_company_news_raw,
     get_stock_news,
+    get_stock_news_result,
     get_stock_news_with_status,
 )
 from src.option_data_provider import get_option_chain
+from src.provider_result import FetchResult
 from src.stock_data_provider import (
     get_current_price,
     get_earnings_calendar,
@@ -33,7 +35,7 @@ from src.stock_data_provider import (
 class DataProviderProtocol(Protocol):
     """データ取得メソッドを定義するProtocol（テスト時のMock用インターフェース）"""
 
-    def get_current_price(self, ticker: str) -> float: ...
+    def get_current_price(self, ticker: str) -> float | None: ...
     def get_historical_data(self, ticker: str, period: str = "1mo") -> pd.DataFrame: ...
     def get_historical_data_with_status(self, ticker: str, period: str = "1mo"): ...
     def get_option_chain(
@@ -46,8 +48,14 @@ class DataProviderProtocol(Protocol):
         min_dte: int = 0,
     ) -> tuple[pd.DataFrame, pd.DataFrame] | None: ...
     def get_market_indices(self, market_type: str = "US") -> dict[str, MarketIndex]: ...
+    def get_market_indices_result(
+        self, market_type: str = "US"
+    ) -> FetchResult[dict[str, MarketIndex]]: ...
     def get_stock_news(self, ticker: str, max_items: int = 10) -> list[NewsItem]: ...
     def get_stock_news_with_status(self, ticker: str, max_items: int = 10) -> dict: ...
+    def get_stock_news_result(
+        self, ticker: str, max_items: int = 10
+    ) -> FetchResult[list[NewsItem]]: ...
     def get_company_news_raw(self, ticker: str) -> list[dict]: ...
     def get_stock_info(
         self,
@@ -69,7 +77,7 @@ class DataProviderProtocol(Protocol):
 class DefaultDataProvider:
     """実際の実装モジュールを呼び出すデフォルトのプロバイダ"""
 
-    def get_current_price(self, ticker: str) -> float:
+    def get_current_price(self, ticker: str) -> float | None:
         return get_current_price(ticker)
 
     def get_historical_data(self, ticker: str, period: str = "1mo") -> pd.DataFrame:
@@ -98,11 +106,21 @@ class DefaultDataProvider:
     def get_market_indices(self, market_type: str = "US") -> dict[str, MarketIndex]:
         return get_market_indices(market_type)
 
+    def get_market_indices_result(
+        self, market_type: str = "US"
+    ) -> FetchResult[dict[str, MarketIndex]]:
+        return get_market_indices_result(market_type)
+
     def get_stock_news(self, ticker: str, max_items: int = 10) -> list[NewsItem]:
         return get_stock_news(ticker, max_items)
 
     def get_stock_news_with_status(self, ticker: str, max_items: int = 10) -> dict:
         return get_stock_news_with_status(ticker, max_items)
+
+    def get_stock_news_result(
+        self, ticker: str, max_items: int = 10
+    ) -> FetchResult[list[NewsItem]]:
+        return get_stock_news_result(ticker, max_items)
 
     def get_company_news_raw(self, ticker: str) -> list[dict]:
         return get_company_news_raw(ticker)
@@ -160,7 +178,7 @@ class DataProvider:
     """
 
     @staticmethod
-    def get_current_price(ticker: str) -> float:
+    def get_current_price(ticker: str) -> float | None:
         return _global_provider.get_current_price(ticker)
 
     @staticmethod
@@ -193,12 +211,24 @@ class DataProvider:
         return _global_provider.get_market_indices(market_type)
 
     @staticmethod
+    def get_market_indices_result(
+        market_type: str = "US",
+    ) -> FetchResult[dict[str, MarketIndex]]:
+        return _global_provider.get_market_indices_result(market_type)
+
+    @staticmethod
     def get_stock_news(ticker: str, max_items: int = 10) -> list[NewsItem]:
         return _global_provider.get_stock_news(ticker, max_items)
 
     @staticmethod
     def get_stock_news_with_status(ticker: str, max_items: int = 10) -> dict:
         return _global_provider.get_stock_news_with_status(ticker, max_items)
+
+    @staticmethod
+    def get_stock_news_result(
+        ticker: str, max_items: int = 10
+    ) -> FetchResult[list[NewsItem]]:
+        return _global_provider.get_stock_news_result(ticker, max_items)
 
     @staticmethod
     def get_company_news_raw(ticker: str) -> list[dict]:

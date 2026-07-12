@@ -12,6 +12,7 @@ import pandas as pd
 from src.log_config import get_logger
 from src.marketdata_client import MarketDataClient, MarketDataError
 from src.persistent_cache import PersistentJsonCache, repo_state_cache, utc_now_iso
+from src.provider_result import FetchResult
 
 logger = get_logger(__name__)
 
@@ -32,12 +33,13 @@ OPTION_COLUMNS = (
 _expiration_cache: dict[str, tuple[datetime, list[date]]] = {}
 
 
-@dataclass
-class MarketDataOptionResult:
+@dataclass(kw_only=True)
+class MarketDataOptionResult(FetchResult[None]):
     """Normalized option chain and provider metadata."""
 
     calls: pd.DataFrame
     puts: pd.DataFrame
+    data: None = None
     source: str = "marketdata.app"
     fetched_at: str = ""
     data_as_of: str = ""
@@ -55,6 +57,13 @@ class MarketDataOptionResult:
     expiration_fallback_reason: str = ""
     error_code: str = ""
     quality_warnings: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        """Keep the compatibility alias synchronized with the shared contract."""
+
+        combined = list(dict.fromkeys([*self.warnings, *self.quality_warnings]))
+        self.warnings = combined
+        self.quality_warnings = combined
 
     def metadata(self) -> dict[str, Any]:
         return {

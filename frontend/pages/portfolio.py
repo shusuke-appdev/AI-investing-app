@@ -81,7 +81,7 @@ def _render_input_section() -> rx.Component:
         ),
         # ポートフォリオ選択
         rx.hstack(
-            rx.heading(PortfolioState.current_portfolio_name, size="5"),
+            rx.heading(PortfolioState.current_portfolio_name, size="5", as_="h2"),
             rx.spacer(),
             rx.button(
                 rx.icon("plus", size=15),
@@ -271,11 +271,12 @@ def _render_analysis_section() -> rx.Component:
                 rx.card(
                     rx.vstack(
                         rx.text("総資産", size="2", color="gray"),
-                        rx.heading(
+                        rx.text(
                             "$",
                             result["total_value"].to(float),
                             size="5",
                             weight="bold",
+                            font_variant_numeric="tabular-nums",
                         ),
                     ),
                     width="100%",
@@ -283,10 +284,11 @@ def _render_analysis_section() -> rx.Component:
                 rx.card(
                     rx.vstack(
                         rx.text("銘柄数", size="2", color="gray"),
-                        rx.heading(
+                        rx.text(
                             result["num_holdings"].to(int),
                             size="5",
                             weight="bold",
+                            font_variant_numeric="tabular-nums",
                         ),
                     ),
                     width="100%",
@@ -301,7 +303,7 @@ def _render_analysis_section() -> rx.Component:
         rx.card(
             rx.vstack(
                 rx.hstack(
-                    rx.heading("AIアドバイス", size="4"),
+                    rx.heading("AIアドバイス", size="4", as_="h2"),
                     rx.spacer(),
                     rx.button(
                         rx.icon("sparkles", size=15),

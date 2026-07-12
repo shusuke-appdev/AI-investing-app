@@ -47,7 +47,7 @@ def trade_setup_panel() -> rx.Component:
         rx.box(
             rx.hstack(
                 rx.vstack(
-                    rx.heading("エントリー品質評価", size="5"),
+                    rx.heading("エントリー品質評価", size="5", as_="h2"),
                     rx.text(
                         "既存分析を置き換えず、日足のEntry品質と禁止条件を判定します。",
                         size="2",

@@ -117,7 +117,7 @@ def theme_ranking_content() -> rx.Component:
         rx.hstack(
             rx.hstack(
                 rx.icon("list-ordered", size=26, color=rx.color("blue", 9)),
-                rx.heading("テーマランキング", size="7"),
+                rx.heading("テーマランキング", size="7", as_="h1"),
                 align_items="center",
                 spacing="2",
             ),
@@ -170,6 +170,7 @@ def theme_ranking_content() -> rx.Component:
                         rx.heading(
                             "上昇テーマ Top 10",
                             size="5",
+                            as_="h2",
                             margin_bottom="1rem",
                             color=rx.color("green", 11),
                         ),
@@ -184,6 +185,7 @@ def theme_ranking_content() -> rx.Component:
                         rx.heading(
                             "下落テーマ Top 10",
                             size="5",
+                            as_="h2",
                             margin_bottom="1rem",
                             color=rx.color("red", 11),
                         ),

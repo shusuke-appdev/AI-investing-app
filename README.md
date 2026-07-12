@@ -13,7 +13,7 @@ short_description: Market intelligence and investment research dashboard
 
 AI Investing App は、米国株・日本株を対象に、市場環境、テーマ別モメンタム、個別銘柄、ポートフォリオ、ユーザー知識ベースを横断して分析する投資調査ダッシュボードです。
 
-現在の主UIは **Reflex** です。現行画面の入口は `frontend/` です。`src/ui/` と `legacy_streamlit/` は移行前の frozen archive であり、通常の機能追加・不具合修正の対象外です。
+現行UIは **Reflex** で、画面の入口は `frontend/` です。移行前のStreamlit資産は `codex/archive-streamlit-assets` ブランチへ履歴保全し、現行ツリーから撤去済みです。
 
 > 注意: 本アプリは投資判断を補助する調査ツールです。売買助言、投資一任、金融商品の推奨を目的としたものではありません。
 
@@ -30,7 +30,6 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 ## 技術スタック
 
 - UI: Reflex
-- 旧UI: Streamlit
 - データ取得: yfinance、Finnhub、J-Quants、EDINET、Google News
 - AI: Google Gemini API
 - 保存先: ローカルJSON、Supabase
@@ -46,11 +45,9 @@ AI-investing-app/
     advisor/               テクニカル、ボラティリティ、市場環境、ポートフォリオ分析
     services/              AI市場分析などのユースケース調整層
     storage/               保存先の抽象インターフェース
-    ui/                    旧Streamlit UI（frozen archive）
   tests/                   単体テスト
   docs/                    設計・運用・点検・改修計画
   scripts/                 検証・デバッグ用スクリプト
-  legacy_streamlit/        旧Streamlitアプリ（frozen archive）
 ```
 
 ## セットアップ
@@ -61,7 +58,7 @@ Python 3.12 を推奨します。このワークスペースでは `py -3.12` �
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt -c constraints.txt
+python -m pip install -r requirements-dev.txt -c constraints.txt
 ```
 
 `.env.example` を参考に `.env` を作成します。
@@ -80,8 +77,8 @@ SUPABASE_SECRET_KEY=your_supabase_secret_key_here
 # SUPABASE_KEY=your_legacy_supabase_key_here
 ```
 
-`APP_MODE=private` は個人利用向けで、Portfolio・Knowledge、AI生成、URL・YouTube取り込みを許可します。既存Trading Plan互換データは保存層に残りますが、通常UIではStockページ内の「トレード分析」を使います。
-公開配置では `APP_MODE=public_readonly` を設定してください。公開モードでは個人データを読み書きせず、個人ページをナビゲーションから除外し、AI生成とURL・YouTube取り込みも拒否します。
+`APP_MODE=private` は個人利用向けで、Portfolio・Knowledge、AI生成、URL・YouTube取り込みを許可します。これは認証機能ではないため、ローカル環境または外部アクセス制御された環境だけで使用してください。既存Trading Plan互換データは保存層に残りますが、通常UIではStockページ内の「トレード分析」を使います。
+`APP_MODE` 未設定時は安全側の `public_readonly` になります。公開モードでは個人データを読み書きせず、個人ページをナビゲーションから除外し、AI生成とURL・YouTube取り込みも拒否します。
 保存先の既定値はローカルJSONです。
 
 MarketData.app の live オプション取得を厳格に検証するには、ローカル `.env` に `MARKETDATA_TOKEN` と `MARKETDATA_OPTIONS_MODE=preferred` を設定してください。未設定時はアプリ障害ではなく `MarketData未設定 / yfinance・cache fallback中` として扱います。SPY の current / 1W / 1M 期間構造まで確認する場合は次を実行します。
@@ -107,11 +104,7 @@ docker build -t ai-investing-app .
 docker run --env-file .env -p 7860:7860 ai-investing-app
 ```
 
-旧Streamlit版:
-
-```powershell
-streamlit run legacy_streamlit/app.py
-```
+`requirements.txt` はReflex本番用、`requirements-dev.txt` はテスト・lint用です。
 
 ## 品質確認
 

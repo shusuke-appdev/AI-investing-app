@@ -16,6 +16,7 @@ from src.finnhub_client import (
     get_company_news as _finnhub_get_company_news,
 )
 from src.models import NewsItem
+from src.provider_result import FetchResult
 
 
 def _news_status_payload(
@@ -50,34 +51,61 @@ def _format_news_items(news: list[dict], max_items: int) -> list[NewsItem]:
 
 
 @ttl_cache(ttl=CACHE_TTL_MEDIUM)
-def get_stock_news_with_status(ticker: str, max_items: int = 10) -> dict:
-    """Get stock news with Finnhub source status for UI/AI context."""
+def get_stock_news_result(
+    ticker: str, max_items: int = 10
+) -> FetchResult[list[NewsItem]]:
+    """Get stock news through the shared provider result contract."""
 
     if not is_configured():
         status = get_auth_status()
-        return _news_status_payload(
-            source_status=status,
-            error_reason=get_auth_error_message(),
+        return FetchResult(
+            data=[],
+            source="finnhub",
+            status=status,
+            error_code="not_configured" if status == "missing" else status,
+            error=get_auth_error_message(),
         )
 
     try:
         raw_news = _finnhub_get_company_news(ticker)
     except Exception as exc:
-        return _news_status_payload(source_status="error", error_reason=str(exc))
+        return FetchResult(
+            data=[],
+            source="finnhub",
+            status="error",
+            error_code="fetch_failed",
+            error=str(exc),
+        )
 
     auth_status = get_auth_status()
     if auth_status == "invalid":
-        return _news_status_payload(
-            source_status=auth_status,
-            error_reason=get_auth_error_message(),
+        return FetchResult(
+            data=[],
+            source="finnhub",
+            status=auth_status,
+            error_code="invalid_auth",
+            error=get_auth_error_message(),
         )
 
     if not raw_news:
-        return _news_status_payload(source_status="empty")
+        return FetchResult(data=[], source="finnhub", status="empty")
 
+    return FetchResult(
+        data=_format_news_items(raw_news, max_items),
+        source="finnhub",
+        status="available",
+    )
+
+
+@ttl_cache(ttl=CACHE_TTL_MEDIUM)
+def get_stock_news_with_status(ticker: str, max_items: int = 10) -> dict:
+    """Compatibility dictionary for existing UI and AI consumers."""
+
+    result = get_stock_news_result(ticker, max_items)
     return _news_status_payload(
-        items=_format_news_items(raw_news, max_items),
-        source_status="available",
+        items=result.data,
+        source_status=result.status,
+        error_reason=result.error,
     )
 
 

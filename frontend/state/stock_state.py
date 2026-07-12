@@ -13,6 +13,7 @@ from frontend.components.data_provenance import (
     feature_health_display_items,
     provenance_display_items,
 )
+from frontend.state.request_tracking import is_current_request
 from src.display_labels import SECTOR_RATING_LABELS, display_label
 from src.services.stock_dashboard_service import (
     build_stock_dashboard_context,
@@ -171,6 +172,8 @@ class StockState(rx.State):
     data_status: list[DataStatusDisplay] = []
     provenance: list[ProvenanceDisplay] = []
     data_issue_summary: str = ""
+    fetch_request_id: int = 0
+    analysis_request_id: int = 0
 
     def prepare_page(self):
         """Normalize transient flags before the stock page renders."""
@@ -181,8 +184,17 @@ class StockState(rx.State):
         self.profile_warning = ""
 
     def set_ticker(self, value: str):
-        self.ticker = value.upper()
+        normalized = value.upper()
+        if normalized != self.ticker:
+            self.fetch_request_id += 1
+            self.analysis_request_id += 1
+        self.ticker = normalized
         self._reset_trade_analysis()
+
+    def submit_stock_search(self, _form_data: dict[str, Any]):
+        """Start the current ticker search from keyboard or button submit."""
+
+        return StockState.fetch_stock_data
 
     def show_trade_analysis(self):
         """Build the trade analysis from the current stock payload on demand."""
@@ -207,10 +219,13 @@ class StockState(rx.State):
     async def fetch_stock_data(self):
         """Fetch individual stock data without invoking Gemini/AI generation."""
 
-        if not self.ticker:
+        ticker = self.ticker.strip()
+        if not ticker:
             self.error_msg = "ティッカーシンボルを入力してください。"
             return
 
+        self.fetch_request_id += 1
+        request_id = self.fetch_request_id
         self.is_fetching = True
         self.error_msg = ""
         self.profile_warning = ""
@@ -218,12 +233,12 @@ class StockState(rx.State):
         yield
 
         try:
-            context = await asyncio.to_thread(
-                build_stock_dashboard_context, self.ticker
-            )
+            context = await asyncio.to_thread(build_stock_dashboard_context, ticker)
+            if not self._is_current_fetch(request_id, ticker):
+                return
             self.info = plain_state_value(context.info)
             display_info = plain_state_value(context.display_info)
-            self.display_name = display_info.get("name", self.ticker)
+            self.display_name = display_info.get("name", ticker)
             self.display_exchange = display_info.get("exchange", "")
             self.display_sector = display_info.get("sector", "")
             self.display_market_cap = display_info.get("market_cap", "N/A")
@@ -407,11 +422,13 @@ class StockState(rx.State):
             self.data_issue_summary = self._data_issue_summary()
             from src.services.provider_health import record_data_results
 
-            record_data_results(context.data_status, scope=f"stock.{self.ticker}")
+            record_data_results(context.data_status, scope=f"stock.{ticker}")
             self.profile_warning = context.profile_warning
             if context.error_message:
                 self.error_msg = context.error_message
         except Exception as exc:
+            if not self._is_current_fetch(request_id, ticker):
+                return
             self.error_msg = f"データの取得に失敗しました: {exc}"
             self.profile_warning = ""
             self.info = {}
@@ -494,14 +511,18 @@ class StockState(rx.State):
             self.data_issue_summary = ""
             self.smart_criteria = SmartCriteria()
         finally:
-            self.is_fetching = False
-            yield
+            if self._is_current_fetch(request_id, ticker):
+                self.is_fetching = False
+                yield
 
     async def generate_ai_analysis(self):
         """Generate the Gemini-backed stock recap only when explicitly requested."""
 
-        if not self.ticker or not self.info:
+        ticker = self.ticker.strip()
+        if not ticker or not self.info:
             return
+        self.analysis_request_id += 1
+        request_id = self.analysis_request_id
         self.is_generating_analysis = True
         yield
 
@@ -510,7 +531,7 @@ class StockState(rx.State):
 
             recap = await asyncio.to_thread(
                 generate_stock_analysis_report,
-                self.ticker,
+                ticker,
                 plain_state_value(self.info),
                 None,
                 None,
@@ -519,15 +540,37 @@ class StockState(rx.State):
                 plain_state_value(self.stock_signal_context),
             )
 
+            if not self._is_current_analysis(request_id, ticker):
+                return
+
             if recap:
                 self.ai_analysis = recap
             else:
                 self.error_msg = "分析レポートの生成に失敗しました。"
         except Exception as exc:
+            if not self._is_current_analysis(request_id, ticker):
+                return
             self.error_msg = f"AI分析エラー: {exc}"
         finally:
-            self.is_generating_analysis = False
-            yield
+            if self._is_current_analysis(request_id, ticker):
+                self.is_generating_analysis = False
+                yield
+
+    def _is_current_fetch(self, request_id: int, ticker: str) -> bool:
+        return is_current_request(
+            current_id=self.fetch_request_id,
+            current_key=self.ticker.strip(),
+            request_id=request_id,
+            request_key=ticker,
+        )
+
+    def _is_current_analysis(self, request_id: int, ticker: str) -> bool:
+        return is_current_request(
+            current_id=self.analysis_request_id,
+            current_key=self.ticker.strip(),
+            request_id=request_id,
+            request_key=ticker,
+        )
 
     def _news_headlines(self) -> list[str]:
         headlines = []

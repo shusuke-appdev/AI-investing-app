@@ -84,7 +84,11 @@ def fundamental_profile_panel() -> rx.Component:
         rx.card(
             rx.vstack(
                 rx.hstack(
-                    rx.heading("適応型ファンダメンタル / 根拠一致度", size="4"),
+                    rx.heading(
+                        "適応型ファンダメンタル / 根拠一致度",
+                        size="4",
+                        as_="h3",
+                    ),
                     rx.spacer(),
                     evaluation_badge(
                         StockState.fundamental_score_display,

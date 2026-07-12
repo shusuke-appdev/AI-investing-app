@@ -1,5 +1,14 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-07-12 fail-safe deployment / latest-wins / UI semantics
+- Changed missing `APP_MODE` from implicit `private` to fail-safe `public_readonly`; private personal-data, AI, and external-content capabilities now require explicit configuration. Data Quality shows the non-secret active mode and whether it was explicitly set, and docs clarify that private mode is not authentication.
+- Added latest-request guards for Market/Stock data and AI events. Market/ticker changes invalidate older work so out-of-order completions cannot overwrite the current view. Timeout work now uses bounded shared executors instead of creating a new thread pool per request.
+- Preserved unavailable current prices as `None` instead of legacy `0.0`, and connected the data-fetch manifest to Market summary/options and Stock required-dependency checks.
+- Improved Reflex semantics: one primary `h1` per active route, KPI values are numeric text rather than headings, Stock ticker input has an associated label and Enter-submit form, action errors are adjacent/live, and public-only Portfolio/Knowledge notices retain page headings.
+- Split Reflex runtime, development, and frozen Streamlit dependencies into `requirements.txt`, `requirements-dev.txt`, and `requirements-legacy.txt`; CI installs the development set while Docker keeps the smaller runtime set.
+- Added post-export `scripts/ui_static_smoke.py` to the release gate for seven routes, checking one `h1`, no empty headings, and the Stock label/input association.
+- Validation: focused regression sets passed, then full `scripts/check.py` passed with dependency consistency, compileall, Ruff lint/format, `302 passed`, Reflex frontend export, and static UI semantics for seven routes. Dynamic dev-server Browser interaction remains outside this pass because the known Windows multiprocessing `WinError 5` surface was not retried.
+
 ## Session update: 2026-07-05 product resilience implementation
 - Added bounded timeout handling for Market Watch detail-stage background tasks so one slow provider/diagnostic records a partial failure instead of blocking the whole stage indefinitely.
 - Added bounded timeout handling for optional Stock diagnostics while keeping profile, price history, chart data, and core technical analysis available when optional analysis times out or fails.
@@ -438,3 +447,11 @@ streamlit run legacy_streamlit/app.py
 - Made yfinance cache initialization continue with the repo-local `.states/yfinance_cache` when Python cannot resolve a writable OS temp directory, with a regression test.
 - Documented that pytest/Reflex write failures against this repository from another Codex workspace are sandbox-scope failures, not application failures.
 - Validation: dependency check, compileall, full Ruff lint/format, full pytest (`264 passed`), and Reflex frontend export all passed through the new read-only script. A first export hit a transient `.web/build` lock; no competing process remained and both the standalone retry and final full-script retry passed.
+
+# Session update: 2026-07-12 provider contract / module decomposition / Reflex-only tree
+- Added generic `FetchResult[T]` and migrated quote, history, FRED, and MarketData option results to the shared provenance/freshness/error contract. Added status-aware result entry points for news and market indices while retaining compatibility facades.
+- Split the former 1,000+ line modules by responsibility: Market display models/formatting, detailed monitor panels, option cross-index aggregation, stock feature-health presentation, and Market orchestration workflows/AI formatting/support. All Python files under `src/` and `frontend/` are now below 1,000 lines.
+- Preserved historical import and monkeypatch seams while moving implementations, so existing UI/state/tests can migrate incrementally without changing behavior.
+- Created `codex/archive-streamlit-assets` at the pre-removal commit, then removed `legacy_streamlit/`, `src/ui/`, Streamlit-only verification scripts, the legacy requirements file, and the Streamlit constraint from the current tree.
+- Updated README, architecture/operations docs, roadmaps, task state, and runtime dependency tests to make Reflex the sole current UI/runtime.
+- Validation: `python scripts/check.py` passed dependency consistency, compileall, Ruff lint/format, all `306` tests, Reflex frontend export, and static UI semantics for 7 routes. Six existing pandas 4 deprecation warnings remain non-failing.

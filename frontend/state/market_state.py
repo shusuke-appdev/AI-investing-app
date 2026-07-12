@@ -10,6 +10,7 @@ from frontend.components.data_provenance import (
     data_status_display_items,
     provenance_display_items,
 )
+from frontend.state.request_tracking import is_current_request
 from src.services.market_analyst_service import generate_market_analysis_report
 from src.services.market_dashboard_service import (
     build_fomo_scan_context,
@@ -126,8 +127,13 @@ class MarketState(rx.State):
     market_context: dict[str, Any] = {}
     data_status: list[DataStatusDisplay] = []
     provenance: list[ProvenanceDisplay] = []
+    market_request_id: int = 0
+    recap_request_id: int = 0
 
     def set_market_type(self, m_type: str):
+        if m_type != self.market_type:
+            self.market_request_id += 1
+            self.recap_request_id += 1
         self.market_type = m_type
         return MarketState.fetch_market_summary_fast
 
@@ -138,6 +144,7 @@ class MarketState(rx.State):
         self.custom_recap_focus = value
 
     async def fetch_market_summary_fast(self):
+        request_id, market_type = self._begin_market_request()
         self.is_fetching_summary = True
         self.is_fetching = not self._has_visible_market_data()
         self.error_msg = ""
@@ -146,8 +153,10 @@ class MarketState(rx.State):
 
         try:
             cached = await asyncio.to_thread(
-                load_cached_market_summary_context, self.market_type
+                load_cached_market_summary_context, market_type
             )
+            if not self._is_current_market_request(request_id, market_type):
+                return
             if cached:
                 self._apply_market_context(cached)
                 self.is_fetching = False
@@ -155,11 +164,13 @@ class MarketState(rx.State):
                 yield
                 self.is_fetching_summary = True
 
-            context = await asyncio.to_thread(
-                build_market_summary_context, self.market_type
-            )
+            context = await asyncio.to_thread(build_market_summary_context, market_type)
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._apply_market_context(context)
         except Exception as exc:
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self.error_msg = f"Failed to fetch market data: {exc}"
             self.indices_data = []
             self.sectors_data = []
@@ -173,19 +184,23 @@ class MarketState(rx.State):
             self.option_complete_status = "failed"
             self.market_signals = []
         finally:
-            self.is_fetching = False
-            self.is_fetching_summary = False
-            yield
+            if self._is_current_market_request(request_id, market_type):
+                self.is_fetching = False
+                self.is_fetching_summary = False
+                yield
 
     async def refresh_market_details(self):
+        request_id, market_type = self._begin_market_request()
         self.is_fetching_details = True
         self.error_msg = ""
         self._set_stage_status("core", "loading", "前回成功データを確認中...")
         yield
 
         cached_context = await asyncio.to_thread(
-            load_cached_market_full_context, self.market_type
+            load_cached_market_full_context, market_type
         )
+        if not self._is_current_market_request(request_id, market_type):
+            return
         if cached_context:
             self._apply_market_context(cached_context)
             yield
@@ -201,13 +216,17 @@ class MarketState(rx.State):
             yield
             context = await asyncio.to_thread(
                 build_market_theme_flow_context,
-                self.market_type,
+                market_type,
                 base_context,
             )
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._apply_market_context(context)
             base_context = self.market_context or None
             yield
         except Exception as exc:
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._set_stage_status(
                 "theme_flow", "failed", "Theme/Flowの更新に失敗しました。", str(exc)
             )
@@ -222,13 +241,17 @@ class MarketState(rx.State):
             yield
             context = await asyncio.to_thread(
                 build_market_volatility_sentiment_context,
-                self.market_type,
+                market_type,
                 base_context,
             )
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._apply_market_context(context)
             base_context = self.market_context or None
             yield
         except Exception as exc:
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._set_stage_status(
                 "volatility_sentiment",
                 "failed",
@@ -246,13 +269,17 @@ class MarketState(rx.State):
             yield
             context = await asyncio.to_thread(
                 build_market_high_context,
-                self.market_type,
+                market_type,
                 base_context,
             )
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._apply_market_context(context)
             base_context = self.market_context or None
             yield
         except Exception as exc:
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._set_stage_status(
                 "credit_distortion",
                 "failed",
@@ -266,21 +293,27 @@ class MarketState(rx.State):
             yield
             context = await asyncio.to_thread(
                 build_market_options_context,
-                self.market_type,
+                market_type,
                 base_context,
             )
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._apply_market_context(context)
         except Exception as exc:
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self.option_status = "failed"
             self.option_error_msg = f"Failed to refresh option data: {exc}"
             self._set_stage_status(
                 "options", "failed", "Optionsの更新に失敗しました。", str(exc)
             )
         finally:
-            self.is_fetching_details = False
-            yield
+            if self._is_current_market_request(request_id, market_type):
+                self.is_fetching_details = False
+                yield
 
     async def refresh_theme_flow(self):
+        request_id, market_type = self._begin_market_request()
         self.is_fetching_details = True
         self.error_msg = ""
         self._set_stage_status(
@@ -290,19 +323,25 @@ class MarketState(rx.State):
         try:
             context = await asyncio.to_thread(
                 build_market_theme_flow_context,
-                self.market_type,
+                market_type,
                 self.market_context or None,
             )
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._apply_market_context(context)
         except Exception as exc:
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._set_stage_status(
                 "theme_flow", "failed", "Theme/Flowの更新に失敗しました。", str(exc)
             )
         finally:
-            self.is_fetching_details = False
-            yield
+            if self._is_current_market_request(request_id, market_type):
+                self.is_fetching_details = False
+                yield
 
     async def refresh_volatility_sentiment(self):
+        request_id, market_type = self._begin_market_request()
         self.is_fetching_details = True
         self.error_msg = ""
         self._set_stage_status(
@@ -314,11 +353,15 @@ class MarketState(rx.State):
         try:
             context = await asyncio.to_thread(
                 build_market_volatility_sentiment_context,
-                self.market_type,
+                market_type,
                 self.market_context or None,
             )
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._apply_market_context(context)
         except Exception as exc:
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._set_stage_status(
                 "volatility_sentiment",
                 "failed",
@@ -326,10 +369,12 @@ class MarketState(rx.State):
                 str(exc),
             )
         finally:
-            self.is_fetching_details = False
-            yield
+            if self._is_current_market_request(request_id, market_type):
+                self.is_fetching_details = False
+                yield
 
     async def refresh_credit_distortion(self):
+        request_id, market_type = self._begin_market_request()
         self.is_fetching_details = True
         self.error_msg = ""
         self._set_stage_status(
@@ -341,11 +386,15 @@ class MarketState(rx.State):
         try:
             context = await asyncio.to_thread(
                 build_market_high_context,
-                self.market_type,
+                market_type,
                 self.market_context or None,
             )
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._apply_market_context(context)
         except Exception as exc:
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._set_stage_status(
                 "credit_distortion",
                 "failed",
@@ -353,10 +402,12 @@ class MarketState(rx.State):
                 str(exc),
             )
         finally:
-            self.is_fetching_details = False
-            yield
+            if self._is_current_market_request(request_id, market_type):
+                self.is_fetching_details = False
+                yield
 
     async def refresh_options(self):
+        request_id, market_type = self._begin_market_request()
         self.is_fetching_options = True
         self.error_msg = ""
         self.option_error_msg = ""
@@ -366,19 +417,24 @@ class MarketState(rx.State):
         try:
             context = await asyncio.to_thread(
                 build_market_options_context,
-                self.market_type,
+                market_type,
                 self.market_context or None,
             )
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self._apply_market_context(context)
         except Exception as exc:
+            if not self._is_current_market_request(request_id, market_type):
+                return
             self.option_status = "failed"
             self.option_error_msg = f"Failed to refresh option data: {exc}"
             self._set_stage_status(
                 "options", "failed", "Optionsの更新に失敗しました。", str(exc)
             )
         finally:
-            self.is_fetching_options = False
-            yield
+            if self._is_current_market_request(request_id, market_type):
+                self.is_fetching_options = False
+                yield
 
     async def refresh_fomo_scan(self):
         self.is_scanning_fomo = True
@@ -408,6 +464,7 @@ class MarketState(rx.State):
             yield
 
     async def generate_ai_recap(self):
+        request_id, market_type = self._begin_recap_request()
         self.is_generating_recap = True
         self.ai_recap_error_type = ""
         self.ai_recap_notice_msg = ""
@@ -416,10 +473,12 @@ class MarketState(rx.State):
         try:
             recap = await asyncio.to_thread(
                 generate_market_analysis_report,
-                self.market_type,
+                market_type,
                 market_context=self.market_context or None,
                 custom_focus=None,
             )
+            if not self._is_current_recap_request(request_id, market_type):
+                return
             if recap:
                 self.ai_recap = recap
                 self.ai_recap_error_type = self._classify_recap_failure(recap)
@@ -432,13 +491,18 @@ class MarketState(rx.State):
                 self.ai_recap_error_type = "unknown"
                 self.ai_recap_notice_msg = "AI Recapを生成できませんでした。"
         except Exception as exc:
+            if not self._is_current_recap_request(request_id, market_type):
+                return
             self.ai_recap_error_type = "exception"
             self.ai_recap_notice_msg = f"AI Recap生成エラー: {exc}"
         finally:
-            self.is_generating_recap = False
-            yield
+            if self._is_current_recap_request(request_id, market_type):
+                self.is_generating_recap = False
+                yield
 
     async def generate_ai_recap_with_focus(self):
+        request_id, market_type = self._begin_recap_request()
+        custom_focus = self.custom_recap_focus.strip()
         self.is_generating_recap = True
         self.ai_recap_error_type = ""
         self.ai_recap_notice_msg = ""
@@ -447,10 +511,12 @@ class MarketState(rx.State):
         try:
             recap = await asyncio.to_thread(
                 generate_market_analysis_report,
-                self.market_type,
+                market_type,
                 market_context=self.market_context or None,
-                custom_focus=self.custom_recap_focus.strip(),
+                custom_focus=custom_focus,
             )
+            if not self._is_current_recap_request(request_id, market_type):
+                return
             if recap:
                 self.ai_recap = recap
                 self.ai_recap_error_type = self._classify_recap_failure(recap)
@@ -463,11 +529,38 @@ class MarketState(rx.State):
                 self.ai_recap_error_type = "unknown"
                 self.ai_recap_notice_msg = "AI Recapを生成できませんでした。"
         except Exception as exc:
+            if not self._is_current_recap_request(request_id, market_type):
+                return
             self.ai_recap_error_type = "exception"
             self.ai_recap_notice_msg = f"AI Recap生成エラー: {exc}"
         finally:
-            self.is_generating_recap = False
-            yield
+            if self._is_current_recap_request(request_id, market_type):
+                self.is_generating_recap = False
+                yield
+
+    def _begin_market_request(self) -> tuple[int, str]:
+        self.market_request_id += 1
+        return self.market_request_id, self.market_type
+
+    def _is_current_market_request(self, request_id: int, market_type: str) -> bool:
+        return is_current_request(
+            current_id=self.market_request_id,
+            current_key=self.market_type,
+            request_id=request_id,
+            request_key=market_type,
+        )
+
+    def _begin_recap_request(self) -> tuple[int, str]:
+        self.recap_request_id += 1
+        return self.recap_request_id, self.market_type
+
+    def _is_current_recap_request(self, request_id: int, market_type: str) -> bool:
+        return is_current_request(
+            current_id=self.recap_request_id,
+            current_key=self.market_type,
+            request_id=request_id,
+            request_key=market_type,
+        )
 
     def _apply_market_context(self, context) -> None:
         self.market_context = context.to_dict()

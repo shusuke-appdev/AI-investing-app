@@ -56,6 +56,10 @@ def main() -> int:
             [str(reflex), "export", "--frontend-only", "--no-zip"],
             "Reflex frontend export",
         ),
+        (
+            [sys.executable, "scripts/ui_static_smoke.py"],
+            "Static UI semantics",
+        ),
     ]
     failures = [
         description

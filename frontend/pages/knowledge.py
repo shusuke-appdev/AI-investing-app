@@ -37,7 +37,7 @@ def render_knowledge_item(item: dict) -> rx.Component:
             ),
             rx.divider(orientation="vertical"),
             rx.vstack(
-                rx.heading(item["title"], size="4"),
+                rx.heading(item["title"], size="4", as_="h3"),
                 rx.text(item["summary"], size="2", color=rx.color("gray", 11)),
                 rx.hstack(
                     rx.cond(
@@ -85,7 +85,7 @@ def render_list_mode() -> rx.Component:
     """一覧モード"""
     return rx.vstack(
         rx.hstack(
-            rx.heading("保存済み知識", size="5"),
+            rx.heading("保存済み知識", size="5", as_="h2"),
             rx.spacer(),
             rx.button(
                 rx.icon("plus"),
@@ -126,7 +126,7 @@ def render_list_mode() -> rx.Component:
 def render_add_mode() -> rx.Component:
     """追加モード"""
     return rx.vstack(
-        rx.heading("知識を追加", size="5", margin_bottom="1rem"),
+        rx.heading("知識を追加", size="5", as_="h2", margin_bottom="1rem"),
         rx.text("入力方式", weight="bold", size="2"),
         rx.radio(
             ["text", "file", "youtube", "url"],
@@ -250,7 +250,7 @@ def render_add_mode() -> rx.Component:
 def render_edit_mode() -> rx.Component:
     """編集モード"""
     return rx.vstack(
-        rx.heading("知識を編集", size="5", margin_bottom="1rem"),
+        rx.heading("知識を編集", size="5", as_="h2", margin_bottom="1rem"),
         rx.text("タイトル", weight="bold", size="2"),
         rx.input(
             value=KnowledgeState.edit_title,

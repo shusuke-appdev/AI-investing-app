@@ -13,7 +13,12 @@ def metric_card(title: str, value: str, change: str) -> rx.Component:
     return rx.card(
         rx.vstack(
             rx.text(title, size="2", color=rx.color("gray", 11), weight="medium"),
-            rx.heading(value, size="6", weight="bold"),
+            rx.text(
+                value,
+                size="6",
+                weight="bold",
+                font_variant_numeric="tabular-nums",
+            ),
             rx.cond(
                 change != "",
                 rx.hstack(

@@ -3,7 +3,7 @@
 - [x] Python実行環境を復旧し、`python -m pytest -q` と `python -m compileall src frontend tests` を通す <!-- id: 1 -->
 - [x] `ruff check . --fix` と `ruff format .` を適用し、自動修正後に残る指摘をレビューする <!-- id: 2 -->
 - [x] GitHub Actions に lint / test / compile ジョブを追加し、Hugging Face 同期を品質チェック成功後に限定する <!-- id: 3 -->
-- [ ] Reflex を現行UIの正本として、Streamlit残存コードの扱いを決める <!-- id: 4 -->
+- [x] Reflex を現行UIの正本とし、Streamlit資産を履歴保全ブランチへ退避して現行ツリーから撤去 <!-- id: 4 -->
 - [ ] Market / Stock / Portfolio / Knowledge の表示モデルとユースケース出力モデルを定義する <!-- id: 5 -->
 - [ ] 外部API取得結果に `source`、`fetched_at`、`is_stale`、`error` を持つ共通ステータスを導入する <!-- id: 6 -->
 - [ ] `frontend/state/market_state.py` の業務ロジックを `src/services/market_dashboard_service.py` へ移す <!-- id: 7 -->

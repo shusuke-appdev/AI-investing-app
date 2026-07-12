@@ -53,7 +53,12 @@ def _stock_summary_tile(title: str, value, detail, color: str) -> rx.Component:
     return rx.card(
         rx.vstack(
             rx.text(title, size="1", color=rx.color("gray", 10), weight="bold"),
-            rx.heading(value, size="4"),
+            rx.text(
+                value,
+                size="5",
+                weight="bold",
+                font_variant_numeric="tabular-nums",
+            ),
             rx.text(detail, size="1", color=rx.color("gray", 10)),
             spacing="1",
             align_items="start",
@@ -122,7 +127,7 @@ def _stock_decision_summary() -> rx.Component:
 def _ai_recap_panel() -> rx.Component:
     return rx.box(
         rx.hstack(
-            rx.heading("AI銘柄要約", size="5", margin_bottom="1rem"),
+            rx.heading("AI銘柄要約", size="5", as_="h2", margin_bottom="1rem"),
             rx.spacer(),
             rx.button(
                 rx.icon("sparkles", size=16),
@@ -160,7 +165,7 @@ def _ai_recap_panel() -> rx.Component:
 
 def _news_panel() -> rx.Component:
     return rx.box(
-        rx.heading("最新ニュース", size="5", margin_bottom="1rem"),
+        rx.heading("最新ニュース", size="5", as_="h2", margin_bottom="1rem"),
         rx.cond(
             StockState.news.length() > 0,
             rx.grid(
@@ -256,39 +261,55 @@ def stock_page() -> rx.Component:
         ),
         # ティッカー入力と取得ボタン
         rx.card(
-            rx.flex(
-                rx.text("銘柄コード", weight="bold"),
-                rx.input(
-                    placeholder="例: AAPL",
-                    value=StockState.ticker,
-                    on_change=StockState.set_ticker,
-                    width=rx.breakpoints(initial="100%", sm="220px"),
+            rx.vstack(
+                rx.form(
+                    rx.flex(
+                        rx.el.label(
+                            "銘柄コード",
+                            html_for="stock-ticker",
+                            font_weight="bold",
+                        ),
+                        rx.input(
+                            id="stock-ticker",
+                            name="ticker",
+                            placeholder="例: AAPL",
+                            value=StockState.ticker,
+                            on_change=StockState.set_ticker,
+                            width=rx.breakpoints(initial="100%", sm="220px"),
+                        ),
+                        rx.button(
+                            rx.icon("search", size=16),
+                            "データ取得",
+                            type="submit",
+                            loading=StockState.is_fetching,
+                            color_scheme="blue",
+                        ),
+                        align="center",
+                        direction=rx.breakpoints(initial="column", sm="row"),
+                        gap="0.75rem",
+                        width="100%",
+                    ),
+                    on_submit=StockState.submit_stock_search,
+                    reset_on_submit=False,
+                    width="100%",
                 ),
-                rx.button(
-                    rx.icon("search", size=16),
-                    "データ取得",
-                    on_click=StockState.fetch_stock_data,
-                    loading=StockState.is_fetching,
-                    color_scheme="blue",
+                rx.cond(
+                    StockState.error_msg != "",
+                    rx.callout(
+                        StockState.error_msg,
+                        icon="triangle_alert",
+                        color_scheme="red",
+                        role="alert",
+                        aria_live="polite",
+                        width="100%",
+                    ),
+                    rx.fragment(),
                 ),
-                align="center",
-                direction=rx.breakpoints(initial="column", sm="row"),
-                gap="0.75rem",
                 width="100%",
+                align_items="start",
             ),
             width="100%",
             margin_bottom="2rem",
-        ),
-        # エラーメッセージ
-        rx.cond(
-            StockState.error_msg != "",
-            rx.callout(
-                StockState.error_msg,
-                icon="triangle_alert",
-                color_scheme="red",
-                margin_bottom="1rem",
-                width="100%",
-            ),
         ),
         rx.cond(
             StockState.profile_warning != "",
@@ -310,7 +331,7 @@ def stock_page() -> rx.Component:
                 rx.vstack(
                     # 企業名ヘッダ
                     rx.hstack(
-                        rx.heading(StockState.display_name, size="6"),
+                        rx.heading(StockState.display_name, size="6", as_="h2"),
                         rx.cond(
                             StockState.display_exchange != "",
                             rx.badge(
@@ -361,12 +382,14 @@ def stock_page() -> rx.Component:
                                             ),
                                         ),
                                     ),
-                                    rx.heading(
+                                    rx.text(
                                         StockState.technical_data["overall_score"].to(
                                             str
                                         )
                                         + "点",
                                         size="6",
+                                        weight="bold",
+                                        font_variant_numeric="tabular-nums",
                                     ),
                                     rx.badge(
                                         "分析モード: "
@@ -435,7 +458,10 @@ def stock_page() -> rx.Component:
                         rx.card(
                             rx.vstack(
                                 rx.heading(
-                                    "株価推移 (1年)", size="4", margin_bottom="1rem"
+                                    "株価推移 (1年)",
+                                    size="4",
+                                    as_="h2",
+                                    margin_bottom="1rem",
                                 ),
                                 rx.cond(
                                     StockState.chart_data.length() > 0,
@@ -507,7 +533,9 @@ def stock_page() -> rx.Component:
                         # 企業概要エリア (右 1/3)
                         rx.card(
                             rx.vstack(
-                                rx.heading("企業概要", size="4", margin_bottom="1rem"),
+                                rx.heading(
+                                    "企業概要", size="4", as_="h2", margin_bottom="1rem"
+                                ),
                                 rx.scroll_area(
                                     rx.text(
                                         StockState.display_summary,
@@ -533,7 +561,7 @@ def stock_page() -> rx.Component:
                         StockState.smart_criteria.S.value != "",
                         rx.card(
                             rx.hstack(
-                                rx.heading("SMART基準評価", size="4"),
+                                rx.heading("SMART基準評価", size="4", as_="h3"),
                                 rx.cond(
                                     StockState.smart_criteria.all_met,
                                     evaluation_badge("全条件達成", "green"),
@@ -639,7 +667,9 @@ def stock_page() -> rx.Component:
                         rx.card(
                             rx.vstack(
                                 rx.hstack(
-                                    rx.heading("セクター/テーマ評価", size="4"),
+                                    rx.heading(
+                                        "セクター/テーマ評価", size="4", as_="h3"
+                                    ),
                                     evaluation_badge(
                                         StockState.sector_theme_rating_display,
                                         rx.cond(

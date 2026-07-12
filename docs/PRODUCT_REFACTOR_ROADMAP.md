@@ -7,7 +7,8 @@
 - 本アプリは個人用の投資調査ダッシュボードであり、売買助言・投資一任を目的としない。
 - 主UIと新規開発の正本は `frontend/` のReflexアプリとする。
 - `APP_MODE=private` は個人データの読み書き、AI生成、外部コンテンツ取り込みを許可する。
-- 公開配置では `APP_MODE=public_readonly` を設定し、Portfolio、Knowledge、Trading Plan互換データの読み書き、AI生成、URL・YouTube取り込みを禁止する。
+- `private` は認証機能ではなく、ローカルまたは外部アクセス制御済み環境だけで使う。
+- 未設定時と公開配置では `APP_MODE=public_readonly` とし、Portfolio、Knowledge、Trading Plan互換データの読み書き、AI生成、URL・YouTube取り込みを禁止する。
 - 保存先の既定値はローカルJSONとし、Supabaseは明示選択時のみ使用する。
 
 ## 分析機能の責務マップ
@@ -61,7 +62,7 @@
 
 - `market_dashboard_service.py` をステージ実行、依存分析、コンテキスト統合へ分割する。
 - `option_analyst.py` と大型UIコンポーネントを計算・整形・表示へ分割する。
-- `legacy_streamlit/` と `src/ui/` は履歴保持ブランチへ退避後、mainから削除する。
+- [完了] `legacy_streamlit/` と `src/ui/` は `codex/archive-streamlit-assets` へ履歴保持し、現行ツリーから削除した。
 
 ## 受入基準
 

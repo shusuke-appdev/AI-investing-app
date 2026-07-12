@@ -2,6 +2,7 @@ import pytest
 
 from src.app_mode import (
     ai_generation_enabled,
+    app_capability_summary,
     external_content_fetch_enabled,
     get_app_mode,
     personal_data_enabled,
@@ -13,14 +14,31 @@ from src.app_mode import (
 )
 
 
-def test_app_mode_defaults_to_private(monkeypatch):
+def test_app_mode_defaults_to_public_readonly(monkeypatch):
     monkeypatch.delenv("APP_MODE", raising=False)
 
-    assert get_app_mode() == "private"
+    assert get_app_mode() == "public_readonly"
+    assert not writes_enabled()
+    assert not personal_data_enabled()
+    assert not ai_generation_enabled()
+    assert not external_content_fetch_enabled()
+    assert app_capability_summary() == {
+        "mode": "public_readonly",
+        "explicitly_configured": False,
+        "personal_data": False,
+        "ai_generation": False,
+        "external_content_fetch": False,
+    }
+
+
+def test_private_mode_requires_explicit_configuration(monkeypatch):
+    monkeypatch.setenv("APP_MODE", "private")
+
     assert writes_enabled()
     assert personal_data_enabled()
     assert ai_generation_enabled()
     assert external_content_fetch_enabled()
+    assert app_capability_summary()["explicitly_configured"] is True
 
 
 def test_public_readonly_blocks_writes(monkeypatch):

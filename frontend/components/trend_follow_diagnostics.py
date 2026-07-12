@@ -20,7 +20,7 @@ def trend_follow_diagnostics_panel() -> rx.Component:
         diagnostics.contains("diagnostic_rating"),
         rx.box(
             rx.hstack(
-                rx.heading("トレンド追随診断", size="5"),
+                rx.heading("トレンド追随診断", size="5", as_="h2"),
                 rx.spacer(),
                 evaluation_badge(
                     diagnostics["rating_display"].to(str),
@@ -45,7 +45,7 @@ def trend_follow_diagnostics_panel() -> rx.Component:
             rx.grid(
                 rx.card(
                     rx.vstack(
-                        rx.heading("堅牢性", size="4"),
+                        rx.heading("堅牢性", size="4", as_="h3"),
                         rx.text(
                             diagnostics["current_state_display"].to(str),
                             size="2",
@@ -79,7 +79,7 @@ def trend_follow_diagnostics_panel() -> rx.Component:
                 ),
                 rx.card(
                     rx.vstack(
-                        rx.heading("失敗耐性テスト", size="4"),
+                        rx.heading("失敗耐性テスト", size="4", as_="h3"),
                         rx.grid(
                             _metric(
                                 "最大ドローダウン",

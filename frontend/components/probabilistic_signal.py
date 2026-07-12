@@ -19,12 +19,12 @@ def probabilistic_signal_panel() -> rx.Component:
     return rx.cond(
         signal.contains("signal_label"),
         rx.box(
-            rx.heading("確率シグナル", size="5", margin_bottom="1rem"),
+            rx.heading("確率シグナル", size="5", as_="h2", margin_bottom="1rem"),
             rx.grid(
                 rx.card(
                     rx.vstack(
                         rx.hstack(
-                            rx.heading("シグナル概要", size="4"),
+                            rx.heading("シグナル概要", size="4", as_="h3"),
                             rx.spacer(),
                             evaluation_badge(
                                 signal["suggested_action_display"].to(str),
@@ -79,7 +79,7 @@ def probabilistic_signal_panel() -> rx.Component:
                 ),
                 rx.card(
                     rx.vstack(
-                        rx.heading("リスク制約（参考）", size="4"),
+                        rx.heading("リスク制約（参考）", size="4", as_="h3"),
                         rx.grid(
                             _metric("確信度", signal["confidence_display"].to(str)),
                             _metric("相場適合度", signal["regime_fit_display"].to(str)),
@@ -109,7 +109,7 @@ def probabilistic_signal_panel() -> rx.Component:
             rx.grid(
                 rx.card(
                     rx.vstack(
-                        rx.heading("判定理由", size="4"),
+                        rx.heading("判定理由", size="4", as_="h3"),
                         rx.text("プラス要因", size="2", color="green"),
                         rx.markdown(signal["why_positive_display"].to(str)),
                         rx.text("マイナス要因", size="2", color="red"),
@@ -121,7 +121,7 @@ def probabilistic_signal_panel() -> rx.Component:
                 ),
                 rx.card(
                     rx.vstack(
-                        rx.heading("検証情報", size="4"),
+                        rx.heading("検証情報", size="4", as_="h3"),
                         rx.grid(
                             _metric(
                                 "類似サンプル数",

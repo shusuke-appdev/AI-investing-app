@@ -9,10 +9,26 @@ AppMode = Literal["private", "public_readonly"]
 
 
 def get_app_mode() -> AppMode:
-    value = os.getenv("APP_MODE", "private").strip().lower()
+    # Missing deployment configuration must never expose personal data or
+    # server-funded features. Local/private use remains an explicit opt-in.
+    value = os.getenv("APP_MODE", "public_readonly").strip().lower()
     if value not in {"private", "public_readonly"}:
         raise ValueError("APP_MODE must be 'private' or 'public_readonly'.")
     return cast(AppMode, value)
+
+
+def app_capability_summary() -> dict[str, str | bool]:
+    """Return a non-secret summary of the active deployment policy."""
+
+    mode = get_app_mode()
+    enabled = mode == "private"
+    return {
+        "mode": mode,
+        "explicitly_configured": bool(os.getenv("APP_MODE", "").strip()),
+        "personal_data": enabled,
+        "ai_generation": enabled,
+        "external_content_fetch": enabled,
+    }
 
 
 def writes_enabled() -> bool:

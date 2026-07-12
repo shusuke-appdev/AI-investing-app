@@ -224,7 +224,12 @@ def _summary_tile(title: str, value, detail, color: str) -> rx.Component:
     return rx.card(
         rx.vstack(
             rx.text(title, size="1", color=rx.color("gray", 10), weight="bold"),
-            rx.heading(value, size="4"),
+            rx.text(
+                value,
+                size="5",
+                weight="bold",
+                font_variant_numeric="tabular-nums",
+            ),
             rx.text(detail, size="1", color=rx.color("gray", 10)),
             spacing="1",
             align_items="start",

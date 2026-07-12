@@ -196,7 +196,7 @@ def option_analysis_component() -> rx.Component:
 
     return rx.box(
         rx.hstack(
-            rx.heading("オプション分析", size="5"),
+            rx.heading("オプション分析", size="5", as_="h2"),
             rx.spacer(),
             rx.badge(
                 MarketState.option_status,

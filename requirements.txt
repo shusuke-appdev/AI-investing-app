@@ -1,4 +1,3 @@
-streamlit>=1.40.0
 reflex>=0.6.0
 yfinance>=0.2.54
 curl-cffi>=0.7.4
@@ -20,8 +19,6 @@ pandas-ta>=0.4.0
 requests-cache>=1.0.0
 setuptools>=82.0.1
 supabase>=2.0.0
-ruff
-pytest
 arch>=6.3.0
 statsmodels>=0.14.0
 edinet-tools>=0.1.0

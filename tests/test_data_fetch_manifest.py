@@ -1,6 +1,8 @@
+from src.services.analysis_context import DataResult
 from src.services.data_fetch_manifest import (
     get_data_fetch_manifest,
     required_data_names,
+    requirement_failures,
 )
 
 
@@ -13,3 +15,21 @@ def test_data_fetch_manifest_declares_option_horizon_dependency():
     assert "1W" in rows[0]["notes"]
     assert "1M" in rows[0]["notes"]
     assert required_data_names("market_options") == ["index_option_horizons"]
+
+
+def test_required_manifest_reports_missing_and_degraded_statuses():
+    assert requirement_failures("stock_analysis", []) == [
+        "price_history_profile: required status missing (stock_profile, price_history)"
+    ]
+
+    failures = requirement_failures(
+        "stock_analysis",
+        [
+            DataResult(name="stock_profile", is_partial=True),
+            DataResult(name="price_history"),
+        ],
+    )
+
+    assert failures == [
+        "price_history_profile: required dependency degraded (stock_profile)"
+    ]

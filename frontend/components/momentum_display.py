@@ -54,7 +54,12 @@ def _momentum_category_card(category: MomentumCategory) -> rx.Component:
 def momentum_monitor_component() -> rx.Component:
     """テーマモメンタム監視セクション"""
     return rx.box(
-        rx.heading("📊 テーマモメンタム監視", size="5", margin_bottom="0.75rem"),
+        rx.heading(
+            "📊 テーマモメンタム監視",
+            size="5",
+            as_="h2",
+            margin_bottom="0.75rem",
+        ),
         rx.text(
             "各カテゴリの上位3テーマを表示",
             font_size="0.85rem",

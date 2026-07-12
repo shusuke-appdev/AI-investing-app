@@ -3,7 +3,7 @@
 ## Project Shape
 
 - The live application is the Reflex app under `frontend/`.
-- Treat `legacy_streamlit/` as historical unless current evidence says otherwise.
+- Legacy Streamlit assets live only on `codex/archive-streamlit-assets`; the current tree is Reflex-only.
 - Read `progress.md` before non-trivial work because it records repo-local handoff state.
 - Do not touch unrelated dirty files. This repo often has active user changes.
 

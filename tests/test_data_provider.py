@@ -186,6 +186,22 @@ class TestDataProvider:
         history = stock_data_provider.get_historical_data("7203.T", "1mo")
         assert history["Close"].iloc[-1] == 145.0
 
+    def test_unavailable_current_price_is_not_converted_to_zero(self, monkeypatch):
+        from src import stock_data_provider
+
+        stock_data_provider.get_current_price.clear_cache()
+        monkeypatch.setattr(
+            stock_data_provider,
+            "get_quote_with_status",
+            lambda ticker: stock_data_provider.QuoteResult(
+                source="yfinance",
+                cache_status="failed",
+                error="Quote unavailable.",
+            ),
+        )
+
+        assert stock_data_provider.get_current_price("MISSING") is None
+
     @patch("src.news_provider._finnhub_get_company_news")
     @patch("src.news_provider.is_configured", return_value=True)
     def test_get_stock_news_structure(self, mock_is_conf, mock_news):

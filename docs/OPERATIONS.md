@@ -36,12 +36,6 @@ python -m pip install -r requirements.txt -c constraints.txt
 reflex run
 ```
 
-旧UIを確認する場合:
-
-```powershell
-streamlit run legacy_streamlit/app.py
-```
-
 ## Docker起動
 
 ```powershell
@@ -114,6 +108,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 ## 運用上の注意
 
 - `APP_MODE=public_readonly` ではPortfolio・Knowledge・Trading Plan互換データの読み書き、AI生成、URL・YouTube取り込みを拒否します。個人機能のナビゲーションも表示しません
+- `APP_MODE` 未設定時も `public_readonly` になります。`private` は認証機能ではないため、ローカルまたは外部アクセス制御済み環境でのみ明示設定します
 - 外部APIの制限により、オプション分析とニュース集約は一時的に空になることがあります
 - Market Watch の詳細更新とStockの補助診断は、外部取得や重い計算が所定時間を超えた場合、その項目だけを `partial` / `failed` として扱い、取得済みの基本情報を表示します。失敗理由は各画面のデータ状態と「データ品質」ページの provider health で確認します
 - 市場指数・セクター等の取得失敗は価格 `0.0` として表示せず、その項目を利用不可として省略します

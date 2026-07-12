@@ -8,6 +8,13 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def explicit_private_test_mode(monkeypatch):
+    """Run feature tests in explicit private mode; policy tests may override it."""
+
+    monkeypatch.setenv("APP_MODE", "private")
+
+
+@pytest.fixture(autouse=True)
 def mock_finnhub_client():
     """Mock Finnhub client for all tests."""
     with patch("src.finnhub_client._get_client") as mock_get:

@@ -12,7 +12,7 @@ def fomo_volatility_panel() -> rx.Component:
         rx.card(
             rx.vstack(
                 rx.hstack(
-                    rx.heading("FOMO Volatility Regime", size="4"),
+                    rx.heading("FOMO Volatility Regime", size="4", as_="h2"),
                     rx.spacer(),
                     evaluation_badge(
                         StockState.fomo_label,

@@ -225,7 +225,7 @@ def _render_japan_supply_demand_section() -> rx.Component:
         & (supply["status"].to(str) != "not_applicable"),
         rx.box(
             rx.hstack(
-                rx.heading("日本株 需給期日", size="4"),
+                rx.heading("日本株 需給期日", size="4", as_="h3"),
                 rx.badge(supply["label"].to(str), color_scheme="blue"),
                 width="100%",
                 align_items="center",
@@ -268,7 +268,7 @@ def _render_strategy_context_section() -> rx.Component:
         tech.contains("strategy_context"),
         rx.box(
             rx.hstack(
-                rx.heading("戦略別テクニカル", size="4"),
+                rx.heading("戦略別テクニカル", size="4", as_="h3"),
                 rx.badge(strategy["status"].to(str), color_scheme="blue"),
                 width="100%",
                 align_items="center",
@@ -333,7 +333,7 @@ def _render_minervini_section() -> rx.Component:
         rx.box(
             rx.hstack(
                 rx.vstack(
-                    rx.heading("ミネルヴィニ ステージ分析", size="4"),
+                    rx.heading("ミネルヴィニ ステージ分析", size="4", as_="h3"),
                     rx.text(
                         stage["description"].to(str),
                         size="2",

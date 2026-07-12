@@ -33,7 +33,7 @@ def market_risk_intelligence_panel() -> rx.Component:
         rx.card(
             rx.vstack(
                 rx.hstack(
-                    rx.heading("高ボラ銘柄 FOMOスキャン", size="4"),
+                    rx.heading("高ボラ銘柄 FOMOスキャン", size="4", as_="h2"),
                     rx.spacer(),
                     rx.button(
                         "スキャン実行",

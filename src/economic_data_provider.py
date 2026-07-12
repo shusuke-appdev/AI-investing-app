@@ -13,6 +13,7 @@ import requests
 
 from src.pandas_datareader_compat import import_pandas_datareader_data
 from src.persistent_cache import PersistentJsonCache, repo_state_cache, utc_now_iso
+from src.provider_result import FetchResult
 
 ECONOMIC_DATA_CACHE_NAMESPACE = "economic_data_cache"
 FRED_GRAPH_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
@@ -22,18 +23,10 @@ DEFAULT_FRED_CSV_TIMEOUT = 12
 
 
 @dataclass
-class EconomicDataResult:
+class EconomicDataResult(FetchResult[pd.DataFrame]):
     """Economic time series plus source/status metadata."""
 
     data: pd.DataFrame = field(default_factory=pd.DataFrame)
-    source: str = ""
-    fetched_at: str = ""
-    is_stale: bool = False
-    is_partial: bool = False
-    cache_status: str = "live"
-    cache_age_seconds: float | None = None
-    warnings: list[str] = field(default_factory=list)
-    error: str = ""
 
 
 def fetch_fred_series(

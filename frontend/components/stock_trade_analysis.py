@@ -132,7 +132,7 @@ def _analysis_body() -> rx.Component:
         rx.vstack(
             rx.hstack(
                 rx.vstack(
-                    rx.heading("トレード分析", size="5"),
+                    rx.heading("トレード分析", size="5", as_="h2"),
                     rx.text(
                         analysis["summary"].to(str),
                         size="2",
@@ -190,7 +190,7 @@ def _analysis_body() -> rx.Component:
             ),
             rx.box(
                 rx.hstack(
-                    rx.heading("根拠一致度", size="4"),
+                    rx.heading("根拠一致度", size="4", as_="h3"),
                     rx.spacer(),
                     evaluation_badge(
                         purchase_evidence["label"].to(str)
@@ -225,7 +225,7 @@ def _analysis_body() -> rx.Component:
                 bg=rx.color("gray", 1),
             ),
             rx.box(
-                rx.heading("重要水準", size="4", margin_bottom="0.75rem"),
+                rx.heading("重要水準", size="4", as_="h3", margin_bottom="0.75rem"),
                 rx.grid(
                     rx.foreach(key_levels, _level_row),
                     columns=rx.breakpoints(initial="1", sm="2", lg="4"),
@@ -235,7 +235,12 @@ def _analysis_body() -> rx.Component:
                 width="100%",
             ),
             rx.box(
-                rx.heading("需給・タイミング根拠", size="4", margin_bottom="0.75rem"),
+                rx.heading(
+                    "需給・タイミング根拠",
+                    size="4",
+                    as_="h3",
+                    margin_bottom="0.75rem",
+                ),
                 rx.grid(
                     rx.foreach(
                         timing_checks,
@@ -249,7 +254,7 @@ def _analysis_body() -> rx.Component:
             ),
             rx.grid(
                 rx.box(
-                    rx.heading("需給確認", size="4", margin_bottom="0.75rem"),
+                    rx.heading("需給確認", size="4", as_="h3", margin_bottom="0.75rem"),
                     rx.vstack(
                         rx.foreach(
                             supply_demand,
@@ -262,7 +267,12 @@ def _analysis_body() -> rx.Component:
                     width="100%",
                 ),
                 rx.box(
-                    rx.heading("無効化条件・リスク", size="4", margin_bottom="0.75rem"),
+                    rx.heading(
+                        "無効化条件・リスク",
+                        size="4",
+                        as_="h3",
+                        margin_bottom="0.75rem",
+                    ),
                     rx.vstack(
                         rx.hstack(
                             rx.badge("Final stop", color_scheme="red"),
@@ -310,7 +320,7 @@ def stock_trade_analysis_panel() -> rx.Component:
     return rx.box(
         rx.hstack(
             rx.vstack(
-                rx.heading("トレード分析", size="5"),
+                rx.heading("トレード分析", size="5", as_="h2"),
                 rx.text(
                     "この銘柄の既存分析データだけを使って、仕掛け水準と待機条件を整理します。",
                     size="2",

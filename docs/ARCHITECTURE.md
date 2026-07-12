@@ -15,7 +15,7 @@
   - `/stock`: 個別銘柄分析
   - `/portfolio`: ポートフォリオ分析
   - `/knowledge`: 参照知識管理
-- 旧Streamlit UI: `legacy_streamlit/app.py` と `src/ui/` は frozen archive。通常の機能追加・不具合修正は `frontend/` に行う
+- 旧Streamlit UI: `codex/archive-streamlit-assets` ブランチへ履歴保全し、現行ツリーから撤去済み
 
 ## レイヤー構成
 
@@ -147,7 +147,7 @@ UI
 
 ## 現在の構造的な弱点
 
-- Reflex UI と Streamlit UI が同居し、どちらが正本か判断しづらい
+- 旧課題だったUI正本の曖昧さは、Reflexへの一本化とStreamlit資産の履歴ブランチ退避で解消済み
 - データ取得、分析、UI整形が `frontend/state/*` と `src/services/*` にまたがって重複している
 - 外部APIエラーが握りつぶされる箇所が多く、ユーザーに「何が古いデータか」「何が取得失敗か」が伝わりにくい
 - 保存先の抽象化はあるが、local / Supabase のスキーマ契約・移行手順が不足している

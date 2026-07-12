@@ -1,6 +1,6 @@
 """
 Data Models for Type Hinting
-Using TypedDict for dictionary-based structures to maintain compatibility with existing Streamlit code
+Using TypedDict for dictionary-based structures shared across provider and Reflex layers.
 while providing better developer experience and validation capabilities.
 """
 

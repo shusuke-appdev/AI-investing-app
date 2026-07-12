@@ -17,6 +17,7 @@ from src.finnhub_client import is_configured
 from src.log_config import get_logger
 from src.market_config import get_market_config
 from src.models import MarketIndex
+from src.provider_result import FetchResult
 from src.stock_data_provider import get_historical_data
 from src.yfinance_runtime import configure_yfinance_cache
 
@@ -197,6 +198,39 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
             logger.error(f"[MarketIndexProvider] Batch download execution failed: {e}")
 
     return result
+
+
+def get_market_indices_result(
+    market_type: str = MARKET_US,
+) -> FetchResult[dict[str, MarketIndex]]:
+    """Return indices and explicit completeness state via the shared contract."""
+
+    config = get_market_config(market_type)
+    expected = {
+        ticker
+        for group in (
+            "indices",
+            "sectors",
+            "commodities",
+            "crypto",
+            "treasuries",
+            "forex",
+        )
+        for ticker in config.get(group, {}).values()
+    }
+    data = get_market_indices(market_type)
+    available = {item.get("ticker") for item in data.values()}
+    missing_count = len(expected - available)
+    warnings = [f"{missing_count} market series unavailable"] if missing_count else []
+    return FetchResult(
+        data=data,
+        source="multi-provider",
+        status="available" if data else "unavailable",
+        is_partial=bool(data) and bool(missing_count),
+        warnings=warnings,
+        error_code="all_series_unavailable" if not data else "",
+        error="Market indices are unavailable." if not data else "",
+    )
 
 
 def _uses_yfinance_symbol(ticker: str) -> bool:

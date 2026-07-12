@@ -106,7 +106,7 @@ def sidebar_nav() -> rx.Component:
         # アプリロゴ/タイトル
         rx.hstack(
             rx.icon("activity", size=24, color=rx.color("blue", 9)),
-            rx.heading("AI Investing", size="5", weight="bold"),
+            rx.text("AI Investing", size="5", weight="bold"),
             align_items="center",
             spacing="2",
             margin_bottom="1rem",

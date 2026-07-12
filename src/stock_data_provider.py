@@ -16,6 +16,7 @@ from src.edinet_client import get_company_finance
 from src.log_config import get_logger
 from src.models import StockInfo
 from src.persistent_cache import repo_state_cache, utc_now_iso
+from src.provider_result import FetchResult
 from src.translator import translate_to_japanese
 from src.yfinance_runtime import configure_yfinance_cache
 
@@ -34,31 +35,19 @@ _rate_limited_until: datetime | None = None
 
 
 @dataclass
-class QuoteResult:
+class QuoteResult(FetchResult[dict[str, Any] | None]):
     """Quote payload plus retrieval status metadata."""
 
     data: dict[str, Any] | None = None
     source: str = "yfinance"
-    fetched_at: str = ""
-    is_stale: bool = False
-    is_partial: bool = False
-    cache_status: str = "live"
-    warnings: list[str] = field(default_factory=list)
-    error: str = ""
 
 
 @dataclass
-class HistoryResult:
+class HistoryResult(FetchResult[pd.DataFrame]):
     """Historical price payload plus retrieval status metadata."""
 
     data: pd.DataFrame = field(default_factory=pd.DataFrame)
     source: str = "yfinance"
-    fetched_at: str = ""
-    is_stale: bool = False
-    is_partial: bool = False
-    cache_status: str = "live"
-    warnings: list[str] = field(default_factory=list)
-    error: str = ""
 
 
 def is_japanese_stock(ticker: str) -> bool:
@@ -338,12 +327,12 @@ def get_quote_with_status(ticker: str) -> QuoteResult:
 
 
 @ttl_cache(ttl=CACHE_TTL_SHORT)
-def get_current_price(ticker: str) -> float:
+def get_current_price(ticker: str) -> float | None:
+    """Return the current price, preserving unavailable as ``None``."""
+
     result = get_quote_with_status(ticker)
     price = _safe_float(result.data.get("c") if result.data else None)
-    if price is not None:
-        return price
-    return 0.0
+    return price
 
 
 @ttl_cache(ttl=CACHE_TTL_MEDIUM)
