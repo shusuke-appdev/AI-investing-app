@@ -59,7 +59,9 @@ def fetch_cboe_indices(symbols: tuple[str, ...] = CBOE_SYMBOLS) -> CboeIndexResu
                 frame = _frame_from_records(cached.payload.get("records") or [], symbol)
                 if not frame.empty:
                     rows.append(frame)
-    combined = pd.concat(rows, axis=1).sort_index() if rows else pd.DataFrame()
+    combined = (
+        pd.concat(rows, axis=1, sort=True).sort_index() if rows else pd.DataFrame()
+    )
     return CboeIndexResult(
         data=combined,
         source="cboe_official" if not combined.empty else "unavailable",
@@ -419,7 +421,7 @@ def _historical_outcomes(
     spy = _close(spy_df)
     if spy.empty or "VIX" not in cboe:
         return {"sample_size": 0}
-    frame = pd.concat([cboe.ffill(), spy.rename("spy")], axis=1).dropna(
+    frame = pd.concat([cboe.ffill(), spy.rename("spy")], axis=1, sort=True).dropna(
         subset=["VIX", "spy"]
     )
     if len(frame) < 100:

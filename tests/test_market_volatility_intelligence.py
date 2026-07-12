@@ -1,10 +1,14 @@
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 
 from src.market_volatility_intelligence import (
     CboeIndexResult,
+    _historical_outcomes,
     build_local_sentiment_composite,
     build_market_volatility_regime,
+    fetch_cboe_indices,
     fetch_cnn_fear_greed,
 )
 
@@ -38,6 +42,53 @@ def test_market_volatility_regime_returns_staged_posture_for_stable_history():
     assert result["regime"] in {"healthy_risk_on", "complacent", "normalization"}
     assert result["forward_outcomes"]["sample_size"] > 0
     assert result["posture"] in {"Watch", "Pilot", "Staged"}
+
+
+def test_historical_outcomes_sorts_misaligned_datetime_indexes():
+    spy = _history().sort_index(ascending=False)
+    cboe = pd.DataFrame(
+        {
+            "VIX": np.linspace(15, 25, 500),
+            "VVIX": np.linspace(85, 105, 500),
+            "SKEW": np.linspace(135, 125, 500),
+        },
+        index=spy.index + pd.Timedelta(days=1),
+    )
+
+    result = _historical_outcomes(cboe, spy)
+
+    assert result["sample_size"] > 0
+    assert result["20d"]["mean_return"] > 0
+
+
+def test_fetch_cboe_indices_sorts_misaligned_datetime_indexes(monkeypatch):
+    from src import market_volatility_intelligence as module
+
+    cache = SimpleNamespace(
+        read=lambda *args, **kwargs: SimpleNamespace(
+            status="expired", is_available=False
+        ),
+        write=lambda *args, **kwargs: None,
+    )
+    frames = {
+        "VIX": pd.DataFrame(
+            {"VIX": [20.0, 19.0]},
+            index=pd.to_datetime(["2026-01-03", "2026-01-01"]),
+        ),
+        "VVIX": pd.DataFrame(
+            {"VVIX": [90.0, 91.0]},
+            index=pd.to_datetime(["2026-01-04", "2026-01-02"]),
+        ),
+    }
+    response = SimpleNamespace(text="unused", raise_for_status=lambda: None)
+    monkeypatch.setattr(module, "repo_state_cache", lambda namespace: cache)
+    monkeypatch.setattr(module.requests, "get", lambda *args, **kwargs: response)
+    monkeypatch.setattr(module, "_parse_cboe_csv", lambda text, symbol: frames[symbol])
+
+    result = fetch_cboe_indices(("VIX", "VVIX"))
+
+    assert result.data.index.is_monotonic_increasing
+    assert list(result.data.index) == list(pd.date_range("2026-01-01", periods=4))
 
 
 def test_local_sentiment_reweights_available_components():

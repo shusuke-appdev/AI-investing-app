@@ -1,5 +1,11 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-07-12 Pandas 4 DatetimeIndex concat compatibility
+- Confirmed that the two volatility-history joins rely on Pandas' current behavior of sorting concatenated `DatetimeIndex` values chronologically; made that behavior explicit with `sort=True` at the Cboe multi-series join and the Cboe/SPY historical-outcome join.
+- Added regressions with descending and misaligned date indexes for both joins, verifying chronological output and positive forward-return semantics rather than only suppressing the warning.
+- Validation: focused volatility/market-context tests passed with `Pandas4Warning` promoted to an error (`17 passed`), then full `python scripts/check.py` passed dependency consistency, compileall, Ruff lint/format, all `308` tests with zero warnings, Reflex frontend export, and static UI semantics for seven routes.
+- One standalone full-pytest attempt before the release gate hit a repo-local `.states/pytest_tmp` cleanup `PermissionError: [WinError 5]` and was classified as an execution-surface temp-scope failure. The documented release command subsequently completed without that environment failure; no application change was made for it.
+
 ## Session update: 2026-07-12 fail-safe deployment / latest-wins / UI semantics
 - Changed missing `APP_MODE` from implicit `private` to fail-safe `public_readonly`; private personal-data, AI, and external-content capabilities now require explicit configuration. Data Quality shows the non-secret active mode and whether it was explicitly set, and docs clarify that private mode is not authentication.
 - Added latest-request guards for Market/Stock data and AI events. Market/ticker changes invalidate older work so out-of-order completions cannot overwrite the current view. Timeout work now uses bounded shared executors instead of creating a new thread pool per request.
