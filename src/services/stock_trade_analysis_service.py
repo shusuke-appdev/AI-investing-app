@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.services.market_risk_guardrail_service import apply_market_risk_cap
+
 
 def build_stock_trade_analysis(
     stock_signal_context: dict[str, Any],
@@ -33,6 +35,7 @@ def build_stock_trade_analysis(
         for item in context.get("purchase_evidence_health", [])
         if isinstance(item, dict)
     ]
+    market_risk_guardrail = _dict(context.get("market_risk_guardrail"))
     support_zone = _dict(volume_profile.get("support_zone"))
     resistance_zone = _dict(volume_profile.get("resistance_zone"))
 
@@ -61,7 +64,8 @@ def build_stock_trade_analysis(
         _atr_stop(current_price, atr),
     )
 
-    stance_key = _stance_key(technical, setup, sector_theme, fomo)
+    base_stance_key = _stance_key(technical, setup, sector_theme, fomo)
+    stance_key = apply_market_risk_cap(base_stance_key, market_risk_guardrail)
     stance_label = {
         "ready": "仕掛け候補",
         "watch": "条件待ち",
@@ -84,6 +88,9 @@ def build_stock_trade_analysis(
         breakout=breakout,
         support=support,
         resistance=resistance,
+    )
+    timing_rows.insert(
+        0, _market_guardrail_row(market_risk_guardrail, base_stance_key, stance_key)
     )
     key_levels = _key_levels(
         current_price=current_price,
@@ -140,6 +147,7 @@ def build_stock_trade_analysis(
         "volume_profile_summary": str(volume_profile.get("summary") or ""),
         "purchase_evidence": purchase_evidence,
         "purchase_evidence_health": purchase_evidence_health,
+        "market_risk_guardrail": market_risk_guardrail,
         "summary": _summary(stance_key, setup, technical, sector_theme),
         "timing": _timing_plan(
             stance_key=stance_key,
@@ -159,6 +167,24 @@ def build_stock_trade_analysis(
             "atr_percent": _percent(atr_percent),
             "position_note": _position_note(current_price, stop_loss),
         },
+    }
+
+
+def _market_guardrail_row(
+    guardrail: dict[str, Any], base_stance: str, final_stance: str
+) -> dict[str, str]:
+    status = str(guardrail.get("status") or "unavailable")
+    changed = base_stance != final_stance
+    return {
+        "label": "市場短期リスク上限",
+        "status": "fail"
+        if changed
+        else "pass"
+        if status == "monitoring"
+        else "unknown",
+        "value": str(guardrail.get("summary") or "市場短期予測は未連携です。"),
+        "rationale": " / ".join(guardrail.get("reasons") or [])
+        or "確率・購入根拠は変更せず、評価の格下げだけに使用します。",
     }
 
 

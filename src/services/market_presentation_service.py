@@ -9,6 +9,8 @@ from src.services.market_presentation_models import (
     ClimaxData as ClimaxData,
 )
 from src.services.market_presentation_models import (
+    CompositeEvidenceDisplay,
+    CompositeSentimentDisplay,
     CreditStressDisplay,
     CreditStressIndicator,
     DistortionItem,
@@ -31,6 +33,7 @@ from src.services.market_presentation_models import (
     RegimePlaybookDisplay,
     SectorFlowGroup,
     SectorFlowItem,
+    ShortForecastDisplay,
     StageStatusDisplay,
     StrategyRegimeDisplay,
     TimeframeOutlookDisplay,
@@ -86,6 +89,12 @@ def build_market_display_context(context: MarketContext) -> MarketDisplayContext
         flow_alignment=_format_flow_alignment(context.flow_alignment),
         strategy_regime=_format_strategy_regime(context.strategy_regime),
         market_timeframes=_format_timeframes(context.market_timeframes),
+        short_horizon_forecasts=_format_short_horizon_forecasts(
+            context.short_horizon_forecast
+        ),
+        composite_sentiment_items=_format_composite_sentiment(
+            context.composite_sentiment
+        ),
         important_levels=_format_important_levels(context.important_levels),
         important_levels_summary=context.important_levels.get("summary", ""),
         market_drivers=_format_market_drivers(context.market_driver_monitor),
@@ -499,6 +508,114 @@ def _format_timeframes(raw: dict[str, Any]) -> list[TimeframeOutlookDisplay]:
             )
         )
     return rows
+
+
+def _format_short_horizon_forecasts(
+    raw: dict[str, Any],
+) -> list[ShortForecastDisplay]:
+    rows: list[ShortForecastDisplay] = []
+    for ticker in ("SPY", "QQQ"):
+        target = (raw.get("targets") or {}).get(ticker) or {}
+        for horizon in ("1d", "5d", "20d"):
+            item = (target.get("horizons") or {}).get(horizon) or {}
+            rows.append(
+                ShortForecastDisplay(
+                    ticker=ticker,
+                    horizon=horizon,
+                    status=str(item.get("status") or "unavailable"),
+                    status_label=_forecast_status_label(item.get("status")),
+                    probability_up=_optional_pct(item.get("probability_up")),
+                    range_text=_forecast_range(item.get("p10"), item.get("p90")),
+                    implied_move=_optional_pct(item.get("implied_expected_move")),
+                    risk_level=str(item.get("risk_level") or "unknown"),
+                    risk_label=_risk_label(item.get("risk_level")),
+                    direction_label=str(item.get("direction_label") or ""),
+                    confidence=str(item.get("confidence") or ""),
+                    as_of=str(item.get("as_of") or raw.get("as_of") or ""),
+                )
+            )
+    return rows
+
+
+def _format_composite_sentiment(
+    raw: dict[str, Any],
+) -> list[CompositeSentimentDisplay]:
+    rows: list[CompositeSentimentDisplay] = []
+    for ticker in ("SPY", "QQQ"):
+        item = (raw.get("targets") or {}).get(ticker) or {}
+        evidence = []
+        for detail in item.get("evidence", []):
+            evidence.append(
+                CompositeEvidenceDisplay(
+                    label=str(detail.get("label") or ""),
+                    status=str(detail.get("status") or "unavailable"),
+                    status_label={
+                        "met": "成立",
+                        "not_met": "不成立",
+                        "unavailable": "未取得",
+                    }.get(str(detail.get("status") or ""), "未取得"),
+                    value=_number_or_percent(detail.get("value")),
+                    threshold=str(detail.get("threshold") or ""),
+                    source=str(detail.get("source") or ""),
+                )
+            )
+        rows.append(
+            CompositeSentimentDisplay(
+                ticker=ticker,
+                state=str(item.get("state") or "mixed"),
+                state_label=str(item.get("state_label") or "材料混在"),
+                status=str(item.get("status") or "unavailable"),
+                status_label={
+                    "confirmed": "確認済み",
+                    "partial": "一部未確認",
+                    "unavailable": "未判定",
+                }.get(str(item.get("status") or ""), "未判定"),
+                risk_floor=str(item.get("risk_floor") or "none"),
+                risk_label=_risk_label(item.get("risk_floor")),
+                summary=str(item.get("summary") or ""),
+                reversal_watch=bool(item.get("reversal_watch", False)),
+                as_of=str(item.get("as_of") or raw.get("as_of") or ""),
+                evidence=evidence,
+            )
+        )
+    return rows
+
+
+def _forecast_status_label(value: Any) -> str:
+    return {
+        "validated": "検証済み",
+        "research_only": "検証不十分",
+        "insufficient_data": "データ不足",
+        "unavailable": "未算出",
+    }.get(str(value or ""), "未算出")
+
+
+def _risk_label(value: Any) -> str:
+    return {
+        "extreme": "極端",
+        "high": "高",
+        "medium": "中",
+        "low": "低",
+        "none": "補正なし",
+        "unknown": "不明",
+    }.get(str(value or ""), "不明")
+
+
+def _optional_pct(value: Any) -> str:
+    return "算出不可" if value is None else f"{float(value):.1%}"
+
+
+def _forecast_range(lower: Any, upper: Any) -> str:
+    if lower is None or upper is None:
+        return "算出不可"
+    return f"{float(lower):+.1%} ～ {float(upper):+.1%}"
+
+
+def _number_or_percent(value: Any) -> str:
+    if value is None:
+        return "不明"
+    number = float(value)
+    return f"{number:+.1%}" if abs(number) <= 2 else f"{number:.2f}"
 
 
 def _format_important_levels(raw: dict[str, Any]) -> list[ImportantLevelDisplay]:

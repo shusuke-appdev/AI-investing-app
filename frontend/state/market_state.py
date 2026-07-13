@@ -23,6 +23,7 @@ from src.services.market_dashboard_service import (
     load_cached_market_summary_context,
 )
 from src.services.market_presentation_service import (
+    CompositeSentimentDisplay,
     CreditStressDisplay,
     DistortionItem,
     FlowAlignmentDisplay,
@@ -39,6 +40,7 @@ from src.services.market_presentation_service import (
     OptionSummary,
     RegimePlaybookDisplay,
     SectorFlowGroup,
+    ShortForecastDisplay,
     StageStatusDisplay,
     StrategyRegimeDisplay,
     TimeframeOutlookDisplay,
@@ -97,6 +99,8 @@ class MarketState(rx.State):
     flow_alignment: FlowAlignmentDisplay = FlowAlignmentDisplay()
     strategy_regime: StrategyRegimeDisplay = StrategyRegimeDisplay()
     market_timeframes: list[TimeframeOutlookDisplay] = []
+    short_horizon_forecasts: list[ShortForecastDisplay] = []
+    composite_sentiment_items: list[CompositeSentimentDisplay] = []
     important_levels: list[ImportantLevelDisplay] = []
     important_levels_summary: str = ""
     market_drivers: list[MarketDriverDisplay] = []
@@ -606,6 +610,8 @@ class MarketState(rx.State):
         self.flow_alignment = display.flow_alignment
         self.strategy_regime = display.strategy_regime
         self.market_timeframes = display.market_timeframes
+        self.short_horizon_forecasts = display.short_horizon_forecasts
+        self.composite_sentiment_items = display.composite_sentiment_items
         self.important_levels = display.important_levels
         self.important_levels_summary = display.important_levels_summary
         self.market_drivers = display.market_drivers
@@ -651,7 +657,7 @@ class MarketState(rx.State):
             "volatility_sentiment": (
                 "Vol/Sentiment: ボラ/センチメント",
                 "中",
-                "ボラティリティ・レジーム、独自Fear & Greed、時間軸別方向感",
+                "ボラティリティ、1/5/20日短期予測、複合センチメント、時間軸別方向感",
             ),
             "credit_distortion": (
                 "Credit/Risk: 信用/歪み/天井警戒",

@@ -144,6 +144,48 @@ def market_high_provenance(
     ]
 
 
+def market_forecast_provenance(
+    *,
+    fetched_at: str,
+    forecast: dict[str, Any],
+    composite: dict[str, Any],
+) -> list[ProvenanceItem]:
+    forecast_kind = (
+        ProvenanceKind.STALE_CACHE
+        if forecast.get("is_stale")
+        else ProvenanceKind.MODEL_OUTPUT
+        if forecast.get("targets")
+        else ProvenanceKind.UNAVAILABLE
+    )
+    composite_kind = (
+        ProvenanceKind.COMPUTED
+        if composite.get("targets")
+        else ProvenanceKind.UNAVAILABLE
+    )
+    return [
+        _item(
+            "market.short_horizon_forecast",
+            "米国短期市場予測",
+            forecast_kind,
+            source=str(forecast.get("source") or "Cboe and ETF histories"),
+            as_of=str(forecast.get("as_of") or fetched_at),
+            method="Regularized direction model plus prior-only historical analog distribution.",
+            limitation="OOS基準未達はresearch_onlyとして戦略・Stock評価へ連携しない。",
+            risk_level="high",
+        ),
+        _item(
+            "market.composite_sentiment",
+            "複合センチメント判定",
+            composite_kind,
+            source=str(composite.get("source") or "Cboe, OCC, ETF and option Greeks"),
+            as_of=str(composite.get("as_of") or fetched_at),
+            method="Versioned joint-state rules for volatility, tail hedging, gamma and participation.",
+            limitation="確率を変更せず、確認済み警戒状態のリスク下限にだけ使用する。",
+            risk_level="high",
+        ),
+    ]
+
+
 def option_provenance(
     *, fetched_at: str, source: str, status: str, items: list[dict[str, Any]]
 ) -> list[ProvenanceItem]:

@@ -225,6 +225,44 @@ class TimeframeOutlookDisplay(BaseModel):
     evidence: list[str] = []
 
 
+class ShortForecastDisplay(BaseModel):
+    ticker: str = ""
+    horizon: str = ""
+    status: str = "unavailable"
+    status_label: str = "未算出"
+    probability_up: str = "算出不可"
+    range_text: str = "算出不可"
+    implied_move: str = "算出不可"
+    risk_level: str = "unknown"
+    risk_label: str = "不明"
+    direction_label: str = ""
+    confidence: str = ""
+    as_of: str = ""
+
+
+class CompositeEvidenceDisplay(BaseModel):
+    label: str = ""
+    status: str = "unavailable"
+    status_label: str = "未取得"
+    value: str = "不明"
+    threshold: str = ""
+    source: str = ""
+
+
+class CompositeSentimentDisplay(BaseModel):
+    ticker: str = ""
+    state: str = "mixed"
+    state_label: str = "材料混在"
+    status: str = "unavailable"
+    status_label: str = "未判定"
+    risk_floor: str = "none"
+    risk_label: str = "補正なし"
+    summary: str = ""
+    reversal_watch: bool = False
+    as_of: str = ""
+    evidence: list[CompositeEvidenceDisplay] = []
+
+
 class ImportantLevelDisplay(BaseModel):
     label: str = ""
     ticker: str = ""
@@ -394,6 +432,8 @@ class MarketDisplayContext(BaseModel):
     flow_alignment: FlowAlignmentDisplay = FlowAlignmentDisplay()
     strategy_regime: StrategyRegimeDisplay = StrategyRegimeDisplay()
     market_timeframes: list[TimeframeOutlookDisplay] = []
+    short_horizon_forecasts: list[ShortForecastDisplay] = []
+    composite_sentiment_items: list[CompositeSentimentDisplay] = []
     important_levels: list[ImportantLevelDisplay] = []
     important_levels_summary: str = ""
     market_drivers: list[MarketDriverDisplay] = []

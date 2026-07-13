@@ -156,6 +156,7 @@ def _build_volatility_sentiment_context(
     *,
     ibd_regime: dict[str, Any],
     credit_stress: dict[str, Any],
+    option_items: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build dependent volatility/sentiment outputs after their inputs are current."""
 
@@ -167,6 +168,11 @@ def _build_volatility_sentiment_context(
     tlt = get_stock_data("TLT", "1y")
     cboe = fetch_cboe_indices()
     cnn = fetch_cnn_fear_greed()
+    short_horizon_forecast = build_market_short_horizon_forecast(cboe_result=cboe)
+    composite_sentiment = build_market_composite_sentiment(
+        option_items,
+        cboe_result=cboe,
+    )
     return {
         "volatility_regime": build_market_volatility_regime(
             spy,
@@ -182,6 +188,8 @@ def _build_volatility_sentiment_context(
             credit_stress=credit_stress,
             cnn_reference=cnn,
         ),
+        "short_horizon_forecast": short_horizon_forecast,
+        "composite_sentiment": composite_sentiment,
     }
 
 

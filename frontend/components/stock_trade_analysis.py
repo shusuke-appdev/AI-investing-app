@@ -124,6 +124,7 @@ def _analysis_body() -> rx.Component:
     timing = analysis["timing"].to(dict[str, Any])
     purchase_evidence = analysis["purchase_evidence"].to(dict[str, Any])
     purchase_health = analysis["purchase_evidence_health"].to(list[dict])
+    market_guardrail = analysis["market_risk_guardrail"].to(dict[str, Any])
     key_levels = analysis["key_levels"].to(list[dict])
     timing_checks = analysis["timing_checks"].to(list[dict])
     supply_demand = analysis["supply_demand"].to(list[dict])
@@ -187,6 +188,16 @@ def _analysis_body() -> rx.Component:
                 columns=rx.breakpoints(initial="1", md="3"),
                 spacing="3",
                 width="100%",
+            ),
+            rx.cond(
+                market_guardrail["action_cap"].to(str) != "none",
+                rx.callout(
+                    market_guardrail["summary"].to(str),
+                    icon="shield-alert",
+                    color_scheme="orange",
+                    width="100%",
+                ),
+                rx.fragment(),
             ),
             rx.box(
                 rx.hstack(

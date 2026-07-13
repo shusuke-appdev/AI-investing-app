@@ -31,6 +31,9 @@ from src.services.analysis_context import DataResult, ProvenanceItem, StockSigna
 from src.services.data_fetch_manifest import requirement_failures
 from src.services.fundamental_profile_service import evaluate_fundamental_profile
 from src.services.japan_supply_demand_service import build_japan_supply_demand_context
+from src.services.market_risk_guardrail_service import (
+    build_cached_market_risk_guardrail,
+)
 from src.services.provenance_service import stock_provenance
 from src.services.purchase_evidence_service import evaluate_purchase_evidence
 from src.services.stock_analysis_inputs import StockAnalysisInputs
@@ -72,6 +75,7 @@ class StockDashboardContext:
     volume_profile: dict[str, Any] = field(default_factory=dict)
     purchase_evidence: dict[str, Any] = field(default_factory=dict)
     purchase_evidence_health: list[dict[str, Any]] = field(default_factory=list)
+    market_risk_guardrail: dict[str, Any] = field(default_factory=dict)
     japan_supply_demand: dict[str, Any] = field(default_factory=dict)
     stock_signal_context: dict[str, Any] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
@@ -271,6 +275,16 @@ def build_stock_dashboard_context(
         diagnostic_errors,
         timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
+    market_risk_guardrail = _safe_analysis(
+        "market_risk_guardrail",
+        lambda: build_cached_market_risk_guardrail(
+            normalized_ticker,
+            info_dict,
+            sector_theme_context,
+        ),
+        {},
+        diagnostic_errors,
+    )
     japan_supply_demand = _safe_analysis(
         "japan_supply_demand",
         lambda: build_japan_supply_demand_context(normalized_ticker, history_df),
@@ -329,6 +343,18 @@ def build_stock_dashboard_context(
         purchase_evidence,
         japan_supply_demand,
     )
+    data_status.append(
+        DataResult(
+            name="market_risk_guardrail",
+            source=str(market_risk_guardrail.get("source") or "cached MarketContext"),
+            fetched_at=str(market_risk_guardrail.get("as_of") or ""),
+            is_stale=bool(market_risk_guardrail.get("is_stale", False)),
+            is_partial=market_risk_guardrail.get("status")
+            not in {"active", "monitoring", "not_applicable"},
+            error="; ".join(market_risk_guardrail.get("reasons") or []),
+            cache_status="persistent_cache",
+        )
+    )
     _apply_diagnostic_errors(data_status, diagnostic_errors)
     manifest_failures = requirement_failures("stock_analysis", data_status)
     provenance = stock_provenance(
@@ -362,6 +388,7 @@ def build_stock_dashboard_context(
         volume_profile=volume_profile,
         purchase_evidence=purchase_evidence,
         purchase_evidence_health=purchase_evidence_health,
+        market_risk_guardrail=market_risk_guardrail,
         japan_supply_demand=japan_supply_demand,
         data_status=data_status,
         provenance=provenance,
@@ -389,6 +416,7 @@ def build_stock_dashboard_context(
         volume_profile=volume_profile,
         purchase_evidence=purchase_evidence,
         purchase_evidence_health=purchase_evidence_health,
+        market_risk_guardrail=market_risk_guardrail,
         japan_supply_demand=japan_supply_demand,
         profile_warning=_profile_warning_message(info_dict),
         quality_warnings=[

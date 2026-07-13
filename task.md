@@ -15,3 +15,9 @@
 - [x] 参照知識DBに重複排除、鮮度表示、プロンプト注入対策を追加する <!-- id: 13 -->
 - [x] 生成物、SQLiteキャッシュ、アップロードファイル、zip成果物のGit管理方針を整理する <!-- id: 14 -->
 - [ ] 主要画面のスモークテストを追加する <!-- id: 15 -->
+- [x] Cboe指数群、CFTC TFF、OCC日次Put/Callの公式データ経路と欠損・stale契約を追加する <!-- id: 16 -->
+- [x] SPY/QQQの1・5・20営業日予測を時点整合・walk-forward・地平別validation付きで実装する <!-- id: 17 -->
+- [x] VIX/SKEW/VVIX、期間構造、PCR、Gamma、breadthの複合センチメント判定を実装する <!-- id: 18 -->
+- [x] 検証済み予測だけを市場戦略へ使い、複合判定を警戒方向だけのStockガードレールとして統合する <!-- id: 19 -->
+- [x] Market UI、AI context、来歴、live smoke、運用文書へ短期予測と複合判定を接続する <!-- id: 20 -->
+- [x] 対象テスト、実データ予測、MarketData厳格確認、全read-only release gateを通す <!-- id: 21 -->

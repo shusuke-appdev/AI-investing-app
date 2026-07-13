@@ -6,6 +6,7 @@ import pandas as pd
 from src.market_volatility_intelligence import (
     CboeIndexResult,
     _historical_outcomes,
+    _parse_cboe_csv,
     build_local_sentiment_composite,
     build_market_volatility_regime,
     fetch_cboe_indices,
@@ -89,6 +90,41 @@ def test_fetch_cboe_indices_sorts_misaligned_datetime_indexes(monkeypatch):
 
     assert result.data.index.is_monotonic_increasing
     assert list(result.data.index) == list(pd.date_range("2026-01-01", periods=4))
+    assert result.is_partial is False
+    assert result.is_stale is False
+    assert result.symbol_status["VIX"]["cache_status"] == "live"
+
+
+def test_parse_cboe_csv_accepts_single_value_symbol_column():
+    result = _parse_cboe_csv("DATE,SKEW\n01/02/2026,143.25\n", "SKEW")
+
+    assert result.iloc[0]["SKEW"] == 143.25
+
+
+def test_fetch_cboe_indices_marks_only_used_stale_fallback_as_stale(monkeypatch):
+    from src import market_volatility_intelligence as module
+
+    stale_records = [{"date": "2026-01-02", "SKEW": 145.0}]
+    cache = SimpleNamespace(
+        read=lambda key, **kwargs: SimpleNamespace(
+            status="stale",
+            is_available=True,
+            payload={"records": stale_records},
+        ),
+        write=lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(module, "repo_state_cache", lambda namespace: cache)
+    monkeypatch.setattr(
+        module.requests,
+        "get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("offline")),
+    )
+
+    result = fetch_cboe_indices(("SKEW",))
+
+    assert result.is_stale is True
+    assert result.is_partial is True
+    assert result.symbol_status["SKEW"]["status"] == "stale"
 
 
 def test_local_sentiment_reweights_available_components():

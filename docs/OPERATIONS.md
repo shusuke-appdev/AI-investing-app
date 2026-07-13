@@ -158,6 +158,15 @@ python tools/migrate_to_supabase.py --print-setup-sql
 .\.venv\Scripts\ruff.exe format --check .
 ```
 
+米国市場の短期予測と複合センチメントを実データで検証する場合は次を使います。追加APIキーは不要です。Cboe、CFTC、OCCはいずれも公式公開データを使い、Gammaだけは既存の `MARKETDATA_TOKEN` があり直接かつ完全なチェーンを取得できた場合に有効化します。
+
+```powershell
+.\.venv\Scripts\python.exe scripts\backfill_market_sentiment.py --symbols SPY,QQQ --sessions 252
+.\.venv\Scripts\python.exe scripts\live_smoke.py --require-market-forecast
+```
+
+OCC backfillは再開可能で、既取得日は再取得しません。60営業日未満はPut/Call percentileを算出せず、複合ルールをpartialとして表示します。短期予測は1・5・20営業日を個別にOOS判定し、`research_only` はUI/AIへの参考表示に限定されます。
+
 `pytest` のキャッシュは、アクセス拒否が発生していた `.pytest_cache` ではなく `.states/pytest_cache` を使うように設定済みです。
 `ruff` のキャッシュも `.states/ruff_cache` を使います。
 

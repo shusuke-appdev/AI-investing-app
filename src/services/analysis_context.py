@@ -227,6 +227,8 @@ class MarketContext:
     volatility_regime: dict[str, Any] = field(default_factory=dict)
     vix_sq_alert: dict[str, Any] = field(default_factory=dict)
     sentiment: dict[str, Any] = field(default_factory=dict)
+    short_horizon_forecast: dict[str, Any] = field(default_factory=dict)
+    composite_sentiment: dict[str, Any] = field(default_factory=dict)
     top_risk_signposts: dict[str, Any] = field(default_factory=dict)
     fomo_scan: dict[str, Any] = field(default_factory=dict)
     detail_stages: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -269,6 +271,8 @@ class MarketContext:
             "volatility_regime": self.volatility_regime,
             "vix_sq_alert": self.vix_sq_alert,
             "sentiment": self.sentiment,
+            "short_horizon_forecast": self.short_horizon_forecast,
+            "composite_sentiment": self.composite_sentiment,
             "top_risk_signposts": self.top_risk_signposts,
             "fomo_scan": self.fomo_scan,
             "detail_stages": self.detail_stages,
@@ -356,6 +360,8 @@ class MarketContext:
             volatility_regime=value.get("volatility_regime") or {},
             vix_sq_alert=value.get("vix_sq_alert") or {},
             sentiment=value.get("sentiment") or {},
+            short_horizon_forecast=value.get("short_horizon_forecast") or {},
+            composite_sentiment=value.get("composite_sentiment") or {},
             top_risk_signposts=value.get("top_risk_signposts") or {},
             fomo_scan=value.get("fomo_scan") or {},
             detail_stages=value.get("detail_stages") or {},
@@ -393,6 +399,7 @@ class StockSignalContext:
     volume_profile: dict[str, Any] = field(default_factory=dict)
     purchase_evidence: dict[str, Any] = field(default_factory=dict)
     purchase_evidence_health: list[dict[str, Any]] = field(default_factory=list)
+    market_risk_guardrail: dict[str, Any] = field(default_factory=dict)
     japan_supply_demand: dict[str, Any] = field(default_factory=dict)
     news_headlines: list[str] = field(default_factory=list)
     news_source_status: str = ""

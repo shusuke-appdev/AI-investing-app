@@ -37,6 +37,8 @@ def build_market_strategy_context(
     ibd_regime: dict[str, Any] | None = None,
     evaluation: dict[str, Any] | None = None,
     volatility_regime: dict[str, Any] | None = None,
+    short_horizon_forecast: dict[str, Any] | None = None,
+    composite_sentiment: dict[str, Any] | None = None,
     credit_stress: dict[str, Any] | None = None,
     trend_ranking: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -59,6 +61,7 @@ def build_market_strategy_context(
         ibd_regime=ibd_regime,
         evaluation=evaluation,
         volatility_regime=volatility_regime,
+        short_horizon_forecast=short_horizon_forecast,
         credit_stress=credit_stress,
         trend_ranking=trend_ranking,
     )
@@ -69,6 +72,7 @@ def build_market_strategy_context(
         option_horizons=option_horizons,
         ibd_regime=ibd_regime,
         volatility_regime=volatility_regime,
+        composite_sentiment=composite_sentiment,
     )
     return {
         "important_levels": levels,
@@ -146,6 +150,7 @@ def build_timeframe_outlooks(
     ibd_regime: dict[str, Any] | None = None,
     evaluation: dict[str, Any] | None = None,
     volatility_regime: dict[str, Any] | None = None,
+    short_horizon_forecast: dict[str, Any] | None = None,
     credit_stress: dict[str, Any] | None = None,
     trend_ranking: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -156,14 +161,26 @@ def build_timeframe_outlooks(
     if week_option_score is None:
         week_option_score = _option_score(options)
     month_option_score = _option_horizon_score(option_horizons, "one_month") or 0.0
-    week_score = current_score * 0.45 + week_option_score + _driver_score(drivers)
-    month_score = (
+    heuristic_week_score = (
+        current_score * 0.45 + week_option_score + _driver_score(drivers)
+    )
+    heuristic_month_score = (
         current_score * 0.35
         + month_option_score
         + _trend_ranking_score(trend_ranking)
         + _credit_score(credit_stress)
         + _volatility_score(volatility_regime)
     )
+    forecast_week_score = _forecast_direction_score(short_horizon_forecast, 5)
+    forecast_month_score = _forecast_direction_score(short_horizon_forecast, 20)
+    week_score = _forecast_primary_score(forecast_week_score, heuristic_week_score)
+    month_score = _forecast_primary_score(forecast_month_score, heuristic_month_score)
+    week_evidence = _week_evidence(options, drivers, option_horizons)
+    month_evidence = _month_evidence(trend_ranking, credit_stress, option_horizons)
+    if forecast_week_score is not None:
+        week_evidence.append(_forecast_evidence(short_horizon_forecast, 5))
+    if forecast_month_score is not None:
+        month_evidence.append(_forecast_evidence(short_horizon_forecast, 20))
     rows = [
         _outlook(
             "現在時点", "current", current_score, _current_evidence(levels, ibd_regime)
@@ -172,13 +189,13 @@ def build_timeframe_outlooks(
             "1週間先",
             "one_week",
             week_score,
-            _week_evidence(options, drivers, option_horizons),
+            week_evidence,
         ),
         _outlook(
             "1ヶ月先",
             "one_month",
             month_score,
-            _month_evidence(trend_ranking, credit_stress, option_horizons),
+            month_evidence,
         ),
     ]
     return {
@@ -197,6 +214,7 @@ def select_strategy_regime(
     option_horizons: list[dict[str, Any]] | None = None,
     ibd_regime: dict[str, Any] | None = None,
     volatility_regime: dict[str, Any] | None = None,
+    composite_sentiment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Select one of the five requested strategy regimes."""
 
@@ -239,20 +257,33 @@ def select_strategy_regime(
         key = "wait"
         label = "判断不能(待ち)"
 
+    risk_budget = _cap_risk_budget(_strategy_risk_budget(key), composite_sentiment)
+    evidence = [
+        f"重要水準での挙動={behavior}",
+        f"現在スコア={current:+.2f}",
+        f"1週間スコア={one_week:+.2f}",
+        f"オプション寄与={option_score:+.2f}",
+    ]
+    composite = composite_sentiment or {}
+    if composite.get("integration_enabled") and composite.get("risk_floor") not in {
+        "",
+        "none",
+        "low",
+    }:
+        evidence.append(
+            "複合センチメント警戒="
+            f"{composite.get('state_label', composite.get('state', ''))} "
+            f"({composite.get('risk_floor')})"
+        )
     return {
         "key": key,
         "label": label,
         "rationale": _strategy_rationale(
             label, behavior, current, one_week, option_score
         ),
-        "risk_budget": _strategy_risk_budget(key),
+        "risk_budget": risk_budget,
         "invalidation": _strategy_invalidation(key, levels),
-        "evidence": [
-            f"重要水準での挙動={behavior}",
-            f"現在スコア={current:+.2f}",
-            f"1週間スコア={one_week:+.2f}",
-            f"オプション寄与={option_score:+.2f}",
-        ],
+        "evidence": evidence,
     }
 
 
@@ -575,6 +606,73 @@ def _strategy_risk_budget(key: str) -> str:
         "mean_reversion": "10-30%",
         "aggressive_mean_reversion": "20-40%",
     }.get(key, "0-30%")
+
+
+def _forecast_direction_score(
+    forecast: dict[str, Any] | None, horizon: int
+) -> float | None:
+    payload = forecast or {}
+    if payload.get("is_stale"):
+        return None
+    target = (payload.get("targets") or {}).get("SPY") or {}
+    item = (target.get("horizons") or {}).get(f"{horizon}d") or {}
+    if item.get("status") != "validated":
+        return None
+    probability = item.get("probability_up")
+    if not isinstance(probability, (int, float)):
+        return None
+    if probability >= 0.58:
+        return 1.0
+    if probability >= 0.53:
+        return 0.5
+    if probability > 0.47:
+        return 0.0
+    if probability > 0.42:
+        return -0.5
+    return -1.0
+
+
+def _forecast_primary_score(
+    forecast_score: float | None, heuristic_score: float
+) -> float:
+    if forecast_score is None:
+        return heuristic_score
+    confirmation = max(-1.0, min(1.0, heuristic_score))
+    return forecast_score * 0.8 + confirmation * 0.2
+
+
+def _forecast_evidence(forecast: dict[str, Any] | None, horizon: int) -> str:
+    target = ((forecast or {}).get("targets") or {}).get("SPY") or {}
+    item = (target.get("horizons") or {}).get(f"{horizon}d") or {}
+    probability = item.get("probability_up")
+    probability_text = (
+        f"{float(probability):.0%}"
+        if isinstance(probability, (int, float))
+        else "算出不可"
+    )
+    return (
+        f"検証済みSPY {horizon}日予測={probability_text} "
+        f"({item.get('direction_label', '')})"
+    )
+
+
+def _cap_risk_budget(
+    risk_budget: str, composite_sentiment: dict[str, Any] | None
+) -> str:
+    composite = composite_sentiment or {}
+    if not composite.get("integration_enabled"):
+        return risk_budget
+    risk_floor = str(composite.get("risk_floor") or "none")
+    composite_cap = {"extreme": 15, "high": 30, "medium": 50}.get(risk_floor)
+    if composite_cap is None:
+        return risk_budget
+    try:
+        original_upper = int(risk_budget.removesuffix("%").split("-", 1)[1])
+    except (IndexError, ValueError):
+        return risk_budget
+    if original_upper <= composite_cap:
+        return risk_budget
+    return f"0-{composite_cap}%"
 
 
 def _strategy_invalidation(key: str, levels: dict[str, Any]) -> str:

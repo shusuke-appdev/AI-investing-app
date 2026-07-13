@@ -13,11 +13,42 @@ technical context, historical forward outcomes, walk-forward validation,
 regime fit, trend-follow diagnostics, sector/theme context, and sizing rules to
 produce a `StockSignalContext`.
 
+The US Market page also owns a separate market-level short-horizon forecast for
+SPY and QQQ at 1, 5, and 20 business days. It combines price trend, breadth,
+credit and cyclical relative strength, official Cboe volatility indices, and
+weekly CFTC positioning. Every horizon carries its own walk-forward status:
+`validated` can inform the qualitative 1W/1M market direction, while
+`research_only`, stale, or unavailable output remains visible but cannot be
+integrated.
+
+## Composite Sentiment Versus Probability
+
+`composite_sentiment` is an explainable state classifier, not another forecast
+probability. It evaluates combinations such as VIX decline plus elevated SKEW,
+VIX/VVIX acceleration in negative gamma, term-structure stress, extreme OCC
+put/call demand, positive-gamma transition, and weak breadth. Its result may
+only preserve or raise the market risk level and cap position sizing. It never
+changes `probability_up`, upgrades a stock stance, or creates a buy signal.
+
+The composite status is `confirmed` only when every condition required by the
+matched rule is current and usable. Missing OCC history, incomplete or proxy
+gamma, a stale source, or missing breadth makes the relevant rule `partial` or
+unavailable. Gamma is usable only when the existing MarketData.app option path
+reports complete direct coverage; yfinance-estimated gamma is not silently
+substituted.
+
 ## Shared Contexts
 
 - `MarketContext`: shared by the Market Intelligence UI and AI market recap.
 - `OptionContext`: carries option-analysis rows plus retrieval status.
 - `StockSignalContext`: shared by the Stock page and AI stock analysis path.
+
+`MarketContext.short_horizon_forecast` and
+`MarketContext.composite_sentiment` are also reused by the AI market recap. The
+Stock path reads only the cached context through `market_risk_guardrail`: US
+stocks may be downgraded from `エントリー検討可` to `監視` or `見送り`, but
+the market layer cannot upgrade the stock-specific conclusion. JP stocks are
+explicitly outside this guardrail.
 
 The daily Entry Framework is an execution-quality gate inside
 `StockSignalContext.trade_setup`. It reuses existing technical and daily OHLCV
@@ -54,6 +85,12 @@ entry-lag sensitivity, random-direction baselines, and top-trade dependency.
 The first integration step keeps paid data APIs and QuantLib out of scope. The
 US market receives the richest monitoring context because index option data is
 available; JP remains monitoring-first until the option data source improves.
+
+## Primary Public Data References
+
+- Cboe official index history: `https://cdn.cboe.com/api/global/us_indices/daily_prices/<SYMBOL>_History.csv`
+- CFTC Traders in Financial Futures API: `https://publicreporting.cftc.gov/resource/gpe5-46if.json`
+- OCC consolidated option volume query: `https://marketdata.theocc.com/volume-query`
 
 ## Credit Stress and Flow Proxy
 

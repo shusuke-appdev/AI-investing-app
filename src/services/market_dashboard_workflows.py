@@ -85,6 +85,18 @@ def build_market_options_context(
         trend_ranking,
         market_distortions=base.market_distortions,
     )
+    composite_sentiment = (
+        _safe_call(
+            lambda: build_market_composite_sentiment(
+                options.items,
+                refresh_occ=False,
+            ),
+            base.composite_sentiment,
+            errors,
+        )
+        if market_type == "US"
+        else {}
+    )
     strategy_bundle = _safe_call(
         lambda: build_market_strategy_context(
             market_type,
@@ -93,6 +105,8 @@ def build_market_options_context(
             ibd_regime=base.ibd_regime,
             evaluation=evaluation,
             volatility_regime=base.volatility_regime,
+            short_horizon_forecast=base.short_horizon_forecast,
+            composite_sentiment=composite_sentiment,
             credit_stress=base.credit_stress,
             trend_ranking=trend_ranking,
         ),
@@ -131,6 +145,8 @@ def build_market_options_context(
         volatility_regime=base.volatility_regime,
         vix_sq_alert=base.vix_sq_alert,
         sentiment=base.sentiment,
+        short_horizon_forecast=base.short_horizon_forecast,
+        composite_sentiment=composite_sentiment,
         top_risk_signposts=base.top_risk_signposts,
         fomo_scan=base.fomo_scan,
         data_status=_replace_data_status(
@@ -167,6 +183,15 @@ def build_market_options_context(
                 is_partial=not bool(strategy_bundle.get("strategy_regime")),
                 cache_status="computed",
             ),
+            DataResult(
+                name="composite_market_sentiment",
+                source=composite_sentiment.get("source", ""),
+                fetched_at=composite_sentiment.get("as_of", ""),
+                is_stale=bool(composite_sentiment.get("is_stale", False)),
+                is_partial=composite_sentiment.get("status") != "confirmed",
+                error="; ".join(composite_sentiment.get("quality_warnings", [])[:3]),
+                cache_status="computed",
+            ),
         ),
         provenance=_merge_provenance(
             base.provenance,
@@ -185,6 +210,7 @@ def build_market_options_context(
         quality_warnings=_merge_warnings(
             base.quality_warnings,
             options.quality_warnings,
+            composite_sentiment.get("quality_warnings", []),
             trend_ranking.get("quality_warnings", []),
             strategy_bundle.get("important_levels", {}).get("quality_warnings", []),
             strategy_bundle.get("market_driver_monitor", {}).get(

@@ -74,6 +74,47 @@ def _fred_check() -> str:
     return f"source={result.source}, rows={len(result.data)}"
 
 
+def _market_forecast_check(*, required: bool) -> str:
+    if not required:
+        return (
+            "SKIP: pass --require-market-forecast to run the model and composite smoke"
+        )
+    from src.services.market_composite_sentiment import (
+        build_market_composite_sentiment,
+    )
+    from src.services.market_short_horizon_forecast import (
+        build_market_short_horizon_forecast,
+    )
+
+    forecast = build_market_short_horizon_forecast(force_refresh=True)
+    failures = []
+    summaries = []
+    for ticker in ("SPY", "QQQ"):
+        target = (forecast.get("targets") or {}).get(ticker) or {}
+        for horizon in ("1d", "5d", "20d"):
+            item = (target.get("horizons") or {}).get(horizon) or {}
+            if item.get("status") not in {"validated", "research_only"}:
+                failures.append(f"{ticker}:{horizon}:status={item.get('status')}")
+                continue
+            if item.get("probability_up") is None or not item.get("oos_metrics"):
+                failures.append(f"{ticker}:{horizon}:missing_probability_or_oos")
+                continue
+            summaries.append(
+                f"{ticker}:{horizon}:{item.get('status')}:p_up={float(item['probability_up']):.1%}"
+            )
+    composite = build_market_composite_sentiment(refresh_occ=True)
+    for ticker in ("SPY", "QQQ"):
+        item = (composite.get("targets") or {}).get(ticker) or {}
+        if item.get("status") not in {"confirmed", "partial"}:
+            failures.append(f"{ticker}:composite_status={item.get('status')}")
+        summaries.append(
+            f"{ticker}:composite={item.get('state', 'unavailable')}/{item.get('status', 'unavailable')}"
+        )
+    if failures:
+        raise RuntimeError("; ".join(failures))
+    return "; ".join(summaries)
+
+
 def _finnhub_check() -> str:
     if not os.getenv("FINNHUB_API_KEY"):
         return "SKIP: FINNHUB_API_KEY is not configured"
@@ -282,6 +323,11 @@ def main() -> int:
         help="Treat MarketData.app options skip/degraded as a failure.",
     )
     parser.add_argument(
+        "--require-market-forecast",
+        action="store_true",
+        help="Run and require the short-horizon forecast and composite sentiment smoke.",
+    )
+    parser.add_argument(
         "--marketdata-tickers",
         default="SPY,QQQ,IWM",
         help="Comma-separated tickers for the MarketData.app live option smoke.",
@@ -311,6 +357,10 @@ def main() -> int:
     checks = [
         _run("external_market", _external_market_check),
         _run("fred", _fred_check),
+        _run(
+            "market_forecast",
+            lambda: _market_forecast_check(required=args.require_market_forecast),
+        ),
         _run("finnhub", _finnhub_check),
         _run(
             "marketdata_options",
@@ -333,6 +383,12 @@ def main() -> int:
             check
             for check in checks
             if check.name == "marketdata_options" and check.status != "PASS"
+        )
+    if args.require_market_forecast:
+        failed.extend(
+            check
+            for check in checks
+            if check.name == "market_forecast" and check.status != "PASS"
         )
     print({"checks": [asdict(check) for check in checks]})
     return 1 if failed else 0

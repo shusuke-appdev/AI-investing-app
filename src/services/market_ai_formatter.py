@@ -124,6 +124,45 @@ def format_market_context_for_ai(context: MarketContext) -> str:
                 f"status={cnn.get('status', 'unavailable')}, "
                 f"score={cnn.get('score')}, rating={cnn.get('rating', '')}"
             )
+    if context.short_horizon_forecast:
+        forecast = context.short_horizon_forecast
+        parts.append("[Validated short-horizon market forecast]")
+        parts.append(
+            f"- status={forecast.get('status', 'unavailable')}, "
+            f"as_of={forecast.get('as_of', '')}, "
+            f"stale={forecast.get('is_stale', False)}"
+        )
+        for ticker in ("SPY", "QQQ"):
+            target = (forecast.get("targets") or {}).get(ticker) or {}
+            for horizon in ("1d", "5d", "20d"):
+                item = (target.get("horizons") or {}).get(horizon) or {}
+                if not item:
+                    continue
+                parts.append(
+                    f"- {ticker} {horizon}: status={item.get('status')}, "
+                    f"probability_up={_display_percent(item.get('probability_up'))}, "
+                    f"p10={_display_percent(item.get('p10'))}, "
+                    f"p50={_display_percent(item.get('p50'))}, "
+                    f"p90={_display_percent(item.get('p90'))}, "
+                    f"risk={item.get('risk_level', 'unknown')}"
+                )
+    if context.composite_sentiment:
+        composite = context.composite_sentiment
+        parts.append("[Composite volatility and option sentiment]")
+        parts.append(
+            f"- state={composite.get('state_label', composite.get('state', ''))}, "
+            f"status={composite.get('status', 'unavailable')}, "
+            f"risk_floor={composite.get('risk_floor', 'none')}, "
+            f"probability_adjustment=disabled"
+        )
+        if composite.get("summary"):
+            parts.append(f"- {composite.get('summary')}")
+        spy = (composite.get("targets") or {}).get("SPY") or {}
+        for evidence in spy.get("evidence", []):
+            parts.append(
+                f"- {evidence.get('label')}: {evidence.get('status')} "
+                f"value={evidence.get('value')} threshold={evidence.get('threshold')}"
+            )
     if context.top_risk_signposts:
         signposts = context.top_risk_signposts
         parts.append(

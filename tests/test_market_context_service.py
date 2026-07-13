@@ -466,6 +466,25 @@ def test_market_context_cache_preserves_stale_metadata(monkeypatch, tmp_path):
     assert any(item.kind.value == "stale_cache" for item in loaded.provenance)
 
 
+def test_market_context_round_trip_preserves_forecast_and_composite_layers():
+    context = MarketContext(
+        market_type="US",
+        short_horizon_forecast={
+            "status": "research_only",
+            "targets": {"SPY": {"horizons": {"5d": {"probability_up": 0.55}}}},
+        },
+        composite_sentiment={
+            "status": "confirmed",
+            "targets": {"SPY": {"state": "hidden_tail_hedging"}},
+        },
+    )
+
+    restored = MarketContext.from_mapping(context.to_dict())
+
+    assert restored.short_horizon_forecast == context.short_horizon_forecast
+    assert restored.composite_sentiment == context.composite_sentiment
+
+
 def test_market_details_reuses_supplied_context(monkeypatch):
     _patch_new_market_layers(monkeypatch)
     base = MarketContext(

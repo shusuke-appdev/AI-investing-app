@@ -87,6 +87,45 @@ def test_market_display_context_formats_market_context_for_reflex_state():
                 }
             ]
         },
+        short_horizon_forecast={
+            "as_of": "2026-07-10",
+            "targets": {
+                "SPY": {
+                    "horizons": {
+                        "1d": {
+                            "status": "validated",
+                            "probability_up": 0.61,
+                            "p10": -0.02,
+                            "p90": 0.03,
+                            "implied_expected_move": 0.01,
+                            "risk_level": "medium",
+                            "direction_label": "上方向バイアス",
+                        }
+                    }
+                }
+            },
+        },
+        composite_sentiment={
+            "as_of": "2026-07-10",
+            "targets": {
+                "SPY": {
+                    "state": "hidden_tail_hedging",
+                    "state_label": "表面平静・テール警戒",
+                    "status": "confirmed",
+                    "risk_floor": "medium",
+                    "summary": "テールヘッジ需要が強い状態です。",
+                    "evidence": [
+                        {
+                            "label": "SKEWテール警戒",
+                            "status": "met",
+                            "value": 92.0,
+                            "threshold": "≥ 80 percentile",
+                            "source": "Cboe SKEW",
+                        }
+                    ],
+                }
+            },
+        },
         important_levels={
             "summary": "SPY breakout",
             "items": [
@@ -165,6 +204,10 @@ def test_market_display_context_formats_market_context_for_reflex_state():
     assert display.flow_alignment.alignment_label == "整合"
     assert display.strategy_regime.label == "順張り"
     assert display.market_timeframes[0].direction_label == "上昇相場"
+    assert display.short_horizon_forecasts[0].probability_up == "61.0%"
+    assert display.short_horizon_forecasts[0].status_label == "検証済み"
+    assert display.composite_sentiment_items[0].state == "hidden_tail_hedging"
+    assert display.composite_sentiment_items[0].evidence[0].status_label == "成立"
     assert display.important_levels[0].behavior_label == "突破"
     assert len(display.trend_ranking_items) == 5
     assert display.trend_ranking_items[0].option_asymmetry == "upside_squeeze_candidate"

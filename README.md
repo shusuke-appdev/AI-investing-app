@@ -21,6 +21,7 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 
 - Market Intelligence: 主要指数、セクター、コモディティ、為替、暗号資産、VIX、米国債利回りを一覧化
 - 市場環境評価: トレンド、モメンタム、ボラティリティ、マーケットブレッドス、オプションセンチメントを統合評価
+- 短期市場予測: SPY / QQQの1・5・20営業日をwalk-forward検証し、VIX・SKEW・VVIX・期間構造・breadth・OCC Put/Call・Gammaを複合判定。検証未達は研究表示に限定し、個別株には警戒方向のガードレールだけを適用
 - オプション分析: SPY / QQQ / IWM と主要テーマETF proxy の Put/Call Ratio、Gamma Exposure、Max Pain、ATM IV、Skew を算出。MarketData.appを米国オプションの preferred 経路として利用し、失敗時はyfinance/cacheへフォールバック
 - テーマランキング: AI、半導体、エネルギー、ヘルスケアなどのテーマを期間別にランキング
 - 個別銘柄分析: 企業概要、価格チャート、ニュース、テクニカル、SMART基準、日足Entry Framework、トレード分析、AI分析レポート
@@ -85,6 +86,13 @@ MarketData.app の live オプション取得を厳格に検証するには、�
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\live_smoke.py --require-marketdata --marketdata-tickers SPY --marketdata-min-dte 1 --marketdata-horizon-dtes 7,30
+```
+
+公式OCCの日次Put/Call履歴をローカルへ蓄積し、短期予測・複合判定を実データで確認する場合は次を実行します。Cboe/CFTC/OCC用の追加キーは不要です。
+
+```powershell
+.\.venv\Scripts\python.exe scripts\backfill_market_sentiment.py --symbols SPY,QQQ --sessions 252
+.\.venv\Scripts\python.exe scripts\live_smoke.py --require-market-forecast
 ```
 
 J-Quants Freeの価格系列は遅延するため、汎用の現在値・価格履歴には使用しません。日本株の現在値・履歴はyfinanceを使い、J-Quantsは企業マスター・財務情報の補完に限定します。

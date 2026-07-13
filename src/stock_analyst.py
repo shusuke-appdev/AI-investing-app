@@ -404,7 +404,8 @@ def _format_adaptive_decision_context(stock_signal_context: dict | None) -> str:
     volume = stock_signal_context.get("volume_profile") or {}
     purchase = stock_signal_context.get("purchase_evidence") or {}
     purchase_health = stock_signal_context.get("purchase_evidence_health") or []
-    if not any((fundamental, volume, purchase)):
+    market_guardrail = stock_signal_context.get("market_risk_guardrail") or {}
+    if not any((fundamental, volume, purchase, market_guardrail)):
         return ""
     size = fundamental.get("size") or {}
     style = fundamental.get("style") or {}
@@ -435,6 +436,9 @@ def _format_adaptive_decision_context(stock_signal_context: dict | None) -> str:
 - Purchase Components: technical={purchase.get("technical_score", "N/A")}, fundamental_theme={purchase.get("fundamental_theme_score", "N/A")}
 - Purchase Health: {purchase_health_text}
 - Purchase Caps: {purchase_caps or "None"}
+- Market Risk Guardrail: status={market_guardrail.get("status", "unavailable")}, risk={market_guardrail.get("risk_level", "unknown")}, cap={market_guardrail.get("action_cap", "none")}, as_of={market_guardrail.get("as_of", "N/A")}
+- Market Guardrail Summary: {market_guardrail.get("summary", "unavailable")}
+The market guardrail may downgrade timing only. It must never raise the stock rating or alter the stock probability and purchase-evidence score.
 Respect unavailable fields and every cap. SMART is only a growth-stock proxy and must not be added again to the adaptive score.
 """
 

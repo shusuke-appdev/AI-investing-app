@@ -14,7 +14,18 @@ from src.economic_data_provider import fetch_fred_series
 from src.persistent_cache import repo_state_cache, utc_now_iso
 
 CBOE_BASE_URL = "https://cdn.cboe.com/api/global/us_indices/daily_prices"
-CBOE_SYMBOLS = ("VIX", "VIX9D", "VIX3M", "VVIX", "SKEW", "VXN", "RVX")
+CBOE_SYMBOLS = (
+    "VIX",
+    "VIX1D",
+    "VIX9D",
+    "VIX3M",
+    "VVIX",
+    "SKEW",
+    "VXN",
+    "RVX",
+    "DSPX",
+    "VIXEQ",
+)
 CNN_FEAR_GREED_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 
 
@@ -24,7 +35,9 @@ class CboeIndexResult:
     source: str = ""
     fetched_at: str = ""
     is_stale: bool = False
+    is_partial: bool = False
     warnings: list[str] = field(default_factory=list)
+    symbol_status: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def fetch_cboe_indices(symbols: tuple[str, ...] = CBOE_SYMBOLS) -> CboeIndexResult:
@@ -33,6 +46,7 @@ def fetch_cboe_indices(symbols: tuple[str, ...] = CBOE_SYMBOLS) -> CboeIndexResu
     cache = repo_state_cache("cboe_index_cache")
     rows: list[pd.DataFrame] = []
     warnings: list[str] = []
+    symbol_status: dict[str, dict[str, Any]] = {}
     for symbol in symbols:
         key = symbol.lower()
         cached = cache.read(key, fresh_seconds=6 * 3600, stale_seconds=7 * 86400)
@@ -40,6 +54,11 @@ def fetch_cboe_indices(symbols: tuple[str, ...] = CBOE_SYMBOLS) -> CboeIndexResu
             frame = _frame_from_records(cached.payload.get("records") or [], symbol)
             if not frame.empty:
                 rows.append(frame)
+                symbol_status[symbol] = _cboe_symbol_status(
+                    frame,
+                    status="available",
+                    cache_status="persistent_cache",
+                )
                 continue
         try:
             response = requests.get(
@@ -53,12 +72,34 @@ def fetch_cboe_indices(symbols: tuple[str, ...] = CBOE_SYMBOLS) -> CboeIndexResu
                 raise ValueError("empty Cboe history")
             rows.append(frame)
             cache.write(key, {"records": _records(frame, symbol), "source": "cboe"})
+            symbol_status[symbol] = _cboe_symbol_status(
+                frame,
+                status="available",
+                cache_status="live",
+            )
         except Exception as exc:
             warnings.append(f"{symbol}: {exc}")
             if cached.is_available:
                 frame = _frame_from_records(cached.payload.get("records") or [], symbol)
                 if not frame.empty:
                     rows.append(frame)
+                    symbol_status[symbol] = _cboe_symbol_status(
+                        frame,
+                        status="stale",
+                        cache_status="stale_cache",
+                        warning=str(exc),
+                        is_stale=True,
+                    )
+                    continue
+            symbol_status[symbol] = {
+                "status": "unavailable",
+                "source": "cboe_official",
+                "as_of": "",
+                "is_stale": False,
+                "row_count": 0,
+                "cache_status": "failed",
+                "warning": str(exc),
+            }
     combined = (
         pd.concat(rows, axis=1, sort=True).sort_index() if rows else pd.DataFrame()
     )
@@ -66,8 +107,12 @@ def fetch_cboe_indices(symbols: tuple[str, ...] = CBOE_SYMBOLS) -> CboeIndexResu
         data=combined,
         source="cboe_official" if not combined.empty else "unavailable",
         fetched_at=utc_now_iso(),
-        is_stale=bool(warnings),
+        is_stale=any(item.get("is_stale", False) for item in symbol_status.values()),
+        is_partial=any(
+            item.get("status") != "available" for item in symbol_status.values()
+        ),
         warnings=warnings,
+        symbol_status=symbol_status,
     )
 
 
@@ -407,12 +452,50 @@ def _parse_cboe_csv(text: str, symbol: str) -> pd.DataFrame:
     date_column = next(
         (c for c in frame.columns if str(c).strip().upper() == "DATE"), None
     )
+    if date_column is None:
+        return pd.DataFrame()
     close_column = next((c for c in frame.columns if "CLOSE" in str(c).upper()), None)
-    if date_column is None or close_column is None:
+    if close_column is None:
+        close_column = next(
+            (c for c in frame.columns if str(c).strip().upper() == symbol.upper()),
+            None,
+        )
+    if close_column is None:
+        close_column = next(
+            (
+                c
+                for c in frame.columns
+                if c != date_column
+                and pd.to_numeric(frame[c], errors="coerce").notna().any()
+            ),
+            None,
+        )
+    if close_column is None:
         return pd.DataFrame()
     dates = pd.to_datetime(frame[date_column], errors="coerce")
     values = pd.to_numeric(frame[close_column], errors="coerce")
     return pd.DataFrame({symbol: values.values}, index=dates).dropna().sort_index()
+
+
+def _cboe_symbol_status(
+    frame: pd.DataFrame,
+    *,
+    status: str,
+    cache_status: str,
+    warning: str = "",
+    is_stale: bool = False,
+) -> dict[str, Any]:
+    index = frame.index.dropna()
+    as_of = str(index.max().date()) if len(index) else ""
+    return {
+        "status": status,
+        "source": "cboe_official",
+        "as_of": as_of,
+        "is_stale": is_stale,
+        "row_count": len(frame),
+        "cache_status": cache_status,
+        "warning": warning,
+    }
 
 
 def _historical_outcomes(

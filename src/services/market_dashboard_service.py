@@ -46,6 +46,7 @@ from src.sector_flow_monitor import build_sector_flow_monitor
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.services.data_fetch_manifest import requirement_failures
 from src.services.japan_market_conditions import build_japan_conditions_context
+from src.services.market_composite_sentiment import build_market_composite_sentiment
 from src.services.market_context_cache import (
     context_cache_key,
     context_cache_path,
@@ -55,8 +56,12 @@ from src.services.market_context_cache import (
     save_context_cache,
 )
 from src.services.market_playbook import get_market_playbook
+from src.services.market_short_horizon_forecast import (
+    build_market_short_horizon_forecast,
+)
 from src.services.market_strategy_service import build_market_strategy_context
 from src.services.provenance_service import (
+    market_forecast_provenance,
     market_high_provenance,
     market_medium_provenance,
     market_summary_provenance,
@@ -110,8 +115,8 @@ DETAIL_STAGE_DEFAULTS = {
     "volatility_sentiment": {
         "label": "Vol/Sentiment: ボラ/センチメント",
         "difficulty": "中",
-        "target": "ボラティリティ・レジーム、独自Fear & Greed、時間軸別方向感",
-        "summary": "ボラティリティ・レジームと独自Fear & Greedを更新します。",
+        "target": "ボラティリティ、1/5/20日短期予測、複合センチメント、時間軸別方向感",
+        "summary": "ボラティリティ、検証付き短期予測、複合センチメントを更新します。",
     },
     "credit_distortion": {
         "label": "Credit/Risk: 信用/歪み/天井警戒",
@@ -335,6 +340,8 @@ def build_market_theme_flow_context(
             ibd_regime=ibd_regime,
             evaluation=evaluation,
             volatility_regime=volatility_regime,
+            short_horizon_forecast=base.short_horizon_forecast,
+            composite_sentiment=base.composite_sentiment,
             credit_stress=base.credit_stress,
             trend_ranking=trend_ranking,
         ),
@@ -434,6 +441,8 @@ def build_market_theme_flow_context(
         volatility_regime=volatility_regime,
         vix_sq_alert=base.vix_sq_alert,
         sentiment=sentiment,
+        short_horizon_forecast=base.short_horizon_forecast,
+        composite_sentiment=base.composite_sentiment,
         top_risk_signposts=base.top_risk_signposts,
         fomo_scan=base.fomo_scan,
         data_status=_replace_data_status(base.data_status, *data_updates),
@@ -508,6 +517,7 @@ def build_market_volatility_sentiment_context(
             market_type,
             ibd_regime=base.ibd_regime,
             credit_stress=base.credit_stress,
+            option_items=base.options.items,
         ),
         {},
         errors,
@@ -517,6 +527,13 @@ def build_market_volatility_sentiment_context(
     )
     sentiment = volatility_sentiment.get("sentiment") or base.sentiment
     vix_sq_alert = volatility_sentiment.get("vix_sq_alert") or base.vix_sq_alert
+    short_horizon_forecast = (
+        volatility_sentiment.get("short_horizon_forecast")
+        or base.short_horizon_forecast
+    )
+    composite_sentiment = (
+        volatility_sentiment.get("composite_sentiment") or base.composite_sentiment
+    )
     strategy_bundle = _safe_call(
         lambda: build_market_strategy_context(
             market_type,
@@ -525,6 +542,8 @@ def build_market_volatility_sentiment_context(
             ibd_regime=base.ibd_regime,
             evaluation=base.evaluation,
             volatility_regime=volatility_regime,
+            short_horizon_forecast=short_horizon_forecast,
+            composite_sentiment=composite_sentiment,
             credit_stress=base.credit_stress,
             trend_ranking=base.trend_ranking,
         ),
@@ -562,6 +581,8 @@ def build_market_volatility_sentiment_context(
         volatility_regime=volatility_regime,
         vix_sq_alert=vix_sq_alert,
         sentiment=sentiment,
+        short_horizon_forecast=short_horizon_forecast,
+        composite_sentiment=composite_sentiment,
         top_risk_signposts=base.top_risk_signposts,
         fomo_scan=base.fomo_scan,
         data_status=_replace_data_status(
@@ -594,6 +615,24 @@ def build_market_volatility_sentiment_context(
                 cache_status="computed",
             ),
             DataResult(
+                name="short_horizon_forecast",
+                source=short_horizon_forecast.get("source", ""),
+                fetched_at=short_horizon_forecast.get("fetched_at", ""),
+                is_stale=bool(short_horizon_forecast.get("is_stale", False)),
+                is_partial=short_horizon_forecast.get("status") != "validated",
+                error="; ".join(short_horizon_forecast.get("quality_warnings", [])[:3]),
+                cache_status=short_horizon_forecast.get("cache_status", "computed"),
+            ),
+            DataResult(
+                name="composite_market_sentiment",
+                source=composite_sentiment.get("source", ""),
+                fetched_at=composite_sentiment.get("as_of", ""),
+                is_stale=bool(composite_sentiment.get("is_stale", False)),
+                is_partial=composite_sentiment.get("status") != "confirmed",
+                error="; ".join(composite_sentiment.get("quality_warnings", [])[:3]),
+                cache_status="computed",
+            ),
+            DataResult(
                 name="market_strategy_regime",
                 source="market_strategy_service",
                 fetched_at=_utc_now(),
@@ -601,7 +640,14 @@ def build_market_volatility_sentiment_context(
                 cache_status="computed",
             ),
         ),
-        provenance=base.provenance,
+        provenance=_merge_provenance(
+            base.provenance,
+            market_forecast_provenance(
+                fetched_at=_utc_now(),
+                forecast=short_horizon_forecast,
+                composite=composite_sentiment,
+            ),
+        ),
         errors=errors,
         source="live_volatility_sentiment",
         fetched_at=_utc_now(),
@@ -611,6 +657,8 @@ def build_market_volatility_sentiment_context(
             base.quality_warnings,
             volatility_regime.get("warnings", []),
             sentiment.get("quality_warnings", []),
+            short_horizon_forecast.get("quality_warnings", []),
+            composite_sentiment.get("quality_warnings", []),
             vix_sq_alert.get("quality_warnings", []),
             strategy_bundle.get("important_levels", {}).get("quality_warnings", []),
             strategy_bundle.get("market_driver_monitor", {}).get(
@@ -626,10 +674,12 @@ def build_market_volatility_sentiment_context(
             "partial" if errors else "live",
             cache_status="live",
             fetched_at=_utc_now(),
-            summary="ボラティリティ・レジームと独自Fear & Greedを更新しました。",
+            summary="ボラティリティ、短期予測、複合センチメントを更新しました。",
             warnings=_merge_warnings(
                 volatility_regime.get("warnings", []),
                 sentiment.get("quality_warnings", []),
+                short_horizon_forecast.get("quality_warnings", []),
+                composite_sentiment.get("quality_warnings", []),
                 vix_sq_alert.get("quality_warnings", []),
                 errors,
             ),
@@ -708,6 +758,8 @@ def build_market_high_context(
             ibd_regime=base.ibd_regime,
             evaluation=base.evaluation,
             volatility_regime=volatility_regime,
+            short_horizon_forecast=base.short_horizon_forecast,
+            composite_sentiment=base.composite_sentiment,
             credit_stress=credit_stress,
             trend_ranking=trend_ranking,
         ),
@@ -745,6 +797,8 @@ def build_market_high_context(
         volatility_regime=volatility_regime,
         vix_sq_alert=base.vix_sq_alert,
         sentiment=sentiment,
+        short_horizon_forecast=base.short_horizon_forecast,
+        composite_sentiment=base.composite_sentiment,
         top_risk_signposts=top_risk_signposts,
         fomo_scan=base.fomo_scan,
         data_status=_replace_data_status(
