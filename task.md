@@ -29,7 +29,7 @@
 - [x] Portfolioの現地通貨、円換算、通貨別小計、sector/theme、集中度を同一結果へ集約する <!-- id: 27 -->
 - [x] Portfolio UI/AIを同じ通貨・構成・MarketContext契約へ接続する <!-- id: 28 -->
 - [x] `docs/ANALYSIS_FEATURE_CATALOG.md` と文書索引を追加し、履歴資料を`docs/archive`へ移す <!-- id: 29 -->
-- [ ] 全release gate、MarketData/予測live smoke、7画面UI確認を完了する <!-- id: 30 -->
+- [x] 全release gate、MarketData/予測live smoke、7画面UI確認を完了する <!-- id: 30 -->
 - [x] 全テストを `tests/test_inventory.toml` へ一意登録し、分類・信頼度・限界・プロファイルと完全性メタテストを追加する <!-- id: 31 -->
 - [x] 外部モックを明示fixture化し、固定日時・同期プリミティブ・予測分割・Option重複統合で精度と速度を改善する <!-- id: 32 -->
 - [x] `scripts/check.py` のquick/coverageとlive smoke必須フラグを追加し、旧検証19本を削除する <!-- id: 33 -->
