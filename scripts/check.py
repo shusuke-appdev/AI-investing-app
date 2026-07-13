@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 import sys
@@ -31,17 +32,32 @@ def repo_local_tool(name: str) -> Path:
     return Path(sys.executable).resolve().parent / f"{name}{suffix}"
 
 
-def main() -> int:
-    """Run the same non-mutating checks used for local release validation."""
+def _pytest_command(*, coverage: bool, quick: bool) -> list[str]:
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        f"--basetemp=.states/pytest_tmp_{os.getpid()}",
+    ]
+    if quick:
+        return [*command, "-m", "not integration and not slow"]
+    if coverage:
+        return [
+            *command,
+            "--cov=src",
+            "--cov=frontend",
+            "--cov-branch",
+            "--cov-report=term-missing",
+            "--cov-report=html:.states/coverage_html",
+            "--cov-report=json:.states/coverage.json",
+        ]
+    return command
 
+
+def _checks(*, coverage: bool, quick: bool) -> list[tuple[list[str], str]]:
     reflex = repo_local_tool("reflex")
-    if not reflex.exists():
-        print(f"ERROR: Reflex executable not found beside Python: {reflex}")
-        print("Install the pinned dependencies before running this script.")
-        return 1
-
     checks = [
-        ([sys.executable, "-m", "pip", "check"], "Dependency consistency"),
         (
             [sys.executable, "-m", "compileall", "-q", "src", "frontend", "tests"],
             "Python compilation",
@@ -51,7 +67,16 @@ def main() -> int:
             [sys.executable, "-m", "ruff", "format", "--check", "."],
             "Ruff format check",
         ),
-        ([sys.executable, "-m", "pytest", "-q"], "Pytest"),
+        (
+            _pytest_command(coverage=coverage, quick=quick),
+            "Pytest coverage" if coverage else "Pytest quick" if quick else "Pytest",
+        ),
+    ]
+    if quick:
+        return checks
+    return [
+        ([sys.executable, "-m", "pip", "check"], "Dependency consistency"),
+        *checks,
         (
             [str(reflex), "export", "--frontend-only", "--no-zip"],
             "Reflex frontend export",
@@ -61,6 +86,31 @@ def main() -> int:
             "Static UI semantics",
         ),
     ]
+
+
+def main() -> int:
+    """Run the same non-mutating checks used for local release validation."""
+
+    parser = argparse.ArgumentParser()
+    profile = parser.add_mutually_exclusive_group()
+    profile.add_argument(
+        "--quick",
+        action="store_true",
+        help="Run compile, Ruff, and hermetic tests excluding integration/slow markers.",
+    )
+    profile.add_argument(
+        "--coverage",
+        action="store_true",
+        help="Run the full release gate and write branch coverage under .states/.",
+    )
+    args = parser.parse_args()
+    reflex = repo_local_tool("reflex")
+    if not args.quick and not reflex.exists():
+        print(f"ERROR: Reflex executable not found beside Python: {reflex}")
+        print("Install the pinned dependencies before running this script.")
+        return 1
+
+    checks = _checks(coverage=args.coverage, quick=args.quick)
     failures = [
         description
         for command, description in checks

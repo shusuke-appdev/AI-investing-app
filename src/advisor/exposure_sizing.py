@@ -6,13 +6,13 @@ from typing import Any
 
 
 def suggest_exposure(
-    expected_return: float,
-    risk_adjusted_signal: float,
+    expected_return: float | None,
+    risk_adjusted_signal: float | None,
     confidence: str,
     realized_vol_20d: float | None,
     realized_vol_percentile: float | None,
     adverse_loss_p95: float | None,
-    regime_fit: float,
+    regime_fit: float | None,
     cost_adjusted_threshold: float = 0.002,
 ) -> dict[str, Any]:
     """Return action and max allocation without giving a hard trade instruction."""
@@ -20,6 +20,16 @@ def suggest_exposure(
     notes: list[str] = []
     max_allocation = 0
     size_multiplier = 0.0
+
+    if expected_return is None or risk_adjusted_signal is None or regime_fit is None:
+        notes.append("Required return, volatility, or regime evidence is unavailable.")
+        return {
+            "suggested_action": "Watch",
+            "max_allocation_pct": 0,
+            "size_multiplier": 0.0,
+            "reason": notes[0],
+            "risk_cap_notes": notes,
+        }
 
     if expected_return <= cost_adjusted_threshold:
         action = "Avoid" if expected_return < 0 else "Watch"

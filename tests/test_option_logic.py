@@ -92,6 +92,40 @@ class TestOptionAnalyst:
         assert calculate_pcr("TEST") is None
         assert calculate_gex("TEST") is None
 
+    @patch("src.option_analyst.DataProvider.get_current_price", return_value=0.0)
+    @patch("src.option_analyst.get_option_chain")
+    def test_gex_is_unavailable_without_current_price(
+        self, mock_get_chain, _mock_price, mock_option_data
+    ):
+        mock_get_chain.return_value = mock_option_data
+
+        assert calculate_gex("TEST") is None
+
+    def test_estimated_gamma_decreases_away_from_atm(self):
+        calls = pd.DataFrame(
+            {
+                "strike": [100, 120],
+                "volume": [1, 1],
+                "openInterest": [100, 100],
+                "impliedVolatility": [0.2, 0.2],
+                "gamma": [0.05, None],
+            }
+        )
+        puts = pd.DataFrame(columns=calls.columns)
+
+        result = calculate_gex(
+            "TEST",
+            calls=calls,
+            puts=puts,
+            current_price=100.0,
+            allow_gamma_estimation=True,
+        )
+
+        assert result is not None
+        by_strike = {item["strike"]: item["gex"] for item in result["strike_gex"]}
+        assert by_strike[100] > by_strike[120] > 0
+        assert result["is_estimated"] is True
+
     def test_gex_hidden_when_gamma_missing(self, mock_option_data):
         calls, puts = mock_option_data
         calls = calls.drop(columns=["gamma"])

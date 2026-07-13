@@ -53,3 +53,18 @@ pythonpath = ["."]
 python_files = "test_*.py"
 cache_dir = ".states/pytest_cache"
 addopts = "--basetemp=.states/pytest_tmp"
+markers = [
+    "contract: external provider, serialization, storage, or configuration contract",
+    "integration: multi-module service, state, or persistence integration",
+    "slow: deterministic test excluded from the local quick profile",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src", "frontend"]
+data_file = ".states/.coverage"
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+precision = 1

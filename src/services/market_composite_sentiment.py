@@ -14,6 +14,7 @@ from src.market_volatility_intelligence import CboeIndexResult, fetch_cboe_indic
 from src.persistent_cache import repo_state_cache, utc_now_iso
 from src.services.occ_put_call_service import (
     OccPutCallResult,
+    load_occ_put_call_history,
     refresh_occ_put_call_latest,
 )
 
@@ -41,7 +42,7 @@ def build_market_composite_sentiment(
         occ[ticker] = (
             refresh_occ_put_call_latest(ticker)
             if refresh_occ
-            else OccPutCallResult(symbol=ticker)
+            else load_occ_put_call_history(ticker)
         )
     return compute_market_composite_sentiment(
         frames,

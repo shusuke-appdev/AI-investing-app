@@ -2,8 +2,39 @@ import numpy as np
 import pandas as pd
 
 from src.market_volatility_intelligence import CboeIndexResult
-from src.services.market_composite_sentiment import compute_market_composite_sentiment
+from src.services import market_composite_sentiment as composite_module
+from src.services.market_composite_sentiment import (
+    build_market_composite_sentiment,
+    compute_market_composite_sentiment,
+)
 from src.services.occ_put_call_service import OccPutCallResult
+
+
+def test_non_refresh_composite_reuses_occ_history(monkeypatch):
+    loaded = []
+    captured = {}
+
+    def load(symbol):
+        loaded.append(symbol)
+        return OccPutCallResult(symbol=symbol, status="available")
+
+    def compute(frames, cboe, options, occ, **kwargs):
+        captured.update(occ)
+        return {"status": "confirmed"}
+
+    monkeypatch.setattr(composite_module, "load_occ_put_call_history", load)
+    monkeypatch.setattr(composite_module, "compute_market_composite_sentiment", compute)
+
+    result = build_market_composite_sentiment(
+        history_provider=lambda ticker, period: pd.DataFrame(),
+        cboe_result=CboeIndexResult(data=pd.DataFrame()),
+        refresh_occ=False,
+    )
+
+    assert result["status"] == "confirmed"
+    assert loaded == ["SPY", "QQQ"]
+    assert captured["SPY"].status == "available"
+    assert captured["QQQ"].status == "available"
 
 
 def _prices(index: pd.DatetimeIndex, weak_breadth: bool = False):

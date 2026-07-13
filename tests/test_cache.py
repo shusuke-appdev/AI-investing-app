@@ -1,5 +1,4 @@
 import threading
-import time
 
 import pytest
 
@@ -73,13 +72,16 @@ def test_clear_cache_removes_values_and_locks():
 def test_ttl_cache_deduplicates_concurrent_same_key():
     calls = 0
     start_event = threading.Event()
+    entered_event = threading.Event()
+    release_event = threading.Event()
     results: list[int] = []
 
     @cache.ttl_cache(ttl=60)
     def expensive_value(item: str) -> int:
         nonlocal calls
         calls += 1
-        time.sleep(0.05)
+        entered_event.set()
+        release_event.wait(timeout=5)
         return len(item)
 
     def worker() -> None:
@@ -90,6 +92,8 @@ def test_ttl_cache_deduplicates_concurrent_same_key():
     for thread in threads:
         thread.start()
     start_event.set()
+    assert entered_event.wait(timeout=5)
+    release_event.set()
     for thread in threads:
         thread.join(timeout=5)
 

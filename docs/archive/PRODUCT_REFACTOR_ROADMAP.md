@@ -1,4 +1,4 @@
-# Product Refactor Review and Roadmap
+# Product Refactor Review and Roadmap (Archived)
 
 更新日: 2026-06-18
 

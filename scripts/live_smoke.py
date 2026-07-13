@@ -127,6 +127,38 @@ def _finnhub_check() -> str:
     return f"status={status}, items={len(result.get('items') or [])}"
 
 
+def _edinet_check() -> str:
+    if not os.getenv("EDINET_API_KEY"):
+        return "SKIP: EDINET_API_KEY is not configured"
+    from src.edinet_client import get_company_finance, is_configured
+
+    if not is_configured():
+        raise RuntimeError(
+            "EDINET client is unavailable despite configured credentials"
+        )
+    result = get_company_finance("7203.T", limit=1)
+    if not result:
+        raise RuntimeError("EDINET returned no company payload for 7203.T")
+    return (
+        f"company={result.get('company_name') or 'unknown'}, "
+        f"financials={len(result.get('financials') or [])}"
+    )
+
+
+def _yfinance_options_check(*, required: bool) -> str:
+    if not required:
+        return "SKIP: pass --require-yfinance-options to run the option-chain smoke"
+    from src.option_data_provider import get_option_chain
+
+    result = get_option_chain("SPY", allow_marketdata=False)
+    if result is None:
+        raise RuntimeError("SPY yfinance option chain is unavailable")
+    calls, puts = result
+    if calls.empty or puts.empty:
+        raise RuntimeError("SPY yfinance option chain has empty calls or puts")
+    return f"SPY calls={len(calls)}, puts={len(puts)}"
+
+
 def _marketdata_options_check(
     *,
     tickers: list[str] | None = None,
@@ -310,12 +342,63 @@ def _supabase_check() -> str:
     return "user_settings insert/select/delete succeeded"
 
 
+def _required_check_names(args: argparse.Namespace) -> set[str]:
+    """Return only the checks explicitly required by CLI flags."""
+
+    required: set[str] = set()
+    if args.require_optional or args.require_supabase:
+        required.add("supabase")
+    if args.require_finnhub:
+        required.add("finnhub")
+    if args.require_edinet:
+        required.add("edinet")
+    if args.require_marketdata:
+        required.add("marketdata_options")
+    if args.require_market_forecast:
+        required.add("market_forecast")
+    if args.require_yfinance_options:
+        required.add("yfinance_options")
+    return required
+
+
+def _failed_checks(checks: list[Check], required_names: set[str]) -> list[Check]:
+    """Return hard failures and explicitly required non-pass checks once each."""
+
+    failures = {
+        check.name: check
+        for check in checks
+        if check.status == "FAIL"
+        or (check.name in required_names and check.status != "PASS")
+    }
+    return list(failures.values())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--require-optional",
         action="store_true",
-        help="Treat unconfigured Supabase as a failure.",
+        help="Compatibility alias for --require-supabase.",
+    )
+    parser.add_argument(
+        "--require-supabase",
+        action="store_true",
+        help="Require the Supabase user_settings CRUD smoke.",
+    )
+    parser.add_argument(
+        "--require-finnhub",
+        action="store_true",
+        help="Require the configured Finnhub news smoke.",
+    )
+    parser.add_argument(
+        "--require-edinet",
+        action="store_true",
+        help="Require the configured EDINET company-finance smoke.",
+    )
+    parser.add_argument(
+        "--require-yfinance-options",
+        action="store_true",
+        help="Run and require a live SPY yfinance option chain.",
     )
     parser.add_argument(
         "--require-marketdata",
@@ -362,6 +445,11 @@ def main() -> int:
             lambda: _market_forecast_check(required=args.require_market_forecast),
         ),
         _run("finnhub", _finnhub_check),
+        _run("edinet", _edinet_check),
+        _run(
+            "yfinance_options",
+            lambda: _yfinance_options_check(required=args.require_yfinance_options),
+        ),
         _run(
             "marketdata_options",
             lambda: _marketdata_options_check(
@@ -375,21 +463,7 @@ def main() -> int:
     ]
     for check in checks:
         print(f"{check.status} {check.name}: {check.detail}")
-    failed = [check for check in checks if check.status == "FAIL"]
-    if args.require_optional:
-        failed.extend(check for check in checks if check.status == "SKIP")
-    if args.require_marketdata:
-        failed.extend(
-            check
-            for check in checks
-            if check.name == "marketdata_options" and check.status != "PASS"
-        )
-    if args.require_market_forecast:
-        failed.extend(
-            check
-            for check in checks
-            if check.name == "market_forecast" and check.status != "PASS"
-        )
+    failed = _failed_checks(checks, _required_check_names(args))
     print({"checks": [asdict(check) for check in checks]})
     return 1 if failed else 0
 

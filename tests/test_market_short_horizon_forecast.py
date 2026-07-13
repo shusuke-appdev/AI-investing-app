@@ -65,6 +65,8 @@ def test_feature_frame_joins_daily_sources_with_different_clock_times():
 
 def test_compute_forecast_keeps_failed_validation_research_only(monkeypatch):
     frames, cboe = _inputs()
+    monkeypatch.setattr(module, "FORECAST_TICKERS", ("SPY",))
+    monkeypatch.setattr(module, "HORIZONS", (1,))
     monkeypatch.setattr(module, "MIN_TRAIN_ROWS", 120)
     monkeypatch.setattr(module, "OOS_TARGET_ROWS", 80)
     monkeypatch.setattr(module, "MIN_OOS_ROWS", 60)
@@ -78,6 +80,34 @@ def test_compute_forecast_keeps_failed_validation_research_only(monkeypatch):
     assert 0 <= one_day["probability_up"] <= 1
     assert one_day["p10"] <= one_day["p50"] <= one_day["p90"]
     assert result["integration_enabled"] is False
+
+
+def test_compute_forecast_dispatches_every_ticker_and_horizon(monkeypatch):
+    frames, cboe = _inputs()
+    calls = []
+
+    def fake_horizon(ticker, horizon, close, features, cboe_frame):
+        calls.append((ticker, horizon, len(close), len(features), len(cboe_frame)))
+        return {
+            "status": "research_only",
+            "ticker": ticker,
+            "horizon_days": horizon,
+            "as_of": "2025-05-19",
+            "probability_up": 0.5,
+        }
+
+    monkeypatch.setattr(module, "MIN_TRAIN_ROWS", 120)
+    monkeypatch.setattr(module, "_forecast_horizon", fake_horizon)
+
+    result = module.compute_market_short_horizon_forecast(frames, cboe)
+
+    assert {(ticker, horizon) for ticker, horizon, *_ in calls} == {
+        (ticker, horizon)
+        for ticker in module.FORECAST_TICKERS
+        for horizon in module.HORIZONS
+    }
+    assert set(result["targets"]) == set(module.FORECAST_TICKERS)
+    assert result["status"] == "research_only"
 
 
 def test_implied_move_prefers_matching_vix_horizon():

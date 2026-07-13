@@ -22,7 +22,7 @@ def _technical_value(technical: object, name: str, default=None):
 
 def generate_portfolio_advice(
     analysis: dict,
-    market_sentiment: str = "中立",
+    market_sentiment: str | None = None,
     option_summary: str | None = None,
     include_macro: bool = True,
     include_news: bool = True,
@@ -40,14 +40,14 @@ def generate_portfolio_advice(
         tech = h.get("technical")
         if tech:
             signal = _technical_value(tech, "overall_signal", "N/A")
-            score = int(_technical_value(tech, "overall_score", 0) or 0)
-            rsi = float(_technical_value(tech, "rsi", 0.0) or 0.0)
+            score_value = _technical_value(tech, "overall_score")
+            rsi_value = _technical_value(tech, "rsi")
             rsi_signal = _technical_value(tech, "rsi_signal", "N/A")
             macd_signal = _technical_value(tech, "macd_signal", "N/A")
             contrarian_signal = _technical_value(tech, "contrarian_signal", "N/A")
             tech_str = (
-                f"テクニカル: {signal} (スコア: {score:+d}) | "
-                f"RSI: {rsi:.1f} ({rsi_signal}) | "
+                f"テクニカル: {signal} (スコア: {_signed_integer(score_value)}) | "
+                f"RSI: {_decimal(rsi_value)} ({rsi_signal}) | "
                 f"MACD: {macd_signal} | "
                 f"逆張り: {contrarian_signal}"
             )
@@ -70,9 +70,27 @@ def generate_portfolio_advice(
 
         pnl = f"損益: {h['pnl_pct']:+.1f}%" if h.get("pnl_pct") is not None else ""
 
+        currency = str(h.get("native_currency") or "")
+        weight = h.get("weight_pct", h.get("weight"))
+        weight_text = (
+            f"{float(weight):.1f}%" if isinstance(weight, (int, float)) else "算出不可"
+        )
+        native_value = h.get("native_value", h.get("value"))
+        value_text = (
+            f"{currency} {float(native_value):,.2f}"
+            if isinstance(native_value, (int, float))
+            else "算出不可"
+        )
+        jpy_value = h.get("value_jpy")
+        jpy_text = (
+            f" / 円換算 ¥{float(jpy_value):,.0f}"
+            if isinstance(jpy_value, (int, float))
+            else " / 円換算不可"
+        )
         holdings_text.append(
-            f"- {h['ticker']} ({h['name']}): ${h['current_price']:.2f} x {h['shares']:.1f}株 = ${h['value']:,.0f} "
-            f"({h['weight']:.1f}%) | セクター: {h.get('sector', '不明')} | {pnl}\n"
+            f"- {h['ticker']} ({h['name']}): {currency} {h['current_price']:.2f} x "
+            f"{h['shares']:.1f}株 = {value_text}{jpy_text} ({weight_text}) | "
+            f"セクター: {h.get('sector', '不明')} | {pnl}\n"
             f"  {tech_str}\n"
             f"  {zone_str} | {support_str}"
         )
@@ -141,12 +159,14 @@ def generate_portfolio_advice(
             sector_text = "\n".join(sector_lines)
 
     # テーマエクスポージャーはポートフォリオ保有から算出できるため外部再取得しない。
-    themes = get_theme_exposure_analysis(analysis["holdings"])
+    themes = analysis.get("theme_exposure") or get_theme_exposure_analysis(
+        analysis["holdings"]
+    )
     if themes:
         theme_lines = ["【テーマ別エクスポージャー】"]
         for theme, data in list(themes.items())[:5]:
             theme_lines.append(
-                f"- {theme}: ${data['value']:,.0f} ({data['weight']:.1f}%)"
+                f"- {theme}: ¥{data['value']:,.0f} ({data['weight']:.1f}%)"
             )
         theme_text = "\n".join(theme_lines)
 
@@ -163,11 +183,20 @@ def generate_portfolio_advice(
 
     knowledge_context = get_knowledge_for_ai_context(max_items=10)
 
+    total_value = analysis.get("total_value_jpy", analysis.get("total_value"))
+    total_text = (
+        f"¥{float(total_value):,.0f}"
+        if isinstance(total_value, (int, float))
+        else "円換算不可（通貨別小計を参照）"
+    )
+    currency_subtotals = analysis.get("currency_subtotals") or {}
+
     prompt = f"""あなたは経験豊富なポートフォリオマネージャー兼テクニカルアナリストです。
 以下の情報に基づいて、**テクニカル分析を重視した投資調査レポート**を提供してください。
 
 【ポートフォリオ概要】
-総資産: ${analysis["total_value"]:,.0f}
+円換算総資産: {total_text}
+通貨別小計: {currency_subtotals or "なし"}
 銘柄数: {analysis["num_holdings"]}
 
 【保有銘柄詳細（テクニカル分析含む）】
@@ -184,7 +213,7 @@ def generate_portfolio_advice(
 {theme_text}
 
 【市場センチメント】
-オプション市場: {market_sentiment}
+オプション市場: {market_sentiment or "算出不可"}
 {f"詳細: {option_summary}" if option_summary else ""}
 
 {news_text}
@@ -244,3 +273,11 @@ def _coerce_market_context(value: MarketContext | dict | None) -> MarketContext 
     if isinstance(value, dict) and value:
         return MarketContext.from_mapping(value)
     return None
+
+
+def _signed_integer(value: object) -> str:
+    return f"{int(value):+d}" if isinstance(value, (int, float)) else "算出不可"
+
+
+def _decimal(value: object) -> str:
+    return f"{float(value):.1f}" if isinstance(value, (int, float)) else "算出不可"

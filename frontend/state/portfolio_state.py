@@ -76,6 +76,79 @@ class PortfolioState(rx.State):
     def storage_type_label(self) -> str:
         return storage_type_label(self.storage_type)
 
+    @rx.var
+    def portfolio_total_display(self) -> str:
+        value = self.analysis_result.get("total_value_jpy")
+        return (
+            f"¥{float(value):,.0f}" if isinstance(value, (int, float)) else "円換算不可"
+        )
+
+    @rx.var
+    def portfolio_valuation_status(self) -> str:
+        status = self.analysis_result.get("valuation_status")
+        return {
+            "converted": "全銘柄を円換算済み",
+            "currency_subtotals_only": "為替不足: 通貨別小計のみ",
+        }.get(str(status), "評価データなし")
+
+    @rx.var
+    def currency_subtotals_display(self) -> str:
+        subtotals = self.analysis_result.get("currency_subtotals") or {}
+        return " / ".join(
+            f"{currency} {float(value):,.2f}"
+            for currency, value in subtotals.items()
+            if isinstance(value, (int, float))
+        )
+
+    @rx.var
+    def portfolio_concentration_display(self) -> str:
+        concentration = self.analysis_result.get("concentration") or {}
+        top1 = concentration.get("top1_pct")
+        top3 = concentration.get("top3_pct")
+        if not isinstance(top1, (int, float)):
+            return "円換算できないため算出不可"
+        return f"最大銘柄 {top1:.1f}% / 上位3銘柄 {float(top3 or 0):.1f}%"
+
+    @rx.var
+    def analysis_holding_rows(self) -> list[dict[str, str]]:
+        rows = []
+        for item in self.analysis_result.get("holdings") or []:
+            currency = str(item.get("native_currency") or "")
+            native_value = item.get("native_value")
+            value_jpy = item.get("value_jpy")
+            weight = item.get("weight_pct")
+            rows.append(
+                {
+                    "ticker": str(item.get("ticker") or ""),
+                    "name": str(item.get("name") or ""),
+                    "native_value": (
+                        f"{currency} {float(native_value):,.2f}"
+                        if isinstance(native_value, (int, float))
+                        else "算出不可"
+                    ),
+                    "value_jpy": (
+                        f"¥{float(value_jpy):,.0f}"
+                        if isinstance(value_jpy, (int, float))
+                        else "円換算不可"
+                    ),
+                    "weight": (
+                        f"{float(weight):.1f}%"
+                        if isinstance(weight, (int, float))
+                        else "算出不可"
+                    ),
+                    "sector": str(item.get("sector") or "不明"),
+                }
+            )
+        return rows
+
+    @rx.var
+    def sector_exposure_rows(self) -> list[dict[str, str]]:
+        return _exposure_rows(self.analysis_result.get("sector_exposure") or {})
+
+    @rx.var
+    def theme_exposure_rows(self) -> list[dict[str, str]]:
+        return _exposure_rows(self.analysis_result.get("theme_exposure") or {})
+
     def _sync_storage_type(self) -> None:
         self.storage_type = get_active_storage_type()
 
@@ -289,8 +362,26 @@ class PortfolioState(rx.State):
         yield
 
         try:
+            from frontend.state.market_state import MarketState
+
             holdings_data = holdings_to_payload(self.holdings)
-            result = await asyncio.to_thread(run_portfolio_analysis, holdings_data)
+            market_state = await self.get_state(MarketState)
+            market_context = market_state.market_context or None
+            if not market_context:
+                from src.services.market_dashboard_service import (
+                    load_cached_market_full_context,
+                )
+
+                cached = await asyncio.to_thread(
+                    load_cached_market_full_context,
+                    "US",
+                )
+                market_context = cached.to_dict() if cached else None
+            result = await asyncio.to_thread(
+                run_portfolio_analysis,
+                holdings_data,
+                market_context,
+            )
             if result:
                 self.analysis_result = result
                 self.provenance = provenance_display_items(result.get("provenance", []))
@@ -334,10 +425,21 @@ class PortfolioState(rx.State):
             from src.portfolio_advisor import generate_portfolio_advice
 
             market_state = await self.get_state(MarketState)
+            market_context = market_state.market_context or None
+            if not market_context:
+                from src.services.market_dashboard_service import (
+                    load_cached_market_full_context,
+                )
+
+                cached = await asyncio.to_thread(
+                    load_cached_market_full_context,
+                    "US",
+                )
+                market_context = cached.to_dict() if cached else None
             advice = await asyncio.to_thread(
                 generate_portfolio_advice,
                 self.analysis_result,
-                market_context=market_state.market_context or None,
+                market_context=market_context,
                 include_news=False,
             )
             if advice:
@@ -378,3 +480,20 @@ def _personal_data_route_enabled() -> bool:
     from src.app_mode import personal_data_enabled
 
     return personal_data_enabled()
+
+
+def _exposure_rows(exposure: dict[str, Any]) -> list[dict[str, str]]:
+    rows = []
+    for label, item in exposure.items():
+        weight = item.get("weight") if isinstance(item, dict) else None
+        rows.append(
+            {
+                "label": str(label),
+                "weight": (
+                    f"{float(weight):.1f}%"
+                    if isinstance(weight, (int, float))
+                    else "算出不可"
+                ),
+            }
+        )
+    return rows[:10]

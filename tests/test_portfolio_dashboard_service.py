@@ -40,21 +40,92 @@ def test_portfolio_analysis_excludes_missing_prices(monkeypatch):
     monkeypatch.setattr(
         analysis,
         "get_stock_info",
-        lambda ticker: {"current_price": 100.0 if ticker == "AAPL" else None},
+        lambda ticker: {
+            "current_price": 100.0 if ticker == "AAPL" else None,
+            "currency": "USD",
+        },
     )
-    monkeypatch.setattr(analysis, "analyze_technical", lambda ticker: None)
+    monkeypatch.setattr(analysis, "get_stock_data", lambda *args: None)
+    monkeypatch.setattr(analysis, "analyze_technical", lambda *args: None)
 
     result = run_portfolio_analysis(
         [
             {"ticker": "AAPL", "shares": 2, "avg_cost": 90},
             {"ticker": "MISSING", "shares": 3, "avg_cost": 10},
-        ]
+        ],
+        market_context={"market_data": {"USD/JPY": {"price": 150.0}}},
     )
 
-    assert result["total_value"] == 200.0
+    assert result["total_value"] == 30_000.0
+    assert result["currency_subtotals"] == {"USD": 200.0}
     assert result["num_holdings"] == 1
     assert result["excluded_holdings"][0]["ticker"] == "MISSING"
     assert result["provenance"][0]["kind"] == "direct"
+
+
+def test_portfolio_analysis_converts_mixed_usd_jpy_and_builds_exposure(monkeypatch):
+    from src.advisor import analysis
+
+    profiles = {
+        "AAPL": {
+            "current_price": 100.0,
+            "currency": "USD",
+            "sector": "Technology",
+        },
+        "7203.T": {
+            "current_price": 2_500.0,
+            "currency": "JPY",
+            "sector": "輸送用機器",
+        },
+    }
+    monkeypatch.setattr(analysis, "get_stock_info", lambda ticker: profiles[ticker])
+    monkeypatch.setattr(analysis, "get_stock_data", lambda *args: None)
+    monkeypatch.setattr(analysis, "analyze_technical", lambda *args: None)
+
+    result = run_portfolio_analysis(
+        [
+            {"ticker": "AAPL", "shares": 2, "avg_cost": 90},
+            {"ticker": "7203.T", "shares": 10, "avg_cost": 2_000},
+        ],
+        market_context={"market_data": {"USD/JPY": {"price": 150.0}}},
+    )
+
+    assert result["valuation_status"] == "converted"
+    assert result["total_value_jpy"] == 55_000.0
+    assert result["currency_subtotals"] == {"JPY": 25_000.0, "USD": 200.0}
+    assert round(sum(item["weight_pct"] for item in result["holdings"]), 6) == 100
+    assert result["sector_exposure"]
+    assert result["concentration"]["top1_pct"] is not None
+
+
+def test_portfolio_analysis_uses_subtotals_when_fx_is_unavailable(monkeypatch):
+    from src.advisor import analysis
+
+    monkeypatch.setattr(
+        analysis,
+        "get_stock_info",
+        lambda ticker: {"current_price": 100.0, "currency": "USD"},
+    )
+    monkeypatch.setattr(analysis, "get_stock_data", lambda *args: None)
+    monkeypatch.setattr(analysis, "analyze_technical", lambda *args: None)
+    monkeypatch.setattr(
+        analysis,
+        "get_quote_with_status",
+        lambda ticker: SimpleNamespace(
+            data=None,
+            source="yfinance",
+            error="Quote unavailable.",
+            warnings=[],
+        ),
+    )
+
+    result = run_portfolio_analysis([{"ticker": "AAPL", "shares": 2, "avg_cost": 90}])
+
+    assert result["valuation_status"] == "currency_subtotals_only"
+    assert result["total_value_jpy"] is None
+    assert result["total_value"] is None
+    assert result["holdings"][0]["weight"] is None
+    assert result["currency_subtotals"] == {"USD": 200.0}
 
 
 def test_portfolio_ai_accepts_serialized_technical_analysis(monkeypatch):

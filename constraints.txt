@@ -23,6 +23,8 @@ setuptools==82.0.1
 supabase==2.30.0
 ruff==0.15.12
 pytest==9.0.3
+pytest-cov==7.1.0
+coverage==7.15.0
 arch==8.0.0
 statsmodels==0.14.6
 edinet-tools==0.6.0

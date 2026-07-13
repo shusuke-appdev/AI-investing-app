@@ -38,6 +38,41 @@ def _render_holding_row(holding: HoldingItem) -> rx.Component:
     )
 
 
+def _render_analysis_holding(item: dict) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.text(item["ticker"], weight="bold"),
+                rx.text(item["name"], size="2", color=rx.color("gray", 10)),
+                rx.spacer(),
+                rx.badge(item["weight"], variant="surface"),
+                width="100%",
+                align_items="center",
+            ),
+            rx.hstack(
+                rx.text(item["native_value"], size="2"),
+                rx.text("→", color=rx.color("gray", 9)),
+                rx.text(item["value_jpy"], size="2", weight="medium"),
+                rx.spacer(),
+                rx.text(item["sector"], size="1", color=rx.color("gray", 9)),
+                width="100%",
+            ),
+            width="100%",
+            spacing="2",
+        ),
+        width="100%",
+    )
+
+
+def _render_exposure_row(item: dict) -> rx.Component:
+    return rx.hstack(
+        rx.text(item["label"], size="2"),
+        rx.spacer(),
+        rx.text(item["weight"], size="2", weight="bold"),
+        width="100%",
+    )
+
+
 def _render_input_section() -> rx.Component:
     """ポートフォリオ管理画面（銘柄追加・削除・保存）"""
     return rx.vstack(
@@ -239,7 +274,7 @@ def _render_analysis_section() -> rx.Component:
     return rx.vstack(
         section_heading(
             "ポートフォリオ分析",
-            "価格を取得できた銘柄だけで時価と構成比を計算します。",
+            "現地通貨の時価を保ち、為替を確認できた場合だけ円換算総額と構成比を計算します。",
             rx.button(
                 rx.icon("arrow-left", size=15),
                 "管理画面に戻る",
@@ -266,14 +301,13 @@ def _render_analysis_section() -> rx.Component:
         ),
         # サマリーカード
         rx.cond(
-            result.contains("total_value"),
+            result.contains("valuation_status"),
             rx.grid(
                 rx.card(
                     rx.vstack(
-                        rx.text("総資産", size="2", color="gray"),
+                        rx.text("円換算総資産", size="2", color="gray"),
                         rx.text(
-                            "$",
-                            result["total_value"].to(float),
+                            PortfolioState.portfolio_total_display,
                             size="5",
                             weight="bold",
                             font_variant_numeric="tabular-nums",
@@ -293,11 +327,79 @@ def _render_analysis_section() -> rx.Component:
                     ),
                     width="100%",
                 ),
-                columns="2",
+                rx.card(
+                    rx.vstack(
+                        rx.text("評価状態", size="2", color="gray"),
+                        rx.text(
+                            PortfolioState.portfolio_valuation_status,
+                            size="3",
+                            weight="bold",
+                        ),
+                        rx.text(
+                            PortfolioState.currency_subtotals_display,
+                            size="1",
+                            color=rx.color("gray", 10),
+                        ),
+                    ),
+                    width="100%",
+                ),
+                columns=rx.breakpoints(initial="1", md="3"),
                 spacing="4",
                 width="100%",
                 margin_bottom="2rem",
             ),
+        ),
+        rx.cond(
+            PortfolioState.analysis_holding_rows.length() > 0,
+            rx.vstack(
+                section_heading(
+                    "保有内訳",
+                    PortfolioState.portfolio_concentration_display,
+                ),
+                rx.foreach(
+                    PortfolioState.analysis_holding_rows,
+                    _render_analysis_holding,
+                ),
+                width="100%",
+                spacing="2",
+            ),
+        ),
+        rx.grid(
+            rx.card(
+                rx.vstack(
+                    rx.text("セクター構成", weight="bold"),
+                    rx.cond(
+                        PortfolioState.sector_exposure_rows.length() > 0,
+                        rx.foreach(
+                            PortfolioState.sector_exposure_rows,
+                            _render_exposure_row,
+                        ),
+                        rx.text("円換算できないため算出不可", size="2", color="gray"),
+                    ),
+                    width="100%",
+                ),
+                width="100%",
+            ),
+            rx.card(
+                rx.vstack(
+                    rx.text("テーマ構成", weight="bold"),
+                    rx.cond(
+                        PortfolioState.theme_exposure_rows.length() > 0,
+                        rx.foreach(
+                            PortfolioState.theme_exposure_rows,
+                            _render_exposure_row,
+                        ),
+                        rx.text(
+                            "該当テーマなし、または算出不可", size="2", color="gray"
+                        ),
+                    ),
+                    width="100%",
+                ),
+                width="100%",
+            ),
+            columns=rx.breakpoints(initial="1", md="2"),
+            spacing="4",
+            width="100%",
         ),
         # AIアドバイスセクション
         rx.card(

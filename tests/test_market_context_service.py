@@ -1,3 +1,4 @@
+import threading
 import time
 
 import pandas as pd
@@ -111,6 +112,23 @@ def _flow_monitor_payload():
 
 def _patch_new_market_layers(monkeypatch):
     monkeypatch.setattr(service, "get_stock_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        service,
+        "_build_volatility_sentiment_context",
+        lambda *args, **kwargs: {
+            "volatility_regime": {"regime": "normal", "warnings": []},
+            "sentiment": {"score": 50, "quality_warnings": []},
+            "vix_sq_alert": {"status": "available", "quality_warnings": []},
+            "short_horizon_forecast": {
+                "status": "validated",
+                "quality_warnings": [],
+            },
+            "composite_sentiment": {
+                "status": "confirmed",
+                "quality_warnings": [],
+            },
+        },
+    )
     monkeypatch.setattr(
         service,
         "build_sector_flow_context",
@@ -257,7 +275,9 @@ def test_data_status_replaces_previous_feature_status():
     assert statuses == [current]
 
 
-def test_build_market_context_collects_monitoring_inputs(monkeypatch):
+def test_build_market_context_collects_monitoring_inputs(
+    monkeypatch, mock_finnhub_client
+):
     _patch_new_market_layers(monkeypatch)
     monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)
     monkeypatch.setattr(
@@ -281,7 +301,7 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     monkeypatch.setattr(
         service,
         "evaluate_market_environment",
-        lambda market_type, options: {
+        lambda market_type, options, **kwargs: {
             "status": "Neutral",
             "score": 0.1,
             "signals": [{"name": "Trend", "score": 0.2, "rationale": "Stable"}],
@@ -290,7 +310,7 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     monkeypatch.setattr(
         service,
         "analyze_market_structure",
-        lambda ticker, option_analysis=None: {
+        lambda ticker, option_analysis=None, **kwargs: {
             "vrp": 0.03,
             "cta_proxy": {"score": 10, "extremity": "Neutral"},
             "liquidity": {"status": "Normal"},
@@ -319,7 +339,9 @@ def test_build_market_context_collects_monitoring_inputs(monkeypatch):
     assert context.flow_monitor["leaders"][0]["ticker"] == "SMH"
     assert context.flow_alignment["etf_leader"]["ticker"] == "SMH"
     assert context.detail_stages["theme_flow"]["status"] == "live"
-    assert context.detail_stages["volatility_sentiment"]["status"] == "live"
+    assert context.detail_stages["volatility_sentiment"]["status"] == "live", (
+        context.errors
+    )
     assert context.detail_stages["credit_distortion"]["status"] == "live"
     assert context.japan_conditions == {}
     assert context.cross_market == {}
@@ -379,10 +401,16 @@ def test_build_market_context_keeps_partial_data_when_options_fail(monkeypatch):
     monkeypatch.setattr(
         service,
         "evaluate_market_environment",
-        lambda market_type, options: {"status": "Neutral", "score": 0, "signals": []},
+        lambda market_type, options, **kwargs: {
+            "status": "Neutral",
+            "score": 0,
+            "signals": [],
+        },
     )
     monkeypatch.setattr(
-        service, "analyze_market_structure", lambda ticker, option_analysis=None: {}
+        service,
+        "analyze_market_structure",
+        lambda ticker, option_analysis=None, **kwargs: {},
     )
     monkeypatch.setattr(service, "get_momentum_themes", lambda market_type: {})
     monkeypatch.setattr(
@@ -509,10 +537,16 @@ def test_market_details_reuses_supplied_context(monkeypatch):
     monkeypatch.setattr(
         service,
         "evaluate_market_environment",
-        lambda market_type, options: {"status": "Neutral", "score": 0, "signals": []},
+        lambda market_type, options, **kwargs: {
+            "status": "Neutral",
+            "score": 0,
+            "signals": [],
+        },
     )
     monkeypatch.setattr(
-        service, "analyze_market_structure", lambda ticker, option_analysis=None: {}
+        service,
+        "analyze_market_structure",
+        lambda ticker, option_analysis=None, **kwargs: {},
     )
     monkeypatch.setattr(service, "get_momentum_themes", lambda market_type: {})
     monkeypatch.setattr(
@@ -527,7 +561,7 @@ def test_market_details_reuses_supplied_context(monkeypatch):
     assert context.cross_market == {}
 
 
-def test_market_detail_stages_can_update_sequentially(monkeypatch):
+def test_market_detail_stages_can_update_sequentially(monkeypatch, mock_finnhub_client):
     _patch_new_market_layers(monkeypatch)
     base = MarketContext(
         market_type="US",
@@ -539,10 +573,16 @@ def test_market_detail_stages_can_update_sequentially(monkeypatch):
     monkeypatch.setattr(
         service,
         "evaluate_market_environment",
-        lambda market_type, options: {"status": "Neutral", "score": 0, "signals": []},
+        lambda market_type, options, **kwargs: {
+            "status": "Neutral",
+            "score": 0,
+            "signals": [],
+        },
     )
     monkeypatch.setattr(
-        service, "analyze_market_structure", lambda ticker, option_analysis=None: {}
+        service,
+        "analyze_market_structure",
+        lambda ticker, option_analysis=None, **kwargs: {},
     )
     monkeypatch.setattr(service, "get_momentum_themes", lambda market_type: {})
     monkeypatch.setattr(
@@ -559,16 +599,19 @@ def test_market_detail_stages_can_update_sequentially(monkeypatch):
     assert theme_flow.detail_stages["theme_flow"]["status"] == "live"
     assert theme_flow.detail_stages["volatility_sentiment"]["status"] == "pending"
     assert volatility.detail_stages["theme_flow"]["status"] == "live"
-    assert volatility.detail_stages["volatility_sentiment"]["status"] == "live"
+    assert volatility.detail_stages["volatility_sentiment"]["status"] == "live", (
+        volatility.errors
+    )
     assert high.detail_stages["credit_distortion"]["status"] == "live"
     assert high.market_distortions["bullish"][0]["tickers"] == ["NVDA", "MSFT"]
 
 
 def test_market_stage_task_timeout_records_partial_result():
     errors: list[str] = []
+    release_event = threading.Event()
 
     def slow_task():
-        time.sleep(0.2)
+        release_event.wait(timeout=1)
         return {"late": True}
 
     started = time.perf_counter()
@@ -583,6 +626,7 @@ def test_market_stage_task_timeout_records_partial_result():
         task_timeout_seconds=0.01,
         total_timeout_seconds=0.05,
     )
+    release_event.set()
 
     assert time.perf_counter() - started < 0.15
     assert results["fast"].value == {"ok": True}
@@ -715,3 +759,31 @@ def test_market_ai_report_reports_gemini_unavailable():
     )
 
     assert result == "Gemini APIが利用できません。APIキーを設定してください。"
+
+
+def test_theme_flow_uses_provided_only_option_policy(monkeypatch):
+    _patch_new_market_layers(monkeypatch)
+    base = MarketContext(market_type="US", market_data={"S&P 500": {"price": 500}})
+    calls = {}
+    monkeypatch.setattr(service, "_save_context_cache", lambda context, kind: None)
+
+    def microstructure(ticker, option_analysis=None, **kwargs):
+        calls["microstructure"] = (option_analysis, kwargs)
+        return {}
+
+    def evaluation(market_type, options, **kwargs):
+        calls["evaluation"] = kwargs
+        return {"status": "Neutral", "score": 0, "signals": []}
+
+    monkeypatch.setattr(service, "analyze_market_structure", microstructure)
+    monkeypatch.setattr(service, "evaluate_market_environment", evaluation)
+    monkeypatch.setattr(service, "get_momentum_themes", lambda market_type: {})
+    monkeypatch.setattr(
+        service, "build_market_monitor_context", lambda options: _monitor_payload()
+    )
+
+    service.build_market_theme_flow_context("US", base)
+
+    assert calls["microstructure"][0] == {}
+    assert calls["microstructure"][1]["allow_option_fetch"] is False
+    assert calls["evaluation"]["allow_microstructure_fetch"] is False

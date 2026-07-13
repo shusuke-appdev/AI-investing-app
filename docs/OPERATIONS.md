@@ -48,12 +48,18 @@ Dockerfile は Hugging Face Spaces の 7860 番ポートを前提にしていま
 ## 定期的な確認コマンド
 
 ```powershell
-python -m pytest -q
-python -m ruff check .
-python -m ruff format --check .
+.\.venv\Scripts\python.exe scripts\check.py --quick
+.\.venv\Scripts\python.exe scripts\check.py
+.\.venv\Scripts\python.exe scripts\check.py --coverage
 ```
 
-外部APIに依存する確認は失敗しやすいため、単体テストではモックを優先します。実API確認は `scripts/debug/` と `scripts/verify/` を用途別に使います。
+`--quick` はcompileall、Ruff、`integration` / `slow` 以外のpytestを実行します。引数なしはReflex exportと静的UI検査を含む完全ゲートです。`--coverage` は完全ゲートへbranch coverageを追加し、`.states/` に成果物を出します。初回はカバレッジ率で失敗させません。
+
+2026-07-14の初回branch coverageは62.9%（`src` + `frontend`）です。HTMLとJSONは `.states/coverage_html/` と `.states/coverage.json` に生成されます。
+
+同日の実測はquick 10.0-10.6秒、coverage完全ゲート55.5秒、引数なし完全ゲート33.2秒です。マシン・キャッシュ状態で変動します。
+
+外部APIに依存する確認は失敗しやすいため、標準pytestでは明示的モックを使います。旧 `scripts/debug/`、`scripts/verify/`、個別のEDINET/options検証は廃止し、実API確認を `scripts/live_smoke.py` に集約しています。
 
 ## データ保存先
 
@@ -78,7 +84,7 @@ python -m ruff format --check .
 .\.venv\Scripts\python.exe scripts\live_smoke.py
 ```
 
-任意保存先が未設定の場合も失敗にするには `--require-optional` を付けます。
+Supabaseを必須にするには `--require-supabase` を付けます。`--require-optional` は後方互換のSupabase専用エイリアスで、予測など無関係なSKIPを失敗扱いしません。Finnhub、EDINET、yfinance optionsを必須にする場合は、それぞれ `--require-finnhub`、`--require-edinet`、`--require-yfinance-options` を使います。
 MarketData.app の live オプション取得を必須検証にするには、`.env` に `MARKETDATA_TOKEN=<token>` と `MARKETDATA_OPTIONS_MODE=preferred` を設定したうえで `--require-marketdata` を付けます。token 未設定の状態は `SKIP` とし、アプリ本体は yfinance/cache fallback で継続します。live smoke は 0DTE の時刻依存を避けるため、既定で `--marketdata-min-dte 1` の次回有効満期を確認し、追加で `--marketdata-horizon-dtes 7,30` の満期別チェーンも確認します。その後、`analyze_option_sentiment()` が current / 1W / 1M の `term_structure` を MarketData.app 系 source で組み立てたことまで検証します。
 
 ```powershell
@@ -114,7 +120,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - 市場指数・セクター等の取得失敗は価格 `0.0` として表示せず、その項目を利用不可として省略します
 - Theme Rankingは指定期間を満たす構成銘柄だけを使い、2銘柄以上かつ構成銘柄の40%以上を取得できたテーマだけを表示します
 - 日本株の汎用現在値・価格履歴はyfinanceを使います。J-Quants Freeの価格系列は遅延するため現在値として扱わず、企業マスター・財務情報の補完に限定します
-- Market Intelligence の起動時は軽量サマリーのみ自動取得します。詳細分析はサイドバーの「市場監視」で「詳細更新」を押すと、キャッシュ/サマリー、Theme/Flow、Vol/Sentiment、Credit/Risk、Optionsの順に段階取得します
+- Market Intelligence の起動時は軽量サマリーのみ自動取得します。詳細分析はサイドバーの「市場監視」で「詳細更新」を押すと、キャッシュ/サマリー、Theme/Flow、Credit/Risk、Vol/Sentiment、Optionsの順に段階取得します。信用ストレスを先に更新し、後続のvolレジーム・予測・戦略へ同じ値を渡します
 - 「市場監視」には、IBD式市場状態、状態別プレイブック、総合市場監視、テーマモメンタム、テーマランキング、オプション分析、市場の歪み検知を統合しています。各段階は「取得中」「最新」「キャッシュ」「一部取得」「取得失敗」を表示します
 - IBD式市場状態は無料データによる近似です。公式IBD Market Pulseではなく、SPY / Nasdaq 100 の売り抜け日、ラリー試行、FTD、移動平均割れから分類します
 - Market Recap では「＋」ボタンから任意の追加分析項目を入力できます。入力内容はプロンプトに渡され、現在の市場状態、フロー、ファンダメンタル、反証条件に結び付けて分析されます
@@ -136,6 +142,8 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - 時系列データを突合する場合は `src/services/temporal_alignment.py` の as-of join を使い、許容時間差外の未突合行を `DataResult.is_partial` と `quality_warnings` で明示します
 - 重い分析処理は `src/services/analysis_jobs.py` の `queued/running/succeeded/failed/partial/cancelled` 状態で管理し、単一Reflex環境ではローカルJSON永続化を使います
 - 個別株分析は `StockAnalysisInputs` が同一実行内の価格・企業情報・ニュース・ベンチマーク取得を共有します。通常UIでは独立Trading Planページを使わず、Stock画面の「トレード分析」ボタンで既存分析結果から重要水準、タイミング、無効化条件、需給根拠を展開します
+- Stockの主要な独立診断は最大4並列、各8秒・グループ16秒上限です。タイムアウトした診断だけを`partial`にし、企業情報・価格・他診断は維持します。類似局面0件やvol欠損を数値0として表示しません
+- Portfolioは現地通貨時価を保持し、USD/JPYを確認できた場合だけ円換算総額・構成比を表示します。為替取得に失敗した場合はUSD/JPYを固定値で補わず、JPY・USD等の通貨別小計のみを表示します
 - `yfinance` など外部データソースのレスポンススキーマは変更されることがあり、列名の変化に備えたテストが必要です
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - Entry Frameworkは日足データによるproxyです。LoD、ORH、寄付き後30分、1-2時間確認、即時ギャップ抵抗は判定しません
@@ -174,6 +182,8 @@ Codex から一括検証する場合は、このリポジトリを workspace roo
 `.venv\Scripts\python.exe scripts\check.py` を実行します。このスクリプトは依存関係を
 自動インストールせず、コードも自動修正しません。別 workspace から実行したときの
 temp/cache/`.web` 書き込み拒否は、まず sandbox 境界として切り分けます。
+
+テストの分類、信頼度、データの現実性、限界、実行プロファイルは `tests/test_inventory.toml` が正本です。予測モデルのテストは時点整合・OOS評価・配線を検証しますが、実運用上の投資成果を保証しません。
 
 ローカルキャッシュを初期化したい場合は、アプリを停止してから `.states/http_cache`、`.states/yfinance_cache`、`.states/market_context_cache`、`.states/option_chain_cache`、`.states/marketdata_option_chain_cache`、`.states/analysis_jobs` を削除してください。`.states` 全体を削除すると pytest/ruff の作業キャッシュも消えますが、次回実行時に再作成されます。Reflexセッション状態だけを初期化する場合は `.reflex_states/` を削除します。
 

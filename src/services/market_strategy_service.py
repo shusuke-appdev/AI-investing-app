@@ -41,18 +41,24 @@ def build_market_strategy_context(
     composite_sentiment: dict[str, Any] | None = None,
     credit_stress: dict[str, Any] | None = None,
     trend_ranking: dict[str, Any] | None = None,
+    important_levels: dict[str, Any] | None = None,
+    market_driver_monitor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return all strategy-related market-monitoring payloads."""
+    """Return all strategy-related market-monitoring payloads.
+
+    取得済みの重要水準・市場ドライバーが渡された場合は再取得せず再利用する。
+    同一更新内で予測レイヤーだけを再計算するための境界である。
+    """
 
     if market_type != "US":
         return {
-            "important_levels": build_important_levels(market_type),
+            "important_levels": important_levels or build_important_levels(market_type),
             "market_timeframes": {},
             "strategy_regime": {},
             "market_driver_monitor": {},
         }
-    levels = build_important_levels(market_type)
-    drivers = build_market_driver_monitor()
+    levels = important_levels or build_important_levels(market_type)
+    drivers = market_driver_monitor or build_market_driver_monitor()
     timeframes = build_timeframe_outlooks(
         levels,
         drivers,
@@ -183,19 +189,36 @@ def build_timeframe_outlooks(
         month_evidence.append(_forecast_evidence(short_horizon_forecast, 20))
     rows = [
         _outlook(
-            "現在時点", "current", current_score, _current_evidence(levels, ibd_regime)
+            "現在時点",
+            "current",
+            current_score,
+            _current_evidence(levels, ibd_regime),
+            coverage=_current_coverage(levels, ibd_regime, evaluation),
         ),
         _outlook(
             "1週間先",
             "one_week",
             week_score,
             week_evidence,
+            coverage=_week_coverage(
+                options,
+                option_horizons,
+                drivers,
+                forecast_week_score,
+            ),
         ),
         _outlook(
             "1ヶ月先",
             "one_month",
             month_score,
             month_evidence,
+            coverage=_month_coverage(
+                option_horizons,
+                trend_ranking,
+                credit_stress,
+                volatility_regime,
+                forecast_month_score,
+            ),
         ),
     ]
     return {
@@ -497,10 +520,33 @@ def _volatility_score(volatility_regime: dict[str, Any] | None) -> float:
     return 0.0
 
 
-def _outlook(label: str, key: str, score: float, evidence: list[str]) -> dict[str, Any]:
+def _outlook(
+    label: str,
+    key: str,
+    score: float,
+    evidence: list[str],
+    *,
+    coverage: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     score = _clamp(score)
+    coverage = coverage or {"available": 0, "expected": 0, "ratio": 0.0}
+    available = int(coverage.get("available", 0))
+    expected = int(coverage.get("expected", 0))
+    status = (
+        "unavailable"
+        if available == 0
+        else "partial"
+        if expected and available < expected
+        else "available"
+    )
     direction = (
-        "uptrend" if score >= 0.25 else "downtrend" if score <= -0.25 else "range"
+        "unavailable"
+        if status == "unavailable"
+        else "uptrend"
+        if score >= 0.25
+        else "downtrend"
+        if score <= -0.25
+        else "range"
     )
     return {
         "label": label,
@@ -512,13 +558,72 @@ def _outlook(label: str, key: str, score: float, evidence: list[str]) -> dict[st
             "uptrend": "上昇相場",
             "range": "レンジ相場",
             "downtrend": "下落相場",
+            "unavailable": "判定不能",
         }[direction],
-        "confidence": "高"
+        "confidence": "判定不能"
+        if status == "unavailable"
+        else "高"
         if abs(score) >= 0.55
         else "中"
         if abs(score) >= 0.25
         else "低",
         "evidence": evidence,
+        "status": status,
+        "coverage": coverage,
+    }
+
+
+def _current_coverage(
+    levels: dict[str, Any],
+    ibd_regime: dict[str, Any] | None,
+    evaluation: dict[str, Any] | None,
+) -> dict[str, Any]:
+    available = sum(
+        1 for item in levels.get("items", []) if item.get("data_quality") == "ok"
+    )
+    available += int(bool((ibd_regime or {}).get("status_key")))
+    available += int((evaluation or {}).get("status") not in {None, "", "データなし"})
+    return _coverage_payload(available, 4)
+
+
+def _week_coverage(
+    options: list[dict[str, Any]] | None,
+    option_horizons: list[dict[str, Any]] | None,
+    drivers: dict[str, Any],
+    forecast_score: float | None,
+) -> dict[str, Any]:
+    option_available = bool(_option_horizon(option_horizons, "one_week") or options)
+    driver_available = any(
+        item.get("data_quality") == "ok" for item in drivers.get("items", [])
+    )
+    return _coverage_payload(
+        int(option_available) + int(driver_available) + int(forecast_score is not None),
+        3,
+    )
+
+
+def _month_coverage(
+    option_horizons: list[dict[str, Any]] | None,
+    trend_ranking: dict[str, Any] | None,
+    credit_stress: dict[str, Any] | None,
+    volatility_regime: dict[str, Any] | None,
+    forecast_score: float | None,
+) -> dict[str, Any]:
+    available = int(bool(_option_horizon(option_horizons, "one_month")))
+    available += int(bool((trend_ranking or {}).get("items")))
+    available += int(bool((credit_stress or {}).get("status")))
+    available += int(
+        (volatility_regime or {}).get("regime") not in {None, "", "unavailable"}
+    )
+    available += int(forecast_score is not None)
+    return _coverage_payload(available, 5)
+
+
+def _coverage_payload(available: int, expected: int) -> dict[str, Any]:
+    return {
+        "available": available,
+        "expected": expected,
+        "ratio": round(available / expected, 2) if expected else 0.0,
     }
 
 

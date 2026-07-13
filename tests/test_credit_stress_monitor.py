@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 import pandas as pd
 
 from src import credit_stress_monitor as monitor
@@ -22,7 +20,7 @@ def test_credit_stress_detects_rapid_stress(monkeypatch):
         lambda *args, **kwargs: EconomicDataResult(
             data=data,
             source="test",
-            fetched_at=datetime.now(timezone.utc).isoformat(),
+            fetched_at="2026-01-01T00:00:00+00:00",
         ),
     )
     monkeypatch.setattr(monitor, "_market_confirmation_payloads", lambda: [])

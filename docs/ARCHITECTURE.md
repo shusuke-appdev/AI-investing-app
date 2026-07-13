@@ -13,6 +13,8 @@
   - `/`: Market Intelligence
   - `/market-watch`: 市場監視
   - `/stock`: 個別銘柄分析
+  - `/theme`: テーマランキング
+  - `/data-quality`: Provider状態・来歴・欠損確認
   - `/portfolio`: ポートフォリオ分析
   - `/knowledge`: 参照知識管理
 - 旧Streamlit UI: `codex/archive-streamlit-assets` ブランチへ履歴保全し、現行ツリーから撤去済み
@@ -77,7 +79,7 @@ UI
 
 1. `MarketState.fetch_market_summary_fast()` がUIロードで実行され、`.states/market_context_cache` の最後の軽量サマリーを優先表示する
 2. 軽量サマリーは `market_data.get_market_indices()` と `market_config.get_market_config()` のみを取得し、起動時にオプション取得を行わない
-3. `MarketState.refresh_market_details()` が、既存の `MarketContext` を再利用しながら市場環境、IBD式市場状態、マイクロストラクチャー、テーマ、監視指標、信用ストレス、セクター/テーマ歪みを更新する
+3. `MarketState.refresh_market_details()` が、既存の `MarketContext` を再利用しながら `Theme/Flow → Credit/Risk → Vol/Sentiment → Options` の依存順で更新する。信用ストレスはvolレジームと短期予測より先に確定する
 4. 詳細更新では `sector_flow_service` が米国セクターETFと日本テーマバスケットから資金流入セクター、確信度、継続性、調査判断を計算し、`japan_market_conditions` が日経平均上昇の6条件を直接データまたは代理指標として評価する
 5. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、current / 1W / 1M の満期別チェーン、想定変動幅、Skew、GEX、キャッシュ鮮度、品質警告を `OptionContext.items` と `OptionContext.horizons` に保存する
 6. Reflex state に整形済みデータを保存し、画面が再描画される
@@ -87,7 +89,7 @@ UI
 ### 市場監視
 
 - `/market-watch` は、総合市場監視、IBD式市場状態、状態別固定プレイブック、テーマモメンタム、テーマランキング、オプション分析、市場の歪み検知を集約する
-- 市場監視の詳細更新は、Core、Theme/Flow、Vol/Sentiment、Credit/Risk、Optionsの順に `MarketState` が yield し、各ブロックの `status`、`cache_status`、`fetched_at`、`quality_warnings` を表示モデルへ渡す
+- 市場監視の詳細更新は、Core、Theme/Flow、Credit/Risk、Vol/Sentiment、Optionsの順に `MarketState` がyieldし、各ブロックの`status`、`cache_status`、`fetched_at`、`quality_warnings`を表示モデルへ渡す。例外がなくても必須結果が欠損・stale・research-onlyなら`partial`とする
 - IBD式市場状態は `advisor.ibd_market_regime.classify_ibd_market_regime()` が SPY / Nasdaq 100 代理データから判定する。分類は `confirmed_uptrend`、`uptrend_under_pressure`、`rally_attempt`、`market_in_correction`
 - `services.market_playbook` は市場状態ごとの「現在考えるべきこと」「今やること」「避けること」を固定データとして返す
 - `advisor.sector_theme_diagnostics.detect_market_distortions()` はテーマごとのファンダメンタルスコアとフロースコアの乖離から、強気/弱気の歪み候補を上位5件ずつ返す
@@ -98,6 +100,8 @@ UI
 2. `market_data` 経由で企業情報、価格、ニュース、テクニカルを取得
 3. `advisor.smart_criteria.evaluate_smart_criteria()` で成長株観点の条件を評価
 4. `advisor.probabilistic_signal.generate_probabilistic_stock_signal()` が過去の類似局面、forward return、walk-forward検証、サイジング目安を作る
+   - 類似局面0件、benchmark欠損、vol欠損は0へ置換せず`None`を維持する
+   - 独立した主要診断は最大4並列、各8秒・グループ16秒の上限で実行する
 5. `advisor.trend_follow_diagnostics.generate_trend_follow_diagnostics()` が日足トレンドフォローを診断軸として評価し、OOS、コスト耐性、遅延耐性、右テール依存、Buy & Hold比較を `StockSignalContext` に追加する
 6. `advisor.sector_theme_diagnostics.evaluate_stock_sector_theme_context()` が対象銘柄のセクター/テーマを、ファンダメンタル優位とフロー優位の両面から評価して `StockSignalContext` に追加する
 7. `advisor.trade_setup.evaluate_trade_setup()` が市場/セクター相対強度、VCP、RVOL、ATR拡張、200MAトレンドを日足Entry Frameworkとして評価し、`StockSignalContext.trade_setup` に追加する
@@ -114,8 +118,9 @@ UI
 
 1. UI入力を `PortfolioState.holdings` に保持
 2. `portfolio_storage` が local / Supabase の保存先を抽象化
-3. `portfolio_advisor.analyze_portfolio()` が銘柄別情報、評価額、テーマ露出、リスク要素を集計
-4. `portfolio_advisor.generate_portfolio_advice()` がAIアドバイスを生成
+3. `portfolio_advisor.analyze_portfolio()` が各銘柄を現地通貨で評価し、共有`MarketContext`のUSD/JPY、なければ1回だけの`JPY=X` quoteで円換算する
+4. 全銘柄を換算できる場合だけ円換算総額・構成比・セクター/日米テーマ露出・top1/top3/HHIを計算する。為替不足時は通貨別小計だけを返す
+5. `portfolio_advisor.generate_portfolio_advice()` は同じ集約結果と現在/保存済み`MarketContext`を再利用してAIアドバイスを生成する
 
 ### 参照知識
 
@@ -140,6 +145,7 @@ UI
 - MarketData.appは米国オプションのpreferred経路として使う。対象はSPY / QQQ / IWM、統合トレンドランキング上位のテーマETF proxy、個別銘柄分析で所属テーマのETF option proxyを明示分析する場合に限定する。`off`ではyfinanceのみ、`shadow`ではyfinance表示を維持しながら比較取得、`preferred`ではMarketData.appを優先して失敗時にyfinance/cacheへフォールバックする。起動時や単なる描画時にはMarketData.appを呼ばない
 - MarketData.appの解決済み満期チェーンは専用キャッシュへ保存し、IV・Greeks・OI・Volumeを直接値として扱う。同日満期は米国東部時間の有効時間帯だけ使い、引け後・週末・live smokeでは次回有効満期へ切り替える。1W / 1M は満期一覧から目標DTEに最も近い有効満期を選ぶ。PCR、Max Pain、GEXはローカル算出であり、GEXのディーラー方向は簡易仮定として来歴へ残す
 - `src/services/data_fetch_manifest.py` は画面・分析ごとの必須/任意データ、許容鮮度、fallback/cache方針を定義する軽量マニフェスト。欠損監査やlive smoke拡張時はここを基準にする
+- 分析機能の責務、許可される連携、欠損契約は `docs/ANALYSIS_FEATURE_CATALOG.md` を正本とする
 - Reflex state では `dict[str, Any]` の深いアクセスが壊れやすいため、`pydantic.BaseModel` でUI表示用モデルを定義している
 - 外部APIの失敗はアプリ全体を止めず、機能単位で degraded mode に落とす設計が多い
 - Two Sigma OSSからは依存ではなく設計要素を取り込む。`temporal_alignment.py` は Flint 型の許容時間差付き as-of join を pandas で提供し、`AnalysisRun` は BeakerX 型の再現可能な分析成果物、`analysis_jobs.py` は Cook 型の重い分析ジョブ状態管理、`analysis_diagnostics.py` は Marbles 型の説明的テスト失敗メッセージを担う

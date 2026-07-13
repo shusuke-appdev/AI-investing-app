@@ -12,6 +12,8 @@ from src.services.market_dashboard_support import (
     _merge_ibd_signal,
     _merge_provenance,
     _merge_warnings,
+    _normalize_microstructure,
+    _option_item,
     _replace_data_status,
     _run_stage_tasks,
     _safe_call,
@@ -50,8 +52,14 @@ def build_market_options_context(
     if options.error_message:
         errors.append(options.error_message)
 
-    def evaluation_task() -> dict[str, Any]:
-        return evaluate_market_environment(market_type, options.items)
+    def microstructure_task() -> dict[str, Any]:
+        return _normalize_microstructure(
+            analyze_market_structure(
+                "SPY",
+                _option_item(options.items, "SPY") or {},
+                allow_option_fetch=False,
+            )
+        )
 
     def monitor_task() -> dict[str, Any]:
         return build_market_monitor_context(options.items)
@@ -59,7 +67,7 @@ def build_market_options_context(
     results = _stage_task_values(
         _run_stage_tasks(
             {
-                "evaluation": evaluation_task,
+                "microstructure": microstructure_task,
                 "monitor": monitor_task,
             },
             errors,
@@ -67,8 +75,19 @@ def build_market_options_context(
             max_workers=2,
         )
     )
+    microstructure = results.get("microstructure") or base.microstructure
+    raw_evaluation = _safe_call(
+        lambda: evaluate_market_environment(
+            market_type,
+            options.items,
+            microstructure=microstructure,
+            allow_microstructure_fetch=False,
+        ),
+        base.evaluation,
+        errors,
+    )
     evaluation = _merge_ibd_signal(
-        results.get("evaluation") or base.evaluation,
+        raw_evaluation,
         base.ibd_regime,
     )
     trend_ranking = _safe_call(
@@ -109,6 +128,8 @@ def build_market_options_context(
             composite_sentiment=composite_sentiment,
             credit_stress=base.credit_stress,
             trend_ranking=trend_ranking,
+            important_levels=base.important_levels or None,
+            market_driver_monitor=base.market_driver_monitor or None,
         ),
         {},
         errors,
@@ -122,7 +143,7 @@ def build_market_options_context(
         evaluation=evaluation,
         ibd_regime=base.ibd_regime,
         regime_playbook=base.regime_playbook,
-        microstructure=base.microstructure,
+        microstructure=microstructure,
         momentum=base.momentum,
         monitor=results.get("monitor") or base.monitor,
         market_distortions=base.market_distortions,
@@ -225,7 +246,11 @@ def build_market_options_context(
         detail_stages=_updated_stage_statuses(
             base.detail_stages,
             "options",
-            "partial" if options.is_partial else "live",
+            "partial"
+            if options.is_partial
+            or composite_sentiment.get("status") != "confirmed"
+            or bool(errors)
+            else "live",
             cache_status=options.cache_status,
             fetched_at=options.fetched_at or _utc_now(),
             summary="主要ETFのオプション分析を更新しました。",
@@ -250,9 +275,10 @@ def build_market_context(market_type: str = "US") -> MarketContext:
 
     _sync_compat_dependencies()
     summary = build_market_summary_context(market_type)
-    medium = build_market_medium_context(market_type, summary)
-    high = build_market_high_context(market_type, medium)
-    return build_market_options_context(market_type, high)
+    theme_flow = build_market_theme_flow_context(market_type, summary)
+    credit = build_market_high_context(market_type, theme_flow)
+    volatility = build_market_volatility_sentiment_context(market_type, credit)
+    return build_market_options_context(market_type, volatility)
 
 
 def build_market_monitor_context(option_data: list[dict[str, Any]] | None) -> dict:

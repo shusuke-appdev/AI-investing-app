@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, field
+from time import monotonic
 from typing import Any, TypedDict
 
 import pandas as pd
@@ -41,6 +42,7 @@ from src.services.volume_profile_service import build_volume_profile
 from src.stock_data_provider import normalize_ticker
 
 STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS = 8.0
+STOCK_OPTIONAL_ANALYSIS_GROUP_TIMEOUT_SECONDS = 16.0
 STOCK_OPTIONAL_ANALYSIS_MAX_WORKERS = 4
 _STOCK_ANALYSIS_EXECUTOR = ThreadPoolExecutor(
     max_workers=STOCK_OPTIONAL_ANALYSIS_MAX_WORKERS,
@@ -158,68 +160,65 @@ def build_stock_dashboard_context(
         diagnostic_errors,
     )
 
-    probabilistic_dict = _safe_analysis(
-        "probabilistic_signal",
-        lambda: to_plain_value(
-            signal_to_dict(
-                generate_probabilistic_stock_signal(
-                    normalized_ticker,
-                    "5y",
-                    benchmark,
-                    info_dict,
-                    technical_dict,
-                    long_history_df,
-                    long_benchmark_df,
-                )
-            )
-        ),
-        {},
+    primary_diagnostics = _run_analysis_group(
+        {
+            "probabilistic_signal": (
+                lambda: to_plain_value(
+                    signal_to_dict(
+                        generate_probabilistic_stock_signal(
+                            normalized_ticker,
+                            "5y",
+                            benchmark,
+                            info_dict,
+                            technical_dict,
+                            long_history_df,
+                            long_benchmark_df,
+                        )
+                    )
+                ),
+                {},
+            ),
+            "trend_follow_diagnostics": (
+                lambda: to_plain_value(
+                    trend_follow_to_dict(
+                        generate_trend_follow_diagnostics(
+                            normalized_ticker,
+                            "5y",
+                            benchmark,
+                            long_history_df,
+                        )
+                    )
+                ),
+                {},
+            ),
+            "fomo_regime": (
+                lambda: to_plain_value(
+                    analyze_fomo_volatility_regime(history_df, ticker=normalized_ticker)
+                ),
+                {},
+            ),
+            "trade_setup": (
+                lambda: to_plain_value(
+                    trade_setup_to_dict(
+                        evaluate_trade_setup(
+                            normalized_ticker,
+                            info_dict,
+                            technical_dict,
+                            history_df,
+                            benchmark_df,
+                            inputs.history,
+                        )
+                    )
+                ),
+                {},
+            ),
+        },
         diagnostic_errors,
-        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
     )
-    trend_follow_dict = _safe_analysis(
-        "trend_follow_diagnostics",
-        lambda: to_plain_value(
-            trend_follow_to_dict(
-                generate_trend_follow_diagnostics(
-                    normalized_ticker,
-                    "5y",
-                    benchmark,
-                    long_history_df,
-                )
-            )
-        ),
-        {},
-        diagnostic_errors,
-        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
-    )
-    fomo_regime = _safe_analysis(
-        "fomo_regime",
-        lambda: to_plain_value(
-            analyze_fomo_volatility_regime(history_df, ticker=normalized_ticker)
-        ),
-        {},
-        diagnostic_errors,
-        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
-    )
-    trade_setup_dict = _safe_analysis(
-        "trade_setup",
-        lambda: to_plain_value(
-            trade_setup_to_dict(
-                evaluate_trade_setup(
-                    normalized_ticker,
-                    info_dict,
-                    technical_dict,
-                    history_df,
-                    benchmark_df,
-                    inputs.history,
-                )
-            )
-        ),
-        {},
-        diagnostic_errors,
-        timeout_seconds=STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS,
-    )
+    probabilistic_dict = primary_diagnostics["probabilistic_signal"]
+    trend_follow_dict = primary_diagnostics["trend_follow_diagnostics"]
+    fomo_regime = primary_diagnostics["fomo_regime"]
+    trade_setup_dict = primary_diagnostics["trade_setup"]
     fundamental_profile = _safe_analysis(
         "fundamental_profile",
         lambda: evaluate_fundamental_profile(
@@ -502,6 +501,49 @@ def _safe_analysis_with_timeout(
             timed_out=False,
         )
         return fallback
+
+
+def _run_analysis_group(
+    tasks: dict[str, tuple[Any, Any]],
+    errors: dict[str, StockDiagnosticError],
+) -> dict[str, Any]:
+    """Run independent diagnostics concurrently with task and group deadlines."""
+
+    submitted_at = monotonic()
+    group_deadline = submitted_at + STOCK_OPTIONAL_ANALYSIS_GROUP_TIMEOUT_SECONDS
+    futures = {
+        name: (_STOCK_ANALYSIS_EXECUTOR.submit(callback), fallback)
+        for name, (callback, fallback) in tasks.items()
+    }
+    results: dict[str, Any] = {}
+    for name, (future, fallback) in futures.items():
+        task_deadline = submitted_at + STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS
+        timeout = max(0.0, min(task_deadline, group_deadline) - monotonic())
+        try:
+            results[name] = future.result(timeout=timeout)
+        except FutureTimeoutError:
+            future.cancel()
+            _record_diagnostic_error(
+                errors,
+                name,
+                status="timed_out",
+                error=(
+                    f"{name} timed out after "
+                    f"{STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS:g}s"
+                ),
+                timed_out=True,
+            )
+            results[name] = fallback
+        except Exception as exc:
+            _record_diagnostic_error(
+                errors,
+                name,
+                status="failed",
+                error=f"{name} failed: {exc}",
+                timed_out=False,
+            )
+            results[name] = fallback
+    return results
 
 
 def _record_diagnostic_error(

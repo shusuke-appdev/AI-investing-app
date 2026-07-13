@@ -25,7 +25,7 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 - オプション分析: SPY / QQQ / IWM と主要テーマETF proxy の Put/Call Ratio、Gamma Exposure、Max Pain、ATM IV、Skew を算出。MarketData.appを米国オプションの preferred 経路として利用し、失敗時はyfinance/cacheへフォールバック
 - テーマランキング: AI、半導体、エネルギー、ヘルスケアなどのテーマを期間別にランキング
 - 個別銘柄分析: 企業概要、価格チャート、ニュース、テクニカル、SMART基準、日足Entry Framework、トレード分析、AI分析レポート
-- ポートフォリオ分析: 保有銘柄、評価額、セクター・テーマ露出、AIアドバイス
+- ポートフォリオ分析: 現地通貨時価、USD/JPY確認後の円換算総額、通貨別小計、構成比、セクター・日米テーマ露出、集中度、AIアドバイス。為替欠損時は異なる通貨を合算しません
 - 参照知識管理: テキスト、URL、YouTube、ファイルから知識を登録し、AI分析のコンテキストに利用
 
 ## 技術スタック
@@ -47,7 +47,7 @@ AI-investing-app/
     services/              AI市場分析などのユースケース調整層
     storage/               保存先の抽象インターフェース
   tests/                   単体テスト
-  docs/                    設計・運用・点検・改修計画
+  docs/                    現行仕様・運用・来歴台帳とarchive済み履歴資料
   scripts/                 検証・デバッグ用スクリプト
 ```
 
@@ -88,6 +88,8 @@ MarketData.app の live オプション取得を厳格に検証するには、�
 .\.venv\Scripts\python.exe scripts\live_smoke.py --require-marketdata --marketdata-tickers SPY --marketdata-min-dte 1 --marketdata-horizon-dtes 7,30
 ```
 
+その他の実APIを必須検証にする場合は、用途に応じて `--require-supabase`、`--require-finnhub`、`--require-edinet`、`--require-yfinance-options` を付けます。従来の `--require-optional` は `--require-supabase` の互換エイリアスです。
+
 公式OCCの日次Put/Call履歴をローカルへ蓄積し、短期予測・複合判定を実データで確認する場合は次を実行します。Cboe/CFTC/OCC用の追加キーは不要です。
 
 ```powershell
@@ -122,17 +124,16 @@ python -m ruff check .
 python -m ruff format --check .
 ```
 
-このワークスペースでは、2026-05-14 に `.venv\Scripts\python.exe` の起動不全を復旧し、Python 3.12.10 ベースで `.venv` を再作成済みです。現在は上記の通常コマンドで `pytest`、`compileall`、`ruff check`、`ruff format --check` が通ります。詳細は [コード点検結果](docs/CODE_AUDIT.md) を参照してください。
+このワークスペースでは、Python 3.12.10ベースのrepo-local `.venv` を使用します。現在の検証手順は [運用・環境設定ガイド](docs/OPERATIONS.md) を参照してください。過去の復旧・監査記録は `docs/archive/` に保存しています。
 
 ## 必読資料
 
-- [総合リファクタリング・分析責務マップ](docs/PRODUCT_REFACTOR_ROADMAP.md)
+- [文書索引](docs/README.md)
+- [分析・予測機能カタログ](docs/ANALYSIS_FEATURE_CATALOG.md)
 - [アーキテクチャ概要](docs/ARCHITECTURE.md)
 - [運用・環境設定ガイド](docs/OPERATIONS.md)
+- [市場監視・予測の役割分担](docs/MARKET_MONITORING_PREDICTION.md)
 - [Supabase Data API grants 対応](docs/SUPABASE_DATA_API_GRANTS.md)
-- [コード点検結果](docs/CODE_AUDIT.md)
 - [データ取得・分析機能レビュー](docs/DATA_ANALYSIS_REVIEW.md)
 - [分析データ来歴台帳](docs/ANALYSIS_DATA_PROVENANCE.md)
-- [UI総合改善計画](docs/UI_IMPROVEMENT_PLAN.md)
-- [根本改修ロードマップ](docs/REMEDIATION_ROADMAP.md)
 - [実行タスク](task.md)

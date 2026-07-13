@@ -1,4 +1,4 @@
-# yfinance → Finnhub 移行計画 v2
+# yfinance → Finnhub 移行計画 v2（履歴資料）
 
 yfinanceからFinnhub APIへ情報収集基盤を移行する。  
 yfinanceが優位な機能は維持しつつ、リスク緩和策を講じるハイブリッド構成。

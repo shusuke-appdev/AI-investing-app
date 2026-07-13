@@ -1,3 +1,4 @@
+import threading
 import time
 
 import pandas as pd
@@ -258,6 +259,7 @@ def test_stock_dashboard_keeps_partial_results_when_optional_diagnostic_fails(
 
 
 def test_stock_dashboard_times_out_slow_optional_diagnostic(monkeypatch):
+    release_event = threading.Event()
     monkeypatch.setattr(service, "STOCK_OPTIONAL_ANALYSIS_TIMEOUT_SECONDS", 0.01)
     monkeypatch.setattr(
         service,
@@ -274,7 +276,7 @@ def test_stock_dashboard_times_out_slow_optional_diagnostic(monkeypatch):
     monkeypatch.setattr(service, "evaluate_smart_criteria", lambda *args: {})
 
     def slow_probabilistic_signal(*args):
-        time.sleep(0.2)
+        release_event.wait(timeout=1)
         return {}
 
     monkeypatch.setattr(
@@ -304,6 +306,7 @@ def test_stock_dashboard_times_out_slow_optional_diagnostic(monkeypatch):
 
     started = time.perf_counter()
     context = service.build_stock_dashboard_context("TEST")
+    release_event.set()
 
     assert time.perf_counter() - started < 0.15
     assert context.info["ticker"] == "TEST"
@@ -317,6 +320,29 @@ def test_stock_dashboard_times_out_slow_optional_diagnostic(monkeypatch):
     )
     assert status.cache_status == "failed"
     assert status.is_partial is True
+
+
+def test_primary_diagnostic_group_runs_independent_tasks_concurrently():
+    errors = {}
+    all_workers_started = threading.Barrier(4)
+
+    def delayed(value):
+        all_workers_started.wait(timeout=1)
+        return value
+
+    started = time.perf_counter()
+    result = service._run_analysis_group(
+        {
+            f"task_{index}": (lambda index=index: delayed(index), None)
+            for index in range(4)
+        },
+        errors,
+    )
+    elapsed = time.perf_counter() - started
+
+    assert result == {f"task_{index}": index for index in range(4)}
+    assert errors == {}
+    assert elapsed < 0.15
 
 
 def test_stock_dashboard_reuses_shared_target_and_benchmark_history(monkeypatch):

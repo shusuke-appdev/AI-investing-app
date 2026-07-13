@@ -1,6 +1,8 @@
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import tomllib
 
 # NOTE: 全オプショナルパッケージ (arch, finnhub, gnews, edinet_tools) は
 # インストール済みのため、sys.modules への MagicMock 注入は行わない。
@@ -14,7 +16,7 @@ def explicit_private_test_mode(monkeypatch):
     monkeypatch.setenv("APP_MODE", "private")
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def mock_finnhub_client():
     """Mock Finnhub client for all tests."""
     with patch("src.finnhub_client._get_client") as mock_get:
@@ -65,7 +67,7 @@ def mock_finnhub_client():
         yield mock_client
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def mock_gemini_client():
     """Mock Gemini client for all tests."""
     with patch("src.gemini_client.generate_content") as mock_gen:
@@ -73,7 +75,7 @@ def mock_gemini_client():
         yield mock_gen
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def mock_supabase_client():
     """Mock Supabase client for all tests."""
     with patch("src.supabase_client.get_supabase_client") as mock_get:
@@ -82,9 +84,29 @@ def mock_supabase_client():
         yield mock_client
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def mock_settings_storage():
     """Mock settings storage to force local storage."""
     with patch("src.settings_storage.get_storage_type") as mock_get:
         mock_get.return_value = "local"
         yield mock_get
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Apply execution markers from the canonical test inventory."""
+
+    inventory_path = Path(__file__).with_name("test_inventory.toml")
+    inventory = tomllib.loads(inventory_path.read_text(encoding="utf-8"))
+    metadata = {
+        filename: suite for suite in inventory["suite"] for filename in suite["files"]
+    }
+    for item in items:
+        filename = Path(str(item.fspath)).name
+        suite = metadata.get(filename)
+        if not suite:
+            continue
+        nature = suite["nature"]
+        if nature in {"contract", "integration"}:
+            item.add_marker(getattr(pytest.mark, nature))
+        if suite["profile"] == "slow":
+            item.add_marker(pytest.mark.slow)

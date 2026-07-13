@@ -1,0 +1,188 @@
+version = 1
+coverage_baseline = 62.9
+coverage_as_of = "2026-07-14"
+
+[[suite]]
+id = "quantitative-models"
+role = "定量計算、時系列整合、テクニカル指標、予測検証"
+nature = "unit"
+realism = "固定または合成の時系列データ"
+confidence = "high"
+limitations = "計算契約と検証ゲートを確認するが、将来の投資成果は保証しない。初回coverageでは分割済みtechnical補助モジュールに0-17%台の未到達が残る"
+profile = "standard"
+files = [
+  "test_adaptive_analysis_acceptance.py",
+  "test_advisor_phase3.py",
+  "test_credit_stress_monitor.py",
+  "test_fomo_volatility_regime.py",
+  "test_ibd_market_regime.py",
+  "test_japan_market_conditions.py",
+  "test_japan_supply_demand_service.py",
+  "test_market_composite_sentiment.py",
+  "test_market_risk_guardrail_service.py",
+  "test_market_short_horizon_forecast.py",
+  "test_market_volatility_intelligence.py",
+  "test_mean_reversion.py",
+  "test_minervini_analyzer.py",
+  "test_momentum_monitor.py",
+  "test_probabilistic_stock_signal.py",
+  "test_technical_regressions.py",
+  "test_technical_strategy_service.py",
+  "test_temporal_alignment.py",
+  "test_vix_sq_alert_service.py",
+  "test_volatility_clustering.py",
+  "test_volume_profile_service.py",
+]
+
+[[suite]]
+id = "provider-contracts"
+role = "外部provider、レスポンス正規化、キャッシュ、欠損・エラー契約"
+nature = "contract"
+realism = "最小化したprovider応答とモックHTTP"
+confidence = "high"
+limitations = "実サービスの稼働状況や未観測の将来スキーマ変更はlive smokeで補完する。初回coverageはEDINET 20.2%、Finnhub 30.5%、Gemini 24.2%で実応答経路の余地が大きい"
+profile = "standard"
+files = [
+  "test_cftc_positioning_service.py",
+  "test_candles.py",
+  "test_data_fetch_manifest.py",
+  "test_data_provider.py",
+  "test_economic_data_provider.py",
+  "test_finnhub_auth_state.py",
+  "test_jquants_client.py",
+  "test_market_index_provider.py",
+  "test_marketdata_client.py",
+  "test_marketdata_option_provider.py",
+  "test_network_cache.py",
+  "test_news_aggregator.py",
+  "test_occ_put_call_service.py",
+  "test_option_data_provider_cache.py",
+  "test_provider_result.py",
+  "test_quote.py",
+  "test_startup_warnings.py",
+  "test_yfinance_runtime.py",
+]
+
+[[suite]]
+id = "market-integration"
+role = "Market context、分析ジョブ、表示モデル、戦略、テーマ・フロー統合"
+nature = "integration"
+realism = "サービス境界をモックした複数モジュール統合"
+confidence = "medium-high"
+limitations = "外部取得と実ブラウザ操作は含まない"
+profile = "standard"
+files = [
+  "test_analysis_diagnostics.py",
+  "test_analysis_jobs.py",
+  "test_analysis_run.py",
+  "test_market_analyst_theme_format.py",
+  "test_market_config.py",
+  "test_market_context_service.py",
+  "test_market_presentation_service.py",
+  "test_market_strategy_service.py",
+  "test_sector_flow_monitor.py",
+  "test_sector_flow_service.py",
+  "test_sector_theme_diagnostics.py",
+  "test_theme_periods.py",
+  "test_trend_ranking_service.py",
+]
+
+[[suite]]
+id = "stock-and-trading"
+role = "Stock分析、オプション計算、根拠一致度、トレード分析"
+nature = "integration"
+realism = "固定OHLCVと明示的なproviderモック"
+confidence = "medium-high"
+limitations = "実注文、約定、投資成果は対象外"
+profile = "standard"
+migration = "test_option_analyst.py のPCR・欠損・Gamma境界は test_option_logic.py へ統合し、製品関数に対する契約を残した"
+files = [
+  "test_fundamental_profile_service.py",
+  "test_option_analyst_logic.py",
+  "test_option_logic.py",
+  "test_option_status.py",
+  "test_purchase_evidence_service.py",
+  "test_stock_analysis_inputs.py",
+  "test_stock_analyst.py",
+  "test_stock_dashboard_service.py",
+  "test_stock_trade_analysis_service.py",
+  "test_stock_trade_integration.py",
+  "test_trade_setup.py",
+  "test_trading_plan_service.py",
+]
+
+[[suite]]
+id = "storage-security-runtime"
+role = "保存、権限、秘密情報、永続キャッシュ、移行、安全な実行境界"
+nature = "contract"
+realism = "一時ディレクトリ、インメモリクライアント、設定ファイル"
+confidence = "high"
+limitations = "本番Supabaseの権限は手動live smokeで確認する"
+profile = "standard"
+files = [
+  "test_app_mode.py",
+  "test_atomic_json.py",
+  "test_cache.py",
+  "test_dockerignore_security.py",
+  "test_knowledge_context.py",
+  "test_knowledge_extractor_security.py",
+  "test_persistent_cache.py",
+  "test_portfolio_state_storage.py",
+  "test_portfolio_supabase_storage.py",
+  "test_runtime_dependency_boundary.py",
+  "test_storage_type_settings.py",
+  "test_supabase_client.py",
+  "test_supabase_migration_tool.py",
+  "test_trading_plan_storage.py",
+]
+
+[[suite]]
+id = "frontend-state-ui"
+role = "Reflex state、リクエスト世代管理、表示ラベル、静的UI契約"
+nature = "integration"
+realism = "Reflex state呼び出しとソース・静的HTML検査"
+confidence = "medium"
+limitations = "動的ブラウザ操作と視覚差分は手動確認。初回coverageではfrontend entry/templateが0%、Knowledge state 18.3%、Portfolio 21.9%、Market 31.9%、Stock 36.6%"
+profile = "standard"
+files = [
+  "test_data_reliability_regressions.py",
+  "test_display_labels.py",
+  "test_portfolio_dashboard_service.py",
+  "test_provider_health.py",
+  "test_request_tracking.py",
+  "test_stock_state_helpers.py",
+]
+
+[[suite]]
+id = "live-smoke-contracts"
+role = "live smokeの判定、必須フラグ、出力契約"
+nature = "contract"
+realism = "live入口をモックした決定論的テスト"
+confidence = "high"
+limitations = "実APIの生存確認自体は手動live smokeで行う"
+profile = "standard"
+files = [
+  "test_live_smoke_market_forecast.py",
+  "test_live_smoke_marketdata.py",
+  "test_live_smoke_requirements.py",
+]
+
+[[suite]]
+id = "test-harness"
+role = "テスト台帳そのものの完全性"
+nature = "contract"
+realism = "リポジトリ上のファイル集合"
+confidence = "high"
+limitations = "テスト内容の妥当性は各担当領域のレビューで確認する"
+profile = "standard"
+files = ["test_inventory_contract.py"]
+
+[[suite]]
+id = "slow-computation"
+role = "高計算量の反復診断と実行時間境界"
+nature = "integration"
+realism = "固定seedを用いた実計算"
+confidence = "medium-high"
+limitations = "統計的な再現性を確認するが将来成績は保証しない"
+profile = "slow"
+files = ["test_trend_follow_diagnostics.py"]

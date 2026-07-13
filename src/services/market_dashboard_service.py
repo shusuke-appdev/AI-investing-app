@@ -233,8 +233,8 @@ def build_market_details_context(
     """
 
     theme_flow = build_market_theme_flow_context(market_type, market_context)
-    volatility = build_market_volatility_sentiment_context(market_type, theme_flow)
-    return build_market_high_context(market_type, volatility)
+    credit = build_market_high_context(market_type, theme_flow)
+    return build_market_volatility_sentiment_context(market_type, credit)
 
 
 def build_market_theme_flow_context(
@@ -247,9 +247,6 @@ def build_market_theme_flow_context(
     errors: list[str] = []
     options = base.options
 
-    def evaluation_task() -> dict[str, Any]:
-        return evaluate_market_environment(market_type, options.items)
-
     def ibd_task() -> dict[str, Any]:
         if market_type != "US":
             return {}
@@ -260,7 +257,11 @@ def build_market_theme_flow_context(
 
     def microstructure_task() -> dict[str, Any]:
         return _normalize_microstructure(
-            analyze_market_structure("SPY", _option_item(options.items, "SPY"))
+            analyze_market_structure(
+                "SPY",
+                _option_item(options.items, "SPY") or {},
+                allow_option_fetch=False,
+            )
         )
 
     def momentum_task() -> dict[str, list[dict[str, Any]]]:
@@ -278,7 +279,6 @@ def build_market_theme_flow_context(
     results = _stage_task_values(
         _run_stage_tasks(
             {
-                "evaluation": evaluation_task,
                 "ibd_regime": ibd_task,
                 "microstructure": microstructure_task,
                 "momentum": momentum_task,
@@ -315,10 +315,18 @@ def build_market_theme_flow_context(
     regime_playbook = (
         get_market_playbook(str(ibd_regime.get("status_key", ""))) if ibd_regime else {}
     )
-    evaluation = _merge_ibd_signal(
-        results.get("evaluation") or base.evaluation,
-        ibd_regime,
+    microstructure = results.get("microstructure") or base.microstructure
+    evaluation = _safe_call(
+        lambda: evaluate_market_environment(
+            market_type,
+            options.items,
+            microstructure=microstructure,
+            allow_microstructure_fetch=False,
+        ),
+        base.evaluation,
+        errors,
     )
+    evaluation = _merge_ibd_signal(evaluation, ibd_regime)
     flow_alignment = build_flow_alignment_context(flow_monitor, sector_flow)
     volatility_regime = base.volatility_regime
     sentiment = base.sentiment
@@ -344,6 +352,8 @@ def build_market_theme_flow_context(
             composite_sentiment=base.composite_sentiment,
             credit_stress=base.credit_stress,
             trend_ranking=trend_ranking,
+            important_levels=base.important_levels or None,
+            market_driver_monitor=base.market_driver_monitor or None,
         ),
         {},
         errors,
@@ -422,7 +432,7 @@ def build_market_theme_flow_context(
         evaluation=evaluation,
         ibd_regime=ibd_regime,
         regime_playbook=regime_playbook,
-        microstructure=results.get("microstructure") or base.microstructure,
+        microstructure=microstructure,
         momentum=results.get("momentum") or base.momentum,
         monitor=results.get("monitor") or base.monitor,
         market_distortions=base.market_distortions,
@@ -452,7 +462,7 @@ def build_market_theme_flow_context(
                 fetched_at=_utc_now(),
                 monitor=results.get("monitor") or base.monitor,
                 ibd_regime=ibd_regime,
-                microstructure=results.get("microstructure") or base.microstructure,
+                microstructure=microstructure,
                 sector_flow=sector_flow,
                 flow_monitor=flow_monitor,
                 japan_conditions=japan_conditions,
@@ -534,6 +544,15 @@ def build_market_volatility_sentiment_context(
     composite_sentiment = (
         volatility_sentiment.get("composite_sentiment") or base.composite_sentiment
     )
+    stage_partial = (
+        bool(errors)
+        or not volatility_regime
+        or volatility_regime.get("regime") == "unavailable"
+        or not sentiment
+        or vix_sq_alert.get("status") in {"unavailable", "insufficient_data"}
+        or short_horizon_forecast.get("status") != "validated"
+        or composite_sentiment.get("status") != "confirmed"
+    )
     strategy_bundle = _safe_call(
         lambda: build_market_strategy_context(
             market_type,
@@ -546,6 +565,8 @@ def build_market_volatility_sentiment_context(
             composite_sentiment=composite_sentiment,
             credit_stress=base.credit_stress,
             trend_ranking=base.trend_ranking,
+            important_levels=base.important_levels or None,
+            market_driver_monitor=base.market_driver_monitor or None,
         ),
         {},
         errors,
@@ -652,7 +673,7 @@ def build_market_volatility_sentiment_context(
         source="live_volatility_sentiment",
         fetched_at=_utc_now(),
         is_stale=base.is_stale,
-        is_partial=bool(errors) or base.is_partial,
+        is_partial=stage_partial or base.is_partial,
         quality_warnings=_merge_warnings(
             base.quality_warnings,
             volatility_regime.get("warnings", []),
@@ -671,7 +692,7 @@ def build_market_volatility_sentiment_context(
         detail_stages=_updated_stage_statuses(
             base.detail_stages,
             "volatility_sentiment",
-            "partial" if errors else "live",
+            "partial" if stage_partial else "live",
             cache_status="live",
             fetched_at=_utc_now(),
             summary="ボラティリティ、短期予測、複合センチメントを更新しました。",
@@ -762,6 +783,8 @@ def build_market_high_context(
             composite_sentiment=base.composite_sentiment,
             credit_stress=credit_stress,
             trend_ranking=trend_ranking,
+            important_levels=base.important_levels or None,
+            market_driver_monitor=base.market_driver_monitor or None,
         ),
         {},
         errors,

@@ -1,10 +1,10 @@
 import warnings
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
 
 from src import economic_data_provider as provider
+from src import persistent_cache
 from src.persistent_cache import PersistentJsonCache
 
 
@@ -64,7 +64,8 @@ def test_fetch_fred_series_returns_stale_cache_immediately_when_preferred(
 ):
     store = PersistentJsonCache(tmp_path, provider.ECONOMIC_DATA_CACHE_NAMESPACE)
     monkeypatch.setattr(provider, "_economic_cache", lambda: store)
-    old_fetched_at = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    old_fetched_at = "2026-07-12T00:00:00+00:00"
+    monkeypatch.setattr(persistent_cache, "age_seconds", lambda fetched_at: 172_800)
     key = provider._cache_key(["BAA10Y"], "2026-01-01", None)
     store.write(
         key,

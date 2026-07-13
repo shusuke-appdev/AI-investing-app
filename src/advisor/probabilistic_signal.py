@@ -176,21 +176,28 @@ def _realized_vol_percentile(feature_frame: pd.DataFrame) -> float | None:
     return float((history <= latest).mean() * 100)
 
 
-def _risk_adjusted_signal(expected_return: float, latest_vol: float | None) -> float:
-    if latest_vol is None or latest_vol <= 0 or not np.isfinite(latest_vol):
-        return 0.0
+def _risk_adjusted_signal(
+    expected_return: float | None, latest_vol: float | None
+) -> float | None:
+    if (
+        expected_return is None
+        or latest_vol is None
+        or latest_vol <= 0
+        or not np.isfinite(latest_vol)
+    ):
+        return None
     five_day_vol = latest_vol / np.sqrt(252) * np.sqrt(5)
     if five_day_vol <= 0:
-        return 0.0
+        return None
     return float(expected_return / five_day_vol)
 
 
 def _confidence(
     sample_size: int,
     validation: dict[str, Any],
-    regime_fit: float,
+    regime_fit: float | None,
 ) -> str:
-    if sample_size < 30 or regime_fit < 50:
+    if sample_size < 30 or regime_fit is None or regime_fit < 50:
         return "Low"
     fold_count = len(validation.get("folds", []))
     outperformance = validation.get("outperformance_count", 0)
@@ -309,19 +316,20 @@ def generate_probabilistic_stock_signal(
     similar = historical[historical["signal_label"] == signal_label]
     distribution = _distribution_stats(similar)
 
-    expected_5d = float(distribution.get("mean_5d") or 0.0)
-    expected_20d_excess = float(distribution.get("mean_20d_excess") or 0.0)
-    probability_up = float(distribution.get("probability_up") or 0.0)
+    expected_5d = _optional_float(distribution.get("mean_5d"))
+    expected_20d_excess = _optional_float(distribution.get("mean_20d_excess"))
+    probability_up = _optional_float(distribution.get("probability_up"))
     latest_vol = latest.get("realized_vol_20d")
     latest_vol_float = float(latest_vol) if pd.notna(latest_vol) else None
     risk_adjusted = _risk_adjusted_signal(expected_5d, latest_vol_float)
 
     validation = run_walk_forward_validation(feature_frame, signal_label)
     regime = evaluate_regime(feature_frame)
+    regime_fit = _optional_float(regime.get("regime_fit"))
     confidence = _confidence(
         int(distribution.get("sample_size") or 0),
         validation,
-        float(regime.get("regime_fit", 0.0)),
+        regime_fit,
     )
     exposure = suggest_exposure(
         expected_return=expected_5d,
@@ -332,7 +340,7 @@ def generate_probabilistic_stock_signal(
         adverse_loss_p95=abs(float(distribution["mae_p5"]))
         if distribution.get("mae_p5") is not None
         else None,
-        regime_fit=float(regime.get("regime_fit", 0.0)),
+        regime_fit=regime_fit,
     )
     if signal_label in {"Neutral", "Insufficient data"} or confidence == "Low":
         exposure["suggested_action"] = "Watch"
@@ -347,12 +355,12 @@ def generate_probabilistic_stock_signal(
     return ProbabilisticSignal(
         ticker=ticker,
         signal_label=signal_label,
-        expected_5d_return=round(expected_5d, 6),
-        expected_20d_excess_return=round(expected_20d_excess, 6),
-        probability_up=round(probability_up, 4),
-        risk_adjusted_signal=round(risk_adjusted, 4),
+        expected_5d_return=_optional_round(expected_5d, 6),
+        expected_20d_excess_return=_optional_round(expected_20d_excess, 6),
+        probability_up=_optional_round(probability_up, 4),
+        risk_adjusted_signal=_optional_round(risk_adjusted, 4),
         confidence=confidence,
-        regime_fit=float(regime.get("regime_fit", 0.0)),
+        regime_fit=regime_fit,
         sample_size=int(distribution.get("sample_size") or 0),
         distribution=distribution,
         validation_summary=validation,
@@ -426,3 +434,16 @@ def _number_display(value: float | None, *, digits: int, signed: bool = False) -
         return "算出不可"
     sign = "+" if signed else ""
     return f"{value:{sign}.{digits}f}"
+
+
+def _optional_float(value: Any) -> float | None:
+    """Return a finite float while preserving unavailable values."""
+
+    if value is None or pd.isna(value):
+        return None
+    number = float(value)
+    return number if np.isfinite(number) else None
+
+
+def _optional_round(value: float | None, digits: int) -> float | None:
+    return None if value is None else round(value, digits)

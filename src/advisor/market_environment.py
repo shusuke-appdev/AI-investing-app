@@ -206,7 +206,12 @@ def _evaluate_option_sentiment(
     return MarketSignal("オプションセンチメント", val_pcr, score, 0.5, rat)
 
 
-def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
+def _evaluate_microstructure(
+    market_type: str,
+    microstructure: dict[str, Any] | None = None,
+    *,
+    allow_fetch: bool = True,
+) -> list[MarketSignal]:
     """
     マーケットマイクロストラクチャー指標のシグナル化
     VRP, CTAポジショニング, 流動性(Amihud)
@@ -217,7 +222,9 @@ def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
     try:
         from src.market_microstructure import analyze_market_structure
 
-        micro = analyze_market_structure("SPY")
+        micro = microstructure
+        if micro is None and allow_fetch:
+            micro = analyze_market_structure("SPY")
         if not micro:
             return []
 
@@ -336,7 +343,11 @@ def _evaluate_microstructure(market_type: str) -> list[MarketSignal]:
 
 
 def evaluate_market_environment(
-    market_type: str, option_state: Any = None
+    market_type: str,
+    option_state: Any = None,
+    *,
+    microstructure: dict[str, Any] | None = None,
+    allow_microstructure_fetch: bool = True,
 ) -> dict[str, Any]:
     """
     複数指標を統合し、現在の市場環境をスコアリングして総合判断を下します。
@@ -368,7 +379,13 @@ def evaluate_market_environment(
     if opt_sig:
         signals.append(opt_sig)
 
-    signals.extend(_evaluate_microstructure(market_type))
+    signals.extend(
+        _evaluate_microstructure(
+            market_type,
+            microstructure,
+            allow_fetch=allow_microstructure_fetch,
+        )
+    )
 
     if not signals:
         return {

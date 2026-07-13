@@ -4,20 +4,34 @@
 - [x] `ruff check . --fix` と `ruff format .` を適用し、自動修正後に残る指摘をレビューする <!-- id: 2 -->
 - [x] GitHub Actions に lint / test / compile ジョブを追加し、Hugging Face 同期を品質チェック成功後に限定する <!-- id: 3 -->
 - [x] Reflex を現行UIの正本とし、Streamlit資産を履歴保全ブランチへ退避して現行ツリーから撤去 <!-- id: 4 -->
-- [ ] Market / Stock / Portfolio / Knowledge の表示モデルとユースケース出力モデルを定義する <!-- id: 5 -->
-- [ ] 外部API取得結果に `source`、`fetched_at`、`is_stale`、`error` を持つ共通ステータスを導入する <!-- id: 6 -->
-- [ ] `frontend/state/market_state.py` の業務ロジックを `src/services/market_dashboard_service.py` へ移す <!-- id: 7 -->
+- [x] Market / Stock / Portfolio / Knowledge の表示モデルとユースケース出力モデルを定義する <!-- id: 5 -->
+- [x] 外部API取得結果に `source`、`fetched_at`、`is_stale`、`error` を持つ共通ステータスを導入する <!-- id: 6 -->
+- [x] `frontend/state/market_state.py` の業務ロジックを `src/services/market_dashboard_service.py` へ移す <!-- id: 7 -->
 - [x] `frontend/state/stock_state.py` の業務ロジックを `src/services/stock_dashboard_service.py` へ移す <!-- id: 8 -->
 - [x] `frontend/state/portfolio_state.py` の業務ロジックを `src/services/portfolio_dashboard_service.py` へ移す <!-- id: 9 -->
 - [x] オプション分析を「取得」と「計算」に分離し、取得失敗・推定値・キャッシュ値をUIに表示する <!-- id: 10 -->
-- [ ] AI分析用の `AnalysisContext` を導入し、欠損データと取得元をプロンプトに明示する <!-- id: 11 -->
+- [x] AI分析用の `MarketContext` / `StockSignalContext` を導入し、欠損データと取得元をプロンプトに明示する <!-- id: 11 -->
 - [ ] local / GAS / Supabase の保存スキーマをPydanticモデルで固定し、保存前後の検証を追加する <!-- id: 12 -->
 - [x] 参照知識DBに重複排除、鮮度表示、プロンプト注入対策を追加する <!-- id: 13 -->
 - [x] 生成物、SQLiteキャッシュ、アップロードファイル、zip成果物のGit管理方針を整理する <!-- id: 14 -->
-- [ ] 主要画面のスモークテストを追加する <!-- id: 15 -->
+- [x] 主要7画面の静的スモークテストを追加する <!-- id: 15 -->
 - [x] Cboe指数群、CFTC TFF、OCC日次Put/Callの公式データ経路と欠損・stale契約を追加する <!-- id: 16 -->
 - [x] SPY/QQQの1・5・20営業日予測を時点整合・walk-forward・地平別validation付きで実装する <!-- id: 17 -->
 - [x] VIX/SKEW/VVIX、期間構造、PCR、Gamma、breadthの複合センチメント判定を実装する <!-- id: 18 -->
 - [x] 検証済み予測だけを市場戦略へ使い、複合判定を警戒方向だけのStockガードレールとして統合する <!-- id: 19 -->
 - [x] Market UI、AI context、来歴、live smoke、運用文書へ短期予測と複合判定を接続する <!-- id: 20 -->
 - [x] 対象テスト、実データ予測、MarketData厳格確認、全read-only release gateを通す <!-- id: 21 -->
+- [x] Theme/Flowの隠れoption取得を廃止し、Options更新で同一chainを再利用する <!-- id: 22 -->
+- [x] OCC履歴をOptions再計算で保持し、詳細更新順をTheme/Flow→Credit/Risk→Vol/Sentiment→Optionsへ修正する <!-- id: 23 -->
+- [x] 市場時間軸にstatus/coverageを追加し、根拠ゼロをレンジではなく判定不能にする <!-- id: 24 -->
+- [x] Stockの類似0件・benchmark欠損・vol欠損を0へ変換せず、Watch/0%へ制限する <!-- id: 25 -->
+- [x] Stock主要診断4本を上限付き並列実行へ変更し、個別失敗を分離する <!-- id: 26 -->
+- [x] Portfolioの現地通貨、円換算、通貨別小計、sector/theme、集中度を同一結果へ集約する <!-- id: 27 -->
+- [x] Portfolio UI/AIを同じ通貨・構成・MarketContext契約へ接続する <!-- id: 28 -->
+- [x] `docs/ANALYSIS_FEATURE_CATALOG.md` と文書索引を追加し、履歴資料を`docs/archive`へ移す <!-- id: 29 -->
+- [ ] 全release gate、MarketData/予測live smoke、7画面UI確認を完了する <!-- id: 30 -->
+- [x] 全テストを `tests/test_inventory.toml` へ一意登録し、分類・信頼度・限界・プロファイルと完全性メタテストを追加する <!-- id: 31 -->
+- [x] 外部モックを明示fixture化し、固定日時・同期プリミティブ・予測分割・Option重複統合で精度と速度を改善する <!-- id: 32 -->
+- [x] `scripts/check.py` のquick/coverageとlive smoke必須フラグを追加し、旧検証19本を削除する <!-- id: 33 -->
+- [x] CI品質ジョブを一本化し、branch coverage成果物を `.states/` とGitHub Actionsへ接続する <!-- id: 34 -->
+- [x] quick 3回、coverage完全ゲート、既定完全ゲートで新テスト体系を検証する <!-- id: 35 -->

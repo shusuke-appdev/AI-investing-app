@@ -2,7 +2,15 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
-from src import option_data_provider
+from src import option_data_provider, persistent_cache
+
+_FIXED_NOW = datetime(2026, 7, 14, 0, 0, tzinfo=timezone.utc)
+
+
+class _FrozenDateTime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return _FIXED_NOW if tz else _FIXED_NOW.replace(tzinfo=None)
 
 
 def test_option_provider_uses_stale_persistent_cache_when_refresh_fails(
@@ -25,9 +33,10 @@ def test_option_provider_uses_stale_persistent_cache_when_refresh_fails(
             "impliedVolatility": [0.25],
         }
     )
-    fetched_at = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    fetched_at = (_FIXED_NOW - timedelta(hours=1)).isoformat()
 
     monkeypatch.setattr(option_data_provider, "_cache_file", lambda ticker: cache_file)
+    monkeypatch.setattr(persistent_cache, "age_seconds", lambda fetched_at: 3_600)
     monkeypatch.setattr(option_data_provider, "_is_market_likely_closed", lambda: False)
     monkeypatch.setattr(
         option_data_provider, "_fetch_with_timeout", lambda ticker: None
@@ -54,13 +63,14 @@ def test_option_provider_cache_only_never_refreshes(monkeypatch, tmp_path):
     puts = pd.DataFrame({"strike": [100], "openInterest": [20]})
 
     monkeypatch.setattr(option_data_provider, "_cache_file", lambda ticker: cache_file)
+    monkeypatch.setattr(persistent_cache, "age_seconds", lambda fetched_at: 0)
     monkeypatch.setattr(
         option_data_provider,
         "_get_yfinance_option_chain",
         lambda ticker: (_ for _ in ()).throw(AssertionError("live refresh ran")),
     )
     option_data_provider._save_persistent_cache(
-        "AAPL", calls, puts, datetime.now(timezone.utc).isoformat()
+        "AAPL", calls, puts, _FIXED_NOW.isoformat()
     )
 
     result = option_data_provider.get_option_chain("AAPL", cache_only=True)
@@ -73,8 +83,9 @@ def test_option_provider_cache_only_never_refreshes(monkeypatch, tmp_path):
     )
 
 
-def test_yfinance_expiration_selection_uses_target_dte():
-    today = datetime.now(timezone.utc).date()
+def test_yfinance_expiration_selection_uses_target_dte(monkeypatch):
+    monkeypatch.setattr(option_data_provider, "datetime", _FrozenDateTime)
+    today = _FIXED_NOW.date()
     expirations = [
         (today + timedelta(days=1)).isoformat(),
         (today + timedelta(days=8)).isoformat(),

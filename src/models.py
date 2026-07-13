@@ -22,6 +22,7 @@ class StockInfo(TypedDict, total=False):
     country: str
     employees: int
     exchange: str
+    currency: str
 
     # Financial Metrics
     market_cap: float | None

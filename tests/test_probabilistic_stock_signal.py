@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from src.advisor import probabilistic_signal as probabilistic_module
 from src.advisor.exposure_sizing import suggest_exposure
 from src.advisor.probabilistic_signal import (
     add_forward_outcomes,
@@ -149,3 +150,28 @@ def test_insufficient_data_is_unavailable_not_numeric_zero():
     assert display["expected_20d_excess_return_display"] == "算出不可"
     assert display["probability_up_display"] == "算出不可"
     assert display["risk_adjusted_signal_display"] == "算出不可"
+
+
+def test_zero_similar_samples_stays_unavailable_and_observation_only(monkeypatch):
+    prices = _price_frame(rows=500)
+    empty_distribution = probabilistic_module._distribution_stats(pd.DataFrame())
+    monkeypatch.setattr(
+        probabilistic_module,
+        "_distribution_stats",
+        lambda rows: empty_distribution,
+    )
+
+    signal = generate_probabilistic_stock_signal(
+        "TEST",
+        price_df=prices,
+        benchmark_df=prices,
+        stock_info={"ticker": "TEST"},
+    )
+
+    assert signal.sample_size == 0
+    assert signal.expected_5d_return is None
+    assert signal.expected_20d_excess_return is None
+    assert signal.probability_up is None
+    assert signal.risk_adjusted_signal is None
+    assert signal.suggested_action == "Watch"
+    assert signal.max_allocation_pct == 0

@@ -78,7 +78,10 @@ def holdings_to_payload(holdings: list[Any]) -> list[dict[str, Any]]:
     ]
 
 
-def run_portfolio_analysis(holdings: list[dict[str, Any]]) -> dict[str, Any]:
+def run_portfolio_analysis(
+    holdings: list[dict[str, Any]],
+    market_context: Any | None = None,
+) -> dict[str, Any]:
     """Run portfolio analysis and return Reflex-safe dictionaries."""
 
     from src.portfolio_advisor import PortfolioHolding, analyze_portfolio
@@ -92,7 +95,7 @@ def run_portfolio_analysis(holdings: list[dict[str, Any]]) -> dict[str, Any]:
         for item in holdings
         if float(item.get("shares") or 0) > 0
     ]
-    result = analyze_portfolio(holding_objects)
+    result = analyze_portfolio(holding_objects, market_context=market_context)
     return serialize_analysis_result(result or {})
 
 

@@ -238,34 +238,6 @@ class MarketState(rx.State):
 
         try:
             self._set_stage_status(
-                "volatility_sentiment",
-                "loading",
-                "ボラティリティ・レジームと独自Fear & Greedを取得中...",
-            )
-            yield
-            context = await asyncio.to_thread(
-                build_market_volatility_sentiment_context,
-                market_type,
-                base_context,
-            )
-            if not self._is_current_market_request(request_id, market_type):
-                return
-            self._apply_market_context(context)
-            base_context = self.market_context or None
-            yield
-        except Exception as exc:
-            if not self._is_current_market_request(request_id, market_type):
-                return
-            self._set_stage_status(
-                "volatility_sentiment",
-                "failed",
-                "Vol/Sentimentの更新に失敗しました。",
-                str(exc),
-            )
-            yield
-
-        try:
-            self._set_stage_status(
                 "credit_distortion",
                 "loading",
                 "信用ストレス、歪み検知、天井警戒を取得中...",
@@ -288,6 +260,34 @@ class MarketState(rx.State):
                 "credit_distortion",
                 "failed",
                 "Credit/Riskの更新に失敗しました。",
+                str(exc),
+            )
+            yield
+
+        try:
+            self._set_stage_status(
+                "volatility_sentiment",
+                "loading",
+                "ボラティリティ・レジームと独自Fear & Greedを取得中...",
+            )
+            yield
+            context = await asyncio.to_thread(
+                build_market_volatility_sentiment_context,
+                market_type,
+                base_context,
+            )
+            if not self._is_current_market_request(request_id, market_type):
+                return
+            self._apply_market_context(context)
+            base_context = self.market_context or None
+            yield
+        except Exception as exc:
+            if not self._is_current_market_request(request_id, market_type):
+                return
+            self._set_stage_status(
+                "volatility_sentiment",
+                "failed",
+                "Vol/Sentimentの更新に失敗しました。",
                 str(exc),
             )
             yield
@@ -390,6 +390,20 @@ class MarketState(rx.State):
         try:
             context = await asyncio.to_thread(
                 build_market_high_context,
+                market_type,
+                self.market_context or None,
+            )
+            if not self._is_current_market_request(request_id, market_type):
+                return
+            self._apply_market_context(context)
+            self._set_stage_status(
+                "volatility_sentiment",
+                "loading",
+                "更新した信用ストレスをボラティリティ・予測へ反映中...",
+            )
+            yield
+            context = await asyncio.to_thread(
+                build_market_volatility_sentiment_context,
                 market_type,
                 self.market_context or None,
             )

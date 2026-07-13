@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
@@ -53,9 +53,7 @@ def test_fetch_marketdata_option_chain_uses_bounded_request(monkeypatch, tmp_pat
     from src.persistent_cache import PersistentJsonCache
 
     calls = []
-    expiration_date = (
-        datetime.now(timezone.utc).date() + timedelta(days=7)
-    ).isoformat()
+    expiration_date = "2099-01-01"
 
     class FakeClient:
         def get(self, path, params=None):

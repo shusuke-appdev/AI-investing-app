@@ -1,4 +1,4 @@
-# Finnhub Migration Walkthrough (Complete)
+# Finnhub Migration Walkthrough (Archived)
 
 Yahoo Finance (yfinance) から Finnhub への移行作業が完了しました。
 Implementation Planに基づき、**オプション分析と日本市場データを除く全てのデータソース**をFinnhub APIに移行しました。
