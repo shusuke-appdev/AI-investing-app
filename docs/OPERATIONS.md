@@ -11,7 +11,7 @@
 | 変数 | 必須度 | 用途 |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | AI機能には必須 | Gemini による市況・銘柄・ポートフォリオ分析 |
-| `GEMINI_MODEL_NAME` / `GEMINI_MODEL` | 任意 | Geminiモデル名の上書き。未設定時は `gemini-3.5-flash` |
+| `GEMINI_MODEL_NAME` / `GEMINI_MODEL` | 任意 | Geminiモデル名の上書き。未設定時は `gemini-3.6-flash` |
 | `FINNHUB_API_KEY` | 推奨 | 企業ニュース、決算、オプション補完データ |
 | `MARKETDATA_TOKEN` | 米国オプション分析に推奨 | MarketData.appのSPY / QQQ / IWMおよび主要テーマETF proxyのオプションチェーン、IV、Greeks、OI、Volume |
 | `MARKETDATA_OPTIONS_MODE` | 任意 | `off` / `shadow` / `preferred`。トークン設定済みの未設定時は`preferred`、トークン未設定時は`off` |

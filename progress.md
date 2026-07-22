@@ -1,5 +1,16 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-07-22 Gemini 3.6 Flash migration
+- Changed the shared Gemini API default from `gemini-3.5-flash` to the stable model ID `gemini-3.6-flash`. All current AI generation paths use this shared client and do not pass a separate model override.
+- Updated `.env.example`, README setup, and operations documentation so new environments select the same model explicitly while preserving `GEMINI_MODEL_NAME` / `GEMINI_MODEL` as an operational rollback override.
+- Added a regression that verifies the actual `client.models.generate_content()` call receives `model="gemini-3.6-flash"` by default.
+- Validation: focused App Mode / Gemini tests passed (`7 passed`), and full `.venv\Scripts\python.exe scripts\check.py` passed dependency consistency, compileall, Ruff lint/format, all `344` tests, Reflex frontend export, and static UI semantics for seven routes.
+
+## Session update: 2026-07-22 FRED Pandas 4 concat compatibility
+- Made the FRED multi-series `DatetimeIndex` concat ordering explicit with `sort=True`, preserving the existing chronological output contract when input series are descending or have misaligned dates.
+- Added a focused regression that promotes `Pandas4Warning` to an error and verifies the combined FRED frame remains chronologically sorted with missing observations preserved as unavailable.
+- Validation: warning-as-error focused tests passed (`6 passed`), then full `.venv\Scripts\python.exe scripts\check.py` passed dependency consistency, compileall, Ruff lint/format, all `345` tests with zero warnings, Reflex frontend export, and static UI semantics for seven routes.
+
 ## Session update: 2026-07-14 Supabase DNS incident recovery
 - Confirmed the repo-root `.env` still targets project `pbdwzpktugztklejzvhn` and has the preferred `SUPABASE_SECRET_KEY`; no credential or application-code change was needed.
 - Supabase Management reported the project as `INACTIVE`, explaining the `[Errno 11001] getaddrinfo failed` API-host DNS failure. Restored the existing project and observed `INACTIVE -> COMING_UP -> RESTORING -> ACTIVE_HEALTHY`.

@@ -64,6 +64,22 @@ def test_public_readonly_does_not_return_cached_gemini_client(monkeypatch):
     assert not gemini_client.configure_gemini("secret")
 
 
+def test_gemini_generation_uses_gemini_3_6_flash_by_default(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from src import gemini_client
+
+    client = MagicMock()
+    client.models.generate_content.return_value.text = "generated"
+    monkeypatch.setattr(gemini_client, "_client", client)
+
+    assert gemini_client.generate_content("prompt") == "generated"
+    client.models.generate_content.assert_called_once_with(
+        model="gemini-3.6-flash",
+        contents="prompt",
+    )
+
+
 def test_invalid_app_mode_fails_closed(monkeypatch):
     monkeypatch.setenv("APP_MODE", "publci")
 

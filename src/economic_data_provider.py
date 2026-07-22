@@ -169,7 +169,7 @@ def _fetch_with_fred_csv(
     )
     if not frames:
         raise ValueError("FRED CSV response did not contain requested series.")
-    combined = pd.concat(frames, axis=1).sort_index()
+    combined = pd.concat(frames, axis=1, sort=True).sort_index()
     return _filter_dates(_normalize_frame(combined, series_ids), start, end)
 
 

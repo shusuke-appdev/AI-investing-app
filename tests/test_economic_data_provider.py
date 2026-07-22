@@ -46,6 +46,37 @@ def test_fetch_fred_series_uses_csv_and_cache(monkeypatch, tmp_path: Path):
     assert cached.data["BAA10Y"].iloc[0] == 1.0
 
 
+def test_fetch_fred_csv_sorts_misaligned_datetime_indexes_without_warning(monkeypatch):
+    first = pd.DataFrame(
+        {"FIRST": [3.0, 1.0]},
+        index=pd.to_datetime(["2026-01-03", "2026-01-01"]),
+    )
+    second = pd.DataFrame(
+        {"SECOND": [2.0, 1.0]},
+        index=pd.to_datetime(["2026-01-02", "2026-01-01"]),
+    )
+    monkeypatch.setattr(
+        provider.requests,
+        "get",
+        lambda *args, **kwargs: _FakeResponse("not-a-zip"),
+    )
+    monkeypatch.setattr(
+        provider,
+        "_frames_from_fred_text",
+        lambda text, series_ids: [first, second],
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pd.errors.Pandas4Warning)
+        result = provider._fetch_with_fred_csv(
+            ["FIRST", "SECOND"], None, None, timeout=1
+        )
+
+    assert list(result.index) == list(pd.date_range("2026-01-01", periods=3))
+    assert result.loc["2026-01-03", "FIRST"] == 3.0
+    assert pd.isna(result.loc["2026-01-03", "SECOND"])
+
+
 def test_pandas_datareader_compat_imports_data_module():
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
