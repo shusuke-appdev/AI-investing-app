@@ -1,9 +1,53 @@
 """FOMO, option, and derived market-monitor workflows."""
 
-# ruff: noqa: F403, F405
+from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+from src.advisor.fomo_volatility_regime import (
+    DEFAULT_FOMO_UNIVERSE,
+)
+from src.advisor.fomo_volatility_regime import (
+    scan_fomo_universe as _default_scan_fomo_universe,
+)
+from src.advisor.market_environment import (
+    evaluate_market_environment as _default_evaluate_market_environment,
+)
+from src.advisor.market_monitor import (
+    detect_market_climax as _default_detect_market_climax,
+)
+from src.advisor.market_monitor import (
+    evaluate_yield_spread as _default_evaluate_yield_spread,
+)
+from src.advisor.market_monitor import (
+    track_distribution_days as _default_track_distribution_days,
+)
+from src.market_data import get_stock_data as _default_get_stock_data
+from src.market_microstructure import (
+    analyze_market_structure as _default_analyze_market_structure,
+)
 from src.services import market_dashboard_service as _service
-from src.services.market_dashboard_service import *
+from src.services.analysis_context import DataResult, MarketContext
+from src.services.data_fetch_manifest import (
+    requirement_failures as _default_requirement_failures,
+)
+from src.services.market_composite_sentiment import (
+    build_market_composite_sentiment as _default_build_market_composite_sentiment,
+)
+from src.services.market_dashboard_service import (
+    build_market_high_context as _default_build_market_high_context,
+)
+from src.services.market_dashboard_service import (
+    build_market_summary_context as _default_build_market_summary_context,
+)
+from src.services.market_dashboard_service import (
+    build_market_theme_flow_context as _default_build_market_theme_flow_context,
+)
+from src.services.market_dashboard_service import (
+    build_market_volatility_sentiment_context as _default_build_market_volatility_sentiment_context,
+)
 from src.services.market_dashboard_support import (
     _build_option_context,
     _coerce_context,
@@ -22,39 +66,170 @@ from src.services.market_dashboard_support import (
     _updated_stage_statuses,
     _utc_now,
 )
+from src.services.market_strategy_service import (
+    build_market_strategy_context as _default_build_market_strategy_context,
+)
+from src.services.provenance_service import (
+    option_provenance as _default_option_provenance,
+)
+from src.services.trend_ranking_service import (
+    build_opportunity_themes as _default_build_opportunity_themes,
+)
+from src.services.trend_ranking_service import (
+    build_trend_ranking_context as _default_build_trend_ranking_context,
+)
+from src.stock_data_provider import (
+    get_valuation_metrics as _default_get_valuation_metrics,
+)
 
 
-def _sync_compat_dependencies() -> None:
-    """Honor patches against the historical facade during the migration window."""
+@dataclass(frozen=True, slots=True)
+class MarketDashboardWorkflowDependencies:
+    """Explicit orchestration dependencies for market workflows."""
 
-    for name in tuple(globals()):
-        if not name.startswith("__") and hasattr(_service, name):
-            globals()[name] = getattr(_service, name)
+    scan_fomo_universe: Callable[..., dict[str, Any]]
+    get_stock_data: Callable[..., Any]
+    build_market_summary_context: Callable[..., MarketContext]
+    build_market_theme_flow_context: Callable[..., MarketContext]
+    build_market_high_context: Callable[..., MarketContext]
+    build_market_volatility_sentiment_context: Callable[..., MarketContext]
+    build_market_options_context: Callable[..., MarketContext]
+    build_option_context: Callable[..., Any]
+    analyze_market_structure: Callable[..., dict[str, Any]]
+    build_market_monitor_context: Callable[..., dict[str, Any]]
+    evaluate_market_environment: Callable[..., dict[str, Any]]
+    build_trend_ranking_context: Callable[..., dict[str, Any]]
+    build_opportunity_themes: Callable[..., dict[str, Any]]
+    build_market_composite_sentiment: Callable[..., dict[str, Any]]
+    build_market_strategy_context: Callable[..., dict[str, Any]]
+    option_provenance: Callable[..., list[Any]]
+    requirement_failures: Callable[..., list[str]]
+    save_context_cache: Callable[..., None]
+    track_distribution_days: Callable[..., dict[str, Any]]
+    detect_market_climax: Callable[..., dict[str, Any]]
+    get_valuation_metrics: Callable[..., dict[str, Any]]
+    evaluate_yield_spread: Callable[..., dict[str, Any]]
 
 
-def build_fomo_scan_context(tickers: list[str] | None = None) -> dict[str, Any]:
+def _facade_dependency(name: str, default: Callable[..., Any]) -> Callable[..., Any]:
+    """Resolve one explicitly named compatibility patch from the facade."""
+
+    candidate = getattr(_service, name, default)
+    return candidate if callable(candidate) else default
+
+
+def _workflow_dependencies(
+    dependencies: MarketDashboardWorkflowDependencies | None = None,
+) -> MarketDashboardWorkflowDependencies:
+    """Build a stable dependency object while honoring legacy test patches."""
+
+    if dependencies is not None:
+        return dependencies
+
+    return MarketDashboardWorkflowDependencies(
+        scan_fomo_universe=_facade_dependency(
+            "scan_fomo_universe", _default_scan_fomo_universe
+        ),
+        get_stock_data=_facade_dependency("get_stock_data", _default_get_stock_data),
+        build_market_summary_context=_facade_dependency(
+            "build_market_summary_context", _default_build_market_summary_context
+        ),
+        build_market_theme_flow_context=_facade_dependency(
+            "build_market_theme_flow_context",
+            _default_build_market_theme_flow_context,
+        ),
+        build_market_high_context=_facade_dependency(
+            "build_market_high_context", _default_build_market_high_context
+        ),
+        build_market_volatility_sentiment_context=_facade_dependency(
+            "build_market_volatility_sentiment_context",
+            _default_build_market_volatility_sentiment_context,
+        ),
+        build_market_options_context=_facade_dependency(
+            "build_market_options_context", build_market_options_context
+        ),
+        build_option_context=_facade_dependency(
+            "_build_option_context", _build_option_context
+        ),
+        analyze_market_structure=_facade_dependency(
+            "analyze_market_structure", _default_analyze_market_structure
+        ),
+        build_market_monitor_context=_facade_dependency(
+            "build_market_monitor_context", build_market_monitor_context
+        ),
+        evaluate_market_environment=_facade_dependency(
+            "evaluate_market_environment", _default_evaluate_market_environment
+        ),
+        build_trend_ranking_context=_facade_dependency(
+            "build_trend_ranking_context", _default_build_trend_ranking_context
+        ),
+        build_opportunity_themes=_facade_dependency(
+            "build_opportunity_themes", _default_build_opportunity_themes
+        ),
+        build_market_composite_sentiment=_facade_dependency(
+            "build_market_composite_sentiment",
+            _default_build_market_composite_sentiment,
+        ),
+        build_market_strategy_context=_facade_dependency(
+            "build_market_strategy_context", _default_build_market_strategy_context
+        ),
+        option_provenance=_facade_dependency(
+            "option_provenance", _default_option_provenance
+        ),
+        requirement_failures=_facade_dependency(
+            "requirement_failures", _default_requirement_failures
+        ),
+        save_context_cache=_facade_dependency(
+            "_save_context_cache", _save_context_cache
+        ),
+        track_distribution_days=_facade_dependency(
+            "track_distribution_days", _default_track_distribution_days
+        ),
+        detect_market_climax=_facade_dependency(
+            "detect_market_climax", _default_detect_market_climax
+        ),
+        get_valuation_metrics=_facade_dependency(
+            "get_valuation_metrics", _default_get_valuation_metrics
+        ),
+        evaluate_yield_spread=_facade_dependency(
+            "evaluate_yield_spread", _default_evaluate_yield_spread
+        ),
+    )
+
+
+def build_fomo_scan_context(
+    tickers: list[str] | None = None,
+    *,
+    dependencies: MarketDashboardWorkflowDependencies | None = None,
+) -> dict[str, Any]:
     """Run the explicit, bounded high-volatility watchlist scan."""
 
-    _sync_compat_dependencies()
-    return scan_fomo_universe(get_stock_data, tickers or DEFAULT_FOMO_UNIVERSE)
+    deps = _workflow_dependencies(dependencies)
+    return deps.scan_fomo_universe(
+        deps.get_stock_data, tickers or DEFAULT_FOMO_UNIVERSE
+    )
 
 
 def build_market_options_context(
     market_type: str = "US",
     market_context: MarketContext | dict[str, Any] | None = None,
+    *,
+    dependencies: MarketDashboardWorkflowDependencies | None = None,
 ) -> MarketContext:
     """Refresh option data and option-dependent monitoring without reloading all data."""
 
-    _sync_compat_dependencies()
-    base = _coerce_context(market_context) or build_market_summary_context(market_type)
+    deps = _workflow_dependencies(dependencies)
+    base = _coerce_context(market_context) or deps.build_market_summary_context(
+        market_type
+    )
     errors: list[str] = []
-    options = _build_option_context(market_type)
+    options = deps.build_option_context(market_type)
     if options.error_message:
         errors.append(options.error_message)
 
     def microstructure_task() -> dict[str, Any]:
         return _normalize_microstructure(
-            analyze_market_structure(
+            deps.analyze_market_structure(
                 "SPY",
                 _option_item(options.items, "SPY") or {},
                 allow_option_fetch=False,
@@ -62,7 +237,7 @@ def build_market_options_context(
         )
 
     def monitor_task() -> dict[str, Any]:
-        return build_market_monitor_context(options.items)
+        return deps.build_market_monitor_context(options.items)
 
     results = _stage_task_values(
         _run_stage_tasks(
@@ -77,7 +252,7 @@ def build_market_options_context(
     )
     microstructure = results.get("microstructure") or base.microstructure
     raw_evaluation = _safe_call(
-        lambda: evaluate_market_environment(
+        lambda: deps.evaluate_market_environment(
             market_type,
             options.items,
             microstructure=microstructure,
@@ -91,7 +266,7 @@ def build_market_options_context(
         base.ibd_regime,
     )
     trend_ranking = _safe_call(
-        lambda: build_trend_ranking_context(
+        lambda: deps.build_trend_ranking_context(
             market_type,
             sector_flow=base.sector_flow,
             distortions=base.market_distortions,
@@ -100,13 +275,13 @@ def build_market_options_context(
         base.trend_ranking,
         errors,
     )
-    opportunity_themes = build_opportunity_themes(
+    opportunity_themes = deps.build_opportunity_themes(
         trend_ranking,
         market_distortions=base.market_distortions,
     )
     composite_sentiment = (
         _safe_call(
-            lambda: build_market_composite_sentiment(
+            lambda: deps.build_market_composite_sentiment(
                 options.items,
                 refresh_occ=False,
             ),
@@ -117,7 +292,7 @@ def build_market_options_context(
         else {}
     )
     strategy_bundle = _safe_call(
-        lambda: build_market_strategy_context(
+        lambda: deps.build_market_strategy_context(
             market_type,
             options=options.items,
             option_horizons=options.horizons,
@@ -216,7 +391,7 @@ def build_market_options_context(
         ),
         provenance=_merge_provenance(
             base.provenance,
-            option_provenance(
+            deps.option_provenance(
                 fetched_at=options.fetched_at or _utc_now(),
                 source=options.source,
                 status=options.status,
@@ -258,7 +433,7 @@ def build_market_options_context(
             + ([options.error_message] if options.error_message else []),
         ),
     )
-    manifest_failures = requirement_failures("market_options", context.data_status)
+    manifest_failures = deps.requirement_failures("market_options", context.data_status)
     if manifest_failures:
         context.errors = _merge_warnings(context.errors, manifest_failures)
         context.quality_warnings = _merge_warnings(
@@ -266,42 +441,50 @@ def build_market_options_context(
         )
         context.is_partial = True
     if context.market_data:
-        _save_context_cache(context, "full")
+        deps.save_context_cache(context, "full")
     return context
 
 
-def build_market_context(market_type: str = "US") -> MarketContext:
+def build_market_context(
+    market_type: str = "US",
+    *,
+    dependencies: MarketDashboardWorkflowDependencies | None = None,
+) -> MarketContext:
     """Build the full context for legacy callers and tests."""
 
-    _sync_compat_dependencies()
-    summary = build_market_summary_context(market_type)
-    theme_flow = build_market_theme_flow_context(market_type, summary)
-    credit = build_market_high_context(market_type, theme_flow)
-    volatility = build_market_volatility_sentiment_context(market_type, credit)
-    return build_market_options_context(market_type, volatility)
+    deps = _workflow_dependencies(dependencies)
+    summary = deps.build_market_summary_context(market_type)
+    theme_flow = deps.build_market_theme_flow_context(market_type, summary)
+    credit = deps.build_market_high_context(market_type, theme_flow)
+    volatility = deps.build_market_volatility_sentiment_context(market_type, credit)
+    return deps.build_market_options_context(market_type, volatility)
 
 
-def build_market_monitor_context(option_data: list[dict[str, Any]] | None) -> dict:
+def build_market_monitor_context(
+    option_data: list[dict[str, Any]] | None,
+    *,
+    dependencies: MarketDashboardWorkflowDependencies | None = None,
+) -> dict:
     """Build Distribution Day, climax, and yield-spread monitoring context."""
 
-    _sync_compat_dependencies()
-    spy_df = get_stock_data("SPY", "6mo")
-    ndx_df = get_stock_data("^NDX", "6mo")
+    deps = _workflow_dependencies(dependencies)
+    spy_df = deps.get_stock_data("SPY", "6mo")
+    ndx_df = deps.get_stock_data("^NDX", "6mo")
 
-    dist_spy = track_distribution_days(spy_df)
-    dist_ndx = track_distribution_days(ndx_df)
-    climax = detect_market_climax(spy_df, ndx_df, _extract_spy_pcr(option_data))
+    dist_spy = deps.track_distribution_days(spy_df)
+    dist_ndx = deps.track_distribution_days(ndx_df)
+    climax = deps.detect_market_climax(spy_df, ndx_df, _extract_spy_pcr(option_data))
 
-    tnx_df = get_stock_data("^TNX", "5d")
+    tnx_df = deps.get_stock_data("^TNX", "5d")
     tnx_yield = (
         float(tnx_df["Close"].iloc[-1]) / 10.0
         if tnx_df is not None and not tnx_df.empty
         else None
     )
 
-    spy_pe = _extract_pe(get_valuation_metrics("SPY"))
-    ndx_pe = _extract_pe(get_valuation_metrics("QQQ"))
-    spread = evaluate_yield_spread(tnx_yield, {"SPY": spy_pe, "NDX": ndx_pe})
+    spy_pe = _extract_pe(deps.get_valuation_metrics("SPY"))
+    ndx_pe = _extract_pe(deps.get_valuation_metrics("QQQ"))
+    spread = deps.evaluate_yield_spread(tnx_yield, {"SPY": spy_pe, "NDX": ndx_pe})
 
     return {
         "distribution_spy": dist_spy,
@@ -317,7 +500,6 @@ def build_flow_alignment_context(
 ) -> dict[str, Any]:
     """Explain how ETF leadership proxy and sector-flow diagnostics should be read."""
 
-    _sync_compat_dependencies()
     flow = flow_monitor or {}
     sectors = sector_flow or {}
     etf_leader = (flow.get("leaders") or [{}])[0]

@@ -76,5 +76,27 @@ def test_docker_runtime_is_non_root_and_excludes_build_toolchain():
     assert "USER appuser" in runtime
     assert "HEALTHCHECK" in runtime
     assert "127.0.0.1:7860/_health" in runtime
+    assert "mkdir -p /app/.web" in runtime
+    assert "chown appuser:appuser /app" in runtime
     assert "build-essential" not in runtime
     assert "python3-dev" not in runtime
+
+
+def test_market_dashboard_extracted_modules_have_explicit_dependencies():
+    for path in (
+        Path("src/services/market_dashboard_support.py"),
+        Path("src/services/market_dashboard_workflows.py"),
+    ):
+        source = path.read_text(encoding="utf-8")
+        assert "import *" not in source
+        assert "_sync_compat_dependencies" not in source
+
+
+def test_ci_builds_and_health_checks_the_docker_image():
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "Build and smoke Docker image" in workflow
+    assert "docker build --tag" in workflow
+    assert "--env APP_MODE=public_readonly" in workflow
+    assert "http://127.0.0.1:7860/_health" in workflow
+    assert "docker rm --force" in workflow

@@ -1,24 +1,166 @@
 """Execution, cache, normalization, and status helpers for market orchestration."""
 
-# ruff: noqa: F403, F405
+from __future__ import annotations
 
+import time
+from collections.abc import Callable
+from concurrent.futures import TimeoutError as FutureTimeoutError
+from concurrent.futures import as_completed
+from dataclasses import dataclass
+from typing import Any
+
+import pandas as pd
+
+from src.market_data import get_stock_data as _default_get_stock_data
+from src.market_volatility_intelligence import (
+    build_local_sentiment_composite as _default_build_local_sentiment_composite,
+)
+from src.market_volatility_intelligence import (
+    build_market_volatility_regime as _default_build_market_volatility_regime,
+)
+from src.market_volatility_intelligence import (
+    fetch_cboe_indices as _default_fetch_cboe_indices,
+)
+from src.market_volatility_intelligence import (
+    fetch_cnn_fear_greed as _default_fetch_cnn_fear_greed,
+)
+from src.option_analyst import (
+    get_major_indices_option_status as _default_get_major_indices_option_status,
+)
+from src.persistent_cache import PersistentJsonCache, utc_now_iso
 from src.services import market_dashboard_service as _service
-from src.services.market_dashboard_service import *
-from src.services.market_dashboard_service import _MARKET_STAGE_EXECUTORS
+from src.services.analysis_context import DataResult, MarketContext, OptionContext
+from src.services.market_composite_sentiment import (
+    build_market_composite_sentiment as _default_build_market_composite_sentiment,
+)
+from src.services.market_context_cache import context_cache_key, context_cache_path
+from src.services.market_context_cache import (
+    context_from_cache_payload as _default_context_from_cache_payload,
+)
+from src.services.market_context_cache import (
+    market_context_cache as _default_market_context_cache_store,
+)
+from src.services.market_context_cache import (
+    read_context_cache as _default_read_context_cache,
+)
+from src.services.market_context_cache import (
+    save_context_cache as _default_save_context_cache,
+)
+from src.services.market_dashboard_service import (
+    _MARKET_STAGE_EXECUTORS,
+    DETAIL_STAGE_DEFAULTS,
+    DETAIL_STAGE_ORDER,
+    MARKET_CONTEXT_CACHE_NAMESPACE,
+    MARKET_STAGE_TASK_TIMEOUT_SECONDS,
+    MARKET_STAGE_TOTAL_TIMEOUT_SECONDS,
+    StageTaskResult,
+)
+from src.services.market_short_horizon_forecast import (
+    build_market_short_horizon_forecast as _default_build_market_short_horizon_forecast,
+)
+from src.services.provenance_service import stale_cache_provenance
+from src.services.vix_sq_alert_service import (
+    build_vix_sq_alert_context as _default_build_vix_sq_alert_context,
+)
 
 
-def _sync_compat_dependencies() -> None:
-    """Honor dependency patches applied to the historical facade."""
+@dataclass(frozen=True, slots=True)
+class MarketDashboardSupportDependencies:
+    """Explicit provider and cache dependencies used by support helpers."""
 
-    for name in tuple(globals()):
-        if not name.startswith("__") and hasattr(_service, name):
-            globals()[name] = getattr(_service, name)
+    get_major_indices_option_status: Callable[..., dict[str, Any]]
+    get_stock_data: Callable[..., Any]
+    fetch_cboe_indices: Callable[..., Any]
+    fetch_cnn_fear_greed: Callable[..., Any]
+    build_market_short_horizon_forecast: Callable[..., dict[str, Any]]
+    build_market_composite_sentiment: Callable[..., dict[str, Any]]
+    build_market_volatility_regime: Callable[..., dict[str, Any]]
+    build_vix_sq_alert_context: Callable[..., dict[str, Any]]
+    build_local_sentiment_composite: Callable[..., dict[str, Any]]
+    cache_factory: Callable[[], PersistentJsonCache]
+    save_context_cache: Callable[..., None]
+    read_context_cache: Callable[..., Any]
+    context_from_cache_payload: Callable[..., MarketContext]
 
 
-def _build_option_context(market_type: str) -> OptionContext:
-    _sync_compat_dependencies()
+def _default_cache_factory() -> PersistentJsonCache:
+    return _default_market_context_cache_store(MARKET_CONTEXT_CACHE_NAMESPACE)
+
+
+def _facade_dependency(name: str, default: Callable[..., Any]) -> Callable[..., Any]:
+    """Resolve one named compatibility patch without copying module globals."""
+
+    candidate = getattr(_service, name, default)
+    return candidate if callable(candidate) else default
+
+
+def _support_dependencies(
+    dependencies: MarketDashboardSupportDependencies | None = None,
+) -> MarketDashboardSupportDependencies:
+    """Resolve explicitly listed dependencies from the historical facade."""
+
+    if dependencies is not None:
+        return dependencies
+
+    cache_candidate = getattr(_service, "_market_context_cache", None)
+    cache_factory = (
+        cache_candidate
+        if callable(cache_candidate) and cache_candidate is not _market_context_cache
+        else _default_cache_factory
+    )
+    return MarketDashboardSupportDependencies(
+        get_major_indices_option_status=_facade_dependency(
+            "get_major_indices_option_status",
+            _default_get_major_indices_option_status,
+        ),
+        get_stock_data=_facade_dependency("get_stock_data", _default_get_stock_data),
+        fetch_cboe_indices=_facade_dependency(
+            "fetch_cboe_indices", _default_fetch_cboe_indices
+        ),
+        fetch_cnn_fear_greed=_facade_dependency(
+            "fetch_cnn_fear_greed", _default_fetch_cnn_fear_greed
+        ),
+        build_market_short_horizon_forecast=_facade_dependency(
+            "build_market_short_horizon_forecast",
+            _default_build_market_short_horizon_forecast,
+        ),
+        build_market_composite_sentiment=_facade_dependency(
+            "build_market_composite_sentiment",
+            _default_build_market_composite_sentiment,
+        ),
+        build_market_volatility_regime=_facade_dependency(
+            "build_market_volatility_regime",
+            _default_build_market_volatility_regime,
+        ),
+        build_vix_sq_alert_context=_facade_dependency(
+            "build_vix_sq_alert_context",
+            _default_build_vix_sq_alert_context,
+        ),
+        build_local_sentiment_composite=_facade_dependency(
+            "build_local_sentiment_composite",
+            _default_build_local_sentiment_composite,
+        ),
+        cache_factory=cache_factory,
+        save_context_cache=_facade_dependency(
+            "save_context_cache", _default_save_context_cache
+        ),
+        read_context_cache=_facade_dependency(
+            "read_context_cache", _default_read_context_cache
+        ),
+        context_from_cache_payload=_facade_dependency(
+            "context_from_cache_payload", _default_context_from_cache_payload
+        ),
+    )
+
+
+def _build_option_context(
+    market_type: str,
+    *,
+    dependencies: MarketDashboardSupportDependencies | None = None,
+) -> OptionContext:
+    deps = _support_dependencies(dependencies)
     try:
-        result = get_major_indices_option_status(market_type)
+        result = deps.get_major_indices_option_status(market_type)
         failed_tickers = list(result.get("failed_tickers") or [])
         status = str(result.get("status") or "unavailable")
         return OptionContext(
@@ -157,31 +299,33 @@ def _build_volatility_sentiment_context(
     ibd_regime: dict[str, Any],
     credit_stress: dict[str, Any],
     option_items: list[dict[str, Any]] | None = None,
+    dependencies: MarketDashboardSupportDependencies | None = None,
 ) -> dict[str, Any]:
     """Build dependent volatility/sentiment outputs after their inputs are current."""
 
     if market_type != "US":
         return {}
-    spy = get_stock_data("SPY", "5y")
+    deps = _support_dependencies(dependencies)
+    spy = deps.get_stock_data("SPY", "5y")
     if spy is None or spy.empty:
         return {}
-    tlt = get_stock_data("TLT", "1y")
-    cboe = fetch_cboe_indices()
-    cnn = fetch_cnn_fear_greed()
-    short_horizon_forecast = build_market_short_horizon_forecast(cboe_result=cboe)
-    composite_sentiment = build_market_composite_sentiment(
+    tlt = deps.get_stock_data("TLT", "1y")
+    cboe = deps.fetch_cboe_indices()
+    cnn = deps.fetch_cnn_fear_greed()
+    short_horizon_forecast = deps.build_market_short_horizon_forecast(cboe_result=cboe)
+    composite_sentiment = deps.build_market_composite_sentiment(
         option_items,
         cboe_result=cboe,
     )
     return {
-        "volatility_regime": build_market_volatility_regime(
+        "volatility_regime": deps.build_market_volatility_regime(
             spy,
             cboe_result=cboe,
             credit_stress=credit_stress,
             ibd_regime=ibd_regime,
         ),
-        "vix_sq_alert": build_vix_sq_alert_context(cboe.data if cboe else None),
-        "sentiment": build_local_sentiment_composite(
+        "vix_sq_alert": deps.build_vix_sq_alert_context(cboe.data if cboe else None),
+        "sentiment": deps.build_local_sentiment_composite(
             spy,
             tlt,
             cboe_result=cboe,
@@ -321,11 +465,16 @@ def _context_cache_path(market_type: str, kind: str):
     return context_cache_path(_market_context_cache(), market_type, kind)
 
 
-def _save_context_cache(context: MarketContext, kind: str) -> None:
-    _sync_compat_dependencies()
+def _save_context_cache(
+    context: MarketContext,
+    kind: str,
+    *,
+    dependencies: MarketDashboardSupportDependencies | None = None,
+) -> None:
+    deps = _support_dependencies(dependencies)
     try:
-        save_context_cache(
-            _market_context_cache(),
+        deps.save_context_cache(
+            deps.cache_factory(),
             context,
             kind,
             fetched_at=context.fetched_at or _utc_now(),
@@ -340,10 +489,11 @@ def _load_context_cache(
     *,
     max_age_seconds: int,
     fresh_seconds: int,
+    dependencies: MarketDashboardSupportDependencies | None = None,
 ) -> MarketContext | None:
-    _sync_compat_dependencies()
-    read = read_context_cache(
-        _market_context_cache(),
+    deps = _support_dependencies(dependencies)
+    read = deps.read_context_cache(
+        deps.cache_factory(),
         market_type,
         kind,
         fresh_seconds=fresh_seconds,
@@ -352,7 +502,7 @@ def _load_context_cache(
     if not read.is_available:
         return None
 
-    context = context_from_cache_payload(read.payload)
+    context = deps.context_from_cache_payload(read.payload)
     if read.fetched_at and not context.fetched_at:
         context.fetched_at = read.fetched_at
     context.source = f"{context.source or kind}_cache"
@@ -501,8 +651,11 @@ def _context_cache_key(market_type: str, kind: str) -> str:
     return context_cache_key(market_type, kind)
 
 
-def _market_context_cache() -> PersistentJsonCache:
-    return market_context_cache(MARKET_CONTEXT_CACHE_NAMESPACE)
+def _market_context_cache(
+    *,
+    dependencies: MarketDashboardSupportDependencies | None = None,
+) -> PersistentJsonCache:
+    return _support_dependencies(dependencies).cache_factory()
 
 
 def _optional_float(value: Any) -> float | None:
@@ -523,11 +676,15 @@ def _optional_int(value: Any) -> int | None:
         return None
 
 
-def _low_pe_relative_return_6m() -> float | None:
+def _low_pe_relative_return_6m(
+    *,
+    dependencies: MarketDashboardSupportDependencies | None = None,
+) -> float | None:
     """Return growth-minus-value six-month performance as the public proxy."""
 
-    growth = get_stock_data("RPG", "1y")
-    value = get_stock_data("RPV", "1y")
+    deps = _support_dependencies(dependencies)
+    growth = deps.get_stock_data("RPG", "1y")
+    value = deps.get_stock_data("RPV", "1y")
     if growth is None or value is None or growth.empty or value.empty:
         return None
     joined = pd.concat(

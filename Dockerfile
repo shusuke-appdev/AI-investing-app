@@ -36,8 +36,9 @@ COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
 COPY --chown=appuser:appuser . /app
-RUN mkdir -p /app/.states /app/.reflex_states /app/data \
-    && chown -R appuser:appuser /app/.states /app/.reflex_states /app/data
+RUN mkdir -p /app/.web /app/.states /app/.reflex_states /app/data \
+    && chown appuser:appuser /app \
+    && chown -R appuser:appuser /app/.web /app/.states /app/.reflex_states /app/data
 
 USER appuser
 

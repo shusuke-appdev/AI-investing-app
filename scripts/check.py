@@ -75,6 +75,8 @@ def _checks(*, coverage: bool, quick: bool) -> list[tuple[list[str], str]]:
                 "mypy",
                 "src/provider_result.py",
                 "src/services/analysis_context.py",
+                "src/services/market_dashboard_support.py",
+                "src/services/market_dashboard_workflows.py",
                 "src/theme_analyst.py",
                 "frontend/state/error_handling.py",
             ],

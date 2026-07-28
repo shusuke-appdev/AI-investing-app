@@ -1,5 +1,6 @@
 import threading
 import time
+from dataclasses import replace
 
 import pandas as pd
 
@@ -7,6 +8,78 @@ from src.persistent_cache import PersistentJsonCache
 from src.services import market_analyst_service
 from src.services import market_dashboard_service as service
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
+
+
+def test_market_monitor_accepts_explicit_dependencies(monkeypatch):
+    from src.services import market_dashboard_service as service
+    from src.services.market_dashboard_workflows import (
+        _workflow_dependencies,
+        build_market_monitor_context,
+    )
+
+    monkeypatch.setattr(
+        service,
+        "get_stock_data",
+        lambda *_: (_ for _ in ()).throw(
+            AssertionError("historical facade dependency was used")
+        ),
+    )
+    calls: list[tuple[str, str]] = []
+
+    def fake_stock_data(ticker: str, period: str):
+        calls.append((ticker, period))
+        if ticker == "^TNX":
+            return pd.DataFrame({"Close": [40.0]})
+        return pd.DataFrame({"Close": [100.0], "Volume": [1_000.0]})
+
+    dependencies = replace(
+        _workflow_dependencies(),
+        get_stock_data=fake_stock_data,
+        track_distribution_days=lambda _: {"count": 0},
+        detect_market_climax=lambda *_: {"is_climax": False},
+        get_valuation_metrics=lambda ticker: {
+            "pe_ratio": 20.0 if ticker == "SPY" else 25.0
+        },
+        evaluate_yield_spread=lambda value, pe: {
+            "yield_10y": value,
+            "pe": pe,
+        },
+    )
+
+    result = build_market_monitor_context([], dependencies=dependencies)
+
+    assert calls == [("SPY", "6mo"), ("^NDX", "6mo"), ("^TNX", "5d")]
+    assert result["yield_spread"]["yield_10y"] == 4.0
+
+
+def test_option_context_accepts_explicit_dependencies(monkeypatch):
+    from src.services import market_dashboard_service as service
+    from src.services.market_dashboard_support import (
+        _build_option_context,
+        _support_dependencies,
+    )
+
+    monkeypatch.setattr(
+        service,
+        "get_major_indices_option_status",
+        lambda *_: (_ for _ in ()).throw(
+            AssertionError("historical facade dependency was used")
+        ),
+    )
+    dependencies = replace(
+        _support_dependencies(),
+        get_major_indices_option_status=lambda _: {
+            "status": "available",
+            "source": "injected",
+            "items": [{"ticker": "SPY"}],
+        },
+    )
+
+    result = _build_option_context("US", dependencies=dependencies)
+
+    assert result.status == "available"
+    assert result.source == "injected"
+    assert result.items == [{"ticker": "SPY"}]
 
 
 def _monitor_payload():

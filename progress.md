@@ -1,5 +1,13 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-07-28 residual architecture, Docker, and live close-out
+- Replaced wildcard imports and whole-module global synchronization in `market_dashboard_support.py` / `market_dashboard_workflows.py` with explicit frozen dependency objects. The public compatibility facade remains, but dependencies can now be injected directly and historical monkeypatch seams are resolved by name rather than copied wholesale.
+- Added direct dependency-injection regressions, static checks that reject wildcard imports and `_sync_compat_dependencies`, and expanded the scoped mypy contract to cover both extracted modules.
+- Verified that the current Hugging Face Docker Space completed its image build but failed at runtime because the non-root Reflex process could not create `/app/.web`. The Dockerfile now creates and owns that path, and CI now builds the image, starts a container, validates the JSON `/_health` contract before deployment, prints logs on failure, and cleans up the container.
+- Restored the existing Supabase project from `INACTIVE` to `ACTIVE_HEALTHY`. Authenticated live smoke then passed external market data, FRED, Finnhub, configured MarketData.app term structures, public-readonly write blocking, and self-cleaning Supabase `user_settings` CRUD. EDINET remains unverified because its API key is not configured.
+- Validation: `.venv\Scripts\python.exe scripts\check.py` passed all `361` tests plus compile/lint/format/mypy, Reflex export, and seven-route static UI checks; `scripts\check.py --coverage` passed at `63.41%` branch coverage; responsive browser smoke passed five routes at desktop/mobile sizes plus drawer keyboard behavior.
+- Remaining operational close-out: Docker/WSL is not installed locally, so the corrected image cannot be built here. No commit or push was performed; after explicit publication approval, CI must build/smoke the corrected image and the deployed Space health must be rechecked.
+
 ## Session update: 2026-07-28 Codex repository guidance simplification
 - Simplified `AGENTS.md` to repository-only guidance for the Reflex stack, context ownership, explicit availability semantics, research framing, and the standard release gate.
 - Removed duplicated global work-style and Windows execution rules; those remain in Codex global guidance or dedicated Skills.

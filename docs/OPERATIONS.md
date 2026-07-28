@@ -150,6 +150,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - Entry Frameworkは日足データによるproxyです。LoD、ORH、寄付き後30分、1-2時間確認、即時ギャップ抵抗は判定しません
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
 - GitHub Actions の Hugging Face Spaces 同期は `main` / `master` へのpushをブランチ単位で直列化し、古い実行をキャンセルしてからforce pushします。対象はGitHub Environment `hugging-face-production` の `HF_SPACE_REPO`、Reflexの`/_health`確認URLは `HF_SPACE_HEALTH_URL` で上書きできます。push後は最大2分のHTTP確認を行い、失敗時は直前のSpaceコミットIDをartifactへ残します
+- quality jobはHugging Face同期より前にDockerイメージを実ビルドし、`APP_MODE=public_readonly`で非rootコンテナを起動してReflex `/_health` のJSON `status=true`まで確認します。コンテナが早期終了した場合はログを出してdeployを止めます
 - Supabase移行は既定でdry-runです。実行は `python tools/migrate_to_supabase.py --execute`、既存テーブルを消して入れ替える場合のみ `--confirm-destroy` を追加します。破壊実行時は `data/supabase_backups/` にバックアップが取れない限り中断します。新規テーブル作成が必要な場合は、先に `python tools/migrate_to_supabase.py --print-setup-sql` で表示される SQL を Supabase SQL Editor で実行します。
 
 ## 既知のローカル環境問題

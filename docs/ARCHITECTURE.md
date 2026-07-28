@@ -133,6 +133,7 @@ UI
 ## 重要な設計判断
 
 - `src/data_provider.py` は facade と依存性注入の入口を兼ねており、テスト時に外部APIを差し替えられる
+- `market_dashboard_service.py` は既存呼び出し向けの公開facadeとして残す一方、抽出済みの `market_dashboard_support.py` / `market_dashboard_workflows.py` は wildcard import や全global同期を行わない。provider・cache・orchestration関数を `MarketDashboardSupportDependencies` / `MarketDashboardWorkflowDependencies` へ明示し、通常時は既定依存、移行中の互換テストは列挙済みfacade依存、直接テストは注入済み依存を使用する
 - `src/cache.py` は Streamlit 依存を避けるためのフレームワーク非依存TTLキャッシュ。エントリごとに `created_at`、`expires_at`、`ttl`、`namespace` を持ち、関数単位の `.clear_cache()` と名前空間単位のクリアに対応する
 - `src/persistent_cache.py` は `.states` 配下のJSONキャッシュ共通基盤。schema/version付きの原子的書き込み、破損JSON無視、fresh/stale/expired判定、ファイル名安全化を担う
 - yfinance系の重い取得は、メモリTTLに加えて `.states/market_context_cache` と `.states/option_chain_cache` のJSONキャッシュを使う。オプションは ticker だけでなく target DTE 別のcache keyを使い、current / 1W / 1M が混線しないようにする。`source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` をUIとAIプロンプトへ渡す
