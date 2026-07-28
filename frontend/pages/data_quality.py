@@ -19,7 +19,7 @@ def _provider_label(status) -> rx.Var:
         "設定済み",
         rx.cond(
             status == "best_effort",
-            "best effort",
+            "ベストエフォート",
             rx.cond(status == "optional_missing", "任意未設定", "未設定"),
         ),
     )
@@ -88,13 +88,18 @@ def _provider_health_card(item) -> rx.Component:
             ),
             rx.cond(
                 item.source != "",
-                rx.text("source: " + item.source, size="1", color=rx.color("gray", 10)),
+                rx.text("取得元: " + item.source, size="1", color=rx.color("gray", 10)),
+                rx.fragment(),
+            ),
+            rx.cond(
+                item.scope != "",
+                rx.text("用途: " + item.scope, size="1", color=rx.color("gray", 10)),
                 rx.fragment(),
             ),
             rx.cond(
                 item.last_success_at != "",
                 rx.text(
-                    "last success: " + item.last_success_at,
+                    "最終成功: " + item.last_success_at,
                     size="1",
                     color=rx.color("gray", 9),
                 ),
@@ -103,7 +108,7 @@ def _provider_health_card(item) -> rx.Component:
             rx.cond(
                 item.last_error_at != "",
                 rx.text(
-                    "last error: " + item.last_error_at,
+                    "最終失敗: " + item.last_error_at,
                     size="1",
                     color=rx.color("gray", 9),
                 ),
@@ -112,7 +117,7 @@ def _provider_health_card(item) -> rx.Component:
             rx.cond(
                 item.cache_status != "",
                 rx.text(
-                    "cache: " + item.cache_status + " " + item.cache_age_label,
+                    "キャッシュ: " + item.cache_status + " " + item.cache_age_label,
                     size="1",
                     color=rx.color("gray", 9),
                 ),
@@ -164,7 +169,9 @@ def data_quality_page() -> rx.Component:
                 variant="surface",
             ),
         ),
-        section_heading("Provider設定", "秘密値は表示せず、設定有無だけ確認します。"),
+        section_heading(
+            "データ取得元の設定", "秘密値は表示せず、設定有無だけ確認します。"
+        ),
         rx.grid(
             rx.foreach(DataQualityState.provider_statuses, _provider_card),
             columns=rx.breakpoints(initial="1", md="2", xl="3"),
@@ -172,7 +179,7 @@ def data_quality_page() -> rx.Component:
             width="100%",
         ),
         section_heading(
-            "Provider直近ヘルス",
+            "データ取得元の直近状態",
             "Market / Stock / Portfolioで最後に観測した成功・失敗・キャッシュ状態です。",
         ),
         rx.cond(

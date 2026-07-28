@@ -81,6 +81,18 @@ def validate_navigation(path: Path) -> list[str]:
     return errors
 
 
+def validate_layout_source() -> list[str]:
+    """Reject width contracts that include the vertical scrollbar in page width."""
+
+    template_source = (REPO_ROOT / "frontend" / "template.py").read_text(
+        encoding="utf-8"
+    )
+    errors = []
+    if 'width="100vw"' in template_source:
+        errors.append("frontend/template.py: 100vw reintroduces horizontal overflow")
+    return errors
+
+
 def main() -> int:
     """Run static UI checks after a Reflex frontend export."""
 
@@ -95,6 +107,7 @@ def main() -> int:
     index_path = EXPORT_DIR / "index.html"
     if index_path.exists():
         errors.extend(validate_navigation(index_path))
+    errors.extend(validate_layout_source())
 
     if errors:
         for error in errors:

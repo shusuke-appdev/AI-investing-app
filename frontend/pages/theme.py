@@ -1,5 +1,6 @@
 import reflex as rx
 
+from frontend.components.ui_primitives import empty_state, page_header, section_heading
 from frontend.state.theme_state import ThemeItem, ThemeState, ThemeStock
 from frontend.template import template
 
@@ -109,41 +110,80 @@ def _render_theme_item(theme_data: ThemeItem, index: int) -> rx.Component:
     )
 
 
-def theme_ranking_content() -> rx.Component:
+def theme_ranking_content(*, embedded: bool = False) -> rx.Component:
     """詳細版テーマランキングの内容を描画する。"""
 
+    period_control = rx.segmented_control.root(
+        rx.foreach(
+            ThemeState.periods,
+            lambda period: rx.segmented_control.item(period, value=period),
+        ),
+        value=ThemeState.selected_period,
+        on_change=ThemeState.set_period,
+        size="2",
+        radius="large",
+    )
+    header = (
+        section_heading(
+            "テーマランキング",
+            "選択市場の構成銘柄を同じ期間で比較します。",
+            period_control,
+        )
+        if embedded
+        else page_header(
+            "テーマランキング",
+            "選択市場の構成銘柄を同じ期間で比較します。",
+            period_control,
+        )
+    )
+
     return rx.vstack(
-        # ヘッダー領域
-        rx.hstack(
-            rx.hstack(
-                rx.icon("list-ordered", size=26, color=rx.color("blue", 9)),
-                rx.heading("テーマランキング", size="7", as_="h1"),
-                align_items="center",
-                spacing="2",
+        header,
+        rx.flex(
+            rx.badge(
+                "対象市場: ",
+                ThemeState.requested_market_label,
+                color_scheme="blue",
+                variant="surface",
+            ),
+            rx.badge(
+                "期間: ",
+                ThemeState.selected_period,
+                color_scheme="gray",
+                variant="surface",
+            ),
+            rx.cond(
+                ThemeState.loaded_at != "",
+                rx.text(
+                    "更新: " + ThemeState.loaded_at,
+                    size="1",
+                    color=rx.color("gray", 9),
+                ),
+                rx.fragment(),
             ),
             rx.spacer(),
-            # 期間選択
-            rx.segmented_control.root(
-                rx.foreach(
-                    ThemeState.periods,
-                    lambda period: rx.segmented_control.item(period, value=period),
-                ),
-                value=ThemeState.selected_period,
-                on_change=ThemeState.set_period,
-                size="2",
-                radius="large",
-            ),
             width="100%",
             align_items="center",
-            margin_bottom="2rem",
+            gap="0.5rem",
+            wrap="wrap",
+            margin_bottom="0.75rem",
         ),
-        # エラーメッセージ
         rx.cond(
             ThemeState.error_msg != "",
             rx.callout(
                 ThemeState.error_msg,
                 icon="triangle_alert",
                 color_scheme="red",
+                margin_bottom="1rem",
+                width="100%",
+            ),
+        ),
+        rx.cond(
+            ThemeState.warning_msg != "",
+            rx.callout(
+                ThemeState.warning_msg,
+                icon="info",
+                color_scheme="amber",
                 margin_bottom="1rem",
                 width="100%",
             ),
@@ -199,10 +239,17 @@ def theme_ranking_content() -> rx.Component:
                     spacing="6",
                     width="100%",
                 ),
-                rx.center(
-                    rx.text("テーマランキングデータがありません", color="gray"),
-                    height="200px",
-                    width="100%",
+                empty_state(
+                    "ランキングを表示できません",
+                    "対象市場・期間の価格データが不足しているか、取得先が一時的に利用できません。条件を確認して再試行してください。",
+                    "list-ordered",
+                    rx.button(
+                        rx.icon("refresh-cw", size=16),
+                        "再試行",
+                        on_click=ThemeState.fetch_themes,
+                        loading=ThemeState.is_fetching,
+                        variant="surface",
+                    ),
                 ),
             ),
         ),

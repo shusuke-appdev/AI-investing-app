@@ -27,7 +27,11 @@
 .\.venv\Scripts\python.exe scripts\check.py --coverage
 ```
 
-`--coverage` は `.states/.coverage`、`.states/coverage.json`、`.states/coverage_html/` を生成します。2026-07-14の初回branch coverageは62.9%です。初期段階では最低率を設定せず、未到達領域の把握に使います。
+`--coverage` は `.states/.coverage`、`.states/coverage.json`、`.states/coverage_html/` を生成します。2026-07-14の初回branch coverage 62.9%を切り捨てた62%を最低率とし、重要経路のテストが減った場合にCIを失敗させます。閾値は今後の成功ベースラインに合わせて上げ、下げません。
+
+全プロファイルで、provider結果、共有分析コンテキスト、Theme契約、UI用エラー契約の段階的mypy検査も実行します。動的なReflexコード全体を一度に厳格化せず、UI・AI・戦略を横断する契約から対象を広げます。
+
+CIではReflex export後にChromiumを使い、390×844と1280×720で主要5ルートの横スクロール、モバイルドロワーのフォーカス移動とEscape操作を確認します。ローカルで再現する場合は `python -m playwright install chromium` の後に `python scripts/ui_browser_smoke.py` を実行します。
 
 ## マーカーと外部境界
 

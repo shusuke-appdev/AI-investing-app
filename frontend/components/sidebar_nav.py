@@ -1,6 +1,7 @@
 import reflex as rx
 
 from frontend.state.market_state import MarketState
+from frontend.state.theme_state import ThemeState
 from src.app_mode import personal_data_enabled
 
 
@@ -49,7 +50,10 @@ def _market_button(label: str, market_value: str) -> rx.Component:
     is_active = MarketState.market_type == market_value
     return rx.button(
         rx.text(label, size="2", weight="medium"),
-        on_click=MarketState.set_market_type(market_value),
+        on_click=[
+            MarketState.set_market_type(market_value),
+            ThemeState.set_market_type(market_value),
+        ],
         variant=rx.cond(is_active, "solid", "ghost"),
         color_scheme=rx.cond(is_active, "blue", "gray"),
         size="2",
@@ -166,6 +170,7 @@ def mobile_nav() -> rx.Component:
                                         rx.icon("x", size=18),
                                         variant="ghost",
                                         aria_label="メインメニューを閉じる",
+                                        auto_focus=True,
                                     )
                                 ),
                                 width="100%",
@@ -195,9 +200,16 @@ def mobile_nav() -> rx.Component:
                     ),
                 ),
                 direction="left",
+                modal=True,
             ),
-            rx.text("画面ナビゲーション", size="2", color=rx.color("gray", 10)),
+            rx.hstack(
+                rx.icon("activity", size=18, color=rx.color("blue", 9)),
+                rx.text("AI Investing", size="2", weight="bold"),
+                spacing="2",
+                align_items="center",
+            ),
             rx.spacer(),
+            rx.color_mode.button(aria_label="表示テーマを切り替える"),
             width="100%",
             min_height="44px",
             align_items="center",

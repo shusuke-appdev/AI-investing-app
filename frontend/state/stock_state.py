@@ -13,12 +13,16 @@ from frontend.components.data_provenance import (
     feature_health_display_items,
     provenance_display_items,
 )
+from frontend.state.error_handling import log_state_exception
 from frontend.state.request_tracking import is_current_request
 from src.display_labels import SECTOR_RATING_LABELS, display_label
+from src.log_config import get_logger
 from src.services.stock_dashboard_service import (
     build_stock_dashboard_context,
     to_plain_value,
 )
+
+logger = get_logger(__name__)
 
 
 class SmartItem(BaseModel):
@@ -429,7 +433,8 @@ class StockState(rx.State):
         except Exception as exc:
             if not self._is_current_fetch(request_id, ticker):
                 return
-            self.error_msg = f"データの取得に失敗しました: {exc}"
+            error = log_state_exception(logger, "銘柄データの取得", exc)
+            self.error_msg = error.message
             self.profile_warning = ""
             self.info = {}
             self.display_name = ""
@@ -550,7 +555,8 @@ class StockState(rx.State):
         except Exception as exc:
             if not self._is_current_analysis(request_id, ticker):
                 return
-            self.error_msg = f"AI分析エラー: {exc}"
+            error = log_state_exception(logger, "AI銘柄分析の生成", exc)
+            self.error_msg = error.message
         finally:
             if self._is_current_analysis(request_id, ticker):
                 self.is_generating_analysis = False

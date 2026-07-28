@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Any
 
 import reflex as rx
@@ -8,11 +9,14 @@ from frontend.components.data_provenance import (
     ProvenanceDisplay,
     provenance_display_items,
 )
+from frontend.state.error_handling import log_state_exception
 from src.services.portfolio_dashboard_service import (
     holdings_to_payload,
     run_portfolio_analysis,
     validate_holding_input,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class HoldingItem(BaseModel):
@@ -161,7 +165,9 @@ class PortfolioState(rx.State):
             names = await asyncio.to_thread(list_portfolios)
             self.portfolio_names = names
         except Exception as e:
-            self.error_msg = f"ポートフォリオ一覧の取得に失敗: {e}"
+            self.error_msg = log_state_exception(
+                logger, "ポートフォリオ一覧の取得", e
+            ).message
 
     async def load_portfolio_list_for_route(self):
         """Load route data only when personal-data pages are enabled."""
@@ -205,7 +211,7 @@ class PortfolioState(rx.State):
             self.portfolio_names = await asyncio.to_thread(list_portfolios)
             self.success_msg = f"保存先を「{storage_type_label(value)}」に変更しました"
         except Exception as e:
-            self.error_msg = f"保存先設定エラー: {e}"
+            self.error_msg = log_state_exception(logger, "保存先設定", e).message
         finally:
             self.is_loading = False
             yield
@@ -238,7 +244,9 @@ class PortfolioState(rx.State):
             else:
                 self.error_msg = f"「{name}」の読み込みに失敗しました"
         except Exception as e:
-            self.error_msg = f"読み込みエラー: {e}"
+            self.error_msg = log_state_exception(
+                logger, "ポートフォリオの読み込み", e
+            ).message
         finally:
             self.is_loading = False
             yield
@@ -317,7 +325,9 @@ class PortfolioState(rx.State):
             else:
                 self.error_msg = "保存に失敗しました"
         except Exception as e:
-            self.error_msg = f"保存エラー: {e}"
+            self.error_msg = log_state_exception(
+                logger, "ポートフォリオの保存", e
+            ).message
         finally:
             self.is_loading = False
             yield
@@ -346,7 +356,9 @@ class PortfolioState(rx.State):
 
             self.portfolio_names = await asyncio.to_thread(list_portfolios)
         except Exception as e:
-            self.error_msg = f"削除エラー: {e}"
+            self.error_msg = log_state_exception(
+                logger, "ポートフォリオの削除", e
+            ).message
         finally:
             self.is_loading = False
             yield
@@ -405,7 +417,9 @@ class PortfolioState(rx.State):
             else:
                 self.error_msg = "分析結果を取得できませんでした"
         except Exception as e:
-            self.error_msg = f"分析エラー: {e}"
+            self.error_msg = log_state_exception(
+                logger, "ポートフォリオ分析", e
+            ).message
         finally:
             self.is_analyzing = False
             yield
@@ -447,7 +461,9 @@ class PortfolioState(rx.State):
             else:
                 self.error_msg = "アドバイスの生成に失敗しました"
         except Exception as e:
-            self.error_msg = f"AI分析エラー: {e}"
+            self.error_msg = log_state_exception(
+                logger, "ポートフォリオAI分析", e
+            ).message
         finally:
             self.is_generating_advice = False
             yield

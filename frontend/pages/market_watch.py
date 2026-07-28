@@ -53,7 +53,7 @@ def _stage_status_card(stage) -> rx.Component:
             rx.cond(
                 stage.cache_status != "",
                 rx.text(
-                    "source: " + stage.cache_status,
+                    "取得経路: " + stage.cache_status,
                     size="1",
                     color=rx.color("gray", 9),
                 ),
@@ -62,7 +62,7 @@ def _stage_status_card(stage) -> rx.Component:
             rx.cond(
                 stage.fetched_at != "",
                 rx.text(
-                    "updated: " + stage.fetched_at,
+                    "更新: " + stage.fetched_at,
                     size="1",
                     color=rx.color("gray", 9),
                 ),
@@ -242,7 +242,7 @@ def _summary_tile(title: str, value, detail, color: str) -> rx.Component:
 
 def _details_accordion() -> rx.Component:
     return rx.accordion.root(
-        rx.accordion.item(
+        _detail_item(
             header="概要",
             content=rx.vstack(
                 watch_indices_strip(),
@@ -252,17 +252,17 @@ def _details_accordion() -> rx.Component:
                 spacing="4",
             ),
         ),
-        rx.accordion.item(
+        _detail_item(
             header="トレンド/テーマ",
             content=rx.vstack(
                 trend_ranking_panel(),
                 momentum_monitor_component(),
-                theme_ranking_content(),
+                theme_ranking_content(embedded=True),
                 width="100%",
                 spacing="4",
             ),
         ),
-        rx.accordion.item(
+        _detail_item(
             header="リスク/信用",
             content=rx.vstack(
                 market_distortion_panel(),
@@ -270,11 +270,11 @@ def _details_accordion() -> rx.Component:
                 spacing="4",
             ),
         ),
-        rx.accordion.item(
+        _detail_item(
             header="オプション",
             content=option_analysis_component(),
         ),
-        rx.accordion.item(
+        _detail_item(
             header="データ状態",
             content=rx.vstack(
                 data_status_panel(MarketState.data_status),
@@ -286,6 +286,20 @@ def _details_accordion() -> rx.Component:
         type="multiple",
         default_value=["概要"],
         width="100%",
+        display="flex",
+        flex_direction="column",
+        gap="0.5rem",
+    )
+
+
+def _detail_item(*, header: str, content: rx.Component) -> rx.Component:
+    return rx.accordion.item(
+        header=header,
+        content=content,
+        bg=rx.color("gray", 1),
+        border=f"1px solid {rx.color('gray', 4)}",
+        border_radius="10px",
+        overflow="hidden",
     )
 
 

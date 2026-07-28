@@ -70,6 +70,12 @@ def _provider_statuses() -> list[ProviderStatus]:
                 " APP_MODEで明示設定されています。"
                 if capabilities["explicitly_configured"]
                 else " APP_MODE未設定のため安全側の既定値を使用しています。"
+            )
+            + (
+                " ホスティング環境のprivate利用確認済みです。"
+                if capabilities["hosted_environment"]
+                and capabilities["private_deployment_acknowledged"]
+                else ""
             ),
         ),
         ProviderStatus(

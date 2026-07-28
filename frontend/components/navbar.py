@@ -30,4 +30,5 @@ def navbar() -> rx.Component:
         position="sticky",
         top="0",
         z_index="10",
+        display=rx.breakpoints(initial="none", lg="flex"),
     )

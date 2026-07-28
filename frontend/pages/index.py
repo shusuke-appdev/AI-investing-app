@@ -11,6 +11,42 @@ from frontend.template import template
 from src.app_mode import ai_generation_enabled
 
 
+def _ai_recap_section() -> rx.Component:
+    if not ai_generation_enabled():
+        return rx.fragment()
+
+    return rx.box(
+        section_heading(
+            "AI Market Recap",
+            "表示済みの市場コンテキストを再利用して市況を整理します。",
+        ),
+        rx.cond(
+            MarketState.ai_recap_notice_msg != "",
+            rx.callout(
+                MarketState.ai_recap_notice_msg,
+                icon="info",
+                color_scheme="amber",
+                width="100%",
+                margin_bottom="0.75rem",
+            ),
+        ),
+        rx.card(
+            rx.cond(
+                MarketState.ai_recap != "",
+                rx.markdown(MarketState.ai_recap),
+                rx.text(
+                    "上部の「レポートを生成」を押すと、表示済みデータから市況を整理します。",
+                    color=rx.color("gray", 10),
+                    size="2",
+                ),
+            ),
+            width="100%",
+            padding="1rem",
+        ),
+        width="100%",
+    )
+
+
 @template
 def index() -> rx.Component:
     """メインダッシュボード画面 (Market Intelligence)"""
@@ -104,42 +140,7 @@ def index() -> rx.Component:
             MarketState.is_fetching,
             loading_state("市場データを取得中..."),
             rx.vstack(
-                rx.box(
-                    section_heading(
-                        "AI Market Recap",
-                        "表示済みの市場コンテキストを再利用して市況を整理します。",
-                    ),
-                    rx.cond(
-                        MarketState.ai_recap_notice_msg != "",
-                        rx.callout(
-                            MarketState.ai_recap_notice_msg,
-                            icon="info",
-                            color_scheme="amber",
-                            width="100%",
-                            margin_bottom="0.75rem",
-                        ),
-                    ),
-                    rx.card(
-                        rx.cond(
-                            MarketState.ai_recap != "",
-                            rx.markdown(MarketState.ai_recap),
-                            rx.center(
-                                rx.text(
-                                    (
-                                        "公開モードではAIレポート生成を利用できません。"
-                                        if not ai_generation_enabled()
-                                        else "上部の「AI Market Recap」ボタンを押して、最新の市況レポートを生成します。"
-                                    ),
-                                    color="gray",
-                                ),
-                                height="150px",
-                            ),
-                        ),
-                        width="100%",
-                        padding="1.5rem",
-                    ),
-                    width="100%",
-                ),
+                _ai_recap_section(),
                 flash_summary(),
                 width="100%",
                 spacing="4",

@@ -53,6 +53,26 @@ def test_theme_ranking_requires_component_count_and_coverage(monkeypatch):
     assert result[0]["coverage"] == 0.5
 
 
+def test_theme_ranking_result_preserves_provider_failure(monkeypatch):
+    monkeypatch.setattr(
+        theme_analyst,
+        "get_themes",
+        lambda market: {"Covered": ["A", "B"]},
+    )
+
+    def fail_download(*args, **kwargs):
+        raise ConnectionError("https://provider.invalid/?token=secret")
+
+    monkeypatch.setattr(theme_analyst.yf, "download", fail_download)
+
+    result = theme_analyst.get_ranked_themes_result.__wrapped__("1ヶ月", "US")
+
+    assert result.data == []
+    assert result.status == "unavailable"
+    assert result.error_code == "provider_error"
+    assert "token=secret" in result.error
+
+
 def test_ranked_theme_periods_reuses_one_download_for_all_periods(monkeypatch):
     calls = []
     dates = pd.date_range("2024-01-01", periods=820, freq="D")

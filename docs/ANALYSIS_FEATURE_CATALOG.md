@@ -33,6 +33,7 @@ flowchart LR
 | 市場マイクロストラクチャー | CTA proxy、流動性proxy、VRP、巻き戻しリスクはどうか | SPY OHLCV、明示的に渡されたoption | `microstructure` | Theme/Flowではoptionを暗黙取得しない。Options取得後だけ同じチェーンを反映 | option要素だけ欠損 | Theme/Flow、Options |
 | ETFリーダーシップ | 市場全体のリスクオン/オフ圧力はどうか | ETF価格・出来高 | `flow_monitor` | 市場全体の確認proxy | `partial` | Theme/Flow |
 | セクター・テーマ資金流入 | 具体的にどの候補群が相対優位か | 代表ETF・構成銘柄 | `sector_flow` | 候補抽出proxy。ETFリーダーシップと役割を分離 | 取得率不足を警告 | Theme/Flow |
+| テーマランキング | 指定期間で相対的に強い調査候補群はどれか | US/JPテーマ構成銘柄の終値 | `FetchResult[list[RankedTheme]]` | 対象市場・期間ごとの観測順位。売買指示ではない | provider失敗、空結果、取得率不足を区別し、旧リクエスト結果は破棄 | 市場/期間変更・再試行 |
 | 統合トレンド順位 | 複数期間・flow・optionから何を優先調査するか | sector flow、歪み、明示option | `trend_ranking` | テーマ候補順位。売買指示ではない | itemsなし | Theme/Flow、Credit、Options |
 | 信用ストレス | 株安が信用市場へ波及しているか | FRED等の信用系列 | `credit_stress` | Vol/Sentimentより先に計算し予測・戦略へ渡す | stale/cacheまたはunavailable | Credit/Risk |
 | 市場歪み | ファンダメンタルとflowに乖離があるか | 企業・テーマ・flow | `market_distortions` | 調査候補を作るmodel output | 候補なし | Credit/Risk |

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 
 class ProvenanceKind(str, Enum):
@@ -212,14 +212,20 @@ class MarketContext:
     momentum: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     monitor: dict[str, Any] = field(default_factory=dict)
     market_distortions: dict[str, Any] = field(default_factory=dict)
-    trend_ranking: TrendRankingContext = field(default_factory=dict)
+    trend_ranking: TrendRankingContext = field(
+        default_factory=lambda: cast(TrendRankingContext, {})
+    )
     opportunity_themes: dict[str, Any] = field(default_factory=dict)
     important_levels: dict[str, Any] = field(default_factory=dict)
     market_timeframes: dict[str, Any] = field(default_factory=dict)
-    strategy_regime: StrategyRegimeContext = field(default_factory=dict)
+    strategy_regime: StrategyRegimeContext = field(
+        default_factory=lambda: cast(StrategyRegimeContext, {})
+    )
     market_driver_monitor: dict[str, Any] = field(default_factory=dict)
     japan_conditions: dict[str, Any] = field(default_factory=dict)
-    sector_flow: SectorFlowContext = field(default_factory=dict)
+    sector_flow: SectorFlowContext = field(
+        default_factory=lambda: cast(SectorFlowContext, {})
+    )
     credit_stress: dict[str, Any] = field(default_factory=dict)
     flow_monitor: dict[str, Any] = field(default_factory=dict)
     flow_alignment: dict[str, Any] = field(default_factory=dict)
@@ -345,14 +351,16 @@ class MarketContext:
             momentum=value.get("momentum") or {},
             monitor=value.get("monitor") or {},
             market_distortions=value.get("market_distortions") or {},
-            trend_ranking=value.get("trend_ranking") or {},
+            trend_ranking=cast(TrendRankingContext, value.get("trend_ranking") or {}),
             opportunity_themes=value.get("opportunity_themes") or {},
             important_levels=value.get("important_levels") or {},
             market_timeframes=value.get("market_timeframes") or {},
-            strategy_regime=value.get("strategy_regime") or {},
+            strategy_regime=cast(
+                StrategyRegimeContext, value.get("strategy_regime") or {}
+            ),
             market_driver_monitor=value.get("market_driver_monitor") or {},
             japan_conditions=value.get("japan_conditions") or {},
-            sector_flow=value.get("sector_flow") or {},
+            sector_flow=cast(SectorFlowContext, value.get("sector_flow") or {}),
             credit_stress=value.get("credit_stress") or {},
             flow_monitor=value.get("flow_monitor") or {},
             flow_alignment=value.get("flow_alignment") or {},
@@ -388,12 +396,16 @@ class StockSignalContext:
 
     ticker: str
     stock_info: dict[str, Any] = field(default_factory=dict)
-    technical_data: TechnicalSummaryContext = field(default_factory=dict)
+    technical_data: TechnicalSummaryContext = field(
+        default_factory=lambda: cast(TechnicalSummaryContext, {})
+    )
     smart_criteria: dict[str, Any] = field(default_factory=dict)
     probabilistic_signal: dict[str, Any] = field(default_factory=dict)
     trend_follow_diagnostics: dict[str, Any] = field(default_factory=dict)
     fomo_regime: dict[str, Any] = field(default_factory=dict)
-    trade_setup: TradeSetupContextDict = field(default_factory=dict)
+    trade_setup: TradeSetupContextDict = field(
+        default_factory=lambda: cast(TradeSetupContextDict, {})
+    )
     sector_theme_context: dict[str, Any] = field(default_factory=dict)
     fundamental_profile: dict[str, Any] = field(default_factory=dict)
     volume_profile: dict[str, Any] = field(default_factory=dict)

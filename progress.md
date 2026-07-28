@@ -1,5 +1,18 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-07-28 Codex repository guidance simplification
+- Simplified `AGENTS.md` to repository-only guidance for the Reflex stack, context ownership, explicit availability semantics, research framing, and the standard release gate.
+- Removed duplicated global work-style and Windows execution rules; those remain in Codex global guidance or dedicated Skills.
+- Validation: documentation-only diff checked with `git diff --check`; effective instruction discovery still requires a fresh Codex task after restart.
+
+## Session update: 2026-07-28 product reliability and release hardening
+- Made Theme Ranking provider-aware and latest-request-wins across market/period changes. Provider failure, legitimate empty results, insufficient coverage, source, update time, and warnings now remain distinct through provider -> state -> UI, with regression coverage for stale-response rejection.
+- Added a shared safe UI error contract. Market, Stock, Portfolio, Knowledge, Theme, and retained Trading Plan state handlers log full exceptions server-side without exposing provider responses, paths, or credential-adjacent details to users. Settings JSON writes now use the existing atomic storage primitive.
+- Improved responsive information hierarchy: removed duplicate mobile branding, fixed page-width overflow, separated embedded section headings from route `h1`, localized Data Quality labels, made Theme empty states actionable, reduced duplicate public AI notices, and added modal drawer focus/Escape behavior.
+- Hardened private hosted mode with explicit `PRIVATE_DEPLOYMENT_ACK=1`, keyed from Hugging Face's `SPACE_ID`, while keeping local private mode unchanged. CI now serializes same-ref runs, uses a protected production environment, health-checks the deployed Space, and records deployment metadata. Docker is multi-stage, non-root, health-checked, and excludes the build toolchain from runtime.
+- Raised the branch-coverage floor to 62%, added scoped mypy contracts, pinned mypy/Playwright/PyYAML as development-only tools, added CI YAML parsing, and added responsive Playwright smoke coverage for five routes at 390x844 and 1280x720 plus mobile drawer keyboard behavior. Architecture, feature catalog, provenance, README, environment example, operations, and test guidance were updated with the same contracts.
+- Validation: final `.venv\Scripts\python.exe scripts\check.py` passed dependency consistency, compileall, Ruff lint/format, scoped mypy, all `357` tests, Reflex frontend export, and seven-route static semantics. Coverage run passed `356` tests at `63.28%` branch coverage before the YAML-only regression was added. Browser smoke passed five routes at two viewports plus focus/Escape. CI YAML parsed successfully. Docker image build is unverified because Docker is not installed in this Windows environment; authenticated production/live-provider smoke was not run.
+
 ## Session update: 2026-07-22 Gemini 3.6 Flash migration
 - Changed the shared Gemini API default from `gemini-3.5-flash` to the stable model ID `gemini-3.6-flash`. All current AI generation paths use this shared client and do not pass a separate model override.
 - Updated `.env.example`, README setup, and operations documentation so new environments select the same model explicitly while preserving `GEMINI_MODEL_NAME` / `GEMINI_MODEL` as an operational rollback override.

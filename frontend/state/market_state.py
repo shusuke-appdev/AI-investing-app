@@ -10,7 +10,9 @@ from frontend.components.data_provenance import (
     data_status_display_items,
     provenance_display_items,
 )
+from frontend.state.error_handling import log_state_exception
 from frontend.state.request_tracking import is_current_request
+from src.log_config import get_logger
 from src.services.market_analyst_service import generate_market_analysis_report
 from src.services.market_dashboard_service import (
     build_fomo_scan_context,
@@ -48,6 +50,8 @@ from src.services.market_presentation_service import (
     VixSqAlertDisplay,
     build_market_display_context,
 )
+
+logger = get_logger(__name__)
 
 
 class FomoScanDisplay(BaseModel):
@@ -175,7 +179,8 @@ class MarketState(rx.State):
         except Exception as exc:
             if not self._is_current_market_request(request_id, market_type):
                 return
-            self.error_msg = f"Failed to fetch market data: {exc}"
+            error = log_state_exception(logger, "市場データの取得", exc)
+            self.error_msg = error.message
             self.indices_data = []
             self.sectors_data = []
             self.others_data = []
@@ -231,8 +236,11 @@ class MarketState(rx.State):
         except Exception as exc:
             if not self._is_current_market_request(request_id, market_type):
                 return
-            self._set_stage_status(
-                "theme_flow", "failed", "Theme/Flowの更新に失敗しました。", str(exc)
+            self._set_stage_failure(
+                "theme_flow",
+                "Theme/Flowの更新に失敗しました。",
+                "Theme/Flowの更新",
+                exc,
             )
             yield
 
@@ -256,11 +264,11 @@ class MarketState(rx.State):
         except Exception as exc:
             if not self._is_current_market_request(request_id, market_type):
                 return
-            self._set_stage_status(
+            self._set_stage_failure(
                 "credit_distortion",
-                "failed",
                 "Credit/Riskの更新に失敗しました。",
-                str(exc),
+                "Credit/Riskの更新",
+                exc,
             )
             yield
 
@@ -284,11 +292,11 @@ class MarketState(rx.State):
         except Exception as exc:
             if not self._is_current_market_request(request_id, market_type):
                 return
-            self._set_stage_status(
+            self._set_stage_failure(
                 "volatility_sentiment",
-                "failed",
                 "Vol/Sentimentの更新に失敗しました。",
-                str(exc),
+                "Vol/Sentimentの更新",
+                exc,
             )
             yield
 
@@ -307,9 +315,8 @@ class MarketState(rx.State):
             if not self._is_current_market_request(request_id, market_type):
                 return
             self.option_status = "failed"
-            self.option_error_msg = f"Failed to refresh option data: {exc}"
-            self._set_stage_status(
-                "options", "failed", "Optionsの更新に失敗しました。", str(exc)
+            self.option_error_msg = self._set_stage_failure(
+                "options", "Optionsの更新に失敗しました。", "Optionsの更新", exc
             )
         finally:
             if self._is_current_market_request(request_id, market_type):
@@ -336,8 +343,11 @@ class MarketState(rx.State):
         except Exception as exc:
             if not self._is_current_market_request(request_id, market_type):
                 return
-            self._set_stage_status(
-                "theme_flow", "failed", "Theme/Flowの更新に失敗しました。", str(exc)
+            self._set_stage_failure(
+                "theme_flow",
+                "Theme/Flowの更新に失敗しました。",
+                "Theme/Flowの更新",
+                exc,
             )
         finally:
             if self._is_current_market_request(request_id, market_type):
@@ -366,11 +376,11 @@ class MarketState(rx.State):
         except Exception as exc:
             if not self._is_current_market_request(request_id, market_type):
                 return
-            self._set_stage_status(
+            self._set_stage_failure(
                 "volatility_sentiment",
-                "failed",
                 "Vol/Sentimentの更新に失敗しました。",
-                str(exc),
+                "Vol/Sentimentの更新",
+                exc,
             )
         finally:
             if self._is_current_market_request(request_id, market_type):
@@ -413,11 +423,11 @@ class MarketState(rx.State):
         except Exception as exc:
             if not self._is_current_market_request(request_id, market_type):
                 return
-            self._set_stage_status(
+            self._set_stage_failure(
                 "credit_distortion",
-                "failed",
                 "Credit/Riskの更新に失敗しました。",
-                str(exc),
+                "Credit/Riskの更新",
+                exc,
             )
         finally:
             if self._is_current_market_request(request_id, market_type):
@@ -445,9 +455,8 @@ class MarketState(rx.State):
             if not self._is_current_market_request(request_id, market_type):
                 return
             self.option_status = "failed"
-            self.option_error_msg = f"Failed to refresh option data: {exc}"
-            self._set_stage_status(
-                "options", "failed", "Optionsの更新に失敗しました。", str(exc)
+            self.option_error_msg = self._set_stage_failure(
+                "options", "Optionsの更新に失敗しました。", "Optionsの更新", exc
             )
         finally:
             if self._is_current_market_request(request_id, market_type):
@@ -470,9 +479,11 @@ class MarketState(rx.State):
                 for item in result.get("items", [])
             ]
             if result.get("errors"):
-                self.error_msg = "; ".join(result["errors"][:3])
+                logger.warning("FOMO scan partial failures: %s", result["errors"][:3])
+                self.error_msg = "一部銘柄のスキャンを完了できませんでした。取得できた結果だけを表示します。"
         except Exception as exc:
-            self.error_msg = f"FOMO scan failed: {exc}"
+            error = log_state_exception(logger, "FOMOスキャン", exc)
+            self.error_msg = error.message
         finally:
             self.is_scanning_fomo = False
             yield
@@ -511,8 +522,9 @@ class MarketState(rx.State):
         except Exception as exc:
             if not self._is_current_recap_request(request_id, market_type):
                 return
+            error = log_state_exception(logger, "AI Market Recapの生成", exc)
             self.ai_recap_error_type = "exception"
-            self.ai_recap_notice_msg = f"AI Recap生成エラー: {exc}"
+            self.ai_recap_notice_msg = error.message
         finally:
             if self._is_current_recap_request(request_id, market_type):
                 self.is_generating_recap = False
@@ -549,8 +561,9 @@ class MarketState(rx.State):
         except Exception as exc:
             if not self._is_current_recap_request(request_id, market_type):
                 return
+            error = log_state_exception(logger, "AI Market Recapの生成", exc)
             self.ai_recap_error_type = "exception"
-            self.ai_recap_notice_msg = f"AI Recap生成エラー: {exc}"
+            self.ai_recap_notice_msg = error.message
         finally:
             if self._is_current_recap_request(request_id, market_type):
                 self.is_generating_recap = False
@@ -653,6 +666,19 @@ class MarketState(rx.State):
 
     def _has_visible_market_data(self) -> bool:
         return bool(self.indices_data or self.sectors_data or self.others_data)
+
+    def _set_stage_failure(
+        self,
+        key: str,
+        summary: str,
+        operation: str,
+        exc: Exception,
+    ) -> str:
+        """Log provider details and expose only a stable retry message."""
+
+        error = log_state_exception(logger, operation, exc)
+        self._set_stage_status(key, "failed", summary, error.message)
+        return error.message
 
     def _set_stage_status(
         self, key: str, status: str, summary: str = "", error_message: str = ""

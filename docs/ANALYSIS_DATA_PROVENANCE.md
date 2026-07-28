@@ -62,7 +62,7 @@
 | Market / Stock | GARCH失敗時のACF代替 | proxy | ACF、vol-of-vol | GARCHフィット失敗時 | 内部判定に利用 | GARCH成功と誤認 | fallback使用フラグをcontextへ追加 | 中 | 未対応 |
 | News / AI Recap | 決算時期の概算 | estimated | 四半期ごとの一般的時期 | 正確な決算日取得不可時 | ニュース文脈に利用 | 正式日程と誤認 | 公式IR・取引所カレンダーへ置換 | 中 | 未対応 |
 | Market / Options | stale cache | stale_cache | 最後の取得成功データ | 外部取得失敗・低速時 | 来歴パネルで古いキャッシュ表示 | 現在値と誤認 | 基準日時と経過時間を常時表示 | 高 | 表示対応済み |
-| Theme Ranking | 指定期間騰落率 | computed / unavailable | yfinance構成銘柄終値 | 指定期間を満たさない銘柄は除外。2銘柄未満または取得率40%未満のテーマは非表示 | 実測銘柄数・総数・取得率を表示 | 短い上場履歴を長期成績と誤認 | 取得失敗理由を銘柄単位で保持 | 高 | 2026-06-14 修正 |
+| Theme Ranking | 指定期間騰落率 | computed / unavailable | yfinance構成銘柄終値 | 指定期間を満たさない銘柄は除外。2銘柄未満または取得率40%未満のテーマは非表示。provider失敗時は空ランキングと区別して`FetchResult`のstatus・error_code・warningを保持 | 対象市場、期間、更新時刻、実測銘柄数・総数・取得率、取得警告を表示 | 短い上場履歴を長期成績と誤認、旧市場の遅延応答を現在市場の結果と誤認 | 銘柄単位の取得失敗理由は今後保持 | 高 | 2026-07-28 provider契約・latest-wins更新 |
 | Stock / Market | 日本株現在値・価格履歴 | direct | yfinance | J-Quants Free価格系列は遅延するため汎用価格経路から除外 | 通常の価格・履歴表示 | 遅延価格を現在値と誤認 | 公式リアルタイム契約がある場合だけ別経路で追加 | 最優先 | 2026-06-14 修正 |
 | Market Intelligence | 取得失敗した指数・セクター価格 | unavailable | なし | Finnhub・yfinance等の取得失敗 | `0.0` を表示せず項目を省略 | 市場価格ゼロ・中立と誤認 | 失敗理由を結果型へ保持 | 最優先 | 2026-06-14 修正 |
 | Market / Stock / Portfolio | AI生成レポート・助言 | model_output | 画面で使用した構造化context | 明示操作時 | AI Recap / AI助言 | 事実・売買指示と誤認 | 使用来歴と制約をプロンプト・UIに常時表示 | 高 | 一部対応 |

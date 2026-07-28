@@ -68,3 +68,13 @@ data_file = ".states/.coverage"
 show_missing = true
 skip_covered = true
 precision = 1
+fail_under = 62
+
+[tool.mypy]
+python_version = "3.12"
+cache_dir = ".states/mypy_cache"
+follow_imports = "skip"
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+no_implicit_optional = true

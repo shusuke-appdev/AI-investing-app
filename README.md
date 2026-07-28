@@ -80,6 +80,7 @@ SUPABASE_SECRET_KEY=your_supabase_secret_key_here
 ```
 
 `APP_MODE=private` は個人利用向けで、Portfolio・Knowledge、AI生成、URL・YouTube取り込みを許可します。これは認証機能ではないため、ローカル環境または外部アクセス制御された環境だけで使用してください。既存Trading Plan互換データは保存層に残りますが、通常UIではStockページ内の「トレード分析」を使います。
+Hugging Face Spaces など `SPACE_ID` が設定されるホスティング環境で `private` を使う場合は、アクセス制御を確認したうえで `PRIVATE_DEPLOYMENT_ACK=1` も明示してください。未設定では安全のため起動を拒否します。
 `APP_MODE` 未設定時は安全側の `public_readonly` になります。公開モードでは個人データを読み書きせず、個人ページをナビゲーションから除外し、AI生成とURL・YouTube取り込みも拒否します。
 保存先の既定値はローカルJSONです。
 

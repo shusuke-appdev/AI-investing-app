@@ -43,7 +43,8 @@ docker build -t ai-investing-app .
 docker run --env-file .env -p 7860:7860 ai-investing-app
 ```
 
-Dockerfile は Hugging Face Spaces の 7860 番ポートを前提にしています。
+Dockerfile は Hugging Face Spaces の7860番ポートを前提にし、依存ビルドと実行環境を分離した非rootコンテナです。ローカル保存を使う場合は `/app/data`、Reflex状態は `/app/.reflex_states`、アプリキャッシュは `/app/.states` を書込可能な永続領域として扱ってください。
+Hugging Face Spaces で `APP_MODE=private` を使う場合は、Spaceの可視性または外部アクセス制御を確認し、変数 `PRIVATE_DEPLOYMENT_ACK=1` を追加してください。`SPACE_ID` がある環境で確認値がない場合、個人データや有料APIを誤って公開しないよう起動を拒否します。
 
 ## 定期的な確認コマンド
 
@@ -148,7 +149,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - Entry Frameworkは日足データによるproxyです。LoD、ORH、寄付き後30分、1-2時間確認、即時ギャップ抵抗は判定しません
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
-- GitHub Actions の Hugging Face Spaces 同期は `main` / `master` への push で force push します。運用前に対象Spaceとブランチ保護を確認してください
+- GitHub Actions の Hugging Face Spaces 同期は `main` / `master` へのpushをブランチ単位で直列化し、古い実行をキャンセルしてからforce pushします。対象はGitHub Environment `hugging-face-production` の `HF_SPACE_REPO`、Reflexの`/_health`確認URLは `HF_SPACE_HEALTH_URL` で上書きできます。push後は最大2分のHTTP確認を行い、失敗時は直前のSpaceコミットIDをartifactへ残します
 - Supabase移行は既定でdry-runです。実行は `python tools/migrate_to_supabase.py --execute`、既存テーブルを消して入れ替える場合のみ `--confirm-destroy` を追加します。破壊実行時は `data/supabase_backups/` にバックアップが取れない限り中断します。新規テーブル作成が必要な場合は、先に `python tools/migrate_to_supabase.py --print-setup-sql` で表示される SQL を Supabase SQL Editor で実行します。
 
 ## 既知のローカル環境問題

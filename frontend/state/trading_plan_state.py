@@ -1,9 +1,11 @@
 import asyncio
+import logging
 from datetime import date, datetime
 from typing import Any
 
 import reflex as rx
 
+from frontend.state.error_handling import log_state_exception
 from src.services.trading_plan_service import (
     JournalEntry,
     TradePlanRecord,
@@ -13,6 +15,8 @@ from src.services.trading_plan_service import (
     refresh_confirmation_candidates,
     review_metrics,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TradingPlanState(rx.State):
@@ -75,7 +79,9 @@ class TradingPlanState(rx.State):
             records = await asyncio.to_thread(load_trade_plans)
             self._assign(records)
         except Exception as exc:
-            self.error_msg = f"Trading Planの読み込みに失敗しました: {exc}"
+            self.error_msg = log_state_exception(
+                logger, "Trading Planの読み込み", exc
+            ).message
         finally:
             self.is_loading = False
             yield
@@ -115,7 +121,9 @@ class TradingPlanState(rx.State):
 
             self._assign(await asyncio.to_thread(load_trade_plans))
         except Exception as exc:
-            self.error_msg = f"Trading Planの作成に失敗しました: {exc}"
+            self.error_msg = log_state_exception(
+                logger, "Trading Planの作成", exc
+            ).message
         finally:
             self.is_loading = False
             yield
@@ -169,7 +177,7 @@ class TradingPlanState(rx.State):
                 failed = ", ".join(sorted(failures))
                 self.error_msg = f"価格取得に失敗した銘柄: {failed}"
         except Exception as exc:
-            self.error_msg = f"確認候補の更新に失敗しました: {exc}"
+            self.error_msg = log_state_exception(logger, "確認候補の更新", exc).message
         finally:
             self.is_loading = False
             yield
@@ -207,7 +215,7 @@ class TradingPlanState(rx.State):
             self.mistake_tag = ""
             self._assign(await asyncio.to_thread(load_trade_plans))
         except Exception as exc:
-            self.error_msg = f"ジャーナル更新に失敗しました: {exc}"
+            self.error_msg = log_state_exception(logger, "ジャーナル更新", exc).message
 
     async def delete_plan(self, plan_id: str):
         self.error_msg = ""
@@ -219,7 +227,7 @@ class TradingPlanState(rx.State):
             self._assign(await asyncio.to_thread(load_trade_plans))
             self.success_msg = "Trading Planを削除しました。"
         except Exception as exc:
-            self.error_msg = f"削除に失敗しました: {exc}"
+            self.error_msg = log_state_exception(logger, "計画の削除", exc).message
 
     async def _set_status(self, plan_id: str, status: str):
         self.error_msg = ""
@@ -245,7 +253,7 @@ class TradingPlanState(rx.State):
             self._assign(await asyncio.to_thread(load_trade_plans))
             self.success_msg = f"{plan.ticker} を {status} に更新しました。"
         except Exception as exc:
-            self.error_msg = f"状態更新に失敗しました: {exc}"
+            self.error_msg = log_state_exception(logger, "状態更新", exc).message
 
     async def _set_checkpoint(self, plan_id: str, field_name: str, value: str):
         self.error_msg = ""
@@ -265,7 +273,7 @@ class TradingPlanState(rx.State):
                 raise ValueError("Trading Planの保存に失敗しました。")
             self._assign(await asyncio.to_thread(load_trade_plans))
         except Exception as exc:
-            self.error_msg = f"確認状態の更新に失敗しました: {exc}"
+            self.error_msg = log_state_exception(logger, "確認状態の更新", exc).message
 
     async def _close_plan(self, plan_id: str):
         self.error_msg = ""
@@ -302,7 +310,7 @@ class TradingPlanState(rx.State):
             self.mistake_tag = ""
             self._assign(await asyncio.to_thread(load_trade_plans))
         except Exception as exc:
-            self.error_msg = f"Close更新に失敗しました: {exc}"
+            self.error_msg = log_state_exception(logger, "Close更新", exc).message
 
     def _assign(self, records: list[TradePlanRecord]):
         self.plans = [display_plan(plan) for plan in records]

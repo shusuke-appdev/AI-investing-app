@@ -3,7 +3,6 @@ Settings Storage Module
 API設定や保存先設定をローカルに永続化します。
 """
 
-import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +11,7 @@ from dotenv import load_dotenv
 
 from src.app_mode import require_writes_enabled
 from src.log_config import get_logger
+from src.storage.atomic_json import read_json, write_json
 
 from .supabase_client import get_supabase_client
 
@@ -60,8 +60,8 @@ def load_settings(force_reload: bool = False) -> dict:
                 target_file = cwd_file
 
         if target_file.exists():
-            with open(target_file, encoding="utf-8") as f:
-                data = json.load(f)
+            loaded = read_json(target_file, {})
+            data = loaded if isinstance(loaded, dict) else {}
 
     except Exception as e:
         logger.info(f"設定読み込みエラー: {e}")
@@ -90,8 +90,7 @@ def save_settings(settings: dict) -> bool:
     try:
         # 1. Local Save
         _ensure_dir()
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2, ensure_ascii=False)
+        write_json(SETTINGS_FILE, settings)
 
         # 2. Supabase Save (if enabled)
         if settings.get("storage_type") == "supabase":

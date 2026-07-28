@@ -1,33 +1,15 @@
-# AI-investing-app Codex Notes
+# AI-investing-app Repository Notes
 
-## Project Shape
+## Product and Context
 
-- The live application is the Reflex app under `frontend/`.
-- Legacy Streamlit assets live only on `codex/archive-streamlit-assets`; the current tree is Reflex-only.
-- Read `progress.md` before non-trivial work because it records repo-local handoff state.
-- Do not touch unrelated dirty files. This repo often has active user changes.
-
-## Implementation Defaults
-
-- Prefer small, direct fixes that match the existing Reflex/Python structure.
-- Keep docs aligned with code when changing runtime behavior, setup, or validation.
-- Keep cross-project agent behavior in Codex memory or user-level skills, not in this repo.
-- Keep project-specific durable decisions in `progress.md` after substantive work.
+- The active app is Reflex; treat Streamlit code as archived unless the task explicitly targets the legacy branch.
+- Read `progress.md` before non-trivial work and keep it limited to repository state.
+- Trace market features through provider -> service or context -> UI -> AI before changing ownership or adding analysis.
+- Preserve explicit `unavailable`, insufficient-data, and `research_only` states; do not zero-fill missing evidence or synthesize certainty.
+- Keep outputs framed as research and alerts, not direct trade recommendations.
+- Update provenance or operations documentation when a source, freshness contract, or availability status changes.
 
 ## Validation
 
-Use the repo-local `.venv` tools when available. The proven validation stack is:
-
-- `.venv\Scripts\python.exe -m compileall src frontend tests`
-- `.venv\Scripts\ruff.exe check .`
-- `.venv\Scripts\ruff.exe format --check .`
-- `.venv\Scripts\python.exe -m pytest -q`
-- `.venv\Scripts\reflex.exe export --frontend-only --no-zip` for Reflex/startup/UI changes
-
-If one validation path is blocked by the local Windows/Codex environment, find a smaller real
-smoke test and report the exact blocker.
-
-Run these checks from a Codex thread rooted at this repository. If the repository is outside
-the active writable roots, pytest temp files, `__pycache__`, `.states`, and Reflex `.web`
-build output can fail even when the application is healthy. `python scripts/check.py` runs
-the complete release stack without installing packages or rewriting source files.
+- The standard local release gate is `.venv\Scripts\python.exe scripts\check.py`.
+- Credentialed live smoke and Browser verification are separate close-out checks when the changed path requires them.

@@ -5,6 +5,10 @@ on:
   push:
   workflow_dispatch:
 
+concurrency:
+  group: quality-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     name: Lint and test
@@ -25,6 +29,12 @@ jobs:
       - name: Read-only release checks with coverage
         run: python scripts/check.py --coverage
 
+      - name: Install Chromium for responsive UI smoke
+        run: python -m playwright install --with-deps chromium
+
+      - name: Responsive browser UI smoke
+        run: python scripts/ui_browser_smoke.py
+
       - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -44,6 +54,10 @@ jobs:
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     needs: quality
+    environment: hugging-face-production
+    env:
+      HF_SPACE_REPO: ${{ vars.HF_SPACE_REPO || 'shusuke12345/AI-investing-app' }}
+      HF_SPACE_HEALTH_URL: ${{ vars.HF_SPACE_HEALTH_URL || 'https://shusuke12345-ai-investing-app.hf.space/_health' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -57,6 +71,20 @@ jobs:
             echo "::error::HF_TOKEN secret is not configured"
             exit 1
           fi
+          if [ -z "${HF_SPACE_REPO:-}" ] || [ -z "${HF_SPACE_HEALTH_URL:-}" ]; then
+            echo "::error::HF_SPACE_REPO and HF_SPACE_HEALTH_URL must be configured"
+            exit 1
+          fi
+
+          hf_owner="${HF_SPACE_REPO%%/*}"
+          remote_url="https://${hf_owner}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}"
+          previous_commit="$(git ls-remote "${remote_url}" refs/heads/main | awk '{print $1}')"
+          mkdir -p "${GITHUB_WORKSPACE}/.states"
+          {
+            echo "github_sha=${GITHUB_SHA}"
+            echo "hf_space_repo=${HF_SPACE_REPO}"
+            echo "previous_hf_commit=${previous_commit:-none}"
+          } > "${GITHUB_WORKSPACE}/.states/hf-deploy-metadata.txt"
 
           deploy_dir="$(mktemp -d)"
           git archive --format=tar HEAD | tar -x -C "${deploy_dir}"
@@ -69,4 +97,39 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "Deploy to Hugging Face Spaces"
-          git push --force "https://shusuke12345:${HF_TOKEN}@huggingface.co/spaces/shusuke12345/AI-investing-app" main
+          git push --force "${remote_url}" main
+
+      - name: Verify deployed Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          status="000"
+          for attempt in $(seq 1 12); do
+            status="$(curl --location --silent --show-error \
+              --output /dev/null --write-out '%{http_code}' \
+              --max-time 10 \
+              --header "Authorization: Bearer ${HF_TOKEN}" \
+              "${HF_SPACE_HEALTH_URL}" || true)"
+            if [[ "${status}" =~ ^(2|3)[0-9][0-9]$ ]]; then
+              echo "Space health check passed with HTTP ${status}."
+              echo "health_status=${status}" >> .states/hf-deploy-metadata.txt
+              exit 0
+            fi
+            echo "Attempt ${attempt}/12 returned HTTP ${status}; waiting for rebuild."
+            sleep 10
+          done
+
+          echo "health_status=${status}" >> .states/hf-deploy-metadata.txt
+          echo "::error::Space health check failed after deployment (HTTP ${status})"
+          exit 1
+
+      - name: Upload deployment metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf-deploy-${{ github.run_id }}
+          path: .states/hf-deploy-metadata.txt
+          if-no-files-found: warn
+          retention-days: 30

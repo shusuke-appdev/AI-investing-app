@@ -51,6 +51,7 @@ def _pytest_command(*, coverage: bool, quick: bool) -> list[str]:
             "--cov-report=term-missing",
             "--cov-report=html:.states/coverage_html",
             "--cov-report=json:.states/coverage.json",
+            "--cov-fail-under=62",
         ]
     return command
 
@@ -66,6 +67,18 @@ def _checks(*, coverage: bool, quick: bool) -> list[tuple[list[str], str]]:
         (
             [sys.executable, "-m", "ruff", "format", "--check", "."],
             "Ruff format check",
+        ),
+        (
+            [
+                sys.executable,
+                "-m",
+                "mypy",
+                "src/provider_result.py",
+                "src/services/analysis_context.py",
+                "src/theme_analyst.py",
+                "frontend/state/error_handling.py",
+            ],
+            "Mypy critical contracts",
         ),
         (
             _pytest_command(coverage=coverage, quick=quick),
@@ -108,6 +121,10 @@ def main() -> int:
     if not args.quick and not reflex.exists():
         print(f"ERROR: Reflex executable not found beside Python: {reflex}")
         print("Install the pinned dependencies before running this script.")
+        return 1
+    if not repo_local_tool("mypy").exists():
+        print("ERROR: mypy executable not found beside Python.")
+        print("Install the pinned development dependencies before running this script.")
         return 1
 
     checks = _checks(coverage=args.coverage, quick=args.quick)

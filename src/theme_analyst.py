@@ -3,13 +3,15 @@
 テーマごとの騰落率計算とランキング生成を行います。
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from typing import TypedDict
 
 import pandas as pd
 import yfinance as yf
 
 from src.cache import ttl_cache
 from src.log_config import get_logger
+from src.provider_result import FetchResult
 from src.themes_config import PERIODS, THEMES, get_themes
 from src.yfinance_runtime import configure_yfinance_cache
 
@@ -17,6 +19,26 @@ logger = get_logger(__name__)
 configure_yfinance_cache()
 MIN_THEME_COMPONENTS = 2
 MIN_THEME_COVERAGE = 0.4
+
+
+class ThemeObservation(TypedDict):
+    performance: float
+    requested_days: int
+    actual_days: int
+
+
+class ThemeStockPerformance(ThemeObservation):
+    ticker: str
+
+
+class RankedTheme(TypedDict):
+    theme: str
+    performance: float
+    stocks: list[ThemeStockPerformance]
+    requested_days: int
+    component_count: int
+    total_components: int
+    coverage: float
 
 
 def fetch_and_calculate_all_performances(
@@ -38,7 +60,7 @@ def fetch_and_calculate_all_performances(
 
 def _fetch_performance_observations(
     days: int, market_type: str = "US"
-) -> dict[str, dict[str, float | int]]:
+) -> dict[str, ThemeObservation]:
     """Return only performances that cover the full requested calendar window."""
 
     return _fetch_performance_observations_for_periods((days,), market_type).get(
@@ -49,34 +71,57 @@ def _fetch_performance_observations(
 def _fetch_performance_observations_for_periods(
     days_values: tuple[int, ...],
     market_type: str = "US",
-) -> dict[int, dict[str, dict[str, float | int]]]:
+) -> dict[int, dict[str, ThemeObservation]]:
     """Return performance observations for multiple periods from one batch fetch."""
+
+    return _fetch_performance_observations_for_periods_result(
+        days_values, market_type
+    ).data
+
+
+def _fetch_performance_observations_for_periods_result(
+    days_values: tuple[int, ...],
+    market_type: str = "US",
+) -> FetchResult[dict[int, dict[str, ThemeObservation]]]:
+    """Return status-aware theme observations from one yfinance batch fetch."""
 
     configure_yfinance_cache()
     themes = get_themes(market_type)
     requested_days = tuple(sorted({int(days) for days in days_values if days > 0}))
     if not requested_days:
-        return {}
+        return FetchResult(
+            data={},
+            source="yfinance_batch",
+            status="unavailable",
+            error_code="invalid_period",
+        )
 
     # 1. 全銘柄リストの作成
     all_tickers = set()
     for tickers in themes.values():
         all_tickers.update(tickers)
 
-    all_tickers = list(all_tickers)
-    if not all_tickers:
-        return {}
+    all_ticker_list = list(all_tickers)
+    if not all_ticker_list:
+        return FetchResult(
+            data={},
+            source="theme_taxonomy",
+            status="unavailable",
+            error_code="empty_universe",
+        )
 
     fetch_period = _fetch_period_for_days(max(requested_days))
     interval = "1d"
-    performance_maps: dict[int, dict[str, dict[str, float | int]]] = {
+    performance_maps: dict[int, dict[str, ThemeObservation]] = {
         days: {} for days in requested_days
     }
+    ticker_errors = 0
+    fetched_at = datetime.now(timezone.utc).isoformat()
 
     try:
         # yfinanceで一括ダウンロード
         df = yf.download(
-            all_tickers,
+            all_ticker_list,
             period=fetch_period,
             interval=interval,
             group_by="ticker",
@@ -87,13 +132,20 @@ def _fetch_performance_observations_for_periods(
         )
 
         if df.empty:
-            return {}
+            return FetchResult(
+                data=performance_maps,
+                source="yfinance_batch",
+                fetched_at=fetched_at,
+                status="unavailable",
+                error_code="empty_response",
+                warnings=["テーマ構成銘柄の価格履歴を取得できませんでした。"],
+            )
 
         # 1銘柄だけの場合のハンドリング
-        if len(all_tickers) == 1:
+        if len(all_ticker_list) == 1:
             pass  # 通常はMultiIndexではないが、アクセス方法を統一する必要がある
 
-        for ticker in all_tickers:
+        for ticker in all_ticker_list:
             try:
                 # データ抽出
                 if isinstance(df.columns, pd.MultiIndex):
@@ -134,13 +186,33 @@ def _fetch_performance_observations_for_periods(
                     }
 
             except Exception:
+                ticker_errors += 1
                 continue
 
     except Exception as e:
-        logger.error(f"Batch download error: {e}")
-        return {}
+        logger.exception("Theme batch download failed")
+        return FetchResult(
+            data=performance_maps,
+            source="yfinance_batch",
+            fetched_at=fetched_at,
+            status="unavailable",
+            error_code="provider_error",
+            error=str(e),
+        )
 
-    return performance_maps
+    warnings = []
+    if ticker_errors:
+        warnings.append(
+            f"{ticker_errors}銘柄は応答形式を確認できず、ランキングから除外しました。"
+        )
+    return FetchResult(
+        data=performance_maps,
+        source="yfinance_batch",
+        fetched_at=fetched_at,
+        status="partial" if ticker_errors else "available",
+        is_partial=bool(ticker_errors),
+        warnings=warnings,
+    )
 
 
 def _fetch_period_for_days(days: int) -> str:
@@ -156,7 +228,7 @@ def _fetch_period_for_days(days: int) -> str:
 
 
 @ttl_cache(ttl=43200)  # 12時間キャッシュ
-def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:
+def get_ranked_themes(period_name: str, market_type: str = "US") -> list[RankedTheme]:
     """
     指定期間での全テーマをパフォーマンス順（降順）で取得します。
 
@@ -176,10 +248,52 @@ def get_ranked_themes(period_name: str, market_type: str = "US") -> list[dict]:
 
 
 @ttl_cache(ttl=43200)
+def get_ranked_themes_result(
+    period_name: str,
+    market_type: str = "US",
+) -> FetchResult[list[RankedTheme]]:
+    """Return theme rankings with normalized availability and provenance metadata."""
+
+    if period_name not in PERIODS:
+        raise ValueError(f"Unknown period: {period_name}")
+
+    days = PERIODS[period_name]
+    observations = _fetch_performance_observations_for_periods_result(
+        (days,), market_type
+    )
+    ranking = _rank_themes_from_observations(
+        days,
+        observations.data.get(days, {}),
+        market_type,
+    )
+    warnings = list(observations.warnings)
+    status = observations.status
+    error_code = observations.error_code
+    if not ranking and status in {"available", "partial"}:
+        status = "unavailable"
+        error_code = "insufficient_coverage"
+        warnings.append("必要な構成銘柄数または取得率を満たすテーマがありません。")
+
+    return FetchResult(
+        data=ranking,
+        source=observations.source,
+        fetched_at=observations.fetched_at,
+        is_stale=observations.is_stale,
+        is_partial=observations.is_partial,
+        cache_status=observations.cache_status,
+        cache_age_seconds=observations.cache_age_seconds,
+        status=status,
+        warnings=warnings,
+        error_code=error_code,
+        error=observations.error,
+    )
+
+
+@ttl_cache(ttl=43200)
 def get_ranked_theme_periods(
     period_names: tuple[str, ...],
     market_type: str = "US",
-) -> dict[str, list[dict]]:
+) -> dict[str, list[RankedTheme]]:
     """Return rankings for several periods using one yfinance batch fetch."""
 
     unknown = [period for period in period_names if period not in PERIODS]
@@ -201,15 +315,15 @@ def get_ranked_theme_periods(
 
 def _rank_themes_from_observations(
     days: int,
-    ticker_performances: dict[str, dict[str, float | int]],
+    ticker_performances: dict[str, ThemeObservation],
     market_type: str,
-) -> list[dict]:
+) -> list[RankedTheme]:
 
     themes = get_themes(market_type)
-    theme_performances = []
+    theme_performances: list[RankedTheme] = []
 
     for theme_name, tickers in themes.items():
-        stock_perfs = []
+        stock_perfs: list[ThemeStockPerformance] = []
         for t in tickers:
             if t in ticker_performances:
                 observation = ticker_performances[t]
@@ -245,7 +359,7 @@ def _rank_themes_from_observations(
     return theme_performances
 
 
-def get_top_themes(period_name: str, top_n: int = 10) -> list[dict]:
+def get_top_themes(period_name: str, top_n: int = 10) -> list[RankedTheme]:
     """
     指定期間での上位テーマを取得します（互換性維持）。
     """

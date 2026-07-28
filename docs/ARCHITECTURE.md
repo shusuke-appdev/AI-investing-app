@@ -90,6 +90,7 @@ UI
 
 - `/market-watch` は、総合市場監視、IBD式市場状態、状態別固定プレイブック、テーマモメンタム、テーマランキング、オプション分析、市場の歪み検知を集約する
 - 市場監視の詳細更新は、Core、Theme/Flow、Credit/Risk、Vol/Sentiment、Optionsの順に `MarketState` がyieldし、各ブロックの`status`、`cache_status`、`fetched_at`、`quality_warnings`を表示モデルへ渡す。例外がなくても必須結果が欠損・stale・research-onlyなら`partial`とする
+- テーマランキングは `theme_analyst.get_ranked_themes_result()` が `FetchResult` として返し、provider失敗と正当な空結果を区別する。`ThemeState` は市場・期間・request idを組にして、後から完了した旧リクエストが現在の画面状態を上書きしないようにする
 - IBD式市場状態は `advisor.ibd_market_regime.classify_ibd_market_regime()` が SPY / Nasdaq 100 代理データから判定する。分類は `confirmed_uptrend`、`uptrend_under_pressure`、`rally_attempt`、`market_in_correction`
 - `services.market_playbook` は市場状態ごとの「現在考えるべきこと」「今やること」「避けること」を固定データとして返す
 - `advisor.sector_theme_diagnostics.detect_market_distortions()` はテーマごとのファンダメンタルスコアとフロースコアの乖離から、強気/弱気の歪み候補を上位5件ずつ返す

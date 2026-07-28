@@ -28,6 +28,8 @@ def test_app_mode_defaults_to_public_readonly(monkeypatch):
         "personal_data": False,
         "ai_generation": False,
         "external_content_fetch": False,
+        "hosted_environment": False,
+        "private_deployment_acknowledged": False,
     }
 
 
@@ -85,6 +87,21 @@ def test_invalid_app_mode_fails_closed(monkeypatch):
 
     with pytest.raises(ValueError, match="APP_MODE"):
         writes_enabled()
+
+
+def test_hosted_private_mode_requires_explicit_acknowledgement(monkeypatch):
+    monkeypatch.setenv("APP_MODE", "private")
+    monkeypatch.setenv("SPACE_ID", "owner/space")
+    monkeypatch.delenv("PRIVATE_DEPLOYMENT_ACK", raising=False)
+
+    with pytest.raises(RuntimeError, match="PRIVATE_DEPLOYMENT_ACK=1"):
+        get_app_mode()
+
+    monkeypatch.setenv("PRIVATE_DEPLOYMENT_ACK", "1")
+
+    assert get_app_mode() == "private"
+    assert app_capability_summary()["hosted_environment"] is True
+    assert app_capability_summary()["private_deployment_acknowledged"] is True
 
 
 def test_public_readonly_route_load_guards_disable_personal_loads(monkeypatch):

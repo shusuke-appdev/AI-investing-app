@@ -1,7 +1,12 @@
 import asyncio
+import logging
 from typing import Any
 
 import reflex as rx
+
+from frontend.state.error_handling import log_state_exception
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeState(rx.State):
@@ -88,7 +93,9 @@ class KnowledgeState(rx.State):
             ]
         except Exception as e:
             self.items = []
-            self.error_msg = f"参照知識の読み込みに失敗しました: {e}"
+            self.error_msg = log_state_exception(
+                logger, "参照知識の読み込み", e
+            ).message
         finally:
             self.is_loading = False
             yield
@@ -105,7 +112,7 @@ class KnowledgeState(rx.State):
             self.success_msg = "参照知識を削除しました。"
             return KnowledgeState.load_items
         except Exception as e:
-            self.error_msg = f"削除に失敗しました: {e}"
+            self.error_msg = log_state_exception(logger, "参照知識の削除", e).message
 
     def prepare_edit(self, item_id: str):
         from src.knowledge_storage import get_knowledge_by_id
@@ -132,7 +139,7 @@ class KnowledgeState(rx.State):
             self.success_msg = "参照知識を更新しました。"
             return KnowledgeState.load_items
         except Exception as e:
-            self.error_msg = f"更新に失敗しました: {e}"
+            self.error_msg = log_state_exception(logger, "参照知識の更新", e).message
 
     async def extract_content(self):
         self.is_extracting = True
@@ -154,7 +161,7 @@ class KnowledgeState(rx.State):
                     extract_from_youtube, self.url_input
                 )
         except Exception as e:
-            self.error_msg = f"コンテンツ抽出に失敗しました: {e}"
+            self.error_msg = log_state_exception(logger, "コンテンツ抽出", e).message
         finally:
             self.is_extracting = False
             yield
@@ -200,7 +207,7 @@ class KnowledgeState(rx.State):
             self.success_msg = "参照知識を追加しました。"
             yield KnowledgeState.load_items
         except Exception as e:
-            self.error_msg = f"参照知識の保存に失敗しました: {e}"
+            self.error_msg = log_state_exception(logger, "参照知識の保存", e).message
         finally:
             self.is_saving = False
             yield
@@ -233,7 +240,8 @@ class KnowledgeState(rx.State):
                     extract_from_file, upload_data, file.filename
                 )
         except Exception as e:
-            self.extracted_content = f"[Error] {e}"
+            error = log_state_exception(logger, "ファイル内容の抽出", e)
+            self.extracted_content = f"[エラー] {error.message}"
         finally:
             self.is_extracting = False
             yield

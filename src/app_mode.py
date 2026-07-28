@@ -6,6 +6,19 @@ import os
 from typing import Literal, cast
 
 AppMode = Literal["private", "public_readonly"]
+PRIVATE_DEPLOYMENT_ACK = "PRIVATE_DEPLOYMENT_ACK"
+
+
+def hosted_environment_detected() -> bool:
+    """Return whether the app is running inside a known hosted runtime."""
+
+    return bool(os.getenv("SPACE_ID", "").strip())
+
+
+def private_deployment_acknowledged() -> bool:
+    """Return whether hosted private mode was explicitly approved."""
+
+    return os.getenv(PRIVATE_DEPLOYMENT_ACK, "").strip() == "1"
 
 
 def get_app_mode() -> AppMode:
@@ -14,6 +27,15 @@ def get_app_mode() -> AppMode:
     value = os.getenv("APP_MODE", "public_readonly").strip().lower()
     if value not in {"private", "public_readonly"}:
         raise ValueError("APP_MODE must be 'private' or 'public_readonly'.")
+    if (
+        value == "private"
+        and hosted_environment_detected()
+        and not private_deployment_acknowledged()
+    ):
+        raise RuntimeError(
+            "Hosted APP_MODE=private requires PRIVATE_DEPLOYMENT_ACK=1 and "
+            "external access control."
+        )
     return cast(AppMode, value)
 
 
@@ -28,6 +50,8 @@ def app_capability_summary() -> dict[str, str | bool]:
         "personal_data": enabled,
         "ai_generation": enabled,
         "external_content_fetch": enabled,
+        "hosted_environment": hosted_environment_detected(),
+        "private_deployment_acknowledged": private_deployment_acknowledged(),
     }
 
 
