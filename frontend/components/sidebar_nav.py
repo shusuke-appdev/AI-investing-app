@@ -79,25 +79,62 @@ def market_switcher() -> rx.Component:
     )
 
 
-def _main_navigation_items() -> list[rx.Component]:
-    items = [
-        nav_item("Market", "globe", "/"),
-        nav_item("市場監視", "radar", "/market-watch"),
-        nav_item("テーマ", "list-ordered", "/theme"),
-        nav_item("Stock", "trending-up", "/stock"),
+def _nav_group(
+    label: str,
+    items: list[tuple[str, str, str]],
+    *,
+    close_drawer: bool = False,
+) -> rx.Component:
+    links: list[rx.Component] = []
+    for text, icon, url in items:
+        item = nav_item(text, icon, url)
+        links.append(rx.drawer.close(item) if close_drawer else item)
+    return rx.vstack(
+        rx.text(
+            label,
+            size="1",
+            weight="bold",
+            color=rx.color("gray", 9),
+            padding_x="1rem",
+        ),
+        *links,
+        width="100%",
+        spacing="1",
+        align_items="start",
+    )
+
+
+def _navigation_groups(*, close_drawer: bool = False) -> list[rx.Component]:
+    groups = [
+        _nav_group(
+            "市場を見る",
+            [
+                ("今日の市場", "globe", "/"),
+                ("市場監視", "radar", "/market-watch"),
+            ],
+            close_drawer=close_drawer,
+        ),
+        _nav_group(
+            "銘柄を探す",
+            [
+                ("テーマ比較", "list-ordered", "/theme"),
+                ("銘柄分析", "trending-up", "/stock"),
+            ],
+            close_drawer=close_drawer,
+        ),
     ]
     if personal_data_enabled():
-        items.extend(
-            [
-                nav_item("Portfolio", "pie-chart", "/portfolio"),
-                nav_item("Knowledge", "book-open", "/knowledge"),
-            ]
+        groups.append(
+            _nav_group(
+                "自分の情報",
+                [
+                    ("Portfolio", "pie-chart", "/portfolio"),
+                    ("Knowledge", "book-open", "/knowledge"),
+                ],
+                close_drawer=close_drawer,
+            )
         )
-    return items
-
-
-def _drawer_navigation_items() -> list[rx.Component]:
-    return [rx.drawer.close(item) for item in _main_navigation_items()]
+    return groups
 
 
 def _data_quality_nav_item() -> rx.Component:
@@ -120,9 +157,9 @@ def sidebar_nav() -> rx.Component:
         market_switcher(),
         # ナビゲーションリンク
         rx.vstack(
-            *_main_navigation_items(),
+            *_navigation_groups(),
             width="100%",
-            spacing="2",
+            spacing="4",
         ),
         rx.spacer(),
         # フッター情報
@@ -181,9 +218,9 @@ def mobile_nav() -> rx.Component:
                                 color=rx.color("gray", 10),
                             ),
                             rx.vstack(
-                                *_drawer_navigation_items(),
+                                *_navigation_groups(close_drawer=True),
                                 width="100%",
-                                spacing="2",
+                                spacing="4",
                             ),
                             rx.spacer(),
                             rx.drawer.close(_data_quality_nav_item()),

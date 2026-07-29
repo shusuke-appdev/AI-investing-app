@@ -30,6 +30,9 @@ class ThemeItem(BaseModel):
     component_count: int = 0
     total_components: int = 0
     coverage: float = 0.0
+    leader_ticker: str = ""
+    leader_display_name: str = ""
+    leader_performance: float = 0.0
 
 
 class ThemeState(rx.State):
@@ -45,6 +48,8 @@ class ThemeState(rx.State):
     warning_msg: str = ""
     error_code: str = ""
     theme_request_id: int = 0
+    direction_filter: str = "all"
+    sort_mode: str = "performance"
 
     # テーマランキングデータ（型付き）
     ranked_themes: list[ThemeItem] = []
@@ -87,6 +92,22 @@ class ThemeState(rx.State):
             return ThemeState.fetch_themes
         return None
 
+    def set_direction_filter(self, value: str | list[str]):
+        """上昇・下落の表示対象を切り替える。"""
+
+        if isinstance(value, list):
+            value = value[0] if value else "all"
+        if value in {"all", "up", "down"}:
+            self.direction_filter = value
+
+    def set_sort_mode(self, value: str | list[str]):
+        """テーマの並び順をパフォーマンスまたは取得率に切り替える。"""
+
+        if isinstance(value, list):
+            value = value[0] if value else "performance"
+        if value in {"performance", "coverage"}:
+            self.sort_mode = value
+
     @rx.var
     def periods(self) -> list[str]:
         """選択可能な期間のリスト"""
@@ -94,18 +115,32 @@ class ThemeState(rx.State):
 
     @rx.var
     def top_10_themes(self) -> list[ThemeItem]:
-        """トップ10テーマ（パフォーマンス降順）"""
-        if not self.ranked_themes:
-            return []
-        return self.ranked_themes[:10]
+        """上昇テーマを選択中の基準で並べる。"""
+
+        upward = [item for item in self.ranked_themes if item.performance >= 0]
+        key = (
+            (lambda item: item.coverage)
+            if self.sort_mode == "coverage"
+            else (lambda item: item.performance)
+        )
+        return sorted(upward, key=key, reverse=True)[:10]
 
     @rx.var
     def bottom_10_themes(self) -> list[ThemeItem]:
-        """ワースト10テーマ（パフォーマンス昇順）"""
-        if not self.ranked_themes:
-            return []
-        bottom_10 = self.ranked_themes[-10:]
-        return sorted(bottom_10, key=lambda x: x.performance)
+        """下落テーマを選択中の基準で並べる。"""
+
+        downward = [item for item in self.ranked_themes if item.performance < 0]
+        if self.sort_mode == "coverage":
+            return sorted(downward, key=lambda item: item.coverage, reverse=True)[:10]
+        return sorted(downward, key=lambda item: item.performance)[:10]
+
+    @rx.var
+    def show_upward_column(self) -> bool:
+        return self.direction_filter in {"all", "up"}
+
+    @rx.var
+    def show_downward_column(self) -> bool:
+        return self.direction_filter in {"all", "down"}
 
     @rx.var
     def requested_market_label(self) -> str:
@@ -159,6 +194,11 @@ class ThemeState(rx.State):
                                 performance=round(float(sd.get("performance", 0)), 1),
                             )
                         )
+                    leader = max(
+                        stocks_out,
+                        key=lambda stock: stock.performance,
+                        default=ThemeStock(),
+                    )
                     items.append(
                         ThemeItem(
                             theme=td["theme"],
@@ -168,6 +208,9 @@ class ThemeState(rx.State):
                             component_count=int(td.get("component_count", 0)),
                             total_components=int(td.get("total_components", 0)),
                             coverage=round(float(td.get("coverage", 0.0)) * 100, 1),
+                            leader_ticker=leader.ticker,
+                            leader_display_name=leader.display_name,
+                            leader_performance=leader.performance,
                         )
                     )
                 self.ranked_themes = items

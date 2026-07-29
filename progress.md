@@ -1,5 +1,12 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-07-30 research journey and Theme-to-Stock flow
+- Reworked `/` into the "今日の市場" research entrance with a four-step market -> monitoring -> theme -> stock journey, visible freshness/availability status, and explicit research-only/missing-data language. Reorganized desktop and mobile navigation by purpose while keeping Data Quality isolated at the bottom and preserving all seven routes.
+- Added market-specific example tickers to the Stock empty state as non-recommendation shortcuts. Theme stock and leader links now deep-link to `/stock?ticker=...`; Stock route preparation normalizes that query and starts the existing fetch path. The Stock result keeps detailed provenance and now surfaces compact availability/freshness plus a return link to Theme comparison.
+- Added Theme period/direction/sort controls, same-period component leader summaries, contextual ranking guidance, and direction-specific empty states. Coverage, fetched-at, provider warning, insufficient-data, and unavailable semantics remain unchanged; missing evidence is never zero-filled.
+- Added regressions for ticker shortcuts/deep links, Theme leader mapping and sorting/filtering, and the cross-page research journey. Static-export browser checks covered `/`, `/theme`, and `/stock` at desktop and 390x844: one page `h1`, named controls, mobile navigation, and no page-level horizontal overflow. The static preview intentionally had no backend websocket, so credentialed data refresh was not exercised.
+- Validation: `.venv\Scripts\python.exe scripts\check.py` passed dependency consistency, compileall, Ruff lint/format, scoped mypy, all `365` tests, Reflex frontend export, and seven-route static UI semantics. No hosting, authentication, billing, API, route, or data-provider changes were made; no commit or push was performed.
+
 ## Session update: 2026-07-28 residual architecture, Docker, and live close-out
 - Replaced wildcard imports and whole-module global synchronization in `market_dashboard_support.py` / `market_dashboard_workflows.py` with explicit frozen dependency objects. The public compatibility facade remains, but dependencies can now be injected directly and historical monkeypatch seams are resolved by name rather than copied wholesale.
 - Added direct dependency-injection regressions, static checks that reject wildcard imports and `_sync_compat_dependencies`, and expanded the scoped mypy contract to cover both extracted modules.

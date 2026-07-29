@@ -7,7 +7,7 @@ from frontend.state.error_handling import user_facing_error
 from frontend.state.market_state import MarketState
 from frontend.state.request_tracking import is_current_request
 from frontend.state.stock_state import StockState
-from frontend.state.theme_state import ThemeState
+from frontend.state.theme_state import ThemeItem, ThemeState, ThemeStock
 from src.provider_result import FetchResult
 
 
@@ -186,4 +186,44 @@ def test_theme_fetch_commits_matching_market_period_result(monkeypatch):
     assert state.loaded_period == "1週間"
     assert state.loaded_at == "2026-07-28T00:00:00+00:00"
     assert state.ranked_themes[0].theme == "半導体"
+    assert state.ranked_themes[0].leader_ticker == "7203.T"
+    assert state.ranked_themes[0].leader_performance == 1.0
     assert state.is_fetching is False
+
+
+def test_theme_direction_and_sort_controls_preserve_coverage_semantics():
+    state = ThemeState(_reflex_internal_init=True)
+    state.ranked_themes = [
+        ThemeItem(
+            theme="High return",
+            performance=5.0,
+            coverage=55.0,
+            stocks=[ThemeStock(ticker="AAA", performance=5.0)],
+        ),
+        ThemeItem(theme="High coverage", performance=2.0, coverage=95.0),
+        ThemeItem(theme="Down one", performance=-1.0, coverage=60.0),
+        ThemeItem(theme="Down two", performance=-4.0, coverage=90.0),
+    ]
+
+    assert [item.theme for item in state.top_10_themes] == [
+        "High return",
+        "High coverage",
+    ]
+    assert [item.theme for item in state.bottom_10_themes] == [
+        "Down two",
+        "Down one",
+    ]
+
+    state.set_sort_mode("coverage")
+    state.set_direction_filter("down")
+
+    assert [item.theme for item in state.top_10_themes] == [
+        "High coverage",
+        "High return",
+    ]
+    assert [item.theme for item in state.bottom_10_themes] == [
+        "Down two",
+        "Down one",
+    ]
+    assert state.show_upward_column is False
+    assert state.show_downward_column is True

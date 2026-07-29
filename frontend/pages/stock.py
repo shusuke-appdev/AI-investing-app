@@ -16,6 +16,7 @@ from frontend.components.ui_primitives import (
     loading_state,
     page_header,
 )
+from frontend.state.market_state import MarketState
 from frontend.state.stock_state import StockState
 from frontend.template import template
 from src.app_mode import ai_generation_enabled
@@ -251,6 +252,111 @@ def _stock_detail_accordion() -> rx.Component:
     )
 
 
+def _ticker_example(ticker: str, label: str) -> rx.Component:
+    return rx.button(
+        rx.vstack(
+            rx.text(ticker, size="2", weight="bold"),
+            rx.text(label, size="1"),
+            spacing="0",
+            align_items="start",
+        ),
+        on_click=StockState.select_ticker(ticker),
+        variant="surface",
+        color_scheme="gray",
+        min_height="44px",
+        aria_label=f"{ticker} {label}の分析を開始",
+    )
+
+
+def _ticker_examples() -> rx.Component:
+    us_examples = rx.flex(
+        _ticker_example("AAPL", "Apple"),
+        _ticker_example("NVDA", "NVIDIA"),
+        _ticker_example("MSFT", "Microsoft"),
+        _ticker_example("AMZN", "Amazon"),
+        _ticker_example("GOOGL", "Alphabet"),
+        _ticker_example("META", "Meta"),
+        _ticker_example("TSLA", "Tesla"),
+        _ticker_example("AMD", "AMD"),
+        gap="0.5rem",
+        wrap="wrap",
+        width="100%",
+    )
+    jp_examples = rx.flex(
+        _ticker_example("7203.T", "トヨタ"),
+        _ticker_example("8306.T", "三菱UFJ"),
+        _ticker_example("9984.T", "ソフトバンクG"),
+        _ticker_example("8035.T", "東京エレクトロン"),
+        _ticker_example("6758.T", "ソニーG"),
+        gap="0.5rem",
+        wrap="wrap",
+        width="100%",
+    )
+    return rx.vstack(
+        rx.hstack(
+            rx.text("代表ティッカーから開始", size="2", weight="bold"),
+            rx.badge("入力例・推奨ではありません", color_scheme="gray"),
+            spacing="2",
+            wrap="wrap",
+        ),
+        rx.cond(MarketState.market_type == "JP", jp_examples, us_examples),
+        width="100%",
+        align_items="start",
+        spacing="2",
+    )
+
+
+def _stock_status_item(item) -> rx.Component:
+    return rx.hstack(
+        rx.text(item.name, size="1", weight="bold"),
+        rx.badge(
+            item.status_label,
+            color_scheme=rx.cond(
+                item.status_key == "ok",
+                "green",
+                rx.cond(item.status_key == "failed", "red", "amber"),
+            ),
+            variant="surface",
+        ),
+        rx.text(
+            rx.cond(item.fetched_at != "", item.fetched_at, "更新時刻不明"),
+            size="1",
+            color=rx.color("gray", 10),
+        ),
+        spacing="2",
+        align_items="center",
+        wrap="wrap",
+    )
+
+
+def _stock_status_summary() -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.text("更新時刻・利用可能性", size="2", weight="bold"),
+            rx.cond(
+                StockState.data_status.length() > 0,
+                rx.flex(
+                    rx.foreach(StockState.data_status, _stock_status_item),
+                    gap="0.75rem",
+                    wrap="wrap",
+                    width="100%",
+                ),
+                rx.text("データ状態は未取得です。", size="2", color="gray"),
+            ),
+            rx.text(
+                "研究用途の分析です。欠損・部分取得・取得不能は推測で補完しません。",
+                size="1",
+                color=rx.color("gray", 10),
+            ),
+            width="100%",
+            align_items="start",
+            spacing="2",
+        ),
+        width="100%",
+        variant="surface",
+    )
+
+
 @template
 def stock_page() -> rx.Component:
     """個別銘柄分析画面 (Stock)"""
@@ -293,6 +399,7 @@ def stock_page() -> rx.Component:
                     reset_on_submit=False,
                     width="100%",
                 ),
+                _ticker_examples(),
                 rx.cond(
                     StockState.error_msg != "",
                     rx.callout(
@@ -350,6 +457,7 @@ def stock_page() -> rx.Component:
                         width="100%",
                         margin_bottom="1rem",
                     ),
+                    _stock_status_summary(),
                     # 現在の評価
                     rx.cond(
                         StockState.technical_data.contains("overall_signal"),
@@ -688,8 +796,21 @@ def stock_page() -> rx.Component:
                                             ),
                                         ),
                                     ),
+                                    rx.spacer(),
+                                    rx.link(
+                                        rx.button(
+                                            rx.icon("list-ordered", size=15),
+                                            "テーマ比較へ",
+                                            variant="surface",
+                                            size="2",
+                                            aria_label="テーマランキングを開く",
+                                        ),
+                                        href="/theme",
+                                        underline="none",
+                                    ),
                                     width="100%",
                                     align_items="center",
+                                    wrap="wrap",
                                 ),
                                 rx.hstack(
                                     rx.badge(

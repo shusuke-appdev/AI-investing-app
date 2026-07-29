@@ -186,6 +186,13 @@ class StockState(rx.State):
         self.is_generating_analysis = False
         self.error_msg = ""
         self.profile_warning = ""
+        route_ticker = self.router.page.params.get("ticker", "")
+        if isinstance(route_ticker, list):
+            route_ticker = route_ticker[0] if route_ticker else ""
+        normalized = str(route_ticker).strip().upper()
+        if normalized:
+            self.set_ticker(normalized)
+            return StockState.fetch_stock_data
 
     def set_ticker(self, value: str):
         normalized = value.upper()
@@ -198,6 +205,12 @@ class StockState(rx.State):
     def submit_stock_search(self, _form_data: dict[str, Any]):
         """Start the current ticker search from keyboard or button submit."""
 
+        return StockState.fetch_stock_data
+
+    def select_ticker(self, ticker: str):
+        """Select one of the market examples and start the same research flow."""
+
+        self.set_ticker(ticker)
         return StockState.fetch_stock_data
 
     def show_trade_analysis(self):
