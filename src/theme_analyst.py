@@ -11,6 +11,7 @@ import yfinance as yf
 
 from src.cache import ttl_cache
 from src.log_config import get_logger
+from src.persistent_cache import repo_state_cache
 from src.provider_result import FetchResult
 from src.themes_config import PERIODS, THEMES, get_themes
 from src.yfinance_runtime import configure_yfinance_cache
@@ -19,6 +20,9 @@ logger = get_logger(__name__)
 configure_yfinance_cache()
 MIN_THEME_COMPONENTS = 2
 MIN_THEME_COVERAGE = 0.4
+THEME_CACHE_FRESH_SECONDS = 12 * 60 * 60
+THEME_CACHE_STALE_SECONDS = 3 * 24 * 60 * 60
+_THEME_RANKING_CACHE = repo_state_cache("theme_rankings")
 
 
 class ThemeObservation(TypedDict):
@@ -247,7 +251,6 @@ def get_ranked_themes(period_name: str, market_type: str = "US") -> list[RankedT
     return _rank_themes_from_observations(days, ticker_performances, market_type)
 
 
-@ttl_cache(ttl=43200)
 def get_ranked_themes_result(
     period_name: str,
     market_type: str = "US",
@@ -257,6 +260,44 @@ def get_ranked_themes_result(
     if period_name not in PERIODS:
         raise ValueError(f"Unknown period: {period_name}")
 
+    cache_key = f"{market_type}:{period_name}"
+    cached = _THEME_RANKING_CACHE.read(
+        cache_key,
+        fresh_seconds=THEME_CACHE_FRESH_SECONDS,
+        stale_seconds=THEME_CACHE_STALE_SECONDS,
+    )
+    if cached.status == "fresh":
+        return _theme_result_from_cache(cached.payload, cached, stale=False)
+
+    live = _build_ranked_themes_result(period_name, market_type)
+    if live.is_available:
+        _THEME_RANKING_CACHE.write(
+            cache_key,
+            _theme_result_payload(live),
+            fetched_at=live.fetched_at or None,
+        )
+        return live
+    if cached.status == "stale" and cached.payload.get("data"):
+        stale = _theme_result_from_cache(cached.payload, cached, stale=True)
+        stale.warnings = list(
+            dict.fromkeys(
+                [
+                    *stale.warnings,
+                    *live.warnings,
+                    "最新取得に失敗したため、12時間契約を超えた前回ランキングを表示しています。",
+                ]
+            )
+        )
+        stale.error = live.error
+        stale.error_code = live.error_code
+        return stale
+    return live
+
+
+def _build_ranked_themes_result(
+    period_name: str,
+    market_type: str,
+) -> FetchResult[list[RankedTheme]]:
     days = PERIODS[period_name]
     observations = _fetch_performance_observations_for_periods_result(
         (days,), market_type
@@ -286,6 +327,38 @@ def get_ranked_themes_result(
         warnings=warnings,
         error_code=error_code,
         error=observations.error,
+    )
+
+
+def _theme_result_payload(result: FetchResult[list[RankedTheme]]) -> dict:
+    return {
+        "data": result.data,
+        "source": result.source,
+        "fetched_at": result.fetched_at,
+        "is_partial": result.is_partial,
+        "status": result.status,
+        "warnings": result.warnings,
+        "error_code": result.error_code,
+        "error": result.error,
+    }
+
+
+def _theme_result_from_cache(
+    payload: dict, cached, *, stale: bool
+) -> FetchResult[list[RankedTheme]]:
+    data = payload.get("data")
+    return FetchResult(
+        data=list(data) if isinstance(data, list) else [],
+        source=str(payload.get("source") or "theme_rankings"),
+        fetched_at=str(payload.get("fetched_at") or cached.fetched_at),
+        is_stale=stale,
+        is_partial=bool(payload.get("is_partial")) or stale,
+        cache_status="stale_cache" if stale else "persistent_cache",
+        cache_age_seconds=cached.age_seconds,
+        status="partial" if stale else str(payload.get("status") or "available"),
+        warnings=list(payload.get("warnings") or []),
+        error_code=str(payload.get("error_code") or ""),
+        error=str(payload.get("error") or ""),
     )
 
 

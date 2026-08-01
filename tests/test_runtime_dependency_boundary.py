@@ -97,6 +97,6 @@ def test_ci_builds_and_health_checks_the_docker_image():
 
     assert "Build and smoke Docker image" in workflow
     assert "docker build --tag" in workflow
-    assert "--env APP_MODE=public_readonly" in workflow
+    assert "APP_MODE" not in workflow
     assert "http://127.0.0.1:7860/_health" in workflow
     assert "docker rm --force" in workflow

@@ -40,6 +40,6 @@ CIではReflex export後にChromiumを使い、390×844と1280×720で主要5ル
 - `slow`: 高計算量または実スレッドを使う検証
 - 純粋な短時間単体テストは無印
 
-マーカーは台帳から収集時に付与します。Finnhub、Gemini、Supabase、保存先のモックは明示的fixtureであり、依存するテストが引数または `usefixtures` で宣言します。全テスト共通のautouseは安全な `APP_MODE=private` だけです。
+マーカーは台帳から収集時に付与します。Finnhub、Gemini、Supabase、保存先のモックは明示的fixtureであり、依存するテストが引数または `usefixtures` で宣言します。
 
 実APIの生存確認は `scripts/live_smoke.py` に集約しています。外部APIの生存と、計算・契約の正しさは別のテスト層として扱います。

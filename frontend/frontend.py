@@ -13,7 +13,9 @@ from frontend.state.market_state import MarketState
 from frontend.state.portfolio_state import PortfolioState
 from frontend.state.stock_state import StockState
 from frontend.state.theme_state import ThemeState
+from src.deployment_guard import require_safe_deployment
 
+require_safe_deployment()
 app = rx.App()
 app.add_page(
     index,
@@ -31,7 +33,7 @@ app.add_page(
     market_watch_page,
     route="/market-watch",
     title="市場監視 | AI Investing",
-    on_load=[MarketState.fetch_market_summary_fast, ThemeState.fetch_themes],
+    on_load=MarketState.prepare_market_watch,
 )
 app.add_page(
     data_quality_page,
@@ -42,7 +44,7 @@ app.add_page(
 app.add_page(
     theme_page,
     route="/theme",
-    title="テーマランキング | AI Investing",
+    title="トレンド/テーマ | AI Investing",
     on_load=ThemeState.fetch_themes,
 )
 app.add_page(

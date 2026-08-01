@@ -45,8 +45,9 @@ def test_extract_from_url_rejects_private_redirect(monkeypatch):
     assert calls == ["https://example.com/report"]
 
 
-def test_public_mode_rejects_url_before_network_request(monkeypatch):
-    monkeypatch.setenv("APP_MODE", "public_readonly")
+def test_hosted_without_ack_rejects_url_before_network_request(monkeypatch):
+    monkeypatch.setenv("SPACE_ID", "owner/space")
+    monkeypatch.delenv("PRIVATE_DEPLOYMENT_ACK", raising=False)
     monkeypatch.setattr(
         "requests.get",
         lambda *args, **kwargs: (_ for _ in ()).throw(
@@ -56,7 +57,7 @@ def test_public_mode_rejects_url_before_network_request(monkeypatch):
 
     result = knowledge_extractor.extract_from_url("https://example.com/report")
 
-    assert "公開読み取り専用モード" in result
+    assert "PRIVATE_DEPLOYMENT_ACK=1" in result
 
 
 def test_extract_from_file_rejects_large_or_unsupported_upload():

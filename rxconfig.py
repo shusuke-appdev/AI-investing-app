@@ -34,10 +34,12 @@ def _prefer_codex_runtime_node() -> None:
 _prefer_codex_runtime_node()
 
 app_theme = rx.theme(
-    appearance="light",
+    appearance="inherit",
     has_background=True,
     radius="large",
     accent_color="blue",
+    gray_color="slate",
+    panel_background="solid",
 )
 
 config = rx.Config(

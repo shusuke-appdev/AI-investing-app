@@ -269,7 +269,7 @@ def _ranking_help() -> rx.Component:
 
 
 def theme_ranking_content(*, embedded: bool = False) -> rx.Component:
-    """詳細版テーマランキングの内容を描画する。"""
+    """トレンド/テーマの詳細内容を描画する。"""
 
     period_control = rx.segmented_control.root(
         rx.foreach(
@@ -283,12 +283,12 @@ def theme_ranking_content(*, embedded: bool = False) -> rx.Component:
     )
     header = (
         section_heading(
-            "テーマランキング",
+            "トレンド/テーマ",
             "選択市場の構成銘柄を同じ期間で比較します。",
         )
         if embedded
         else page_header(
-            "テーマランキング",
+            "トレンド/テーマ",
             "選択市場の構成銘柄を同じ期間で比較します。",
         )
     )
@@ -352,7 +352,7 @@ def theme_ranking_content(*, embedded: bool = False) -> rx.Component:
             rx.center(
                 rx.spinner(size="3"),
                 rx.text(
-                    "テーマランキングを計算中...",
+                    "トレンド/テーマを計算中...",
                     margin_top="1rem",
                     color="gray",
                 ),
@@ -419,6 +419,6 @@ def theme_ranking_content(*, embedded: bool = False) -> rx.Component:
 
 @template
 def theme_page() -> rx.Component:
-    """テーマランキング画面"""
+    """トレンド/テーマ画面"""
 
     return theme_ranking_content()

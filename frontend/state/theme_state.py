@@ -9,7 +9,7 @@ from src.log_config import get_logger
 from src.themes_config import PERIODS
 
 logger = get_logger(__name__)
-THEME_ROUTES = {"/theme", "/market-watch"}
+THEME_ROUTES = {"/theme"}
 
 
 class ThemeStock(BaseModel):

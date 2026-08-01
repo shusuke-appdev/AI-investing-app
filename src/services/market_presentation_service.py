@@ -745,6 +745,12 @@ def _format_detail_stages(raw: dict[str, dict[str, Any]]) -> list[StageStatusDis
                 status_label=item.get("status_label", item.get("status", "pending")),
                 cache_status=item.get("cache_status", ""),
                 fetched_at=item.get("fetched_at", ""),
+                duration_ms=int(item.get("duration_ms", 0) or 0),
+                duration_label=(
+                    f"{int(item.get('duration_ms', 0) or 0):,} ms"
+                    if item.get("duration_ms")
+                    else ""
+                ),
                 summary=item.get("summary", ""),
                 target=item.get("target", ""),
                 error_message=item.get("error_message", ""),

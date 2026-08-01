@@ -19,7 +19,6 @@ from frontend.components.ui_primitives import (
 from frontend.state.market_state import MarketState
 from frontend.state.stock_state import StockState
 from frontend.template import template
-from src.app_mode import ai_generation_enabled
 
 
 def _option_signal_label(value) -> rx.Var:
@@ -136,7 +135,6 @@ def _ai_recap_panel() -> rx.Component:
                 on_click=StockState.generate_ai_analysis,
                 loading=StockState.is_generating_analysis,
                 color_scheme="indigo",
-                disabled=not ai_generation_enabled(),
             ),
             width="100%",
             align_items="center",
@@ -147,11 +145,7 @@ def _ai_recap_panel() -> rx.Component:
                 rx.markdown(StockState.ai_analysis),
                 rx.center(
                     rx.text(
-                        (
-                            "公開モードではAI銘柄分析を利用できません。"
-                            if not ai_generation_enabled()
-                            else "AI銘柄分析レポートを生成して投資判断をサポートします。"
-                        ),
+                        "AI銘柄分析レポートを生成して投資判断をサポートします。",
                         color="gray",
                     ),
                     height="100px",
@@ -800,10 +794,10 @@ def stock_page() -> rx.Component:
                                     rx.link(
                                         rx.button(
                                             rx.icon("list-ordered", size=15),
-                                            "テーマ比較へ",
+                                            "トレンド/テーマへ",
                                             variant="surface",
                                             size="2",
-                                            aria_label="テーマランキングを開く",
+                                            aria_label="トレンド/テーマを開く",
                                         ),
                                         href="/theme",
                                         underline="none",

@@ -2,87 +2,9 @@ import reflex as rx
 
 from frontend.components.data_provenance import DataStatusDisplay
 from frontend.components.flash_summary import flash_summary
-from frontend.components.ui_primitives import (
-    loading_state,
-    page_header,
-    section_heading,
-)
+from frontend.components.ui_primitives import page_header, section_heading
 from frontend.state.market_state import MarketState
 from frontend.template import template
-from src.app_mode import ai_generation_enabled
-
-
-def _journey_card(
-    step: str,
-    title: str,
-    description: str,
-    icon: str,
-    href: str | None = None,
-) -> rx.Component:
-    content = rx.card(
-        rx.vstack(
-            rx.hstack(
-                rx.badge(step, color_scheme="blue", variant="surface"),
-                rx.icon(icon, size=18, color=rx.color("blue", 9)),
-                width="100%",
-                align_items="center",
-            ),
-            rx.text(title, weight="bold", size="3"),
-            rx.text(description, size="2", color=rx.color("gray", 10)),
-            align_items="start",
-            spacing="2",
-            width="100%",
-        ),
-        width="100%",
-        min_height="150px",
-        border_left=f"4px solid {rx.color('blue', 8)}",
-        _hover={"bg": rx.color("blue", 2)} if href else {},
-    )
-    if not href:
-        return content
-    return rx.link(content, href=href, underline="none", width="100%")
-
-
-def _research_journey() -> rx.Component:
-    return rx.box(
-        section_heading(
-            "今日の調査フロー",
-            "市場の変化から個別銘柄まで、必要な深さへ順番に進みます。",
-        ),
-        rx.grid(
-            _journey_card(
-                "1",
-                "市場概況",
-                "この画面で主要資産の変化と欠損状態を確認します。",
-                "globe",
-            ),
-            _journey_card(
-                "2",
-                "市場監視",
-                "市場レジーム、リスク、資金フローの根拠を確認します。",
-                "radar",
-                "/market-watch",
-            ),
-            _journey_card(
-                "3",
-                "テーマ比較",
-                "同じ期間で上昇・下落テーマと構成銘柄を比較します。",
-                "list-ordered",
-                "/theme",
-            ),
-            _journey_card(
-                "4",
-                "銘柄分析",
-                "ティッカーを選び、根拠とデータ制約を確認します。",
-                "trending-up",
-                "/stock",
-            ),
-            columns=rx.breakpoints(initial="1", sm="2", xl="4"),
-            spacing="3",
-            width="100%",
-        ),
-        width="100%",
-    )
 
 
 def _status_chip(item: DataStatusDisplay) -> rx.Component:
@@ -148,9 +70,6 @@ def _market_status_strip() -> rx.Component:
 
 
 def _ai_recap_section() -> rx.Component:
-    if not ai_generation_enabled():
-        return rx.fragment()
-
     return rx.box(
         section_heading(
             "AI Market Recap",
@@ -189,7 +108,7 @@ def index() -> rx.Component:
     return rx.vstack(
         page_header(
             "今日の市場",
-            "主要資産の変化を入口に、市場監視、テーマ比較、個別銘柄分析へ進みます。",
+            "主要資産の変化とAI要約を、前回データを保ったまま確認します。",
             rx.button(
                 rx.icon("sparkles", size=18),
                 "レポートを生成",
@@ -198,7 +117,6 @@ def index() -> rx.Component:
                 color_scheme="indigo",
                 size="3",
                 variant="solid",
-                disabled=not ai_generation_enabled(),
             ),
             rx.tooltip(
                 rx.icon_button(
@@ -207,7 +125,6 @@ def index() -> rx.Component:
                     size="3",
                     variant="surface",
                     aria_label="任意の分析項目を追加",
-                    disabled=not ai_generation_enabled(),
                 ),
                 content="任意の分析項目を追加",
             ),
@@ -219,18 +136,6 @@ def index() -> rx.Component:
                 variant="surface",
             ),
         ),
-        (
-            rx.callout(
-                "公開モードではAIレポート生成を利用できません。",
-                icon="lock",
-                color_scheme="amber",
-                width="100%",
-            )
-            if not ai_generation_enabled()
-            else rx.fragment()
-        ),
-        _research_journey(),
-        _market_status_strip(),
         rx.cond(
             MarketState.recap_focus_visible,
             rx.card(
@@ -251,7 +156,6 @@ def index() -> rx.Component:
                             on_click=MarketState.generate_ai_recap_with_focus,
                             loading=MarketState.is_generating_recap,
                             color_scheme="indigo",
-                            disabled=not ai_generation_enabled(),
                         ),
                         width="100%",
                     ),
@@ -273,17 +177,18 @@ def index() -> rx.Component:
                 width="100%",
             ),
         ),
-        # ローディングスピナー（全体）
         rx.cond(
             MarketState.is_fetching,
-            loading_state("市場データを取得中..."),
-            rx.vstack(
-                _ai_recap_section(),
-                flash_summary(),
+            rx.callout(
+                "最新データを取得中です。完了まで前回の表示を維持します。",
+                icon="refresh-cw",
+                color_scheme="blue",
                 width="100%",
-                spacing="4",
             ),
         ),
+        flash_summary(),
+        _ai_recap_section(),
+        _market_status_strip(),
         width="100%",
         max_width="1400px",
         margin="0 auto",

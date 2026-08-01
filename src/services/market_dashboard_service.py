@@ -46,6 +46,7 @@ from src.sector_flow_monitor import build_sector_flow_monitor
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.services.data_fetch_manifest import requirement_failures
 from src.services.japan_market_conditions import build_japan_conditions_context
+from src.services.market_analysis_inputs import MarketAnalysisInputs, shared_history
 from src.services.market_composite_sentiment import build_market_composite_sentiment
 from src.services.market_context_cache import (
     context_cache_key,
@@ -172,6 +173,7 @@ def load_cached_market_full_context(
 def build_market_summary_context(market_type: str = "US") -> MarketContext:
     """Fetch only the lightweight market overview used by initial page load."""
 
+    stage_started = time.perf_counter()
     errors: list[str] = []
     market_data = _safe_call(lambda: get_market_indices(market_type), {}, errors)
     market_config = _safe_call(lambda: get_market_config(market_type), {}, errors)
@@ -215,6 +217,7 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
             cache_status="live",
             fetched_at=_utc_now(),
             summary="主要指数と市場サマリーを取得しました。",
+            duration_ms=int((time.perf_counter() - stage_started) * 1000),
         ),
     )
     if market_data:
@@ -240,9 +243,12 @@ def build_market_details_context(
 def build_market_theme_flow_context(
     market_type: str = "US",
     market_context: MarketContext | dict[str, Any] | None = None,
+    *,
+    inputs: MarketAnalysisInputs | None = None,
 ) -> MarketContext:
     """Build market state, momentum, trend ranking, and flow diagnostics."""
 
+    stage_started = time.perf_counter()
     base = _coerce_context(market_context) or build_market_summary_context(market_type)
     errors: list[str] = []
     options = base.options
@@ -251,8 +257,8 @@ def build_market_theme_flow_context(
         if market_type != "US":
             return {}
         return classify_ibd_market_regime(
-            get_stock_data("SPY", "1y"),
-            get_stock_data("^NDX", "1y"),
+            shared_history(inputs, "SPY", "1y", get_stock_data),
+            shared_history(inputs, "^NDX", "1y", get_stock_data),
         ).to_dict()
 
     def microstructure_task() -> dict[str, Any]:
@@ -268,7 +274,9 @@ def build_market_theme_flow_context(
         return get_momentum_themes(market_type)
 
     def monitor_task() -> dict[str, Any]:
-        return build_market_monitor_context(options.items)
+        if inputs is None:
+            return build_market_monitor_context(options.items)
+        return build_market_monitor_context(options.items, inputs=inputs)
 
     def sector_flow_task() -> dict[str, Any]:
         return build_sector_flow_context(market_type)
@@ -497,6 +505,7 @@ def build_market_theme_flow_context(
             fetched_at=_utc_now(),
             summary="市場状態、モメンタム、ETF proxy、セクター資金流入を更新しました。",
             warnings=errors,
+            duration_ms=int((time.perf_counter() - stage_started) * 1000),
         ),
     )
     if context.market_data:
@@ -517,9 +526,12 @@ def build_market_medium_context(
 def build_market_volatility_sentiment_context(
     market_type: str = "US",
     market_context: MarketContext | dict[str, Any] | None = None,
+    *,
+    inputs: MarketAnalysisInputs | None = None,
 ) -> MarketContext:
     """Build volatility regime, local sentiment, and dependent strategy outputs."""
 
+    stage_started = time.perf_counter()
     base = _coerce_context(market_context) or build_market_summary_context(market_type)
     errors: list[str] = []
     volatility_sentiment = _safe_call(
@@ -528,6 +540,7 @@ def build_market_volatility_sentiment_context(
             ibd_regime=base.ibd_regime,
             credit_stress=base.credit_stress,
             option_items=base.options.items,
+            inputs=inputs,
         ),
         {},
         errors,
@@ -704,6 +717,7 @@ def build_market_volatility_sentiment_context(
                 vix_sq_alert.get("quality_warnings", []),
                 errors,
             ),
+            duration_ms=int((time.perf_counter() - stage_started) * 1000),
         ),
     )
     if context.market_data:
@@ -717,6 +731,7 @@ def build_market_high_context(
 ) -> MarketContext:
     """Build high-cost credit stress and distortion diagnostics."""
 
+    stage_started = time.perf_counter()
     base = _coerce_context(market_context) or build_market_summary_context(market_type)
     errors: list[str] = []
 
@@ -922,6 +937,7 @@ def build_market_high_context(
                 market_distortions.get("quality_warnings", []),
                 errors,
             ),
+            duration_ms=int((time.perf_counter() - stage_started) * 1000),
         ),
     )
     if context.market_data:
@@ -970,5 +986,6 @@ from src.services.market_dashboard_workflows import (  # noqa: E402, F401
     build_fomo_scan_context,
     build_market_context,
     build_market_monitor_context,
+    build_market_option_snapshot,
     build_market_options_context,
 )

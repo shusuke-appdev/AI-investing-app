@@ -8,6 +8,48 @@ from src.persistent_cache import PersistentJsonCache
 from src.services import market_analyst_service
 from src.services import market_dashboard_service as service
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
+from src.services.market_analysis_inputs import build_market_analysis_inputs
+
+
+def test_market_analysis_inputs_fetch_each_ticker_once_and_slice_shared_history():
+    calls: list[tuple[str, str]] = []
+    dates = pd.date_range("2021-01-01", periods=1300, freq="D")
+    frame = pd.DataFrame({"Close": range(1300), "Volume": [100] * 1300}, index=dates)
+
+    def fetcher(ticker: str, period: str):
+        calls.append((ticker, period))
+        return frame
+
+    inputs = build_market_analysis_inputs("US", fetcher=fetcher)
+
+    assert sorted(calls) == sorted(
+        [("SPY", "5y"), ("^NDX", "1y"), ("^TNX", "5d"), ("TLT", "1y")]
+    )
+    assert all(calls.count(call) == 1 for call in calls)
+    assert inputs.history("SPY", "6mo").equals(
+        frame.loc[frame.index >= frame.index.max() - pd.DateOffset(months=6)]
+    )
+    assert inputs.history("SPY", "5d").equals(frame.tail(5))
+
+
+def test_market_analysis_inputs_timeout_preserves_missing_value():
+    gate = threading.Event()
+    frame = pd.DataFrame({"Close": [100.0]}, index=pd.to_datetime(["2026-08-01"]))
+
+    def fetcher(ticker: str, period: str):
+        if ticker == "TLT":
+            gate.wait(timeout=1)
+        return frame
+
+    inputs = build_market_analysis_inputs(
+        "US",
+        fetcher=fetcher,
+        timeout_seconds=0.01,
+    )
+    gate.set()
+
+    assert inputs.history("TLT", "1y") is None
+    assert "timed out" in inputs.errors["TLT"]
 
 
 def test_market_monitor_accepts_explicit_dependencies(monkeypatch):
@@ -565,6 +607,25 @@ def test_market_context_cache_preserves_stale_metadata(monkeypatch, tmp_path):
     assert loaded.is_stale is True
     assert loaded.data_status[0].cache_status == "stale_cache"
     assert any(item.kind.value == "stale_cache" for item in loaded.provenance)
+
+
+def test_market_context_cache_rejects_incompatible_serialized_config(
+    monkeypatch, tmp_path
+):
+    store = PersistentJsonCache(tmp_path, service.MARKET_CONTEXT_CACHE_NAMESPACE)
+    monkeypatch.setattr(service, "_market_context_cache", lambda: store)
+    context = MarketContext(market_type="US", market_data={"S&P 500": {}})
+    context.market_config = "{'indices': {}}"  # type: ignore[assignment]
+    service._save_context_cache(context, "full")
+
+    loaded = service._load_context_cache(
+        "US",
+        "full",
+        max_age_seconds=86_400,
+        fresh_seconds=300,
+    )
+
+    assert loaded is None
 
 
 def test_market_context_round_trip_preserves_forecast_and_composite_layers():

@@ -20,7 +20,11 @@ def navbar() -> rx.Component:
             spacing="3",
         ),
         rx.spacer(),
-        rx.color_mode.button(aria_label="表示テーマを切り替える"),
+        rx.color_mode.button(
+            aria_label="表示テーマを切り替える",
+            min_width="44px",
+            min_height="44px",
+        ),
         width="100%",
         padding=rx.breakpoints(initial="0.75rem 1rem", md="1rem 1.5rem"),
         border_bottom=f"1px solid {rx.color('gray', 3)}",

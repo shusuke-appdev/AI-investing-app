@@ -44,7 +44,6 @@ jobs:
           docker build --tag "${image}" .
           container_id="$(docker run --detach \
             --publish 7860:7860 \
-            --env APP_MODE=public_readonly \
             "${image}")"
           cleanup() {
             docker logs "${container_id}" || true

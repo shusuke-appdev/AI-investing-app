@@ -3,12 +3,10 @@ import reflex as rx
 from frontend.components.ui_primitives import (
     empty_state,
     page_header,
-    private_mode_notice,
     section_heading,
 )
 from frontend.state.portfolio_state import HoldingItem, PortfolioState
 from frontend.template import template
-from src.app_mode import personal_data_enabled
 
 
 def _render_holding_row(holding: HoldingItem) -> rx.Component:
@@ -438,9 +436,6 @@ def _render_analysis_section() -> rx.Component:
 @template
 def portfolio_page() -> rx.Component:
     """ポートフォリオ管理ページ"""
-    if not personal_data_enabled():
-        return private_mode_notice("ポートフォリオ")
-
     return rx.vstack(
         page_header(
             "ポートフォリオアドバイザー",

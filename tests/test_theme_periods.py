@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import pandas as pd
 
 from src import theme_analyst
@@ -65,7 +67,7 @@ def test_theme_ranking_result_preserves_provider_failure(monkeypatch):
 
     monkeypatch.setattr(theme_analyst.yf, "download", fail_download)
 
-    result = theme_analyst.get_ranked_themes_result.__wrapped__("1ヶ月", "US")
+    result = theme_analyst._build_ranked_themes_result("1ヶ月", "US")
 
     assert result.data == []
     assert result.status == "unavailable"
@@ -99,3 +101,62 @@ def test_ranked_theme_periods_reuses_one_download_for_all_periods(monkeypatch):
     assert calls == ["2y"]
     assert set(result) == {"1週間", "1ヶ月", "6ヶ月", "24ヶ月"}
     assert all(rows[0]["theme"] == "AI" for rows in result.values())
+
+
+def test_theme_result_reuses_persistent_cache_after_restart(monkeypatch, tmp_path):
+    from src.persistent_cache import PersistentJsonCache
+    from src.provider_result import FetchResult
+
+    cache = PersistentJsonCache(tmp_path, "theme-test")
+    monkeypatch.setattr(theme_analyst, "_THEME_RANKING_CACHE", cache)
+    calls = []
+    ranking = [{"theme": "AI", "performance": 4.0, "stocks": []}]
+
+    def live(*args):
+        calls.append(args)
+        return FetchResult(
+            data=ranking,
+            source="live",
+            fetched_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    monkeypatch.setattr(theme_analyst, "_build_ranked_themes_result", live)
+    first = theme_analyst.get_ranked_themes_result("1週間", "US")
+    second = theme_analyst.get_ranked_themes_result("1週間", "US")
+
+    assert first.data == ranking
+    assert second.data == ranking
+    assert second.cache_status == "persistent_cache"
+    assert len(calls) == 1
+
+
+def test_theme_result_uses_stale_cache_only_when_live_fails(monkeypatch, tmp_path):
+    from src.persistent_cache import PersistentJsonCache
+    from src.provider_result import FetchResult
+
+    cache = PersistentJsonCache(tmp_path, "theme-test")
+    monkeypatch.setattr(theme_analyst, "_THEME_RANKING_CACHE", cache)
+    old = (datetime.now(timezone.utc) - timedelta(hours=13)).isoformat()
+    cache.write(
+        "US:1週間",
+        {
+            "data": [{"theme": "AI", "performance": 1.0, "stocks": []}],
+            "source": "live",
+            "fetched_at": old,
+        },
+        fetched_at=old,
+    )
+    monkeypatch.setattr(
+        theme_analyst,
+        "_build_ranked_themes_result",
+        lambda *args: FetchResult(
+            data=[], status="unavailable", error_code="timeout", error="timed out"
+        ),
+    )
+
+    result = theme_analyst.get_ranked_themes_result("1週間", "US")
+
+    assert result.data[0]["theme"] == "AI"
+    assert result.is_stale is True
+    assert result.is_partial is True
+    assert result.cache_status == "stale_cache"

@@ -46,38 +46,12 @@ class DataQualityState(rx.State):
 
 
 def _provider_statuses() -> list[ProviderStatus]:
-    from src.app_mode import app_capability_summary
     from src.finnhub_client import is_configured as finnhub_is_configured
     from src.marketdata_client import is_configured as marketdata_is_configured
     from src.option_data_provider import marketdata_options_status
 
     marketdata = marketdata_options_status()
-    capabilities = app_capability_summary()
     return [
-        ProviderStatus(
-            name="アプリ実行モード",
-            status=(
-                "configured" if capabilities["mode"] == "private" else "best_effort"
-            ),
-            mode=str(capabilities["mode"]),
-            message=str(capabilities["mode"]),
-            detail=(
-                "private: 個人データ・AI生成・外部コンテンツ取得が有効です。"
-                if capabilities["mode"] == "private"
-                else "public_readonly: 個人データ・AI生成・外部コンテンツ取得を拒否します。"
-            )
-            + (
-                " APP_MODEで明示設定されています。"
-                if capabilities["explicitly_configured"]
-                else " APP_MODE未設定のため安全側の既定値を使用しています。"
-            )
-            + (
-                " ホスティング環境のprivate利用確認済みです。"
-                if capabilities["hosted_environment"]
-                and capabilities["private_deployment_acknowledged"]
-                else ""
-            ),
-        ),
         ProviderStatus(
             name="MarketData.app",
             status="configured" if marketdata_is_configured() else "not_configured",

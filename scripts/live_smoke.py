@@ -304,22 +304,32 @@ def _latest_updated_timestamp(values: Any) -> str:
     return datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
 
 
-def _public_readonly_check() -> str:
-    from src.app_mode import require_writes_enabled
+def _deployment_guard_check() -> str:
+    from src.deployment_guard import require_safe_deployment
 
-    previous = os.environ.get("APP_MODE")
-    os.environ["APP_MODE"] = "public_readonly"
+    previous_space = os.environ.get("SPACE_ID")
+    previous_ack = os.environ.get("PRIVATE_DEPLOYMENT_ACK")
     try:
+        os.environ.pop("SPACE_ID", None)
+        os.environ.pop("PRIVATE_DEPLOYMENT_ACK", None)
+        require_safe_deployment()
+        os.environ["SPACE_ID"] = "live-smoke/hosted"
         try:
-            require_writes_enabled()
-        except PermissionError:
-            return "personal-data writes blocked"
-        raise RuntimeError("write guard did not block public_readonly mode")
+            require_safe_deployment()
+        except RuntimeError:
+            os.environ["PRIVATE_DEPLOYMENT_ACK"] = "1"
+            require_safe_deployment()
+            return "local allowed; hosted requires access-control acknowledgement"
+        raise RuntimeError("hosted deployment guard did not fail closed")
     finally:
-        if previous is None:
-            os.environ.pop("APP_MODE", None)
+        if previous_space is None:
+            os.environ.pop("SPACE_ID", None)
         else:
-            os.environ["APP_MODE"] = previous
+            os.environ["SPACE_ID"] = previous_space
+        if previous_ack is None:
+            os.environ.pop("PRIVATE_DEPLOYMENT_ACK", None)
+        else:
+            os.environ["PRIVATE_DEPLOYMENT_ACK"] = previous_ack
 
 
 def _supabase_check() -> str:
@@ -458,7 +468,7 @@ def main() -> int:
                 horizon_dtes=marketdata_horizon_dtes,
             ),
         ),
-        _run("public_readonly", _public_readonly_check),
+        _run("deployment_guard", _deployment_guard_check),
         _run("supabase", _supabase_check),
     ]
     for check in checks:

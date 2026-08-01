@@ -30,6 +30,7 @@ from src.option_analyst import (
 from src.persistent_cache import PersistentJsonCache, utc_now_iso
 from src.services import market_dashboard_service as _service
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
+from src.services.market_analysis_inputs import MarketAnalysisInputs, shared_history
 from src.services.market_composite_sentiment import (
     build_market_composite_sentiment as _default_build_market_composite_sentiment,
 )
@@ -299,6 +300,7 @@ def _build_volatility_sentiment_context(
     ibd_regime: dict[str, Any],
     credit_stress: dict[str, Any],
     option_items: list[dict[str, Any]] | None = None,
+    inputs: MarketAnalysisInputs | None = None,
     dependencies: MarketDashboardSupportDependencies | None = None,
 ) -> dict[str, Any]:
     """Build dependent volatility/sentiment outputs after their inputs are current."""
@@ -306,10 +308,10 @@ def _build_volatility_sentiment_context(
     if market_type != "US":
         return {}
     deps = _support_dependencies(dependencies)
-    spy = deps.get_stock_data("SPY", "5y")
+    spy = shared_history(inputs, "SPY", "5y", deps.get_stock_data)
     if spy is None or spy.empty:
         return {}
-    tlt = deps.get_stock_data("TLT", "1y")
+    tlt = shared_history(inputs, "TLT", "1y", deps.get_stock_data)
     cboe = deps.fetch_cboe_indices()
     cnn = deps.fetch_cnn_fear_greed()
     short_horizon_forecast = deps.build_market_short_horizon_forecast(cboe_result=cboe)
@@ -503,6 +505,10 @@ def _load_context_cache(
         return None
 
     context = deps.context_from_cache_payload(read.payload)
+    if not isinstance(context.market_data, dict) or not isinstance(
+        context.market_config, dict
+    ):
+        return None
     if read.fetched_at and not context.fetched_at:
         context.fetched_at = read.fetched_at
     context.source = f"{context.source or kind}_cache"
@@ -545,6 +551,7 @@ def _updated_stage_statuses(
     summary: str = "",
     error_message: str = "",
     warnings: list[str] | None = None,
+    duration_ms: int = 0,
 ) -> dict[str, dict[str, Any]]:
     stages = _default_stage_statuses()
     for stage_key, payload in (existing or {}).items():
@@ -561,6 +568,7 @@ def _updated_stage_statuses(
         "status_label": _stage_status_label(status),
         "cache_status": cache_status,
         "fetched_at": fetched_at,
+        "duration_ms": duration_ms,
         "summary": summary or default.get("summary", ""),
         "error_message": error_message,
         "quality_warnings": _merge_warnings(warnings or []),
@@ -579,6 +587,7 @@ def _default_stage_statuses() -> dict[str, dict[str, Any]]:
             "status_label": "未取得",
             "cache_status": "",
             "fetched_at": "",
+            "duration_ms": 0,
             "summary": payload["summary"],
             "error_message": "",
             "quality_warnings": [],

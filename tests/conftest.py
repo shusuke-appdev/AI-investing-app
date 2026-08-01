@@ -9,13 +9,6 @@ import tomllib
 # 外部APIの呼び出しは、以下の autouse fixture で個別にパッチする。
 
 
-@pytest.fixture(autouse=True)
-def explicit_private_test_mode(monkeypatch):
-    """Run feature tests in explicit private mode; policy tests may override it."""
-
-    monkeypatch.setenv("APP_MODE", "private")
-
-
 @pytest.fixture
 def mock_finnhub_client():
     """Mock Finnhub client for all tests."""

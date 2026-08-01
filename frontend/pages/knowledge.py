@@ -4,11 +4,9 @@ from frontend.components.ui_primitives import (
     empty_state,
     loading_state,
     page_header,
-    private_mode_notice,
 )
 from frontend.state.knowledge_state import KnowledgeState
 from frontend.template import template
-from src.app_mode import personal_data_enabled
 
 
 def render_knowledge_item(item: dict) -> rx.Component:
@@ -296,9 +294,6 @@ def render_edit_mode() -> rx.Component:
 @template
 def knowledge() -> rx.Component:
     """Knowledge DB ページ"""
-    if not personal_data_enabled():
-        return private_mode_notice("参照知識管理")
-
     return rx.vstack(
         page_header(
             "参照知識管理",

@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from frontend.state import market_state as market_state_module
 from frontend.state import theme_state as theme_state_module
 from frontend.state.error_handling import user_facing_error
 from frontend.state.market_state import MarketState
@@ -9,6 +10,7 @@ from frontend.state.request_tracking import is_current_request
 from frontend.state.stock_state import StockState
 from frontend.state.theme_state import ThemeItem, ThemeState, ThemeStock
 from src.provider_result import FetchResult
+from src.services.analysis_context import MarketContext
 
 
 def test_current_request_requires_matching_id_and_key():
@@ -95,6 +97,118 @@ def test_theme_market_change_invalidates_rows_and_refreshes_only_theme_routes():
     assert state.set_market_type("US") is None
     assert state.requested_market_type == "US"
     assert state.theme_request_id == 2
+
+    state.router.url.path = "/market-watch"
+    assert state.set_market_type("JP") is None
+
+
+def test_prepare_market_watch_applies_cached_details_before_live_refresh(monkeypatch):
+    state = MarketState(_reflex_internal_init=True)
+    applied: list[str] = []
+
+    def fake_apply(self, context):
+        applied.append(context.source)
+        self.market_context = context.to_dict()
+        self.indices_data = [{"name": context.source}]
+
+    async def fake_to_thread(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(MarketState, "_apply_market_context", fake_apply)
+    monkeypatch.setattr(market_state_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        market_state_module,
+        "load_cached_market_full_context",
+        lambda market: MarketContext(market_type=market, source="cached_full"),
+    )
+    monkeypatch.setattr(
+        market_state_module,
+        "build_market_summary_context",
+        lambda market: MarketContext(market_type=market, source="live_summary"),
+    )
+    monkeypatch.setattr(
+        market_state_module,
+        "build_market_analysis_inputs",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        market_state_module,
+        "build_market_theme_flow_context",
+        lambda market, context, **kwargs: MarketContext(
+            market_type=market, source="live_theme_flow"
+        ),
+    )
+
+    async def exercise():
+        events = state.prepare_market_watch()
+        await anext(events)
+        await anext(events)
+        assert applied == ["cached_full"]
+        while True:
+            try:
+                await anext(events)
+            except StopAsyncIteration:
+                break
+
+    asyncio.run(exercise())
+    assert applied == ["cached_full", "live_summary", "live_theme_flow"]
+
+
+def test_detail_refresh_starts_credit_and_options_together_and_keeps_credit(
+    monkeypatch,
+):
+    import threading
+
+    state = MarketState(_reflex_internal_init=True)
+    barrier = threading.Barrier(2)
+    applied: list[str] = []
+
+    def fake_apply(self, context):
+        applied.append(context.source)
+        self.market_context = context.to_dict()
+
+    def credit(market, context):
+        barrier.wait(timeout=2)
+        return MarketContext(market_type=market, source="credit")
+
+    def options(market):
+        barrier.wait(timeout=2)
+        raise TimeoutError("option timeout")
+
+    monkeypatch.setattr(MarketState, "_apply_market_context", fake_apply)
+    monkeypatch.setattr(
+        market_state_module, "load_cached_market_full_context", lambda _: None
+    )
+    monkeypatch.setattr(
+        market_state_module,
+        "build_market_analysis_inputs",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        market_state_module,
+        "build_market_theme_flow_context",
+        lambda market, context, **kwargs: MarketContext(
+            market_type=market, source="theme"
+        ),
+    )
+    monkeypatch.setattr(market_state_module, "build_market_high_context", credit)
+    monkeypatch.setattr(market_state_module, "build_market_option_snapshot", options)
+    monkeypatch.setattr(
+        market_state_module,
+        "build_market_volatility_sentiment_context",
+        lambda market, context, **kwargs: MarketContext(
+            market_type=market, source="vol"
+        ),
+    )
+
+    async def exercise():
+        async for _ in state.refresh_market_details():
+            pass
+
+    asyncio.run(exercise())
+    assert "credit" in applied
+    assert "vol" in applied
+    assert state.is_fetching_options is False
 
 
 def test_theme_period_change_invalidates_inflight_result(monkeypatch):

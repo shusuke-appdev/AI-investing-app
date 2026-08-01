@@ -156,6 +156,74 @@ def _warning_list(items) -> rx.Component:
     )
 
 
+def _stage_card(stage) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.text(stage.label, weight="bold", size="2", flex="1"),
+                rx.badge(stage.status_label, variant="surface"),
+                width="100%",
+                align_items="center",
+            ),
+            rx.cond(
+                stage.duration_label != "",
+                rx.text(
+                    "所要時間: " + stage.duration_label,
+                    size="1",
+                    color=rx.color("gray", 10),
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                stage.cache_status != "",
+                rx.text(
+                    "cache: " + stage.cache_status, size="1", color=rx.color("gray", 10)
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                stage.fetched_at != "",
+                rx.text(
+                    "更新: " + stage.fetched_at, size="1", color=rx.color("gray", 10)
+                ),
+                rx.fragment(),
+            ),
+            rx.text(stage.summary, size="1", color=rx.color("gray", 11)),
+            rx.cond(
+                stage.error_message != "",
+                rx.callout(
+                    stage.error_message,
+                    icon="triangle-alert",
+                    color_scheme="amber",
+                    width="100%",
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                stage.quality_warnings.length() > 0,
+                rx.vstack(
+                    rx.foreach(
+                        stage.quality_warnings,
+                        lambda warning: rx.text(
+                            "・" + warning,
+                            size="1",
+                            color=rx.color("amber", 11),
+                        ),
+                    ),
+                    width="100%",
+                    align_items="start",
+                    spacing="1",
+                ),
+                rx.fragment(),
+            ),
+            align_items="start",
+            width="100%",
+            spacing="1",
+        ),
+        width="100%",
+    )
+
+
 @template
 def data_quality_page() -> rx.Component:
     return rx.vstack(
@@ -197,6 +265,16 @@ def data_quality_page() -> rx.Component:
             ),
         ),
         section_heading("Market", "Market / 市場監視で最後に取得した状態です。"),
+        section_heading(
+            "市場監視の段階別状態",
+            "各段階の所要時間、cache、警告をここに集約します。",
+        ),
+        rx.grid(
+            rx.foreach(MarketState.detail_stages, _stage_card),
+            columns=rx.breakpoints(initial="1", md="2", xl="3"),
+            spacing="3",
+            width="100%",
+        ),
         data_status_panel(MarketState.data_status),
         provenance_panel(MarketState.provenance),
         rx.cond(

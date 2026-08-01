@@ -23,7 +23,7 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 - 市場環境評価: トレンド、モメンタム、ボラティリティ、マーケットブレッドス、オプションセンチメントを統合評価
 - 短期市場予測: SPY / QQQの1・5・20営業日をwalk-forward検証し、VIX・SKEW・VVIX・期間構造・breadth・OCC Put/Call・Gammaを複合判定。検証未達は研究表示に限定し、個別株には警戒方向のガードレールだけを適用
 - オプション分析: SPY / QQQ / IWM と主要テーマETF proxy の Put/Call Ratio、Gamma Exposure、Max Pain、ATM IV、Skew を算出。MarketData.appを米国オプションの preferred 経路として利用し、失敗時はyfinance/cacheへフォールバック
-- テーマランキング: AI、半導体、エネルギー、ヘルスケアなどのテーマを期間別にランキング
+- トレンド/テーマ: AI、半導体、エネルギー、ヘルスケアなどのテーマを期間別に比較
 - 個別銘柄分析: 企業概要、価格チャート、ニュース、テクニカル、SMART基準、日足Entry Framework、トレード分析、AI分析レポート
 - ポートフォリオ分析: 現地通貨時価、USD/JPY確認後の円換算総額、通貨別小計、構成比、セクター・日米テーマ露出、集中度、AIアドバイス。為替欠損時は異なる通貨を合算しません
 - 参照知識管理: テキスト、URL、YouTube、ファイルから知識を登録し、AI分析のコンテキストに利用
@@ -65,7 +65,6 @@ python -m pip install -r requirements-dev.txt -c constraints.txt
 `.env.example` を参考に `.env` を作成します。
 
 ```env
-APP_MODE=private
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL_NAME=gemini-3.6-flash
 FINNHUB_API_KEY=your_finnhub_api_key_here
@@ -79,9 +78,8 @@ SUPABASE_SECRET_KEY=your_supabase_secret_key_here
 # SUPABASE_KEY=your_legacy_supabase_key_here
 ```
 
-`APP_MODE=private` は個人利用向けで、Portfolio・Knowledge、AI生成、URL・YouTube取り込みを許可します。これは認証機能ではないため、ローカル環境または外部アクセス制御された環境だけで使用してください。既存Trading Plan互換データは保存層に残りますが、通常UIではStockページ内の「トレード分析」を使います。
-Hugging Face Spaces など `SPACE_ID` が設定されるホスティング環境で `private` を使う場合は、アクセス制御を確認したうえで `PRIVATE_DEPLOYMENT_ACK=1` も明示してください。未設定では安全のため起動を拒否します。
-`APP_MODE` 未設定時は安全側の `public_readonly` になります。公開モードでは個人データを読み書きせず、個人ページをナビゲーションから除外し、AI生成とURL・YouTube取り込みも拒否します。
+アプリは個人利用の単一モードです。Portfolio・Knowledge、AI生成、URL・YouTube取り込みを常に利用できます。ローカル実行にはモード設定は不要です。Hugging Face Spaces など `SPACE_ID` が設定される環境では、外部アクセス制御を確認した後に `PRIVATE_DEPLOYMENT_ACK=1` を設定してください。確認値がなければ起動を拒否します。
+既存Trading Plan互換データは保存層に残りますが、通常UIではStockページ内の「トレード分析」を使います。
 保存先の既定値はローカルJSONです。
 
 MarketData.app の live オプション取得を厳格に検証するには、ローカル `.env` に `MARKETDATA_TOKEN` と `MARKETDATA_OPTIONS_MODE=preferred` を設定してください。未設定時はアプリ障害ではなく `MarketData未設定 / yfinance・cache fallback中` として扱います。SPY の current / 1W / 1M 期間構造まで確認する場合は次を実行します。

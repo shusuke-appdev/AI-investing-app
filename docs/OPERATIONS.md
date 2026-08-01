@@ -44,7 +44,7 @@ docker run --env-file .env -p 7860:7860 ai-investing-app
 ```
 
 Dockerfile は Hugging Face Spaces の7860番ポートを前提にし、依存ビルドと実行環境を分離した非rootコンテナです。ローカル保存を使う場合は `/app/data`、Reflex状態は `/app/.reflex_states`、アプリキャッシュは `/app/.states` を書込可能な永続領域として扱ってください。
-Hugging Face Spaces で `APP_MODE=private` を使う場合は、Spaceの可視性または外部アクセス制御を確認し、変数 `PRIVATE_DEPLOYMENT_ACK=1` を追加してください。`SPACE_ID` がある環境で確認値がない場合、個人データや有料APIを誤って公開しないよう起動を拒否します。
+アプリは個人利用の単一モードです。ローカルでは追加設定なしで全機能を利用できます。Hugging Face Spaces では、Spaceの可視性または外部アクセス制御を確認してから `PRIVATE_DEPLOYMENT_ACK=1` を追加してください。`SPACE_ID` がある環境で確認値がない場合は起動を拒否します。
 
 ## 定期的な確認コマンド
 
@@ -96,7 +96,7 @@ MarketData.app smoke の `calls=100/100`、`puts=100/100` は `strikeLimit=100` 
 
 2026-06-12時点の本番確認:
 
-- SPY/yfinance、AAPL/Finnhub、`APP_MODE=public_readonly` の書き込み防止とHTTP 200本番起動は実スモーク通過
+- SPY/yfinance、AAPL/Finnhub、ホスト配置ガードとHTTP 200本番起動は実スモークで確認します
 - FRED公式CSVは一時的な504/タイムアウト時もあり、その場合は信用ストレス分析がキャッシュ・代替経路で継続することを確認
 - Supabase本番プロジェクトは4テーブルのinsert/select/update/deleteをロールバック付きで通過
 
@@ -114,15 +114,15 @@ python tools/migrate_to_supabase.py --print-setup-sql
 
 ## 運用上の注意
 
-- `APP_MODE=public_readonly` ではPortfolio・Knowledge・Trading Plan互換データの読み書き、AI生成、URL・YouTube取り込みを拒否します。個人機能のナビゲーションも表示しません
-- `APP_MODE` 未設定時も `public_readonly` になります。`private` は認証機能ではないため、ローカルまたは外部アクセス制御済み環境でのみ明示設定します
+- Portfolio・Knowledge、AI生成、URL・YouTube取り込みは単一の個人モードで利用できます。外部ホストではアクセス制御確認値が必須です
 - 外部APIの制限により、オプション分析とニュース集約は一時的に空になることがあります
 - Market Watch の詳細更新とStockの補助診断は、外部取得や重い計算が所定時間を超えた場合、その項目だけを `partial` / `failed` として扱い、取得済みの基本情報を表示します。失敗理由は各画面のデータ状態と「データ品質」ページの provider health で確認します
 - 市場指数・セクター等の取得失敗は価格 `0.0` として表示せず、その項目を利用不可として省略します
-- Theme Rankingは指定期間を満たす構成銘柄だけを使い、2銘柄以上かつ構成銘柄の40%以上を取得できたテーマだけを表示します
+- トレンド/テーマは指定期間を満たす構成銘柄だけを使い、2銘柄以上かつ構成銘柄の40%以上を取得できたテーマだけを表示します。12時間の永続キャッシュで再起動直後も同条件の結果を再利用します
 - 日本株の汎用現在値・価格履歴はyfinanceを使います。J-Quants Freeの価格系列は遅延するため現在値として扱わず、企業マスター・財務情報の補完に限定します
-- Market Intelligence の起動時は軽量サマリーのみ自動取得します。詳細分析はサイドバーの「市場監視」で「詳細更新」を押すと、キャッシュ/サマリー、Theme/Flow、Credit/Risk、Vol/Sentiment、Optionsの順に段階取得します。信用ストレスを先に更新し、後続のvolレジーム・予測・戦略へ同じ値を渡します
-- 「市場監視」には、IBD式市場状態、状態別プレイブック、総合市場監視、テーマモメンタム、テーマランキング、オプション分析、市場の歪み検知を統合しています。各段階は「取得中」「最新」「キャッシュ」「一部取得」「取得失敗」を表示します
+- 市場監視の起動時は前回の完全コンテキストを即時表示し、主要指数と市場姿勢・資金フロー・上位5テーマだけを更新します。全構成銘柄の取得は「トレンド/テーマ」を開いた場合だけ実行します
+- 「詳細をすべて更新」では共有価格履歴を1回だけ取得し、信用/歪みとオプションを同時開始します。担当フィールドを統合した後、最新の信用・オプションでボラティリティ、センチメント、予測、戦略を再計算します。一方が失敗しても他方と既存概要を維持します
+- 段階状態、所要時間、cache、警告、来歴はサイドバー最下部の「データ品質」に集約します
 - IBD式市場状態は無料データによる近似です。公式IBD Market Pulseではなく、SPY / Nasdaq 100 の売り抜け日、ラリー試行、FTD、移動平均割れから分類します
 - Market Recap では「＋」ボタンから任意の追加分析項目を入力できます。入力内容はプロンプトに渡され、現在の市場状態、フロー、ファンダメンタル、反証条件に結び付けて分析されます
 - 「詳細更新」では、ETFリーダーシップproxyを市場全体の確認、選択市場ごとのセクター/テーマ資金流入判定を具体候補の抽出として扱います。US表示では日本株テーマを混ぜず、JP表示では日本株条件を扱います。これは売買命令ではなく、市場分析の入力です
@@ -150,7 +150,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - Entry Frameworkは日足データによるproxyです。LoD、ORH、寄付き後30分、1-2時間確認、即時ギャップ抵抗は判定しません
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
 - GitHub Actions の Hugging Face Spaces 同期は `main` / `master` へのpushをブランチ単位で直列化し、古い実行をキャンセルしてからforce pushします。対象はGitHub Environment `hugging-face-production` の `HF_SPACE_REPO`、Reflexの`/_health`確認URLは `HF_SPACE_HEALTH_URL` で上書きできます。push後は最大2分のHTTP確認を行い、失敗時は直前のSpaceコミットIDをartifactへ残します
-- quality jobはHugging Face同期より前にDockerイメージを実ビルドし、`APP_MODE=public_readonly`で非rootコンテナを起動してReflex `/_health` のJSON `status=true`まで確認します。コンテナが早期終了した場合はログを出してdeployを止めます
+- quality jobはHugging Face同期より前にDockerイメージを実ビルドし、ローカル相当の単一モードで非rootコンテナを起動してReflex `/_health` のJSON `status=true`まで確認します。コンテナが早期終了した場合はログを出してdeployを止めます
 - Supabase移行は既定でdry-runです。実行は `python tools/migrate_to_supabase.py --execute`、既存テーブルを消して入れ替える場合のみ `--confirm-destroy` を追加します。破壊実行時は `data/supabase_backups/` にバックアップが取れない限り中断します。新規テーブル作成が必要な場合は、先に `python tools/migrate_to_supabase.py --print-setup-sql` で表示される SQL を Supabase SQL Editor で実行します。
 
 ## 既知のローカル環境問題

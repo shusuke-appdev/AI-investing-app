@@ -341,6 +341,8 @@ class StageStatusDisplay(BaseModel):
     status_label: str = "未取得"
     cache_status: str = ""
     fetched_at: str = ""
+    duration_ms: int = 0
+    duration_label: str = ""
     summary: str = ""
     target: str = ""
     error_message: str = ""

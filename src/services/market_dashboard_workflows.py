@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -33,6 +34,7 @@ from src.services.analysis_context import DataResult, MarketContext
 from src.services.data_fetch_manifest import (
     requirement_failures as _default_requirement_failures,
 )
+from src.services.market_analysis_inputs import MarketAnalysisInputs, shared_history
 from src.services.market_composite_sentiment import (
     build_market_composite_sentiment as _default_build_market_composite_sentiment,
 )
@@ -210,20 +212,33 @@ def build_fomo_scan_context(
     )
 
 
+def build_market_option_snapshot(
+    market_type: str = "US",
+    *,
+    dependencies: MarketDashboardWorkflowDependencies | None = None,
+):
+    """Acquire option data independently so it can run beside credit refresh."""
+
+    return _workflow_dependencies(dependencies).build_option_context(market_type)
+
+
 def build_market_options_context(
     market_type: str = "US",
     market_context: MarketContext | dict[str, Any] | None = None,
     *,
+    option_context=None,
+    inputs: MarketAnalysisInputs | None = None,
     dependencies: MarketDashboardWorkflowDependencies | None = None,
 ) -> MarketContext:
     """Refresh option data and option-dependent monitoring without reloading all data."""
 
+    stage_started = time.perf_counter()
     deps = _workflow_dependencies(dependencies)
     base = _coerce_context(market_context) or deps.build_market_summary_context(
         market_type
     )
     errors: list[str] = []
-    options = deps.build_option_context(market_type)
+    options = option_context or deps.build_option_context(market_type)
     if options.error_message:
         errors.append(options.error_message)
 
@@ -237,7 +252,9 @@ def build_market_options_context(
         )
 
     def monitor_task() -> dict[str, Any]:
-        return deps.build_market_monitor_context(options.items)
+        if inputs is None:
+            return deps.build_market_monitor_context(options.items)
+        return deps.build_market_monitor_context(options.items, inputs=inputs)
 
     results = _stage_task_values(
         _run_stage_tasks(
@@ -431,6 +448,7 @@ def build_market_options_context(
             summary="主要ETFのオプション分析を更新しました。",
             warnings=options.quality_warnings
             + ([options.error_message] if options.error_message else []),
+            duration_ms=int((time.perf_counter() - stage_started) * 1000),
         ),
     )
     manifest_failures = deps.requirement_failures("market_options", context.data_status)
@@ -463,19 +481,20 @@ def build_market_context(
 def build_market_monitor_context(
     option_data: list[dict[str, Any]] | None,
     *,
+    inputs: MarketAnalysisInputs | None = None,
     dependencies: MarketDashboardWorkflowDependencies | None = None,
 ) -> dict:
     """Build Distribution Day, climax, and yield-spread monitoring context."""
 
     deps = _workflow_dependencies(dependencies)
-    spy_df = deps.get_stock_data("SPY", "6mo")
-    ndx_df = deps.get_stock_data("^NDX", "6mo")
+    spy_df = shared_history(inputs, "SPY", "6mo", deps.get_stock_data)
+    ndx_df = shared_history(inputs, "^NDX", "6mo", deps.get_stock_data)
 
     dist_spy = deps.track_distribution_days(spy_df)
     dist_ndx = deps.track_distribution_days(ndx_df)
     climax = deps.detect_market_climax(spy_df, ndx_df, _extract_spy_pcr(option_data))
 
-    tnx_df = deps.get_stock_data("^TNX", "5d")
+    tnx_df = shared_history(inputs, "^TNX", "5d", deps.get_stock_data)
     tnx_yield = (
         float(tnx_df["Close"].iloc[-1]) / 10.0
         if tnx_df is not None and not tnx_df.empty

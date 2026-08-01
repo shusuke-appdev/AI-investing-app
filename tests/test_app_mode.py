@@ -14,56 +14,43 @@ from src.app_mode import (
 )
 
 
-def test_app_mode_defaults_to_public_readonly(monkeypatch):
-    monkeypatch.delenv("APP_MODE", raising=False)
+def test_local_app_has_one_personal_mode(monkeypatch):
+    monkeypatch.delenv("SPACE_ID", raising=False)
+    monkeypatch.delenv("PRIVATE_DEPLOYMENT_ACK", raising=False)
+    monkeypatch.setenv("APP_MODE", "public_readonly")  # retired value is ignored
 
-    assert get_app_mode() == "public_readonly"
-    assert not writes_enabled()
-    assert not personal_data_enabled()
-    assert not ai_generation_enabled()
-    assert not external_content_fetch_enabled()
+    assert get_app_mode() == "personal"
+    assert writes_enabled()
+    assert personal_data_enabled()
+    assert ai_generation_enabled()
+    assert external_content_fetch_enabled()
+    require_writes_enabled()
+    require_personal_data_enabled()
+    require_ai_generation_enabled()
+    require_external_content_fetch_enabled()
     assert app_capability_summary() == {
-        "mode": "public_readonly",
-        "explicitly_configured": False,
-        "personal_data": False,
-        "ai_generation": False,
-        "external_content_fetch": False,
+        "mode": "personal",
+        "personal_data": True,
+        "ai_generation": True,
+        "external_content_fetch": True,
         "hosted_environment": False,
         "private_deployment_acknowledged": False,
     }
 
 
-def test_private_mode_requires_explicit_configuration(monkeypatch):
-    monkeypatch.setenv("APP_MODE", "private")
+def test_hosted_personal_mode_requires_access_control_ack(monkeypatch):
+    monkeypatch.setenv("SPACE_ID", "owner/space")
+    monkeypatch.delenv("PRIVATE_DEPLOYMENT_ACK", raising=False)
 
-    assert writes_enabled()
-    assert personal_data_enabled()
-    assert ai_generation_enabled()
-    assert external_content_fetch_enabled()
-    assert app_capability_summary()["explicitly_configured"] is True
-
-
-def test_public_readonly_blocks_writes(monkeypatch):
-    monkeypatch.setenv("APP_MODE", "public_readonly")
-
-    with pytest.raises(PermissionError, match="読み取り専用"):
+    with pytest.raises(RuntimeError, match="PRIVATE_DEPLOYMENT_ACK=1"):
+        get_app_mode()
+    with pytest.raises(RuntimeError, match="PRIVATE_DEPLOYMENT_ACK=1"):
         require_writes_enabled()
-    with pytest.raises(PermissionError, match="個人データ"):
-        require_personal_data_enabled()
-    with pytest.raises(PermissionError, match="AI生成"):
-        require_ai_generation_enabled()
-    with pytest.raises(PermissionError, match="URL・YouTube"):
-        require_external_content_fetch_enabled()
 
-
-def test_public_readonly_does_not_return_cached_gemini_client(monkeypatch):
-    from src import gemini_client
-
-    monkeypatch.setenv("APP_MODE", "public_readonly")
-    monkeypatch.setattr(gemini_client, "_client", object())
-
-    assert gemini_client.get_gemini_client() is None
-    assert not gemini_client.configure_gemini("secret")
+    monkeypatch.setenv("PRIVATE_DEPLOYMENT_ACK", "1")
+    assert get_app_mode() == "personal"
+    assert app_capability_summary()["hosted_environment"] is True
+    assert app_capability_summary()["private_deployment_acknowledged"] is True
 
 
 def test_gemini_generation_uses_gemini_3_6_flash_by_default(monkeypatch):
@@ -71,6 +58,7 @@ def test_gemini_generation_uses_gemini_3_6_flash_by_default(monkeypatch):
 
     from src import gemini_client
 
+    monkeypatch.delenv("SPACE_ID", raising=False)
     client = MagicMock()
     client.models.generate_content.return_value.text = "generated"
     monkeypatch.setattr(gemini_client, "_client", client)
@@ -82,32 +70,9 @@ def test_gemini_generation_uses_gemini_3_6_flash_by_default(monkeypatch):
     )
 
 
-def test_invalid_app_mode_fails_closed(monkeypatch):
-    monkeypatch.setenv("APP_MODE", "publci")
-
-    with pytest.raises(ValueError, match="APP_MODE"):
-        writes_enabled()
-
-
-def test_hosted_private_mode_requires_explicit_acknowledgement(monkeypatch):
-    monkeypatch.setenv("APP_MODE", "private")
-    monkeypatch.setenv("SPACE_ID", "owner/space")
-    monkeypatch.delenv("PRIVATE_DEPLOYMENT_ACK", raising=False)
-
-    with pytest.raises(RuntimeError, match="PRIVATE_DEPLOYMENT_ACK=1"):
-        get_app_mode()
-
-    monkeypatch.setenv("PRIVATE_DEPLOYMENT_ACK", "1")
-
-    assert get_app_mode() == "private"
-    assert app_capability_summary()["hosted_environment"] is True
-    assert app_capability_summary()["private_deployment_acknowledged"] is True
-
-
-def test_public_readonly_route_load_guards_disable_personal_loads(monkeypatch):
+def test_personal_routes_are_always_enabled_locally(monkeypatch):
     from frontend.state import knowledge_state, portfolio_state
 
-    monkeypatch.setenv("APP_MODE", "public_readonly")
-
-    assert not portfolio_state._personal_data_route_enabled()
-    assert not knowledge_state._personal_data_route_enabled()
+    monkeypatch.delenv("SPACE_ID", raising=False)
+    assert portfolio_state._personal_data_route_enabled()
+    assert knowledge_state._personal_data_route_enabled()

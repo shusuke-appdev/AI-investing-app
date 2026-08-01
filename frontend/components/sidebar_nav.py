@@ -2,7 +2,6 @@ import reflex as rx
 
 from frontend.state.market_state import MarketState
 from frontend.state.theme_state import ThemeState
-from src.app_mode import personal_data_enabled
 
 
 def nav_item(text: str, icon: str, url: str) -> rx.Component:
@@ -42,6 +41,11 @@ def nav_item(text: str, icon: str, url: str) -> rx.Component:
         underline="none",
         width="100%",
         display="block",
+        border_radius="0.5rem",
+        _focus_visible={
+            "outline": f"3px solid {rx.color('blue', 8)}",
+            "outline_offset": "2px",
+        },
     )
 
 
@@ -58,6 +62,7 @@ def _market_button(label: str, market_value: str) -> rx.Component:
         color_scheme=rx.cond(is_active, "blue", "gray"),
         size="2",
         flex="1",
+        min_height="44px",
         cursor="pointer",
     )
 
@@ -117,23 +122,22 @@ def _navigation_groups(*, close_drawer: bool = False) -> list[rx.Component]:
         _nav_group(
             "銘柄を探す",
             [
-                ("テーマ比較", "list-ordered", "/theme"),
+                ("トレンド/テーマ", "list-ordered", "/theme"),
                 ("銘柄分析", "trending-up", "/stock"),
             ],
             close_drawer=close_drawer,
         ),
     ]
-    if personal_data_enabled():
-        groups.append(
-            _nav_group(
-                "自分の情報",
-                [
-                    ("Portfolio", "pie-chart", "/portfolio"),
-                    ("Knowledge", "book-open", "/knowledge"),
-                ],
-                close_drawer=close_drawer,
-            )
+    groups.append(
+        _nav_group(
+            "自分の情報",
+            [
+                ("Portfolio", "pie-chart", "/portfolio"),
+                ("Knowledge", "book-open", "/knowledge"),
+            ],
+            close_drawer=close_drawer,
         )
+    )
     return groups
 
 
@@ -246,7 +250,11 @@ def mobile_nav() -> rx.Component:
                 align_items="center",
             ),
             rx.spacer(),
-            rx.color_mode.button(aria_label="表示テーマを切り替える"),
+            rx.color_mode.button(
+                aria_label="表示テーマを切り替える",
+                min_width="44px",
+                min_height="44px",
+            ),
             width="100%",
             min_height="44px",
             align_items="center",
