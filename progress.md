@@ -1,5 +1,11 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-08-02 dynamic Reflex dev-server recovery
+- Rechecked the historical Windows/Codex `PermissionError: [WinError 5]` against the current clean repository and environment. Two stale frontend-only `reflex run` process trees were stopped; neither had a listening backend.
+- A single `.venv\Scripts\reflex.exe run --frontend-port 3010 --backend-port 8010` started successfully with the existing repo-local `.reflex_states` directory and bundled Codex Node preference. Both ports listened, the Reflex `/_health` endpoint returned HTTP 200, and the frontend returned HTTP 200. The prior multiprocessing Pipe access denial did not recur.
+- Dynamic in-app browser verification passed after backend hydration: `/` rendered title `Market Intelligence | AI Investing` with one `今日の市場` h1, and `/market-watch` rendered title `市場監視 | AI Investing` with one `市場監視` h1. The Market Watch dev console still reports non-blocking React SSR warnings about `:first-child`; these are separate from the resolved launch failure.
+- The test server and its Python/Bun/Node children were stopped after validation. No application source, dependency, credential, commit, push, deployment, or publication change was made.
+
 ## Session update: 2026-08-02 single-mode UI redesign and bounded market refresh
 - Removed the public/private product split. Portfolio, Knowledge, AI generation, saving, and external-content retrieval are available in the single personal mode. Local startup is unconditional; known hosted runtimes fail closed unless `PRIVATE_DEPLOYMENT_ACK=1` confirms external access control. APP_MODE UI/status/docs/CI/live-smoke branching was removed.
 - Rebuilt `/` without the research-journey cards or mode notice, kept prior data visible during refresh, and moved freshness/availability to the bottom. Renamed all `/theme` user-facing navigation and headings to `トレンド/テーマ` while preserving the route. The shared Radix theme now inherits light/dark mode, uses semantic slate/blue surfaces, 44px primary controls, and visible keyboard focus.
