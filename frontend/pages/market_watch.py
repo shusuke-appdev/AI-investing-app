@@ -186,7 +186,7 @@ def _details_accordion() -> rx.Component:
             "必要なときだけ詳細を確認",
             "概要は常時表示し、取得負荷の高い信用・予測・オプションは明示更新します。",
         ),
-        rx.accordion.root(
+        rx.vstack(
             _detail_item(
                 header="市場レジーム・資金フロー",
                 content=rx.vstack(
@@ -228,20 +228,22 @@ def _details_accordion() -> rx.Component:
                     spacing="4",
                 ),
             ),
-            type="multiple",
             width="100%",
-            display="flex",
-            flex_direction="column",
-            gap="0.75rem",
+            spacing="3",
         ),
         width="100%",
     )
 
 
 def _detail_item(*, header: str, content: rx.Component) -> rx.Component:
-    return rx.accordion.item(
-        header=header,
-        content=content,
+    return rx.el.details(
+        rx.el.summary(
+            header,
+            cursor="pointer",
+            font_weight="700",
+            padding="1rem",
+        ),
+        rx.box(content, padding="0 1rem 1rem"),
         bg=rx.color("gray", 2),
         border=f"1px solid {rx.color('gray', 5)}",
         border_radius="12px",
