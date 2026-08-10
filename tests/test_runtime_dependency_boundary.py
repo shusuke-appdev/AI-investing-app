@@ -64,6 +64,15 @@ def test_hugging_face_deploy_is_serialized_and_health_checked():
     assert "HF_SPACE_REPO:" in workflow
     assert "HF_SPACE_HEALTH_URL:" in workflow
     assert ".hf.space/_health" in workflow
+    assert workflow.index("Verify private Space before push") < workflow.index(
+        "id: deploy"
+    )
+    assert "--preflight-only" in workflow
+    assert "--require-private" in workflow
+    assert "hf_deploy_commit=" in workflow
+    assert "steps.deploy.outputs.hf_commit" in workflow
+    assert "--expected-sha" in workflow
+    assert "--timeout-seconds 900" in workflow
     assert "Verify deployed Space" in workflow
     assert "previous_hf_commit=" in workflow
 

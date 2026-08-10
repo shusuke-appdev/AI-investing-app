@@ -26,6 +26,7 @@
 | `SUPABASE_SECRET_KEY` | Supabase保存時に推奨 | サーバー側 Supabase Data API 用の secret key。クライアントへ公開しない |
 | `SUPABASE_SERVICE_ROLE_KEY` | 任意 | 旧 service role key との互換用。`SUPABASE_SECRET_KEY` が未設定の場合だけ使う |
 | `SUPABASE_KEY` | 任意 | 旧設定との互換用キー。上記2つが未設定の場合だけ使う |
+| `PRIVATE_DEPLOYMENT_ACK` | Private Spaceでは必須 | Space が Private であることを確認した後にだけ `1` を設定する起動ガード確認値 |
 
 ## ローカル起動
 
@@ -44,7 +45,22 @@ docker run --env-file .env -p 7860:7860 ai-investing-app
 ```
 
 Dockerfile は Hugging Face Spaces の7860番ポートを前提にし、依存ビルドと実行環境を分離した非rootコンテナです。ローカル保存を使う場合は `/app/data`、Reflex状態は `/app/.reflex_states`、アプリキャッシュは `/app/.states` を書込可能な永続領域として扱ってください。
-アプリは個人利用の単一モードです。ローカルでは追加設定なしで全機能を利用できます。Hugging Face Spaces では、Spaceの可視性または外部アクセス制御を確認してから `PRIVATE_DEPLOYMENT_ACK=1` を追加してください。`SPACE_ID` がある環境で確認値がない場合は起動を拒否します。
+アプリは個人利用の単一モードです。ローカルでは追加設定なしで全機能を利用できます。Hugging Face Spaces では Space を Private に変更し、Private 表示を確認してからだけ `PRIVATE_DEPLOYMENT_ACK=1` を追加してください。Public のまま ACK だけを追加して起動ガードを回避してはいけません。`SPACE_ID` がある環境で確認値がない場合は起動を拒否します。
+
+## Hugging Face Spaces 復旧・デプロイ順序
+
+1. Space を Private にし、Hub API でも `private: true` を確認する。
+2. Supabase project が `INACTIVE` なら復元し、`COMING_UP` / `RESTORING` を待って `ACTIVE_HEALTHY` になるまで 521 や接続失敗をアプリ障害として扱わない。
+3. 同一 project ref のローカル `SUPABASE_SECRET_KEY` で `scripts/live_smoke.py --require-supabase` を実行し、`user_settings` の一時 insert/select/delete と後片付けを通す。
+4. 値をログへ出さず、Space secret に `SUPABASE_SECRET_KEY` を登録する。Private 表示を再確認してから variable `PRIVATE_DEPLOYMENT_ACK=1` を登録する。
+5. main を push し、CI が今回作成した Hugging Face deploy commit SHA、Hub の現在 SHA、`RUNNING`、認証付き `/_health` の HTTP 200 と正常 JSON を同じ revision の証拠として確認する。
+6. Private Space の主要画面とデータ品質、および新 secret での Supabase CRUD を確認してから、互換用 `SUPABASE_KEY` を削除する。削除後の再起動も同じ revision-aware 検証で確認する。
+
+内部検証器は `HF_TOKEN` を環境変数からだけ読み、次の形で使用します。token や Supabase secret は引数やログへ渡しません。
+
+```powershell
+python scripts/verify_hf_deployment.py --space owner/name --expected-sha <sha> --health-url <url> --require-private --timeout-seconds 900
+```
 
 ## 定期的な確認コマンド
 
@@ -104,6 +120,8 @@ MarketData.app smoke の `calls=100/100`、`puts=100/100` は `strikeLimit=100` 
 
 `SUPABASE_URL` と `SUPABASE_SECRET_KEY` を設定すると Supabase に保存できます。旧設定との互換のため `SUPABASE_SERVICE_ROLE_KEY` と `SUPABASE_KEY` も読みますが、新規環境では secret key をサーバー環境変数として使います。現在のコードは `portfolios`、`knowledge_items`、`user_settings`、`trade_plans` テーブルを前提にしています。
 
+project 復元直後は `COMING_UP` / `RESTORING` や一時的な HTTP 521 が発生し得ます。`ACTIVE_HEALTHY` を確認してから credentialed smoke を行い、新しい `SUPABASE_SECRET_KEY` と旧 `SUPABASE_KEY` を同時に置く移行期間では新キーが優先されます。旧キーは新キーによる本番 CRUD と再起動が成功した後にだけ削除します。
+
 Supabase の 2026-05-30 / 2026-10-30 の Data API 既定変更に対応するため、新規 Supabase プロジェクトまたは新規テーブル作成時は、データ移行前に [supabase/public_tables.sql](../supabase/public_tables.sql) を Supabase SQL Editor で実行してください。移行ツールからも同じ SQL を表示できます。この SQL は `postgres` ロールが今後作る `public` オブジェクトの自動 Data API 公開も抑止します。
 
 ```powershell
@@ -149,7 +167,7 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - Entry Frameworkは日足データによるproxyです。LoD、ORH、寄付き後30分、1-2時間確認、即時ギャップ抵抗は判定しません
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
-- GitHub Actions の Hugging Face Spaces 同期は `main` / `master` へのpushをブランチ単位で直列化し、古い実行をキャンセルしてからforce pushします。対象はGitHub Environment `hugging-face-production` の `HF_SPACE_REPO`、Reflexの`/_health`確認URLは `HF_SPACE_HEALTH_URL` で上書きできます。push後は最大2分のHTTP確認を行い、失敗時は直前のSpaceコミットIDをartifactへ残します
+- GitHub Actions の Hugging Face Spaces 同期は `main` / `master` へのpushをブランチ単位で直列化し、古い実行をキャンセルしてからforce pushします。push前に token と Private 状態を Hub API で検査します。push時に作成した deploy commit SHA をstep outputとartifactへ保存し、Hubの現在SHAとの一致、対象revisionの`RUNNING`、認証付き`/_health`のHTTP 200と`status=true`を最大15分確認します。旧revisionの200は合格にならず、対象revisionの`RUNTIME_ERROR`は安全な要約を残して即時失敗します。対象はGitHub Environment `hugging-face-production` の `HF_SPACE_REPO`、確認URLは `HF_SPACE_HEALTH_URL` で上書きできます
 - quality jobはHugging Face同期より前にDockerイメージを実ビルドし、ローカル相当の単一モードで非rootコンテナを起動してReflex `/_health` のJSON `status=true`まで確認します。コンテナが早期終了した場合はログを出してdeployを止めます
 - Supabase移行は既定でdry-runです。実行は `python tools/migrate_to_supabase.py --execute`、既存テーブルを消して入れ替える場合のみ `--confirm-destroy` を追加します。破壊実行時は `data/supabase_backups/` にバックアップが取れない限り中断します。新規テーブル作成が必要な場合は、先に `python tools/migrate_to_supabase.py --print-setup-sql` で表示される SQL を Supabase SQL Editor で実行します。
 

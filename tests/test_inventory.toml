@@ -134,6 +134,7 @@ files = [
   "test_supabase_client.py",
   "test_supabase_migration_tool.py",
   "test_trading_plan_storage.py",
+  "test_verify_hf_deployment.py",
 ]
 
 [[suite]]

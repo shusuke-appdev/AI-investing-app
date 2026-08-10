@@ -78,7 +78,7 @@ SUPABASE_SECRET_KEY=your_supabase_secret_key_here
 # SUPABASE_KEY=your_legacy_supabase_key_here
 ```
 
-アプリは個人利用の単一モードです。Portfolio・Knowledge、AI生成、URL・YouTube取り込みを常に利用できます。ローカル実行にはモード設定は不要です。Hugging Face Spaces など `SPACE_ID` が設定される環境では、外部アクセス制御を確認した後に `PRIVATE_DEPLOYMENT_ACK=1` を設定してください。確認値がなければ起動を拒否します。
+アプリは個人利用の単一モードです。Portfolio・Knowledge、AI生成、URL・YouTube取り込みを常に利用できます。ローカル実行にはモード設定は不要です。Hugging Face Spaces では、最初に Space を **Private** にし、その反映を確認した後でだけ `PRIVATE_DEPLOYMENT_ACK=1` を設定してください。Public のまま ACK だけを追加する運用は禁止です。`SPACE_ID` がある環境で確認値がなければ、アプリは安全側に倒して起動を拒否します。
 既存Trading Plan互換データは保存層に残りますが、通常UIではStockページ内の「トレード分析」を使います。
 保存先の既定値はローカルJSONです。
 
@@ -113,6 +113,8 @@ Docker / Hugging Face Spaces 相当:
 docker build -t ai-investing-app .
 docker run --env-file .env -p 7860:7860 ai-investing-app
 ```
+
+Hugging Face への本番反映は、Private 化、Supabase の `ACTIVE_HEALTHY` 復旧、`SUPABASE_SECRET_KEY` による `scripts/live_smoke.py --require-supabase`、Space secret と ACK の登録、deploy の順で行います。CI は push 時に作成した Hugging Face commit SHA が Hub の現在 SHA と一致し、その revision が `RUNNING` になった後で、認証付き `/_health` の HTTP 200 と `{"status": true}` を確認します。新 secret で本番確認が完了するまで、互換用 `SUPABASE_KEY` は削除しません。
 
 `requirements.txt` はReflex本番用、`requirements-dev.txt` はテスト・lint用です。
 

@@ -98,7 +98,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Verify private Space before push
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >-
+          python scripts/verify_hf_deployment.py
+          --space "${HF_SPACE_REPO}"
+          --require-private
+          --preflight-only
+
       - name: Push to Hugging Face Spaces
+        id: deploy
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -134,33 +148,23 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "Deploy to Hugging Face Spaces"
+          deploy_commit="$(git rev-parse HEAD)"
+          echo "hf_commit=${deploy_commit}" >> "${GITHUB_OUTPUT}"
+          echo "hf_deploy_commit=${deploy_commit}" >> "${GITHUB_WORKSPACE}/.states/hf-deploy-metadata.txt"
           git push --force "${remote_url}" main
 
       - name: Verify deployed Space
+        timeout-minutes: 17
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          status="000"
-          for attempt in $(seq 1 12); do
-            status="$(curl --location --silent --show-error \
-              --output /dev/null --write-out '%{http_code}' \
-              --max-time 10 \
-              --header "Authorization: Bearer ${HF_TOKEN}" \
-              "${HF_SPACE_HEALTH_URL}" || true)"
-            if [[ "${status}" =~ ^(2|3)[0-9][0-9]$ ]]; then
-              echo "Space health check passed with HTTP ${status}."
-              echo "health_status=${status}" >> .states/hf-deploy-metadata.txt
-              exit 0
-            fi
-            echo "Attempt ${attempt}/12 returned HTTP ${status}; waiting for rebuild."
-            sleep 10
-          done
-
-          echo "health_status=${status}" >> .states/hf-deploy-metadata.txt
-          echo "::error::Space health check failed after deployment (HTTP ${status})"
-          exit 1
+        run: >-
+          python scripts/verify_hf_deployment.py
+          --space "${HF_SPACE_REPO}"
+          --expected-sha "${{ steps.deploy.outputs.hf_commit }}"
+          --health-url "${HF_SPACE_HEALTH_URL}"
+          --require-private
+          --timeout-seconds 900
+          --metadata-path .states/hf-deploy-metadata.txt
 
       - name: Upload deployment metadata
         if: always()
