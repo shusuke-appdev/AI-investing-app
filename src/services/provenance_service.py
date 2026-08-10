@@ -198,6 +198,39 @@ def option_provenance(
         if items
         else ProvenanceKind.UNAVAILABLE
     )
+    skew_horizons = [
+        horizon for item in items for horizon in list(item.get("horizons") or [])
+    ]
+    skew_details = [horizon.get("skew_detail") or {} for horizon in skew_horizons]
+    direct_skew = any(
+        detail.get("status") == "direct" and detail.get("method") == "delta_25_direct"
+        for detail in skew_details
+    )
+    fresh_direct_skew = any(
+        (horizon.get("skew_detail") or {}).get("status") == "direct"
+        and (horizon.get("skew_detail") or {}).get("method") == "delta_25_direct"
+        and not horizon.get("is_stale")
+        for horizon in skew_horizons
+    )
+    proxy_skew = any(detail.get("status") == "proxy" for detail in skew_details)
+    skew_kind = (
+        ProvenanceKind.COMPUTED
+        if fresh_direct_skew
+        else ProvenanceKind.STALE_CACHE
+        if direct_skew
+        else ProvenanceKind.PROXY
+        if proxy_skew
+        else ProvenanceKind.UNAVAILABLE
+    )
+    skew_as_of = max(
+        (
+            str(horizon.get("data_as_of") or "")
+            for item in items
+            for horizon in list(item.get("horizons") or [])
+            if horizon.get("data_as_of")
+        ),
+        default=fetched_at,
+    )
     return [
         _item(
             "market.options",
@@ -219,7 +252,27 @@ def option_provenance(
                 else "Greeks欠損時はGEXを非表示にする。"
             ),
             risk_level="high" if kind == ProvenanceKind.ESTIMATED else "medium",
-        )
+        ),
+        _item(
+            "market.options.iv_skew_25d",
+            "25Δ IVスキュー (Put IV − Call IV)",
+            skew_kind,
+            source=source,
+            as_of=skew_as_of,
+            method=(
+                "Liquid MarketData.app 25-delta legs; interpolate around 0.25 or use a nearest contract within 0.05 delta."
+                if fresh_direct_skew
+                else "Stored 25-delta result from a stale option-chain cache."
+                if direct_skew
+                else "10% OTM moneyness or legacy numeric skew; display-only proxy."
+                if proxy_skew
+                else "Unavailable because both qualified 25-delta legs were not observed."
+            ),
+            limitation=(
+                "市場判断はfreshなSPY直接値だけ。QQQ/IWMと平均せず、proxy/stale/legacyはスコアに使わない。"
+            ),
+            risk_level="high" if skew_kind != ProvenanceKind.COMPUTED else "medium",
+        ),
     ]
 
 

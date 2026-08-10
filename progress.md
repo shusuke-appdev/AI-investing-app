@@ -1,5 +1,14 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-08-10 Vercel方針と25Δ IVスキュー品質契約
+- Vercelプラグイン導入・Vercel移行は見送った。現行本番はGitHub ActionsのDocker検証からHugging Face Spacesへ同期する構成を維持し、Reflex WebSocket、ローカル状態、複数インスタンス復元を別環境で検証できるまでVercelを配置先に追加しない。再検討条件と読み取り限定の導入順をアーキテクチャへ記録した。
+- MarketData.appの取得列へbid/ask/midを追加し、IV、delta、spread、OI/volumeを検査した25デルタ・リスクリバーサル（OTM Put IV − OTM Call IV）を正本化した。0.25を挟む合格脚は線形補間し、挟まない場合はdelta差0.05以内の最寄りだけを使う。従来の10% OTM、yfinance、旧数値cacheは表示専用proxyで、unavailableをゼロ補完しない。
+- `skew_detail`へmethod/status、両脚IV/delta/strike、流動性、警告を追加した。SPY/QQQ/IWMは`skew_by_ticker`に分離し、単純平均を廃止した。市場参照はfreshなSPY直接値だけ、2銘柄以上の直接値がある場合だけdispersionを計算する。
+- 市場戦略は高い直接SPYスキューを下方向警戒にだけ使用し、負のスキューを上昇加点しない。負Gamma単独では方向を決めない。テーマETFも十分なGamma品質と高い直接スキューが揃う場合だけ下方向警戒とし、それ以外の負Gammaは上下双方向のボラ拡大候補・スコア中立にした。
+- Market Watch、Data Quality来歴、AI promptで`Cboe SKEW指数`と`25Δ IVスキュー (Put IV − Call IV)`を分離した。Cboe側は指数値、履歴percentile、5日変化、as-ofを保持し、既存の短期予測特徴量・複合センチメントdowngrade-only契約やモデル係数は変更していない。機能台帳、来歴台帳、オプション比較、運用資料を更新した。
+- Validation: focused regressionは67件成功。最終`.venv\Scripts\python.exe scripts\check.py`は依存整合、compileall、Ruff lint/format、scoped mypy、`389` tests、Reflex frontend export、7-route static semanticsをすべて成功した。Cboe SKEWはofficial/liveで2026-08-07の132.57、複合センチメントconfirmedと新しいCboe表示項目を確認した。
+- MarketData.app strict live smokeはAPI credit limitのHTTP 429でSPYチェーンを再取得できず、current/1W/1Mの新しいbid/ask付き実応答は未確認。外部市場、FRED、Finnhub、deployment guard、Supabase CRUDは成功した。`/market-watch`と`/data-quality`のstatic exportを1280px/390pxで確認し、各1 H1・横overflowなし・モバイル構成を確認したが、動的Reflex起動はWindows実行面の`WinError 5` / `spawn EPERM`で未確認。検証用サーバーは停止済み。今回の変更はcommit/push/deployしていない。
+
 ## Session update: 2026-08-02 dynamic Reflex dev-server recovery
 - Rechecked the historical Windows/Codex `PermissionError: [WinError 5]` against the current clean repository and environment. Two stale frontend-only `reflex run` process trees were stopped; neither had a listening backend.
 - A single `.venv\Scripts\reflex.exe run --frontend-port 3010 --backend-port 8010` started successfully with the existing repo-local `.reflex_states` directory and bundled Codex Node preference. Both ports listened, the Reflex `/_health` endpoint returned HTTP 200, and the frontend returned HTTP 200. The prior multiprocessing Pipe access denial did not recur.

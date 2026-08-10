@@ -19,6 +19,13 @@
   - `/knowledge`: 参照知識管理
 - 旧Streamlit UI: `codex/archive-streamlit-assets` ブランチへ履歴保全し、現行ツリーから撤去済み
 
+## 配置方針
+
+- 現行本番はGitHub Actionsで品質確認とDocker health checkを行い、Hugging Face Spacesへ同期する。Vercelプロジェクト、設定、デプロイは持たない
+- ReflexのPythonバックエンド、WebSocket、ローカルJSON、`.states`、`.reflex_states`を前提にするため、Vercelプラグイン導入やVercel移行は現時点では行わない
+- Vercelは、PR preview・即時rollback・保護環境・Vercel実行ログが実需要になり、状態をSupabase等の共有基盤へ移し、別プロジェクトでWebSocket再接続・長時間分析・Dockerサイズ・scale-down後の復元を検証できた場合だけ再評価する
+- 再評価時は先に`VERCEL`を外部ホスト検出対象へ追加し、アクセス制御確認なしの起動を拒否する。プラグイン接続はその後に行い、最初は一覧・ログ取得など読み取り用途に限定する
+
 ## レイヤー構成
 
 ```text
@@ -81,7 +88,7 @@ UI
 2. 軽量サマリーは `market_data.get_market_indices()` と `market_config.get_market_config()` のみを取得し、起動時にオプション取得を行わない
 3. `MarketState.refresh_market_details()` が、既存の `MarketContext` を再利用しながら `Theme/Flow → Credit/Risk → Vol/Sentiment → Options` の依存順で更新する。信用ストレスはvolレジームと短期予測より先に確定する
 4. 詳細更新では `sector_flow_service` が米国セクターETFと日本テーマバスケットから資金流入セクター、確信度、継続性、調査判断を計算し、`japan_market_conditions` が日経平均上昇の6条件を直接データまたは代理指標として評価する
-5. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、current / 1W / 1M の満期別チェーン、想定変動幅、Skew、GEX、キャッシュ鮮度、品質警告を `OptionContext.items` と `OptionContext.horizons` に保存する
+5. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、current / 1W / 1M の満期別チェーン、想定変動幅、銘柄別25Δ IVスキュー、GEX、キャッシュ鮮度、品質警告を `OptionContext.items` と `OptionContext.horizons` に保存する。市場参照値はfreshなSPY直接値だけで、QQQ/IWMとの単純平均は作らない
 6. Reflex state に整形済みデータを保存し、画面が再描画される
 7. 表示用の整形は `services.market_presentation_service.build_market_display_context()` が担い、`MarketState` はイベント、loading/error、表示モデル保持に集中する
 8. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、通常経路では既に取得済みの `MarketContext`、オプション品質情報、オプション期間構造、日米セクター流入、日経6条件、ユーザー指定の追加分析項目をプロンプトに含める。レポートは米国市場を主軸にし、日本市場は米国との連動・乖離を読む補助コーナーとして扱う

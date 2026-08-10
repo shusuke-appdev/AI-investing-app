@@ -76,8 +76,22 @@ def format_market_context_for_ai(context: MarketContext) -> str:
                 )
             if item.get("pcr_volume") is not None:
                 details.append(f"PCR={float(item.get('pcr_volume')):.2f}")
-            if item.get("skew") is not None:
-                details.append(f"skew={_display_percent(item.get('skew'))}")
+            skew_reference = item.get("skew_reference") or {}
+            if skew_reference.get("value") is not None:
+                details.append(
+                    "25d_iv_skew_put_minus_call(SPY)="
+                    f"{_display_percent(skew_reference.get('value'))}"
+                )
+                details.append(f"skew_method={skew_reference.get('method')}")
+                details.append(f"skew_status={skew_reference.get('status')}")
+                details.append(f"skew_as_of={skew_reference.get('data_as_of', '')}")
+            elif item.get("skew_by_ticker"):
+                display_methods = ",".join(
+                    f"{ticker}:{value.get('method', 'unavailable')}"
+                    for ticker, value in item.get("skew_by_ticker", {}).items()
+                )
+                details.append("25d_iv_skew_reference(SPY)=unavailable")
+                details.append(f"display_only_skew_methods={display_methods}")
             if item.get("nearby_net_gex") is not None:
                 details.append(
                     "nearby_gex="
@@ -159,10 +173,18 @@ def format_market_context_for_ai(context: MarketContext) -> str:
             parts.append(f"- {composite.get('summary')}")
         spy = (composite.get("targets") or {}).get("SPY") or {}
         for evidence in spy.get("evidence", []):
-            parts.append(
+            line = (
                 f"- {evidence.get('label')}: {evidence.get('status')} "
                 f"value={evidence.get('value')} threshold={evidence.get('threshold')}"
             )
+            if evidence.get("metric_kind") == "cboe_skew_index":
+                line += (
+                    f" index_level={evidence.get('raw_value')}"
+                    f" historical_percentile={evidence.get('percentile')}"
+                    f" change_5d={evidence.get('change_5d')}"
+                    f" as_of={evidence.get('as_of', '')}"
+                )
+            parts.append(line)
     if context.top_risk_signposts:
         signposts = context.top_risk_signposts
         parts.append(

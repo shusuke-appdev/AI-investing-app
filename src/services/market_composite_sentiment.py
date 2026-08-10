@@ -215,6 +215,9 @@ def _conditions(
     vix_change = _change(vix, 5)
     vvix_change = _change(vvix, 5)
     skew_change = _change(skew, 5)
+    skew_as_of = (
+        str(skew.dropna().index.max().date()) if not skew.dropna().empty else ""
+    )
     vix9d_vix = _ratio(latest.get("VIX9D"), latest.get("VIX"))
     vix_vix3m = _ratio(latest.get("VIX"), latest.get("VIX3M"))
     term_stress = _any_true(
@@ -255,18 +258,28 @@ def _conditions(
             "Cboe VIX",
         ),
         "skew_high": _evidence(
-            "SKEWテール警戒",
+            "Cboe SKEW指数 テール警戒",
             _any_true(_compare(skew_rank, 80, ">="), _compare(skew_change, 0.03, ">=")),
             skew_rank,
             "順位80以上 または5日+3%",
             "Cboe SKEW",
+            metric_kind="cboe_skew_index",
+            raw_value=_last(skew),
+            percentile=skew_rank,
+            change_5d=skew_change,
+            as_of=skew_as_of,
         ),
         "skew_not_high": _evidence(
-            "SKEW過熱なし",
+            "Cboe SKEW指数 過熱なし",
             _compare(skew_rank, 80, "<"),
             skew_rank,
             "< 80 percentile",
             "Cboe SKEW",
+            metric_kind="cboe_skew_index",
+            raw_value=_last(skew),
+            percentile=skew_rank,
+            change_5d=skew_change,
+            as_of=skew_as_of,
         ),
         "vvix_spike": _evidence(
             "VVIX急騰",
@@ -479,6 +492,7 @@ def _evidence(
     value: Any,
     threshold: str,
     source: str,
+    **metadata: Any,
 ) -> dict[str, Any]:
     return {
         "label": label,
@@ -491,6 +505,7 @@ def _evidence(
         "value": _float(value),
         "threshold": threshold,
         "source": source,
+        **metadata,
     }
 
 

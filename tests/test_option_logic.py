@@ -206,7 +206,14 @@ class TestOptionAnalyst:
     def test_analyze_option_sentiment_marks_complete_for_marketdata_direct_greeks(
         self, mock_get_chain, _mock_metadata, _mock_price, mock_option_data
     ):
-        mock_get_chain.return_value = mock_option_data
+        calls, puts = (frame.copy() for frame in mock_option_data)
+        calls["delta"] = [0.50, 0.35, 0.25]
+        puts["delta"] = [-0.25, -0.35, -0.50]
+        for frame in (calls, puts):
+            frame["bid"] = 1.0
+            frame["ask"] = 1.2
+            frame["mid"] = 1.1
+        mock_get_chain.return_value = calls, puts
 
         result = analyze_option_sentiment("TEST")
 

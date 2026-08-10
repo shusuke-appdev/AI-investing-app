@@ -71,12 +71,64 @@ def test_trend_ranking_reflects_marketdata_option_asymmetry(monkeypatch):
     )
 
     assert result["items"][0]["theme"] == "AI半導体"
-    assert result["items"][0]["option_asymmetry"] == "upside_squeeze_candidate"
+    assert result["items"][0]["option_asymmetry"] == "two_sided_vol_expansion"
+    assert result["items"][0]["option_score"] == 4.0
     assert result["items"][0]["option_source"] == "marketdata.app"
     assert result["items"][0]["rank_points"] == 10
     assert result["option_mode"] == "cache_only"
     assert option_calls
     assert all(cache_only for _, _, cache_only in option_calls)
+
+
+def test_theme_direction_requires_direct_skew_and_reliable_gamma():
+    base = {
+        "source": "marketdata.app",
+        "provider_active": True,
+        "complete_status": "complete",
+        "gamma_coverage": 1.0,
+        "is_stale": False,
+        "gex": {"nearby_net_gex": -10_000_000},
+        "pcr": {"volume_pcr": 1.0},
+    }
+    direct = {
+        **base,
+        "skew_detail": {
+            "value": 0.08,
+            "method": "delta_25_direct",
+            "status": "direct",
+            "liquidity_status": "ok",
+        },
+    }
+    proxy = {
+        **base,
+        "skew_detail": {
+            "value": 0.08,
+            "method": "moneyness_10pct_proxy",
+            "status": "proxy",
+            "liquidity_status": "thin",
+        },
+    }
+
+    assert (
+        service._option_payload("SMH", direct)["option_asymmetry"]
+        == "downside_vol_expansion"
+    )
+    assert service._option_payload("SMH", direct)["option_score"] == -12.0
+    assert (
+        service._option_payload("SMH", proxy)["option_asymmetry"]
+        == "two_sided_vol_expansion"
+    )
+    assert service._option_payload("SMH", proxy)["option_score"] == 0.0
+
+    positive_gex_proxy = {
+        **proxy,
+        "gex": {"nearby_net_gex": 10_000_000},
+    }
+    assert (
+        service._option_payload("SMH", positive_gex_proxy)["option_asymmetry"]
+        == "pinning"
+    )
+    assert service._option_payload("SMH", positive_gex_proxy)["option_score"] == 0.0
 
 
 def test_opportunity_themes_use_ranking_and_option_asymmetry():

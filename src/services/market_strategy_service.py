@@ -427,12 +427,16 @@ def _option_score(options: list[dict[str, Any]] | None) -> float:
         return 0.0
     scores = []
     for item in options:
+        ticker = str(item.get("ticker") or "SPY").upper()
+        if ticker != "SPY":
+            continue
         gex = item.get("gex") or {}
         nearby = _float(gex.get("nearby_net_gex"))
         pcr = _float((item.get("pcr") or {}).get("volume_pcr"))
+        skew = _direct_item_skew(item)
         score = 0.0
-        if nearby is not None and nearby < 0:
-            score += 0.18
+        if nearby is not None and nearby < 0 and skew is not None and skew > 0.03:
+            score -= 0.18
         elif nearby is not None and nearby > 0:
             score -= 0.05
         if pcr is not None and pcr < 0.75:
@@ -451,7 +455,7 @@ def _option_horizon_score(
         return None
     score = 0.0
     pcr = _float(horizon.get("pcr_volume"))
-    skew = _float(horizon.get("skew"))
+    skew = _direct_skew_reference(horizon)
     gex = _float(horizon.get("nearby_net_gex"))
     expected_move = _float(horizon.get("expected_move_pct")) or 0.0
     iv = _float(horizon.get("iv")) or 0.0
@@ -462,10 +466,8 @@ def _option_horizon_score(
         score -= 0.1
     if skew is not None and skew > 0.05:
         score -= 0.12
-    elif skew is not None and skew < -0.05:
-        score += 0.08
     if gex is not None and gex < 0:
-        score += -0.06 if skew is not None and skew > 0.03 else 0.05
+        score += -0.06 if skew is not None and skew > 0.03 else 0.0
     elif gex is not None and gex > 0:
         score -= 0.03
     if key == "one_month" and iv >= 0.28 and expected_move >= 0.06:
@@ -480,6 +482,34 @@ def _option_horizon(
         if item.get("key") == key:
             return item
     return {}
+
+
+def _direct_skew_reference(horizon: dict[str, Any]) -> float | None:
+    reference = horizon.get("skew_reference")
+    if not isinstance(reference, dict):
+        return None
+    if (
+        reference.get("status") != "direct"
+        or reference.get("method") != "delta_25_direct"
+        or reference.get("liquidity_status") != "ok"
+        or reference.get("is_stale")
+    ):
+        return None
+    return _float(reference.get("value"))
+
+
+def _direct_item_skew(item: dict[str, Any]) -> float | None:
+    detail = item.get("skew_detail")
+    if not isinstance(detail, dict):
+        return None
+    if (
+        detail.get("status") != "direct"
+        or detail.get("method") != "delta_25_direct"
+        or detail.get("liquidity_status") != "ok"
+        or item.get("is_stale")
+    ):
+        return None
+    return _float(detail.get("value"))
 
 
 def _driver_score(drivers: dict[str, Any]) -> float:
@@ -673,7 +703,7 @@ def _horizon_evidence(label: str, horizon: dict[str, Any]) -> str:
     iv = _float(horizon.get("iv"))
     move = _float(horizon.get("expected_move_pct"))
     pcr = _float(horizon.get("pcr_volume"))
-    skew = _float(horizon.get("skew"))
+    skew = _direct_skew_reference(horizon)
     if iv is not None:
         parts.append(f"IV={iv:.1%}")
     if move is not None:
@@ -681,7 +711,9 @@ def _horizon_evidence(label: str, horizon: dict[str, Any]) -> str:
     if pcr is not None:
         parts.append(f"PCR={pcr:.2f}")
     if skew is not None:
-        parts.append(f"Skew={skew:.1%}")
+        parts.append(f"25Δ IVスキュー(SPY)={skew:.1%}")
+    elif horizon.get("skew_by_ticker"):
+        parts.append("25Δ IVスキュー(SPY)=利用不可 (proxy/旧cacheは表示のみ)")
     return " / ".join(parts)
 
 

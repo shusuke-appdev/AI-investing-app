@@ -35,7 +35,7 @@ def _squeeze_options():
     ]
 
 
-def test_strategy_regime_selects_five_requested_classes():
+def test_strategy_regime_selection_does_not_treat_negative_gex_as_bullish():
     assert (
         service.select_strategy_regime(_levels("breakout"), _timeframes(0.6, 0.5))[
             "key"
@@ -62,7 +62,7 @@ def test_strategy_regime_selects_five_requested_classes():
             _timeframes(0.0, 0.0),
             options=_squeeze_options(),
         )["key"]
-        == "aggressive_mean_reversion"
+        == "wait"
     )
 
 
@@ -90,6 +90,14 @@ def test_timeframe_outlooks_use_option_horizons_as_evidence():
                 "expected_move_pct": 0.018,
                 "pcr_volume": 1.4,
                 "skew": 0.08,
+                "skew_reference": {
+                    "ticker": "SPY",
+                    "value": 0.08,
+                    "method": "delta_25_direct",
+                    "status": "direct",
+                    "liquidity_status": "ok",
+                    "is_stale": False,
+                },
                 "nearby_net_gex": -1_000_000,
             },
             {
@@ -108,6 +116,58 @@ def test_timeframe_outlooks_use_option_horizons_as_evidence():
     assert any("1Wオプション" in item for item in lookup["one_week"]["evidence"])
     assert any("1Mオプション" in item for item in lookup["one_month"]["evidence"])
     assert lookup["one_week"]["score"] < lookup["current"]["score"]
+
+
+def test_option_horizon_proxy_stale_and_legacy_skew_do_not_change_score():
+    base = {
+        "key": "one_week",
+        "pcr_volume": 1.0,
+        "nearby_net_gex": -1_000_000,
+    }
+    legacy = {**base, "skew": 0.20}
+    proxy = {
+        **base,
+        "skew_reference": {
+            "value": 0.20,
+            "method": "moneyness_10pct_proxy",
+            "status": "proxy",
+            "liquidity_status": "ok",
+            "is_stale": False,
+        },
+    }
+    stale = {
+        **base,
+        "skew_reference": {
+            "value": 0.20,
+            "method": "delta_25_direct",
+            "status": "direct",
+            "liquidity_status": "ok",
+            "is_stale": True,
+        },
+    }
+
+    assert service._option_horizon_score([legacy], "one_week") == 0.0
+    assert service._option_horizon_score([proxy], "one_week") == 0.0
+    assert service._option_horizon_score([stale], "one_week") == 0.0
+
+
+def test_direct_skew_is_downside_only_and_negative_value_never_adds_score():
+    def horizon(value):
+        return {
+            "key": "one_week",
+            "pcr_volume": 1.0,
+            "nearby_net_gex": -1_000_000,
+            "skew_reference": {
+                "value": value,
+                "method": "delta_25_direct",
+                "status": "direct",
+                "liquidity_status": "ok",
+                "is_stale": False,
+            },
+        }
+
+    assert service._option_horizon_score([horizon(0.08)], "one_week") < 0
+    assert service._option_horizon_score([horizon(-0.08)], "one_week") == 0.0
 
 
 def test_validated_forecast_is_primary_for_week_and_month_direction():

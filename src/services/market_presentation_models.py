@@ -23,6 +23,11 @@ class OptionHorizonSummary(BaseModel):
     price_range: str = "-"
     pcr_vol: str = "-"
     skew: str = "-"
+    skew_label: str = "25Δ IVスキュー"
+    skew_method: str = "unavailable"
+    skew_status: str = "unavailable"
+    skew_status_label: str = "未取得"
+    skew_liquidity: str = "unknown"
     gex: str = "-"
     data_quality: str = "unavailable"
 
@@ -247,6 +252,7 @@ class CompositeEvidenceDisplay(BaseModel):
     value: str = "不明"
     threshold: str = ""
     source: str = ""
+    detail: str = ""
 
 
 class CompositeSentimentDisplay(BaseModel):

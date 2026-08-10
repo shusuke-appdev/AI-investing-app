@@ -28,7 +28,7 @@ MARKETDATA_EASTERN_TZ = ZoneInfo("America/New_York")
 SAME_DAY_EXPIRATION_CUTOFF_ET = time(15, 45)
 OPTION_COLUMNS = (
     "optionSymbol,underlying,expiration,side,strike,dte,volume,openInterest,"
-    "underlyingPrice,iv,delta,gamma,theta,vega,updated"
+    "underlyingPrice,iv,bid,ask,mid,delta,gamma,theta,vega,updated"
 )
 _expiration_cache: dict[str, tuple[datetime, list[date]]] = {}
 
@@ -306,6 +306,9 @@ def normalize_option_chain_response(data: dict[str, Any]) -> pd.DataFrame:
         "openInterest",
         "underlyingPrice",
         "impliedVolatility",
+        "bid",
+        "ask",
+        "mid",
         "delta",
         "gamma",
         "theta",

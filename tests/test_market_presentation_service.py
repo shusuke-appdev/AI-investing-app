@@ -28,6 +28,19 @@ def test_market_display_context_formats_market_context_for_reflex_state():
                     "provider_active": True,
                     "gamma_coverage": 1.0,
                     "complete_status": "complete",
+                    "horizons": [
+                        {
+                            "key": "current",
+                            "label": "現在",
+                            "skew": 0.06,
+                            "skew_detail": {
+                                "value": 0.06,
+                                "method": "delta_25_direct",
+                                "status": "direct",
+                                "liquidity_status": "ok",
+                            },
+                        }
+                    ],
                 }
             ]
         ),
@@ -116,11 +129,16 @@ def test_market_display_context_formats_market_context_for_reflex_state():
                     "summary": "テールヘッジ需要が強い状態です。",
                     "evidence": [
                         {
-                            "label": "SKEWテール警戒",
+                            "label": "Cboe SKEW指数 テール警戒",
                             "status": "met",
                             "value": 92.0,
                             "threshold": "≥ 80 percentile",
                             "source": "Cboe SKEW",
+                            "metric_kind": "cboe_skew_index",
+                            "raw_value": 132.57,
+                            "percentile": 92.0,
+                            "change_5d": 0.03,
+                            "as_of": "2026-07-10",
                         }
                     ],
                 }
@@ -197,6 +215,8 @@ def test_market_display_context_formats_market_context_for_reflex_state():
     assert display.option_analysis[0].complete_status_label == "完全取得"
     assert display.option_analysis[0].gamma_coverage_str == "100%"
     assert display.option_analysis[0].provider_active is True
+    assert display.option_analysis[0].horizons[0].skew_label == "25Δ IVスキュー"
+    assert display.option_analysis[0].horizons[0].skew_status_label == "direct"
     assert display.market_signals[0].category == "bullish"
     assert display.momentum_data[0].themes[0].performance_str == "+3.2%"
     assert display.bullish_distortions[0].tickers == ["NVDA", "MSFT"]
@@ -208,6 +228,7 @@ def test_market_display_context_formats_market_context_for_reflex_state():
     assert display.short_horizon_forecasts[0].status_label == "検証済み"
     assert display.composite_sentiment_items[0].state == "hidden_tail_hedging"
     assert display.composite_sentiment_items[0].evidence[0].status_label == "成立"
+    assert "指数値 132.57" in display.composite_sentiment_items[0].evidence[0].detail
     assert display.important_levels[0].behavior_label == "突破"
     assert len(display.trend_ranking_items) == 5
     assert display.trend_ranking_items[0].option_asymmetry == "upside_squeeze_candidate"

@@ -209,7 +209,7 @@ def _aggregate_option_horizons(results: list[dict]) -> list[dict[str, Any]]:
                     "iv_values": [],
                     "expected_move_values": [],
                     "pcr_values": [],
-                    "skew_values": [],
+                    "skew_by_ticker": {},
                     "gex_values": [],
                     "gamma_values": [],
                     "sources": set(),
@@ -227,7 +227,10 @@ def _aggregate_option_horizons(results: list[dict]) -> list[dict[str, Any]]:
             _append_number(
                 bucket["pcr_values"], (horizon.get("pcr") or {}).get("volume_pcr")
             )
-            _append_number(bucket["skew_values"], horizon.get("skew"))
+            skew_entry = _skew_entry(ticker, item, horizon)
+            if ticker and skew_entry is not None:
+                bucket["skew_by_ticker"][ticker] = skew_entry
+                bucket["warnings"].extend(skew_entry.get("warnings") or [])
             _append_number(
                 bucket["gex_values"], (horizon.get("gex") or {}).get("nearby_net_gex")
             )
@@ -247,7 +250,10 @@ def _aggregate_option_horizons(results: list[dict]) -> list[dict[str, Any]]:
         iv = _avg(bucket["iv_values"])
         expected_move = _avg(bucket["expected_move_values"])
         pcr = _avg(bucket["pcr_values"])
-        skew = _avg(bucket["skew_values"])
+        skew_by_ticker = dict(sorted(bucket["skew_by_ticker"].items()))
+        skew_reference = _spy_skew_reference(skew_by_ticker)
+        skew = _float_or_none((skew_reference or {}).get("value"))
+        skew_dispersion = _direct_skew_dispersion(skew_by_ticker)
         nearby_gex = _avg(bucket["gex_values"])
         gamma = _avg(bucket["gamma_values"])
         dte = _avg(bucket["dte_values"])
@@ -262,6 +268,9 @@ def _aggregate_option_horizons(results: list[dict]) -> list[dict[str, Any]]:
                 "expected_move_pct": expected_move,
                 "pcr_volume": pcr,
                 "skew": skew,
+                "skew_reference": skew_reference,
+                "skew_by_ticker": skew_by_ticker,
+                "skew_dispersion": skew_dispersion,
                 "nearby_net_gex": nearby_gex,
                 "gamma_coverage": gamma,
                 "source": ", ".join(sorted(bucket["sources"])),
@@ -290,6 +299,86 @@ def _avg(values: list[float]) -> float | None:
     return round(sum(values) / len(values), 4) if values else None
 
 
+def _skew_entry(
+    ticker: str, item: dict[str, Any], horizon: dict[str, Any]
+) -> dict[str, Any] | None:
+    detail = horizon.get("skew_detail")
+    stale = bool(horizon.get("is_stale") or item.get("is_stale"))
+    if isinstance(detail, dict):
+        entry = {
+            "ticker": ticker,
+            "value": _float_or_none(detail.get("value")),
+            "method": str(detail.get("method") or "unavailable"),
+            "status": str(detail.get("status") or "unavailable"),
+            "put_iv": _float_or_none(detail.get("put_iv")),
+            "call_iv": _float_or_none(detail.get("call_iv")),
+            "put_delta": _float_or_none(detail.get("put_delta")),
+            "call_delta": _float_or_none(detail.get("call_delta")),
+            "put_strike": _float_or_none(detail.get("put_strike")),
+            "call_strike": _float_or_none(detail.get("call_strike")),
+            "liquidity_status": str(detail.get("liquidity_status") or "unknown"),
+            "warnings": list(detail.get("warnings") or []),
+            "is_stale": stale,
+            "data_as_of": str(
+                horizon.get("data_as_of") or item.get("data_as_of") or ""
+            ),
+            "expiration": str(horizon.get("resolved_expiration") or ""),
+        }
+        return entry
+
+    legacy_value = _float_or_none(horizon.get("skew"))
+    if legacy_value is None:
+        return None
+    return {
+        "ticker": ticker,
+        "value": legacy_value,
+        "method": "legacy_proxy",
+        "status": "proxy",
+        "put_iv": None,
+        "call_iv": None,
+        "put_delta": None,
+        "call_delta": None,
+        "put_strike": None,
+        "call_strike": None,
+        "liquidity_status": "unknown",
+        "warnings": [
+            "Legacy numeric skew has no 25-delta provenance and is display-only."
+        ],
+        "is_stale": stale,
+        "data_as_of": str(horizon.get("data_as_of") or item.get("data_as_of") or ""),
+        "expiration": str(horizon.get("resolved_expiration") or ""),
+    }
+
+
+def _is_fresh_direct_skew(entry: dict[str, Any] | None) -> bool:
+    return bool(
+        entry
+        and entry.get("status") == "direct"
+        and entry.get("method") == "delta_25_direct"
+        and entry.get("liquidity_status") == "ok"
+        and entry.get("value") is not None
+        and not entry.get("is_stale")
+    )
+
+
+def _spy_skew_reference(
+    skew_by_ticker: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    spy = skew_by_ticker.get("SPY")
+    return dict(spy) if _is_fresh_direct_skew(spy) else None
+
+
+def _direct_skew_dispersion(
+    skew_by_ticker: dict[str, dict[str, Any]],
+) -> float | None:
+    values = [
+        float(entry["value"])
+        for entry in skew_by_ticker.values()
+        if _is_fresh_direct_skew(entry)
+    ]
+    return round(max(values) - min(values), 6) if len(values) >= 2 else None
+
+
 def _horizon_summary(
     label: str,
     iv: float | None,
@@ -306,7 +395,7 @@ def _horizon_summary(
     if pcr is not None:
         parts.append(f"PCR={pcr:.2f}")
     if skew is not None:
-        parts.append(f"Skew={skew:.1%}")
+        parts.append(f"25Δ IVスキュー(SPY)={skew:.1%}")
     if nearby_gex is not None:
         parts.append("GEX=" + ("正" if nearby_gex > 0 else "負"))
     return " / ".join(parts)

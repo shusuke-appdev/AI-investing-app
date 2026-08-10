@@ -23,6 +23,9 @@ def _payload(expiration_date: str = "2026-06-29"):
         "openInterest": [100, 200],
         "underlyingPrice": [601.5, 601.5],
         "iv": [0.2, 0.22],
+        "bid": [1.0, 1.2],
+        "ask": [1.2, 1.4],
+        "mid": [1.1, 1.3],
         "delta": [0.5, -0.5],
         "gamma": [0.03, 0.03],
         "theta": [-0.1, -0.1],
@@ -38,6 +41,9 @@ def test_normalize_marketdata_option_chain():
     assert list(frame["impliedVolatility"]) == [0.2, 0.22]
     assert list(frame["expiration"]) == ["2026-06-29", "2026-06-29"]
     assert list(frame["gamma"]) == [0.03, 0.03]
+    assert list(frame["bid"]) == [1.0, 1.2]
+    assert list(frame["ask"]) == [1.2, 1.4]
+    assert list(frame["mid"]) == [1.1, 1.3]
 
 
 def test_normalize_marketdata_option_chain_rejects_mismatched_columns():
@@ -81,6 +87,7 @@ def test_fetch_marketdata_option_chain_uses_bounded_request(monkeypatch, tmp_pat
     assert "dte" not in calls[1][1]
     assert calls[1][1]["strikeLimit"] == 100
     assert calls[1][1]["nonstandard"] == "false"
+    assert "bid,ask,mid,delta" in calls[1][1]["columns"]
     assert "mode" not in calls[1][1]
     assert result.resolved_expiration == expiration_date
     assert result.resolved_dte >= 1

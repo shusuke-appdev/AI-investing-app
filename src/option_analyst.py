@@ -525,33 +525,192 @@ def calculate_skew(
     calls: pd.DataFrame | None = None,
     puts: pd.DataFrame | None = None,
     current_price: float = 0.0,
+    source: str = "",
+    provider_active: bool | None = None,
 ) -> float | None:
     """
-    OTM Put IVとOTM Call IVの差からスキュー(Skew)を計算します。
-    正の値は下落リスク（Putの割高感）を、負の値は上昇リスクを強く織り込んでいることを示します。
+    既存互換の数値スキューを返します。
+
+    正本は流動性を確認した25デルタ・リスクリバーサルで、取得できない
+    場合だけ従来の10% OTM値を表示専用proxyとして返します。利用側は
+    ``calculate_skew_detail`` のstatus/methodを確認して判断へ使います。
     """
+    detail = calculate_skew_detail(
+        ticker,
+        calls=calls,
+        puts=puts,
+        current_price=current_price,
+        source=source,
+        provider_active=provider_active,
+    )
+    return _float_or_none(detail.get("value"))
+
+
+def calculate_skew_detail(
+    ticker: str = "",
+    *,
+    calls: pd.DataFrame | None = None,
+    puts: pd.DataFrame | None = None,
+    current_price: float = 0.0,
+    source: str = "",
+    provider_active: bool | None = None,
+) -> dict[str, Any]:
+    """Return a provenance-aware put-minus-call IV skew contract."""
+
     if calls is None or puts is None or current_price == 0.0:
         if not ticker:
-            return None
+            return _unavailable_skew_detail("Option chain or underlying price missing.")
         fetched = _fetch_option_data(ticker)
         if fetched is None:
-            return None
-        calls, puts, current_price, _, _ = fetched
+            return _unavailable_skew_detail("Option chain is unavailable.")
+        calls, puts, current_price, _, metadata = fetched
+        source = str(metadata.get("source") or source)
+        if provider_active is None:
+            provider_active = bool(metadata.get("provider_active"))
 
     if puts.empty or calls.empty:
-        return None
+        return _unavailable_skew_detail("Both put and call legs are required.")
     if "strike" not in calls or "strike" not in puts:
-        return None
+        return _unavailable_skew_detail("Option strikes are unavailable.")
     if "impliedVolatility" not in calls or "impliedVolatility" not in puts:
-        return None
+        return _unavailable_skew_detail("Option implied volatility is unavailable.")
+
+    direct_allowed = (
+        not source or source.startswith("marketdata.app") or provider_active is True
+    )
+    direct_warnings: list[str] = []
+    if direct_allowed:
+        put_leg, put_warning = _select_25_delta_leg(
+            puts, current_price=current_price, side="put"
+        )
+        call_leg, call_warning = _select_25_delta_leg(
+            calls, current_price=current_price, side="call"
+        )
+        direct_warnings.extend(item for item in (put_warning, call_warning) if item)
+        if put_leg is not None and call_leg is not None:
+            return {
+                "value": round(put_leg["iv"] - call_leg["iv"], 6),
+                "method": "delta_25_direct",
+                "status": "direct",
+                "put_iv": put_leg["iv"],
+                "call_iv": call_leg["iv"],
+                "put_delta": -put_leg["abs_delta"],
+                "call_delta": call_leg["abs_delta"],
+                "put_strike": put_leg["strike"],
+                "call_strike": call_leg["strike"],
+                "liquidity_status": "ok",
+                "warnings": _unique_warnings(direct_warnings),
+            }
+        direct_warnings.append(
+            "Liquid 25-delta put and call legs were not both available."
+        )
+    else:
+        direct_warnings.append(
+            "Direct 25-delta skew requires MarketData.app delta and liquidity fields."
+        )
+
+    proxy = _calculate_moneyness_proxy(calls, puts, current_price)
+    if proxy is None:
+        return _unavailable_skew_detail(*direct_warnings)
+    proxy["warnings"] = _unique_warnings(
+        [
+            *direct_warnings,
+            "10% OTM moneyness skew is a display-only proxy and is excluded from scoring.",
+        ]
+    )
+    return proxy
+
+
+def _select_25_delta_leg(
+    frame: pd.DataFrame, *, current_price: float, side: str
+) -> tuple[dict[str, float] | None, str]:
+    required = {
+        "strike",
+        "impliedVolatility",
+        "delta",
+        "bid",
+        "ask",
+        "openInterest",
+        "volume",
+    }
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        return None, f"25-delta {side} fields missing: {', '.join(missing)}."
+
+    candidates: list[dict[str, float]] = []
+    for _, row in frame.iterrows():
+        strike = _float_or_none(row.get("strike"))
+        delta = _float_or_none(row.get("delta"))
+        iv = _normalized_iv(row.get("impliedVolatility"))
+        bid = _float_or_none(row.get("bid"))
+        ask = _float_or_none(row.get("ask"))
+        oi = _float_or_none(row.get("openInterest")) or 0.0
+        volume = _float_or_none(row.get("volume")) or 0.0
+        if strike is None or delta is None or iv is None or bid is None or ask is None:
+            continue
+        is_otm = strike <= current_price if side == "put" else strike >= current_price
+        correct_sign = delta < 0 if side == "put" else delta > 0
+        if not is_otm or not correct_sign or bid <= 0 or ask < bid:
+            continue
+        quoted_mid = _float_or_none(row.get("mid"))
+        mid = (
+            quoted_mid if quoted_mid is not None and quoted_mid > 0 else (bid + ask) / 2
+        )
+        if mid <= 0 or (ask - bid) / mid > 0.5:
+            continue
+        if oi < 50 and volume < 10:
+            continue
+        candidates.append(
+            {
+                "iv": iv,
+                "strike": strike,
+                "abs_delta": abs(delta),
+            }
+        )
+
+    if not candidates:
+        return None, f"No liquid OTM {side} contract passed the 25-delta filters."
+
+    candidates.sort(key=lambda item: item["abs_delta"])
+    lower = [item for item in candidates if item["abs_delta"] <= 0.25]
+    upper = [item for item in candidates if item["abs_delta"] >= 0.25]
+    if lower and upper:
+        low = lower[-1]
+        high = upper[0]
+        if high["abs_delta"] == low["abs_delta"]:
+            return dict(low), ""
+        weight = (0.25 - low["abs_delta"]) / (high["abs_delta"] - low["abs_delta"])
+        return {
+            "iv": round(low["iv"] + weight * (high["iv"] - low["iv"]), 6),
+            "strike": round(
+                low["strike"] + weight * (high["strike"] - low["strike"]), 6
+            ),
+            "abs_delta": 0.25,
+        }, ""
+
+    nearest = min(candidates, key=lambda item: abs(item["abs_delta"] - 0.25))
+    if abs(nearest["abs_delta"] - 0.25) <= 0.05:
+        return dict(
+            nearest
+        ), f"Nearest liquid {side} delta used; interpolation unavailable."
+    return None, f"Nearest liquid {side} contract was more than 0.05 delta from 0.25."
+
+
+def _calculate_moneyness_proxy(
+    calls: pd.DataFrame, puts: pd.DataFrame, current_price: float
+) -> dict[str, Any] | None:
+    """Calculate the historical 10% OTM proxy without granting it score authority."""
 
     # 10% OTMのストライクを目安に
     target_put_strike = current_price * 0.90
     target_call_strike = current_price * 1.10
 
-    # 有効なIVを持つデータに絞る
-    valid_puts = puts[puts["impliedVolatility"] > 0]
-    valid_calls = calls[calls["impliedVolatility"] > 0]
+    valid_puts = puts.copy()
+    valid_calls = calls.copy()
+    valid_puts["_normalized_iv"] = valid_puts["impliedVolatility"].map(_normalized_iv)
+    valid_calls["_normalized_iv"] = valid_calls["impliedVolatility"].map(_normalized_iv)
+    valid_puts = valid_puts[valid_puts["_normalized_iv"].notna()]
+    valid_calls = valid_calls[valid_calls["_normalized_iv"].notna()]
 
     if valid_puts.empty or valid_calls.empty:
         return None
@@ -568,16 +727,70 @@ def calculate_skew(
         return None
     otm_call = otm_calls.iloc[(otm_calls["strike"] - target_call_strike).abs().argmin()]
 
-    put_iv = otm_put["impliedVolatility"]
-    call_iv = otm_call["impliedVolatility"]
+    put_iv = float(otm_put["_normalized_iv"])
+    call_iv = float(otm_call["_normalized_iv"])
+    return {
+        "value": round(put_iv - call_iv, 6),
+        "method": "moneyness_10pct_proxy",
+        "status": "proxy",
+        "put_iv": put_iv,
+        "call_iv": call_iv,
+        "put_delta": _float_or_none(otm_put.get("delta")),
+        "call_delta": _float_or_none(otm_call.get("delta")),
+        "put_strike": _float_or_none(otm_put.get("strike")),
+        "call_strike": _float_or_none(otm_call.get("strike")),
+        "liquidity_status": _proxy_liquidity_status(otm_put, otm_call),
+        "warnings": [],
+    }
 
-    # yfinance(小数)とFinnhub(パーセンテージ)のスケール吸収
-    if put_iv > 2:
-        put_iv /= 100.0
-    if call_iv > 2:
-        call_iv /= 100.0
 
-    return put_iv - call_iv
+def _normalized_iv(value: Any) -> float | None:
+    iv = _float_or_none(value)
+    if iv is None:
+        return None
+    if iv > 2:
+        iv /= 100.0
+    return float(iv) if 0 < iv < 2 else None
+
+
+def _proxy_liquidity_status(put: pd.Series, call: pd.Series) -> str:
+    statuses = [_row_liquidity_status(put), _row_liquidity_status(call)]
+    if "thin" in statuses:
+        return "thin"
+    if all(item == "ok" for item in statuses):
+        return "ok"
+    return "unknown"
+
+
+def _row_liquidity_status(row: pd.Series) -> str:
+    bid = _float_or_none(row.get("bid"))
+    ask = _float_or_none(row.get("ask"))
+    if bid is None or ask is None:
+        return "unknown"
+    mid = _float_or_none(row.get("mid"))
+    if mid is None or mid <= 0:
+        mid = (bid + ask) / 2
+    oi = _float_or_none(row.get("openInterest")) or 0.0
+    volume = _float_or_none(row.get("volume")) or 0.0
+    if bid <= 0 or ask < bid or mid <= 0 or (ask - bid) / mid > 0.5:
+        return "thin"
+    return "ok" if oi >= 50 or volume >= 10 else "thin"
+
+
+def _unavailable_skew_detail(*warnings: str) -> dict[str, Any]:
+    return {
+        "value": None,
+        "method": "unavailable",
+        "status": "unavailable",
+        "put_iv": None,
+        "call_iv": None,
+        "put_delta": None,
+        "call_delta": None,
+        "put_strike": None,
+        "call_strike": None,
+        "liquidity_status": "unknown",
+        "warnings": _unique_warnings([item for item in warnings if item]),
+    }
 
 
 def estimate_price_range(
@@ -662,7 +875,15 @@ def _analyze_fetched_option_data(
     )
     iv = calculate_atm_iv(ticker, calls=calls, puts=puts, current_price=current_price)
     max_pain = calculate_max_pain(ticker, calls=calls, puts=puts)
-    skew = calculate_skew(ticker, calls=calls, puts=puts, current_price=current_price)
+    skew_detail = calculate_skew_detail(
+        ticker,
+        calls=calls,
+        puts=puts,
+        current_price=current_price,
+        source=source,
+        provider_active=provider_active,
+    )
+    skew = _float_or_none(skew_detail.get("value"))
     quality = assess_option_data_quality(
         calls,
         puts,
@@ -681,6 +902,11 @@ def _analyze_fetched_option_data(
         quality["quality_warnings"] = _unique_warnings(
             [*quality["quality_warnings"], warning]
         )
+    if skew_detail.get("status") != "direct":
+        quality["data_quality"] = _worse_quality(quality["data_quality"], "partial")
+    quality["quality_warnings"] = _unique_warnings(
+        [*quality["quality_warnings"], *list(skew_detail.get("warnings") or [])]
+    )
 
     dte = _chain_dte(calls, puts, metadata)
     price_range = estimate_price_range(current_price, iv, dte) if iv else None
@@ -735,12 +961,28 @@ def _analyze_fetched_option_data(
             )
 
     if skew is not None:
-        if skew > 0.05:
-            analysis.append(f"{horizon_label} Skew: {skew:.1%} (下落警戒強め)")
-        elif skew < -0.05:
-            analysis.append(f"{horizon_label} Skew: {skew:.1%} (上昇警戒強め)")
+        if skew_detail.get("status") == "direct" and skew > 0.05:
+            analysis.append(
+                f"{horizon_label} 25Δ IVスキュー (Put IV − Call IV): "
+                f"{skew:.1%} (下方向警戒)"
+            )
+        elif skew_detail.get("status") == "direct" and skew < 0:
+            analysis.append(
+                f"{horizon_label} 25Δ IVスキュー (Put IV − Call IV): "
+                f"{skew:.1%} (負値は上昇評価に未使用)"
+            )
+        elif skew_detail.get("status") == "direct":
+            analysis.append(
+                f"{horizon_label} 25Δ IVスキュー (Put IV − Call IV): "
+                f"{skew:.1%} (警戒閾値未満)"
+            )
         else:
-            analysis.append(f"{horizon_label} Skew: {skew:.1%} (中立水準)")
+            analysis.append(
+                f"{horizon_label} 10% OTM IVスキュー proxy: {skew:.1%} "
+                "(表示のみ・スコア未使用)"
+            )
+    else:
+        analysis.append(f"{horizon_label} 25Δ IVスキュー: unavailable")
 
     if max_pain:
         analysis.append(f"{horizon_label} Max Pain: ${max_pain:.0f}")
@@ -766,6 +1008,7 @@ def _analyze_fetched_option_data(
         "gex": gex,
         "iv": iv,
         "skew": skew,
+        "skew_detail": skew_detail,
         "dte": dte,
         "expected_move_pct": expected_move_pct,
         "price_range": price_range,
@@ -919,6 +1162,7 @@ def analyze_option_sentiment(
         "gex": primary.get("gex"),
         "iv": primary.get("iv"),
         "skew": primary.get("skew"),
+        "skew_detail": primary.get("skew_detail") or _unavailable_skew_detail(),
         "dte": primary.get("dte"),
         "expected_move_pct": primary.get("expected_move_pct"),
         "price_range": primary.get("price_range"),

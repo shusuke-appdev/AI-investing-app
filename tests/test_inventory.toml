@@ -100,6 +100,7 @@ files = [
   "test_fundamental_profile_service.py",
   "test_option_analyst_logic.py",
   "test_option_logic.py",
+  "test_option_market_aggregate.py",
   "test_option_status.py",
   "test_purchase_evidence_service.py",
   "test_stock_analysis_inputs.py",

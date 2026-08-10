@@ -151,7 +151,7 @@ def _composite_sentiment_panel() -> rx.Component:
                 align_items="center",
             ),
             rx.text(
-                "VIX・SKEW・VVIX・Put/Call・期間構造・gamma・市場参加度を組み合わせます。",
+                "VIX・Cboe SKEW指数・VVIX・Put/Call・期間構造・gamma・市場参加度を組み合わせます。",
                 size="1",
                 color=rx.color("gray", 10),
             ),
@@ -229,6 +229,11 @@ def _composite_evidence_row(item) -> rx.Component:
                 item.threshold + " / " + item.source,
                 size="1",
                 color=rx.color("gray", 9),
+            ),
+            rx.cond(
+                item.detail != "",
+                rx.text(item.detail, size="1", color=rx.color("gray", 9)),
+                rx.fragment(),
             ),
             spacing="0",
             align_items="start",

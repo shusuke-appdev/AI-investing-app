@@ -489,6 +489,14 @@ def test_market_ai_prompt_includes_option_term_structure():
                     "expected_move_pct": 0.018,
                     "pcr_volume": 1.2,
                     "skew": 0.04,
+                    "skew_reference": {
+                        "ticker": "SPY",
+                        "value": 0.04,
+                        "method": "delta_25_direct",
+                        "status": "direct",
+                        "liquidity_status": "ok",
+                        "data_as_of": "2026-07-10T00:00:00+00:00",
+                    },
                     "nearby_net_gex": -1_000_000,
                 }
             ],
@@ -501,6 +509,66 @@ def test_market_ai_prompt_includes_option_term_structure():
     assert "[Options term structure]" in prompt
     assert "1sigma_move" in prompt
     assert "nearby_gex=negative" in prompt
+    assert "25d_iv_skew_put_minus_call(SPY)" in prompt
+    assert "skew_method=delta_25_direct" in prompt
+
+
+def test_market_ai_prompt_labels_cboe_skew_index_separately():
+    context = MarketContext(
+        market_type="US",
+        composite_sentiment={
+            "targets": {
+                "SPY": {
+                    "evidence": [
+                        {
+                            "label": "Cboe SKEW指数 テール警戒",
+                            "status": "met",
+                            "value": 91.0,
+                            "threshold": "順位80以上",
+                            "metric_kind": "cboe_skew_index",
+                            "raw_value": 132.57,
+                            "percentile": 91.0,
+                            "change_5d": 0.03,
+                            "as_of": "2026-08-07",
+                        }
+                    ]
+                }
+            }
+        },
+    )
+
+    prompt = service.format_market_context_for_ai(context)
+
+    assert "Cboe SKEW指数" in prompt
+    assert "index_level=132.57" in prompt
+    assert "as_of=2026-08-07" in prompt
+
+
+def test_option_provenance_distinguishes_fresh_and_stale_25_delta_skew():
+    from src.services.provenance_service import option_provenance
+
+    horizon = {
+        "data_as_of": "2026-08-07T20:00:00+00:00",
+        "skew_detail": {
+            "method": "delta_25_direct",
+            "status": "direct",
+        },
+    }
+    fresh = option_provenance(
+        fetched_at="2026-08-07T20:01:00+00:00",
+        source="marketdata.app",
+        status="available",
+        items=[{"horizons": [horizon]}],
+    )
+    stale = option_provenance(
+        fetched_at="2026-08-07T20:01:00+00:00",
+        source="marketdata.app_cache",
+        status="partial",
+        items=[{"horizons": [{**horizon, "is_stale": True}]}],
+    )
+
+    assert fresh[-1].kind.value == "computed"
+    assert stale[-1].kind.value == "stale_cache"
 
 
 def test_build_market_context_keeps_partial_data_when_options_fail(monkeypatch):

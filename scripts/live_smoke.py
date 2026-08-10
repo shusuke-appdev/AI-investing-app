@@ -244,6 +244,12 @@ def _marketdata_options_check(
             if key in {"current", "one_week", "one_month"}
             and "marketdata.app" not in str(item.get("source") or "")
         ]
+        incomplete_skew_terms = [
+            key
+            for key, item in by_key.items()
+            if key in {"current", "one_week", "one_month"}
+            and not _complete_skew_detail(item)
+        ]
         if missing_terms:
             failures.append(
                 f"{ticker}:term_structure_missing={','.join(missing_terms)}"
@@ -257,7 +263,16 @@ def _marketdata_options_check(
                 f"{ticker}:term_structure_non_marketdata="
                 + ",".join(non_marketdata_terms)
             )
-        if not missing_terms and not inactive_terms and not non_marketdata_terms:
+        if incomplete_skew_terms:
+            failures.append(
+                f"{ticker}:skew_detail_incomplete=" + ",".join(incomplete_skew_terms)
+            )
+        if (
+            not missing_terms
+            and not inactive_terms
+            and not non_marketdata_terms
+            and not incomplete_skew_terms
+        ):
             summaries.append(
                 f"{ticker}:term_structure="
                 f"{analysis.get('term_structure', {}).get('summary') or 'available'}"
@@ -282,11 +297,43 @@ def _term_horizon_detail(item: dict[str, Any]) -> str:
     iv = item.get("iv")
     as_of = str(item.get("data_as_of") or "unknown")
     source = str(item.get("source") or "unknown")
+    skew = item.get("skew_detail") or {}
     try:
         iv_text = f"{float(iv):.1%}"
     except (TypeError, ValueError):
         iv_text = "unknown"
-    return f"{key}@{expiration}/dte={dte}/iv={iv_text}/as_of={as_of}/source={source}"
+    return (
+        f"{key}@{expiration}/dte={dte}/iv={iv_text}/as_of={as_of}/source={source}"
+        f"/skew_method={skew.get('method', 'unavailable')}"
+        f"/skew_status={skew.get('status', 'unavailable')}"
+        f"/put_iv={skew.get('put_iv')}/call_iv={skew.get('call_iv')}"
+        f"/put_delta={skew.get('put_delta')}/call_delta={skew.get('call_delta')}"
+        f"/put_strike={skew.get('put_strike')}/call_strike={skew.get('call_strike')}"
+        f"/liquidity={skew.get('liquidity_status', 'unknown')}"
+    )
+
+
+def _complete_skew_detail(item: dict[str, Any]) -> bool:
+    detail = item.get("skew_detail")
+    if not isinstance(detail, dict):
+        return False
+    if detail.get("method") not in {"delta_25_direct", "moneyness_10pct_proxy"}:
+        return False
+    if detail.get("status") not in {"direct", "proxy"}:
+        return False
+    required_values = (
+        "put_iv",
+        "call_iv",
+        "put_delta",
+        "call_delta",
+        "put_strike",
+        "call_strike",
+    )
+    return bool(
+        all(detail.get(key) is not None for key in required_values)
+        and detail.get("liquidity_status") in {"ok", "thin"}
+        and item.get("data_as_of")
+    )
 
 
 def _latest_updated_timestamp(values: Any) -> str:

@@ -173,6 +173,10 @@ def format_option_summaries(option_data: list[dict[str, Any]]) -> list[dict[str,
 def _format_option_horizons(horizons: list[dict[str, Any]]) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for item in horizons[:3]:
+        skew_detail = item.get("skew_detail") or {}
+        skew_method = str(skew_detail.get("method") or "legacy_proxy")
+        skew_status = str(skew_detail.get("status") or "proxy")
+        skew_value = skew_detail.get("value", item.get("skew"))
         price_range = item.get("price_range")
         lower = item.get("price_range_lower")
         upper = item.get("price_range_upper")
@@ -188,7 +192,22 @@ def _format_option_horizons(horizons: list[dict[str, Any]]) -> list[dict[str, st
                 "expected_move": _ratio_percent_str(item.get("expected_move_pct")),
                 "price_range": _range_str(lower, upper),
                 "pcr_vol": _number_str((item.get("pcr") or {}).get("volume_pcr")),
-                "skew": _ratio_percent_str(item.get("skew")),
+                "skew": _ratio_percent_str(skew_value),
+                "skew_label": (
+                    "25Δ IVスキュー"
+                    if skew_method == "delta_25_direct"
+                    else "10% OTM IVスキュー"
+                    if skew_method in {"moneyness_10pct_proxy", "legacy_proxy"}
+                    else "IVスキュー"
+                ),
+                "skew_method": skew_method,
+                "skew_status": skew_status,
+                "skew_status_label": {
+                    "direct": "direct",
+                    "proxy": "proxy・表示のみ",
+                    "unavailable": "未取得",
+                }.get(skew_status, "未取得"),
+                "skew_liquidity": str(skew_detail.get("liquidity_status") or "unknown"),
                 "gex": _gex_direction((item.get("gex") or {}).get("nearby_net_gex")),
                 "data_quality": str(item.get("data_quality") or "unavailable"),
             }
@@ -557,6 +576,7 @@ def _format_composite_sentiment(
                     value=_number_or_percent(detail.get("value")),
                     threshold=str(detail.get("threshold") or ""),
                     source=str(detail.get("source") or ""),
+                    detail=_composite_evidence_detail(detail),
                 )
             )
         rows.append(
@@ -579,6 +599,24 @@ def _format_composite_sentiment(
             )
         )
     return rows
+
+
+def _composite_evidence_detail(detail: dict[str, Any]) -> str:
+    if detail.get("metric_kind") != "cboe_skew_index":
+        return ""
+    parts = []
+    raw_value = _optional_float(detail.get("raw_value"))
+    percentile = _optional_float(detail.get("percentile"))
+    change_5d = _optional_float(detail.get("change_5d"))
+    if raw_value is not None:
+        parts.append(f"指数値 {raw_value:.2f}")
+    if percentile is not None:
+        parts.append(f"履歴percentile {percentile:.1f}")
+    if change_5d is not None:
+        parts.append(f"5日変化 {change_5d:+.1%}")
+    if detail.get("as_of"):
+        parts.append(f"as-of {detail.get('as_of')}")
+    return " / ".join(parts)
 
 
 def _forecast_status_label(value: Any) -> str:

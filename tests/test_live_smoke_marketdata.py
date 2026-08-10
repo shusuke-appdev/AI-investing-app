@@ -38,6 +38,19 @@ def test_marketdata_live_smoke_reports_app_term_structure(monkeypatch):
     def fake_analysis(ticker, *, allow_marketdata):
         assert ticker == "SPY"
         assert allow_marketdata is True
+        skew_detail = {
+            "value": 0.04,
+            "method": "delta_25_direct",
+            "status": "direct",
+            "put_iv": 0.24,
+            "call_iv": 0.20,
+            "put_delta": -0.25,
+            "call_delta": 0.25,
+            "put_strike": 590,
+            "call_strike": 610,
+            "liquidity_status": "ok",
+            "warnings": [],
+        }
         return {
             "term_structure": {"summary": "現在IV=7.2% / 1W IV=11.0% / 1M IV=13.7%"},
             "horizons": [
@@ -49,6 +62,7 @@ def test_marketdata_live_smoke_reports_app_term_structure(monkeypatch):
                     "resolved_dte": 4,
                     "iv": 0.072,
                     "data_as_of": "2026-07-02T20:00:00+00:00",
+                    "skew_detail": skew_detail,
                 },
                 {
                     "key": "one_week",
@@ -58,6 +72,7 @@ def test_marketdata_live_smoke_reports_app_term_structure(monkeypatch):
                     "resolved_dte": 8,
                     "iv": 0.11,
                     "data_as_of": "2026-07-02T20:00:00+00:00",
+                    "skew_detail": skew_detail,
                 },
                 {
                     "key": "one_month",
@@ -67,6 +82,7 @@ def test_marketdata_live_smoke_reports_app_term_structure(monkeypatch):
                     "resolved_dte": 29,
                     "iv": 0.137,
                     "data_as_of": "2026-07-02T20:00:00+00:00",
+                    "skew_detail": skew_detail,
                 },
             ],
         }
@@ -85,6 +101,9 @@ def test_marketdata_live_smoke_reports_app_term_structure(monkeypatch):
     assert "SPY:term_structure=現在IV=7.2% / 1W IV=11.0% / 1M IV=13.7%" in detail
     assert "calls=1/100 puts=1/100 side_cap_reached=false" in detail
     assert "current@2026-07-06/dte=4/iv=7.2%/as_of=2026-07-02T20:00:00+00:00" in detail
+    assert "skew_method=delta_25_direct" in detail
+    assert "put_delta=-0.25/call_delta=0.25" in detail
+    assert "liquidity=ok" in detail
     assert [call[1].get("target_dte") for call in fetch_calls] == [None, 7, 30]
 
 

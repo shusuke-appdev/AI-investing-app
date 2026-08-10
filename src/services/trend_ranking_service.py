@@ -244,17 +244,30 @@ def _option_payload(proxy: str, analysis: dict[str, Any] | None) -> dict[str, An
         }
     gex = analysis.get("gex") or {}
     nearby_gex = _float(gex.get("nearby_net_gex"))
-    skew = _float(analysis.get("skew"))
+    skew = _direct_option_skew(analysis)
+    gamma_coverage = _float(analysis.get("gamma_coverage"))
+    gamma_reliable = bool(
+        analysis.get("provider_active")
+        and analysis.get("complete_status") == "complete"
+        and not analysis.get("is_stale")
+        and gamma_coverage is not None
+        and gamma_coverage >= 0.8
+    )
     pcr = (analysis.get("pcr") or {}).get("volume_pcr")
     label = "pinning"
     score = 0.0
-    if nearby_gex is not None and nearby_gex < 0 and (skew is None or skew <= 0.05):
-        label = "upside_squeeze_candidate"
-        score = 12.0
-    elif nearby_gex is not None and nearby_gex < 0 and skew and skew > 0.05:
-        label = "downside_vol_expansion"
-        score = -12.0
-    elif nearby_gex is not None and nearby_gex > 0:
+    if nearby_gex is not None and nearby_gex < 0:
+        if gamma_reliable and skew is not None and skew > 0.05:
+            label = "downside_vol_expansion"
+            score = -12.0
+        else:
+            label = "two_sided_vol_expansion"
+    elif (
+        nearby_gex is not None
+        and nearby_gex > 0
+        and gamma_reliable
+        and skew is not None
+    ):
         label = "pinning_resistance"
         score = -3.0
     if pcr is not None and float(pcr) < 0.75:
@@ -273,6 +286,12 @@ def _option_payload(proxy: str, analysis: dict[str, Any] | None) -> dict[str, An
         "option_provider_active": analysis.get("provider_active", False),
         "option_fallback_reason": analysis.get("fallback_reason", ""),
         "option_gamma_coverage": analysis.get("gamma_coverage"),
+        "option_skew_method": str(
+            (analysis.get("skew_detail") or {}).get("method") or "unavailable"
+        ),
+        "option_skew_status": str(
+            (analysis.get("skew_detail") or {}).get("status") or "unavailable"
+        ),
         "option_credits_consumed": analysis.get("credits_consumed"),
         "option_credits_remaining": analysis.get("credits_remaining"),
         "quality_warnings": analysis.get("quality_warnings", []),
@@ -433,13 +452,31 @@ def _ranking_warnings(
 
 def _option_summary(label: str, analysis: dict[str, Any]) -> str:
     source = analysis.get("source", "")
+    detail = analysis.get("skew_detail") or {}
     text = {
-        "upside_squeeze_candidate": "負の近傍GEXと過度でない下方Skewで上方向ボラ拡大候補。",
-        "downside_vol_expansion": "負の近傍GEXと下方Skewで下方向ボラ拡大に警戒。",
+        "two_sided_vol_expansion": "負の近傍GEXにより上下双方向のボラ拡大候補。方向は判定しません。",
+        "downside_vol_expansion": "十分なGamma品質と高い直接25Δ IVスキューが併存し、下方向ボラ拡大に警戒。",
         "pinning_resistance": "正の近傍GEXでピン留め/抵抗を優先。",
         "pinning": "オプション構造は中立寄り。",
     }.get(label, "オプション構造は判定不能。")
-    return f"{text} source={source or 'unknown'}"
+    return (
+        f"{text} source={source or 'unknown'} "
+        f"skew_method={detail.get('method', 'unavailable')}"
+    )
+
+
+def _direct_option_skew(analysis: dict[str, Any]) -> float | None:
+    detail = analysis.get("skew_detail")
+    if not isinstance(detail, dict):
+        return None
+    if (
+        detail.get("status") != "direct"
+        or detail.get("method") != "delta_25_direct"
+        or detail.get("liquidity_status") != "ok"
+        or analysis.get("is_stale")
+    ):
+        return None
+    return _float(detail.get("value"))
 
 
 def _float(value: Any) -> float | None:

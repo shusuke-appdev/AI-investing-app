@@ -85,6 +85,11 @@ def test_hidden_tail_hedging_combines_falling_vix_and_high_skew():
 
     assert result["targets"]["SPY"]["state"] == "hidden_tail_hedging"
     assert result["targets"]["SPY"]["risk_floor"] == "medium"
+    skew_evidence = result["targets"]["SPY"]["conditions"]["skew_high"]
+    assert skew_evidence["label"] == "Cboe SKEW指数 テール警戒"
+    assert skew_evidence["metric_kind"] == "cboe_skew_index"
+    assert skew_evidence["raw_value"] == 155.0
+    assert skew_evidence["as_of"] == str(index[-1].date())
 
 
 def test_vix_vvix_and_negative_gamma_confirm_downside_amplification():

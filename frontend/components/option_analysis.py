@@ -181,7 +181,26 @@ def render_horizon_row(horizon) -> rx.Component:
         rx.text("IV ", horizon.iv, size="1"),
         rx.text("1σ ", horizon.expected_move, size="1"),
         rx.text("PCR ", horizon.pcr_vol, size="1"),
-        rx.text("Skew ", horizon.skew, size="1"),
+        rx.vstack(
+            rx.text(horizon.skew_label + " " + horizon.skew, size="1"),
+            rx.hstack(
+                rx.badge(
+                    horizon.skew_status_label,
+                    color_scheme=rx.cond(
+                        horizon.skew_status == "direct", "green", "amber"
+                    ),
+                    variant="surface",
+                ),
+                rx.text(
+                    "流動性=" + horizon.skew_liquidity,
+                    size="1",
+                    color="gray",
+                ),
+                spacing="1",
+            ),
+            align_items="start",
+            spacing="1",
+        ),
         rx.text("GEX ", horizon.gex, size="1"),
         columns=rx.breakpoints(initial="2", sm="4", lg="7"),
         spacing="2",
