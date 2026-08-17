@@ -7,6 +7,7 @@ from frontend.pages.market_watch import market_watch_page
 from frontend.pages.portfolio import portfolio_page
 from frontend.pages.stock import stock_page
 from frontend.pages.theme import theme_page
+from frontend.pages.theme_leaders import theme_leaders_page
 from frontend.state.data_quality_state import DataQualityState
 from frontend.state.knowledge_state import KnowledgeState
 from frontend.state.market_state import MarketState
@@ -46,6 +47,12 @@ app.add_page(
     route="/theme",
     title="トレンド/テーマ | AI Investing",
     on_load=ThemeState.fetch_themes,
+)
+app.add_page(
+    theme_leaders_page,
+    route="/theme-leaders",
+    title="次期リーダー候補 | AI Investing",
+    on_load=ThemeState.prepare_theme_leaders,
 )
 app.add_page(
     portfolio_page,

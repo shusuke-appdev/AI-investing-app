@@ -23,7 +23,7 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 - 市場環境評価: トレンド、モメンタム、ボラティリティ、マーケットブレッドス、オプションセンチメントを統合評価
 - 短期市場予測: SPY / QQQの1・5・20営業日をwalk-forward検証し、VIX・SKEW・VVIX・期間構造・breadth・OCC Put/Call・Gammaを複合判定。検証未達は研究表示に限定し、個別株には警戒方向のガードレールだけを適用
 - オプション分析: SPY / QQQ / IWM と主要テーマETF proxy の Put/Call Ratio、Gamma Exposure、Max Pain、ATM IV、Skew を算出。MarketData.appを米国オプションの preferred 経路として利用し、失敗時はyfinance/cacheへフォールバック
-- トレンド/テーマ: AI、半導体、エネルギー、ヘルスケアなどのテーマを期間別に比較
+- トレンド/テーマ: 価格、市場相対強度、価格・出来高による資金注目度、広がりを100点で総合順位化。別ページの明示操作時だけ、登録代表と一次資料で検証したGemini探索銘柄をStage 2・相対強度・価格出来高・適応型ファンダメンタルで絞る
 - 個別銘柄分析: 企業概要、価格チャート、ニュース、テクニカル、SMART基準、日足Entry Framework、トレード分析、AI分析レポート
 - ポートフォリオ分析: 現地通貨時価、USD/JPY確認後の円換算総額、通貨別小計、構成比、セクター・日米テーマ露出、集中度、AIアドバイス。為替欠損時は異なる通貨を合算しません
 - 参照知識管理: テキスト、URL、YouTube、ファイルから知識を登録し、AI分析のコンテキストに利用
@@ -31,7 +31,7 @@ AI Investing App は、米国株・日本株を対象に、市場環境、テー
 ## 技術スタック
 
 - UI: Reflex
-- データ取得: yfinance、Finnhub、J-Quants、EDINET、Google News
+- データ取得: yfinance、Finnhub、J-Quants、EDINET
 - AI: Google Gemini API
 - 保存先: ローカルJSON、Supabase
 - グラフ・数値処理: pandas、numpy、scipy、plotly、statsmodels、arch
@@ -44,7 +44,7 @@ AI-investing-app/
   frontend/                Reflex UI、ページ、状態管理
   src/                     データ取得、分析、保存、AI連携の本体
     advisor/               テクニカル、ボラティリティ、市場環境、ポートフォリオ分析
-    services/              AI市場分析などのユースケース調整層
+    services/              市場・テーマ・個別株のユースケース調整層
     storage/               保存先の抽象インターフェース
   tests/                   単体テスト
   docs/                    現行仕様・運用・来歴台帳とarchive済み履歴資料

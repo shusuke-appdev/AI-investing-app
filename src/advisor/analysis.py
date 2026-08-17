@@ -54,7 +54,7 @@ def get_macro_context() -> dict:
 
 
 def get_sector_performance() -> dict:
-    """セクター別パフォーマンスを取得"""
+    """セクター別パフォーマンスを、上限付き並列取得で計算する。"""
     sector_etfs = {
         "Technology": "XLK",
         "Healthcare": "XLV",
@@ -69,22 +69,40 @@ def get_sector_performance() -> dict:
         "Consumer Staples": "XLP",
     }
 
-    results = {}
-    for sector, etf in sector_etfs.items():
-        try:
-            df = get_stock_data(etf, "1mo")
-            if not df.empty and len(df) >= 2:
-                start = df["Close"].iloc[0]
-                end = df["Close"].iloc[-1]
-                change = ((end - start) / start) * 100
-                results[sector] = {
-                    "etf": etf,
-                    "change_1m": change,
-                }
-        except Exception:
-            continue
-
+    results: dict[str, dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        future_map = {
+            executor.submit(_sector_performance_item, sector, etf): sector
+            for sector, etf in sector_etfs.items()
+        }
+        for future in as_completed(future_map):
+            sector = future_map[future]
+            try:
+                item = future.result()
+            except Exception:
+                continue
+            if item is not None:
+                results[sector] = item
     return results
+
+
+def _sector_performance_item(sector: str, etf: str) -> dict[str, Any] | None:
+    """1セクター分を取得し、取得不能ならNoneを返す。"""
+
+    try:
+        df = get_stock_data(etf, "1mo")
+        if not df.empty and len(df) >= 2:
+            start = float(df["Close"].iloc[0])
+            end = float(df["Close"].iloc[-1])
+            if start == 0:
+                return None
+            return {
+                "etf": etf,
+                "change_1m": ((end - start) / start) * 100,
+            }
+    except Exception:
+        return None
+    return None
 
 
 def get_theme_exposure_analysis(holdings: list[dict]) -> dict:

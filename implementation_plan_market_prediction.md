@@ -143,15 +143,11 @@ BSMモデルによるGreeks（Vanna, Charm, Speed）のベクトル化計算エ�
 
 ---
 
-### Phase 4: AIレポート統合
+### Phase 4: 型付きデータ連携
 
-#### [MODIFY] `src/services/market_analyst_service.py`
-- 予測データをAI Market Recapのコンテキストに追加
-- Streamlit依存の除去（`st.session_state`参照をReflex対応に）
-
-#### [MODIFY] `src/prompts/analysis_prompts.py`
-- `MARKET_RECAP_PROMPT_TEMPLATE` にオプション構造解析セクションを追加
-- 因果推論フレームワーク（WHO→WHOM→WHAT）の統合
+- 市場予測は独立した型付きContextとしてReflex UIへ渡す。
+- 自動生成レポートには接続せず、構造化された根拠・欠損状態・取得時刻を画面に直接表示する。
+- AIを利用する場合も、明示操作された既存の個別株分析から参照するだけとし、市場画面の表示時には実行しない。
 
 ---
 
@@ -170,7 +166,7 @@ BSMモデルによるGreeks（Vanna, Charm, Speed）のベクトル化計算エ�
 | 1 | Phase 1: Greeks Engine + 構造解析 | ①のオプションデータ修正完了後 | 大 |
 | 2 | Phase 2: 予測モデル | Phase 1 | 大 |
 | 3 | Phase 3: UI統合 | Phase 2 | 中 |
-| 4 | Phase 4: AIレポート統合 | Phase 2 | 小 |
+| 4 | Phase 4: 型付きデータ連携 | Phase 2 | 小 |
 
 ## 検証計画
 

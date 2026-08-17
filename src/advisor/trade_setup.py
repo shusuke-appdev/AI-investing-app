@@ -11,6 +11,16 @@ import pandas as pd
 from src.market_data import get_stock_data
 from src.themes_config import get_themes
 
+from .price_action_metrics import (
+    atr_series,
+    normalize_price_frame,
+    period_returns,
+    recent_pivot,
+    relative_returns,
+    relative_volume,
+    rs_line_near_high,
+)
+
 US_SECTOR_ETFS = {
     "technology": "XLK",
     "healthcare": "XLV",
@@ -95,10 +105,10 @@ def evaluate_trade_setup(
     history_provider = history_provider or get_stock_data
     market_type = "JP" if normalized.endswith(".T") else "US"
     benchmark = "1306.T" if market_type == "JP" else "SPY"
-    prices = _normalize(
+    prices = normalize_price_frame(
         price_df if price_df is not None else history_provider(normalized, "1y")
     )
-    benchmark_prices = _normalize(
+    benchmark_prices = normalize_price_frame(
         benchmark_df if benchmark_df is not None else history_provider(benchmark, "1y")
     )
     tech = technical_data or {}
@@ -121,8 +131,8 @@ def evaluate_trade_setup(
     low = prices["Low"].astype(float)
     volume = prices["Volume"].astype(float)
     current = float(close.iloc[-1])
-    atr_series = _atr_series(high, low, close)
-    atr = float(atr_series.iloc[-1])
+    atr_values = atr_series(high, low, close)
+    atr = float(atr_values.iloc[-1])
     atr_percent = atr / current * 100 if current > 0 else 0.0
     ma50 = float(close.rolling(50).mean().iloc[-1])
     ma200_series = close.rolling(200).mean()
@@ -132,19 +142,18 @@ def evaluate_trade_setup(
         ((current - ma50) / current * 100) / atr_percent if atr_percent else 0.0
     )
     adr_percent = float(((high - low) / close.shift(1) * 100).tail(20).mean())
-    prior_volume = float(volume.iloc[-51:-1].mean())
-    rvol = float(volume.iloc[-1] / prior_volume) if prior_volume > 0 else 0.0
-    market_relative = _relative_returns(close, benchmark_prices["Close"].astype(float))
+    rvol = relative_volume(volume, lookback=50) or 0.0
+    market_relative = relative_returns(close, benchmark_prices["Close"].astype(float))
     sector_label, sector_relative = _sector_relative_returns(
         normalized, market_type, info, close, history_provider
     )
-    rs_line_high = _rs_line_new_high(close, benchmark_prices["Close"].astype(float))
+    rs_line_high = rs_line_near_high(close, benchmark_prices["Close"].astype(float))
     vars_proxy = market_relative.get("20d", 0.0) / max(atr_percent, 0.01)
     tight_range = (
         (float(high.tail(20).max()) - float(low.tail(20).min())) / current * 100
     )
-    declining_volatility = float(atr_series.tail(10).mean()) < float(
-        atr_series.iloc[-30:-10].mean()
+    declining_volatility = float(atr_values.tail(10).mean()) < float(
+        atr_values.iloc[-30:-10].mean()
     )
     vcp = bool((tech.get("vcp_data") or {}).get("is_vcp"))
     base = tech.get("base_recognition_data") or {}
@@ -320,61 +329,6 @@ def trade_setup_to_dict(context: TradeSetupContext) -> dict[str, Any]:
     return context.to_dict()
 
 
-def _normalize(frame: pd.DataFrame | None) -> pd.DataFrame:
-    if frame is None or frame.empty:
-        return pd.DataFrame()
-    normalized = frame.copy()
-    normalized.rename(
-        columns={
-            "open": "Open",
-            "high": "High",
-            "low": "Low",
-            "close": "Close",
-            "volume": "Volume",
-        },
-        inplace=True,
-    )
-    required = {"Open", "High", "Low", "Close", "Volume"}
-    if not required.issubset(normalized.columns):
-        return pd.DataFrame()
-    return normalized.dropna(subset=["High", "Low", "Close"])
-
-
-def _atr_series(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
-    previous = close.shift(1)
-    true_range = pd.concat(
-        [high - low, (high - previous).abs(), (low - previous).abs()], axis=1
-    ).max(axis=1)
-    return true_range.rolling(14).mean().fillna(0.0)
-
-
-def _relative_returns(stock: pd.Series, benchmark: pd.Series) -> dict[str, float]:
-    aligned = pd.concat([stock.rename("stock"), benchmark.rename("benchmark")], axis=1)
-    aligned = aligned.ffill().dropna()
-    result = {}
-    for key, window in {"20d": 20, "63d": 63, "126d": 126}.items():
-        if len(aligned) <= window:
-            continue
-        stock_return = (
-            aligned["stock"].iloc[-1] / aligned["stock"].iloc[-window - 1] - 1
-        )
-        benchmark_return = (
-            aligned["benchmark"].iloc[-1] / aligned["benchmark"].iloc[-window - 1] - 1
-        )
-        result[key] = float((stock_return - benchmark_return) * 100)
-    return result
-
-
-def _rs_line_new_high(stock: pd.Series, benchmark: pd.Series) -> bool:
-    aligned = pd.concat([stock.rename("stock"), benchmark.rename("benchmark")], axis=1)
-    aligned = aligned.ffill().dropna()
-    if len(aligned) < 126:
-        return False
-    rs_line = aligned["stock"] / aligned["benchmark"].replace(0, pd.NA)
-    recent = rs_line.tail(252).dropna()
-    return bool(not recent.empty and recent.iloc[-1] >= recent.max() * 0.99)
-
-
 def _sector_relative_returns(
     ticker: str,
     market_type: str,
@@ -387,12 +341,12 @@ def _sector_relative_returns(
         sector = str(info.get("sector") or "").strip().lower()
         benchmark = US_SECTOR_ETFS.get(sector, "")
         prices = (
-            _normalize(history_provider(benchmark, "1y"))
+            normalize_price_frame(history_provider(benchmark, "1y"))
             if benchmark
             else pd.DataFrame()
         )
         relative = (
-            _relative_returns(stock_close, prices["Close"].astype(float))
+            relative_returns(stock_close, prices["Close"].astype(float))
             if not prices.empty
             else {}
         )
@@ -406,7 +360,7 @@ def _sector_relative_returns(
         for peer in normalized_tickers:
             if peer == ticker:
                 continue
-            prices = _normalize(history_provider(peer, "1y"))
+            prices = normalize_price_frame(history_provider(peer, "1y"))
             if not prices.empty:
                 peer_profiles.append(_return_profile(prices["Close"].astype(float)))
             if len(peer_profiles) >= 5:
@@ -419,9 +373,9 @@ def _sector_relative_returns(
         }
         return f"{theme}中央値", relative
 
-    fallback = _normalize(history_provider("1306.T", "1y"))
+    fallback = normalize_price_frame(history_provider("1306.T", "1y"))
     relative = (
-        _relative_returns(stock_close, fallback["Close"].astype(float))
+        relative_returns(stock_close, fallback["Close"].astype(float))
         if not fallback.empty
         else {}
     )
@@ -429,11 +383,7 @@ def _sector_relative_returns(
 
 
 def _return_profile(close: pd.Series) -> dict[str, float]:
-    result = {}
-    for key, window in {"20d": 20, "63d": 63, "126d": 126}.items():
-        if len(close) > window:
-            result[key] = float((close.iloc[-1] / close.iloc[-window - 1] - 1) * 100)
-    return result
+    return period_returns(close)
 
 
 def _pocket_pivot(prices: pd.DataFrame) -> bool:
@@ -456,7 +406,7 @@ def _breakout_price(technical: dict[str, Any], high: pd.Series) -> float:
     value = _number(vcp.get("breakout_price"))
     if value > 0:
         return value
-    return float(high.iloc[-21:-1].max()) if len(high) >= 21 else 0.0
+    return recent_pivot(high, lookback=20) or 0.0
 
 
 def _profit_extension_levels(ma50: float, atr_percent: float) -> dict[str, float]:

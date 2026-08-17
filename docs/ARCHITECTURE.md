@@ -14,6 +14,7 @@
   - `/market-watch`: 市場監視
   - `/stock`: 個別銘柄分析
   - `/theme`: トレンド/テーマ
+  - `/theme-leaders`: 明示操作による次期リーダー候補
   - `/data-quality`: Provider状態・来歴・欠損確認
   - `/portfolio`: ポートフォリオ分析
   - `/knowledge`: 参照知識管理
@@ -42,7 +43,6 @@ UI
   src/services/analysis_jobs.py
   src/portfolio_advisor.py
   src/stock_analyst.py
-  src/news_analyst.py
 
 ドメイン分析
   src/advisor/*
@@ -57,7 +57,6 @@ UI
   src/stock_data_provider.py
   src/market_index_provider.py
   src/news_provider.py
-  src/news_aggregator.py
   src/finnhub_client.py
   src/marketdata_client.py
   src/marketdata_option_provider.py
@@ -91,13 +90,14 @@ UI
 5. `MarketState.refresh_options()` が SPY / QQQ / IWM のオプション取得を明示的に実行し、current / 1W / 1M の満期別チェーン、想定変動幅、銘柄別25Δ IVスキュー、GEX、キャッシュ鮮度、品質警告を `OptionContext.items` と `OptionContext.horizons` に保存する。市場参照値はfreshなSPY直接値だけで、QQQ/IWMとの単純平均は作らない
 6. Reflex state に整形済みデータを保存し、画面が再描画される
 7. 表示用の整形は `services.market_presentation_service.build_market_display_context()` が担い、`MarketState` はイベント、loading/error、表示モデル保持に集中する
-8. AI Market Recap は `services.market_analyst_service.generate_market_analysis_report()` から Gemini へ渡り、通常経路では既に取得済みの `MarketContext`、オプション品質情報、オプション期間構造、日米セクター流入、日経6条件、ユーザー指定の追加分析項目をプロンプトに含める。レポートは米国市場を主軸にし、日本市場は米国との連動・乖離を読む補助コーナーとして扱う
 
 ### 市場監視
 
 - `/market-watch` は判断に必要な概要を常時表示し、市場レジーム・資金フロー、リスク・信用・予測、オプションの重い詳細だけを明示更新する。段階状態・警告・来歴は `/data-quality` に集約する
 - 市場監視の詳細更新は、Core、Theme/Flow、Credit/Risk、Vol/Sentiment、Optionsの順に `MarketState` がyieldし、各ブロックの`status`、`cache_status`、`fetched_at`、`quality_warnings`を表示モデルへ渡す。例外がなくても必須結果が欠損・stale・research-onlyなら`partial`とする
-- トレンド/テーマは `theme_analyst.get_ranked_themes_result()` が `FetchResult` として返し、provider失敗と正当な空結果を区別する。12時間のrepo-local永続キャッシュを再起動後も利用する。`ThemeState` は市場・期間・request idを組にして、後から完了した旧リクエストが現在の画面状態を上書きしないようにする
+- トレンド/テーマは `comprehensive_theme_ranking_service` が、版管理済み代表銘柄、ETF proxy、市場benchmarkの2年日足を1回で取得し、価格30点、市場相対強度25点、資金注目度proxy25点、広がり・持続性20点を同一市場内パーセンタイルで算出する。12時間のrepo-local永続キャッシュを再起動後も利用し、欠損テーマは0点化しない
+- 次期リーダー候補は `/theme-leaders` の明示操作時だけ `theme_leader_service` が実行する。登録代表最大20銘柄と、一次資料・別根拠・18か月以内を検証したGemini探索最大20銘柄を合わせ、SPYまたは1306.Tを含む2年日足を1回で一括取得する。テクニカル通過後の最大15銘柄だけを3並列で適応型ファンダメンタル評価し、最大10銘柄を返す。ニュース、オプション、保存、通知は呼ばない
+- `theme_grounded_research_service` はGemini Interactions APIの検索引用に含まれるURLだけを根拠として扱う。Geminiは母集団拡張と上位5件の別操作深掘りだけを担当し、決定論的な順位・採点は変更しない。探索と深掘りは24時間キャッシュし、API失敗時も登録代表銘柄だけで継続する
 - `/market-watch` の `prepare_market_watch` は前回の詳細コンテキストを即時表示し、主要指数、Theme/Flowだけを自動更新する。SPY、Nasdaq 100、TLT、米10年債の価格履歴は `MarketAnalysisInputs` が1更新内で共有し、信用/歪みとオプションを同時開始してから派生分析を再計算する
 - IBD式市場状態は `advisor.ibd_market_regime.classify_ibd_market_regime()` が SPY / Nasdaq 100 代理データから判定する。分類は `confirmed_uptrend`、`uptrend_under_pressure`、`rally_attempt`、`market_in_correction`
 - `services.market_playbook` は市場状態ごとの「現在考えるべきこと」「今やること」「避けること」を固定データとして返す
@@ -145,8 +145,8 @@ UI
 - `src/cache.py` は Streamlit 依存を避けるためのフレームワーク非依存TTLキャッシュ。エントリごとに `created_at`、`expires_at`、`ttl`、`namespace` を持ち、関数単位の `.clear_cache()` と名前空間単位のクリアに対応する
 - `src/persistent_cache.py` は `.states` 配下のJSONキャッシュ共通基盤。schema/version付きの原子的書き込み、破損JSON無視、fresh/stale/expired判定、ファイル名安全化を担う
 - yfinance系の重い取得は、メモリTTLに加えて `.states/market_context_cache` と `.states/option_chain_cache` のJSONキャッシュを使う。オプションは ticker だけでなく target DTE 別のcache keyを使い、current / 1W / 1M が混線しないようにする。`source`、`fetched_at`、`is_stale`、`cache_status`、`quality_warnings` をUIとAIプロンプトへ渡す
-- Market AI Recap は `MarketContext` がある場合に市場監視やテーマランキングを再取得せず、context 内の monitoring / momentum / option 情報を優先する。context 構築に失敗した互換パスだけ旧取得ロジックへフォールバックする
-- Stock AI Recap は `StockSignalContext` がある場合に表示済みのテクニカル、SMART基準、ニュース見出し、確率シグナルを使い、UIとAIの材料ズレを避ける
+- `advisor.price_action_metrics` はATR、期間リターン、市場相対リターン、RSライン、RVOL、節目、収縮を外部取得なしで計算し、個別株Entry Frameworkと次期リーダー候補が共用する
+- Stock AI分析は `StockSignalContext` がある場合に表示済みのテクニカル、SMART基準、ニュース見出し、確率シグナルを使い、UIとAIの材料ズレを避ける
 - Entry Frameworkは日足専用で、LoD、ORH、寄付き後30分、1-2時間確認などの分足依存ルールを成立済みと仮定しない。`blocked`判定はAIが上書きしない
 - 日経平均上昇6条件は、日証金売り残、1570信用倍率、海外投資家買越額などの直接データがない場合に `proxy` または `unavailable` として明示する。代理評価は断定ではなく、AIプロンプトにもデータ品質として渡す
 - ETFリーダーシップproxyは市場全体のリスクオン/オフ確認に使い、資金流入セクター判定は選択市場ごとに分離する。USは広義セクターETFと細分化テーマETF proxyを優先し、JPは日本テーマ代表銘柄バスケットで具体候補を出す。スコアは相対騰落率、5日/20日継続性、出来高比、上昇参加率から作り、売買指示ではなく「乗る候補」「押し目待ち」「観察」「見送り」の調査支援ラベルに留める

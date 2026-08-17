@@ -5,7 +5,6 @@ from dataclasses import replace
 import pandas as pd
 
 from src.persistent_cache import PersistentJsonCache
-from src.services import market_analyst_service
 from src.services import market_dashboard_service as service
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.services.market_analysis_inputs import build_market_analysis_inputs
@@ -837,130 +836,6 @@ def test_market_stage_task_timeout_records_partial_result():
     assert results["slow"].timed_out is True
     assert "test_stage.slow timed out" in results["slow"].error
     assert any("test_stage.slow timed out" in error for error in errors)
-
-
-def test_market_ai_report_reuses_supplied_market_context(monkeypatch):
-    context = MarketContext(
-        market_type="US",
-        market_data={"S&P 500": {"ticker": "SPY", "price": 500, "change": 1}},
-        options=OptionContext(items=[{"ticker": "SPY"}]),
-        evaluation={
-            "status": "Bullish",
-            "score": 0.4,
-            "signals": [{"name": "Trend", "score": 0.6, "rationale": "Above MAs"}],
-        },
-        microstructure={
-            "vrp": 0.04,
-            "cta_proxy": {"extremity": "Long"},
-            "liquidity": {"status": "Normal"},
-            "unwind_level": "Low",
-        },
-        momentum={"Short": [{"theme": "AI", "performance": 2.5}]},
-        monitor=_monitor_payload(),
-        sector_flow=_sector_flow_payload(),
-        credit_stress=_credit_stress_payload(),
-        flow_monitor=_flow_monitor_payload(),
-        flow_alignment={
-            "summary": "ETF proxy is risk-on; sector flow points to Technology.",
-            "etf_role": "市場全体の確認",
-            "sector_role": "具体候補",
-        },
-        trend_ranking={"items": [{"rank": 1, "theme": "AI", "total_score": 50}]},
-        opportunity_themes={
-            "items": [
-                {
-                    "theme": "AI",
-                    "label": "上昇候補",
-                    "opportunity_score": 55,
-                    "reason": "統合順位 1位",
-                }
-            ]
-        },
-        strategy_regime={
-            "key": "trend_following",
-            "label": "順張り",
-            "risk_budget": "30-70%",
-        },
-        market_timeframes={
-            "items": [
-                {
-                    "key": "current",
-                    "label": "現在時点",
-                    "direction_label": "上昇相場",
-                    "market_tone": "強気",
-                    "score": 0.5,
-                    "confidence": "中",
-                }
-            ]
-        },
-    )
-    captured = {}
-
-    monkeypatch.setattr(
-        market_analyst_service,
-        "get_market_config",
-        lambda market_type: {"ai_analysis_targets": [], "news_keywords": []},
-    )
-    monkeypatch.setattr(
-        market_analyst_service, "generate_dynamic_search_queries", lambda *args, **_: []
-    )
-    monkeypatch.setattr(
-        market_analyst_service, "get_aggregated_news", lambda **kwargs: []
-    )
-    monkeypatch.setattr(
-        market_analyst_service,
-        "merge_with_finnhub_news",
-        lambda articles, finnhub_news, max_total: [],
-    )
-    monkeypatch.setattr(
-        market_analyst_service,
-        "get_ranked_themes",
-        lambda period: (_ for _ in ()).throw(AssertionError("should reuse momentum")),
-    )
-    monkeypatch.setattr(
-        market_analyst_service,
-        "get_stock_data",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("should reuse market context")
-        ),
-    )
-    monkeypatch.setattr(
-        market_analyst_service,
-        "get_major_indices_options",
-        lambda market_type: (_ for _ in ()).throw(AssertionError("should not fetch")),
-    )
-
-    def fake_recap(market_data, news, options, **kwargs):
-        captured["market_data"] = market_data
-        captured["options"] = options
-        captured["advanced"] = kwargs["advanced_tech_analysis"]
-        return "ok"
-
-    monkeypatch.setattr(market_analyst_service, "generate_market_recap", fake_recap)
-
-    result = market_analyst_service.generate_market_analysis_report(
-        "US", market_context=context.to_dict()
-    )
-
-    assert result == "ok"
-    assert captured["options"] == [{"ticker": "SPY"}]
-    assert captured["market_data"]["S&P 500"]["ticker"] == "SPY"
-    assert "Market environment: Bullish" in captured["advanced"]
-    assert "Credit stress velocity" in captured["advanced"]
-    assert "Leadership flow-pressure proxy" in captured["advanced"]
-    assert "Sector/theme flow" in captured["advanced"]
-    assert "ETF proxy / sector-flow role split" in captured["advanced"]
-    assert "Integrated trend ranking" in captured["advanced"]
-    assert "Strategy regime" in captured["advanced"]
-    assert "Nikkei upside six conditions" not in captured["advanced"]
-
-
-def test_market_ai_report_reports_gemini_unavailable():
-    result = market_analyst_service.generate_market_analysis_report(
-        "US", gemini_configured=False
-    )
-
-    assert result == "Gemini APIが利用できません。APIキーを設定してください。"
 
 
 def test_theme_flow_uses_provided_only_option_policy(monkeypatch):

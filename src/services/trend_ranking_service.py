@@ -6,13 +6,12 @@ from typing import Any
 
 from src.log_config import get_logger
 from src.option_analyst import analyze_option_sentiment
-from src.theme_analyst import get_ranked_theme_periods
-from src.theme_taxonomy import get_theme_profile
-from src.themes_config import get_themes
+from src.services.comprehensive_theme_ranking_service import (
+    get_comprehensive_theme_ranking_result,
+)
 
 logger = get_logger(__name__)
 
-RANKING_PERIODS = ("1週間", "1ヶ月", "6ヶ月")
 MAX_OPTION_PROXIES = 6
 
 
@@ -27,16 +26,22 @@ def build_trend_ranking_context(
 ) -> dict[str, Any]:
     """Build the app's unified trend ranking for one market."""
 
-    period_maps = _period_rank_maps(market_type)
-    if not period_maps:
+    comprehensive = get_comprehensive_theme_ranking_result(market_type)
+    context = comprehensive.data
+    if not context.get("items"):
         return {
             "market": market_type,
             "items": [],
             "summary": "トレンドランキングを算出できません。",
-            "quality_warnings": ["Theme performance data is unavailable."],
+            "quality_warnings": list(
+                context.get("quality_warnings")
+                or ["Comprehensive theme evidence is unavailable."]
+            ),
         }
 
-    base_rows = _base_rows(market_type, period_maps, sector_flow, distortions)
+    base_rows = _base_rows(
+        list(context.get("items") or []), sector_flow, distortions, market_type
+    )
     option_map = (
         _option_asymmetry_map(
             base_rows[:MAX_OPTION_PROXIES], cache_only=option_cache_only
@@ -46,7 +51,7 @@ def build_trend_ranking_context(
     )
     rows = []
     for row in base_rows:
-        option_payload = option_map.get(row["option_proxy_ticker"], {})
+        option_payload = option_map.get(str(row.get("option_proxy_ticker") or ""), {})
         rows.append(_finalize_row(row, option_payload))
 
     rows.sort(key=lambda item: item["total_score"], reverse=True)
@@ -59,7 +64,12 @@ def build_trend_ranking_context(
         "market": market_type,
         "items": visible,
         "summary": _summary(visible, include_options, option_cache_only),
-        "quality_warnings": _ranking_warnings(period_maps, option_map, include_options),
+        "quality_warnings": _ranking_warnings(
+            list(context.get("quality_warnings") or []), option_map, include_options
+        ),
+        "fetched_at": context.get("fetched_at", comprehensive.fetched_at),
+        "data_quality": context.get("status", comprehensive.status),
+        "excluded_reasons": context.get("excluded_reasons", {}),
         "option_updated": include_options,
         "option_mode": (
             "cache_only"
@@ -155,54 +165,27 @@ def build_opportunity_themes(
     }
 
 
-def _period_rank_maps(market_type: str) -> dict[str, dict[str, dict[str, Any]]]:
-    result: dict[str, dict[str, dict[str, Any]]] = {}
-    try:
-        rankings = get_ranked_theme_periods(RANKING_PERIODS, market_type)
-    except Exception as exc:
-        logger.warning("[TrendRanking] %s ranking batch failed: %s", market_type, exc)
-        rankings = {}
-    for period in RANKING_PERIODS:
-        ranked = rankings.get(period, [])
-        result[period] = {str(item.get("theme")): dict(item) for item in ranked}
-    return result
-
-
 def _base_rows(
-    market_type: str,
-    period_maps: dict[str, dict[str, dict[str, Any]]],
+    comprehensive_rows: list[dict[str, Any]],
     sector_flow: dict[str, Any] | None,
     distortions: dict[str, Any] | None,
+    market_type: str,
 ) -> list[dict[str, Any]]:
     flow_lookup = _flow_lookup(sector_flow, market_type)
     distortion_lookup = _distortion_lookup(distortions)
     rows = []
-    for theme, tickers in get_themes(market_type).items():
-        profile = get_theme_profile(theme, market_type, tickers=tickers)
-        perf_1w = _performance(period_maps, "1週間", theme)
-        perf_1m = _performance(period_maps, "1ヶ月", theme)
-        perf_6m = _performance(period_maps, "6ヶ月", theme)
-        if perf_1w is None and perf_1m is None and perf_6m is None:
-            continue
+    for comprehensive_row in comprehensive_rows:
+        row = dict(comprehensive_row)
+        theme = str(row.get("theme") or "")
         flow = flow_lookup.get(theme, {})
         distortion = distortion_lookup.get(theme, {})
-        base_score = _base_score(perf_1w, perf_1m, perf_6m, flow, distortion)
         rows.append(
             {
-                "theme": theme,
-                "market": market_type,
-                "parent_sector": profile.parent_sector,
-                "proxy_ticker": profile.proxy_ticker,
-                "option_proxy_ticker": profile.option_proxy_ticker,
-                "representative_tickers": list(profile.representative_tickers),
-                "performance_1w": _round(perf_1w),
-                "performance_1m": _round(perf_1m),
-                "performance_6m": _round(perf_6m),
-                "flow_score": _round(flow.get("flow_score")),
+                **row,
+                "legacy_flow_score": _round(flow.get("flow_score")),
                 "flow_confidence": str(flow.get("confidence") or ""),
-                "participation": _round(flow.get("participation")),
                 "distortion_score": _round(distortion.get("distortion_score")),
-                "base_score": round(base_score, 1),
+                "base_score": round(float(row.get("total_score") or 0.0), 1),
             }
         )
     rows.sort(key=lambda item: item["base_score"], reverse=True)
@@ -302,43 +285,19 @@ def _finalize_row(
     row: dict[str, Any], option_payload: dict[str, Any]
 ) -> dict[str, Any]:
     option_score = float(option_payload.get("option_score", 0.0))
-    total = float(row["base_score"]) + option_score
     return {
         **row,
         **option_payload,
         "option_score": round(option_score, 1),
-        "total_score": round(total, 1),
-        "current_score": round(float(row["base_score"]) + option_score * 0.4, 1),
-        "one_week_score": round(
-            _score_part(row.get("performance_1w"), 1.8) + option_score, 1
-        ),
+        "total_score": round(float(row["base_score"]), 1),
+        "current_score": round(float(row["base_score"]), 1),
+        "one_week_score": round(float(row.get("momentum_score") or 0), 1),
         "one_month_score": round(
-            _score_part(row.get("performance_1m"), 1.2)
-            + _score_part(row.get("performance_6m"), 0.35)
-            + option_score * 0.5,
+            float(row.get("momentum_score") or 0)
+            + float(row.get("relative_strength_score") or 0),
             1,
         ),
     }
-
-
-def _base_score(
-    perf_1w: float | None,
-    perf_1m: float | None,
-    perf_6m: float | None,
-    flow: dict[str, Any],
-    distortion: dict[str, Any],
-) -> float:
-    score = (
-        _score_part(perf_1w, 1.6)
-        + _score_part(perf_1m, 1.1)
-        + _score_part(perf_6m, 0.25)
-    )
-    score += _score_part(flow.get("flow_score"), 0.18)
-    score += _score_part(flow.get("participation"), 15.0)
-    distortion_score = _float(distortion.get("distortion_score"))
-    if distortion_score is not None and distortion_score > 0:
-        score += distortion_score * 20.0
-    return score
 
 
 def _flow_lookup(
@@ -358,17 +317,6 @@ def _distortion_lookup(
             if theme:
                 result[theme] = item
     return result
-
-
-def _performance(
-    period_maps: dict[str, dict[str, dict[str, Any]]], period: str, theme: str
-) -> float | None:
-    return _float((period_maps.get(period) or {}).get(theme, {}).get("performance"))
-
-
-def _score_part(value: Any, weight: float) -> float:
-    number = _float(value)
-    return 0.0 if number is None else number * weight
 
 
 def _rank_points(rank: int) -> int:
@@ -411,11 +359,11 @@ def _summary(
     if not rows:
         return "統合トレンドランキングを算出できません。"
     suffix = (
-        "保存済みオプションを任意反映"
+        "保存済みオプションを参考併記"
         if include_options and option_cache_only
-        else "MarketDataオプションを反映"
+        else "MarketDataオプションを参考併記"
         if include_options
-        else "価格/フロー中心"
+        else "価格・市場相対強度・資金注目度・広がり"
     )
     return f"首位は {rows[0]['theme']}（{suffix}）。"
 
@@ -434,15 +382,11 @@ def _opportunity_summary(rows: list[dict[str, Any]]) -> str:
 
 
 def _ranking_warnings(
-    period_maps: dict[str, dict[str, dict[str, Any]]],
+    base_warnings: list[str],
     option_map: dict[str, dict[str, Any]],
     include_options: bool,
 ) -> list[str]:
-    warnings = [
-        f"{period} ranking unavailable."
-        for period, payload in period_maps.items()
-        if not payload
-    ]
+    warnings = list(base_warnings)
     if include_options:
         for proxy, payload in option_map.items():
             for warning in payload.get("quality_warnings", []):

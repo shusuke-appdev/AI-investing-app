@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import tomllib
 
-# NOTE: 全オプショナルパッケージ (arch, finnhub, gnews, edinet_tools) は
+# NOTE: 全オプショナルパッケージ (arch, finnhub, edinet_tools) は
 # インストール済みのため、sys.modules への MagicMock 注入は行わない。
 # 外部APIの呼び出しは、以下の autouse fixture で個別にパッチする。
 

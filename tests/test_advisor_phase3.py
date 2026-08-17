@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from src.advisor import analysis as analysis_module
 from src.advisor.base_recognition import detect_bases
 from src.advisor.market_monitor import evaluate_yield_spread, track_distribution_days
 from src.advisor.mode_selector import determine_analysis_mode
@@ -39,6 +40,26 @@ def test_base_recognition():
     result = detect_bases(df)
     assert "detected" in result
     assert "patterns" in result
+    assert result["breakout_count"] is None
+    assert "判定不能" in result["message"]
+
+
+def test_sector_performance_keeps_available_rows_and_omits_failures(monkeypatch):
+    calls = []
+
+    def fake_history(ticker, period):
+        calls.append((ticker, period))
+        if ticker == "XLRE":
+            raise TimeoutError("provider timeout")
+        return pd.DataFrame({"Close": [100.0, 105.0]})
+
+    monkeypatch.setattr(analysis_module, "get_stock_data", fake_history)
+
+    result = analysis_module.get_sector_performance()
+
+    assert len(calls) == 11
+    assert "Real Estate" not in result
+    assert result["Technology"]["change_1m"] == 5.0
 
 
 def test_market_monitor_distribution_days():

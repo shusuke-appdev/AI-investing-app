@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 
 import pytest
 
@@ -53,17 +54,15 @@ def test_stock_ticker_change_invalidates_inflight_requests():
     assert not state._is_current_fetch(4, "AAPL")
 
 
-def test_market_change_invalidates_data_and_recap_requests():
+def test_market_change_invalidates_data_requests():
     state = MarketState(_reflex_internal_init=True)
     state.market_type = "US"
     state.market_request_id = 7
-    state.recap_request_id = 3
 
     event = state.set_market_type("JP")
 
     assert event == MarketState.fetch_market_summary_fast
     assert state.market_request_id == 8
-    assert state.recap_request_id == 4
     assert not state._is_current_market_request(7, "US")
     assert not is_current_request(
         current_id=2,
@@ -92,14 +91,119 @@ def test_theme_market_change_invalidates_rows_and_refreshes_only_theme_routes():
     assert state.loaded_market_type == ""
     assert state.ranked_themes == []
     assert state.theme_request_id == 1
+    assert state.leader_request_id == 1
+    assert state.leader_candidates == []
 
     state.router.url.path = "/stock"
     assert state.set_market_type("US") is None
     assert state.requested_market_type == "US"
     assert state.theme_request_id == 2
+    assert state.leader_request_id == 2
 
     state.router.url.path = "/market-watch"
     assert state.set_market_type("JP") is None
+
+
+def test_theme_leader_analysis_commits_matching_manual_request(monkeypatch):
+    state = ThemeState(_reflex_internal_init=True)
+    market_state = MarketState(_reflex_internal_init=True)
+    market_state.market_type = "US"
+
+    async def fake_get_state(self, state_cls):
+        assert state_cls is MarketState
+        return market_state
+
+    async def fake_to_thread(function, *args, **kwargs):
+        assert args == ("US", None)
+        assert kwargs == {"force_refresh": False}
+        return FetchResult(
+            data={
+                "status": "available",
+                "candidates": [
+                    {
+                        "ticker": "NVDA",
+                        "primary_theme": "AI半導体",
+                        "themes": ["AI半導体", "データセンター"],
+                        "status": "ブレイク準備",
+                        "score": 88.0,
+                        "score_breakdown": {
+                            "theme_strength": 23,
+                            "stage2_fit": 30,
+                            "relative_strength": 20,
+                            "setup_readiness": 15,
+                        },
+                        "stage_conditions": [],
+                    }
+                ],
+                "excluded_reasons": {"過熱": 2},
+                "selected_themes": [{"theme": "AI半導体"}],
+                "fetched_at": "2026-08-17T00:00:00+00:00",
+            },
+            source="test",
+            fetched_at="2026-08-17T00:00:00+00:00",
+        )
+
+    monkeypatch.setattr(ThemeState, "get_state", fake_get_state)
+    monkeypatch.setattr(theme_state_module.asyncio, "to_thread", fake_to_thread)
+
+    async def exercise():
+        events = state.discover_theme_leaders()
+        await anext(events)
+        await anext(events)
+        with pytest.raises(StopAsyncIteration):
+            await anext(events)
+
+    asyncio.run(exercise())
+
+    assert [item.ticker for item in state.leader_candidates] == ["NVDA"]
+    assert state.leader_candidates[0].themes_display == "AI半導体 / データセンター"
+    assert state.leader_exclusions[0].reason == "過熱"
+    assert state.leader_status == "available"
+    assert state.is_discovering_leaders is False
+
+
+def test_theme_market_change_discards_delayed_leader_result(monkeypatch):
+    state = ThemeState(_reflex_internal_init=True)
+    state.router.url.path = "/theme"
+    market_state = MarketState(_reflex_internal_init=True)
+    market_state.market_type = "US"
+
+    async def fake_get_state(self, state_cls):
+        return market_state
+
+    async def fake_to_thread(function, *args, **kwargs):
+        return FetchResult(
+            data={
+                "status": "available",
+                "candidates": [{"ticker": "OLD", "stage_conditions": []}],
+            }
+        )
+
+    monkeypatch.setattr(ThemeState, "get_state", fake_get_state)
+    monkeypatch.setattr(theme_state_module.asyncio, "to_thread", fake_to_thread)
+
+    async def exercise():
+        events = state.discover_theme_leaders()
+        await anext(events)
+        state.set_market_type("JP")
+        with pytest.raises(StopAsyncIteration):
+            await anext(events)
+
+    asyncio.run(exercise())
+
+    assert state.leader_candidates == []
+    assert state.leader_status == "idle"
+    assert state.is_discovering_leaders is False
+
+
+def test_theme_route_does_not_auto_run_leader_discovery():
+    source = Path(theme_state_module.__file__).read_text(encoding="utf-8")
+    frontend_source = Path("frontend/frontend.py").read_text(encoding="utf-8")
+
+    assert "on_load=ThemeState.fetch_themes" in frontend_source
+    assert "on_load=ThemeState.discover_theme_leaders" not in frontend_source
+    assert "on_load=ThemeState.prepare_theme_leaders" in frontend_source
+    assert "async def discover_theme_leaders" in source
 
 
 def test_prepare_market_watch_applies_cached_details_before_live_refresh(monkeypatch):
@@ -266,19 +370,31 @@ def test_theme_fetch_commits_matching_market_period_result(monkeypatch):
         return market_state
 
     async def fake_to_thread(function, *args):
-        assert args == ("1週間", "JP")
+        assert args == ("JP",)
         return FetchResult(
-            data=[
-                {
-                    "theme": "半導体",
-                    "performance": 1.5,
-                    "stocks": [{"ticker": "7203.T", "performance": 1.0}],
-                    "requested_days": 7,
-                    "component_count": 2,
-                    "total_components": 3,
-                    "coverage": 2 / 3,
-                }
-            ],
+            data={
+                "status": "available",
+                "items": [
+                    {
+                        "theme": "半導体",
+                        "rank": 1,
+                        "total_score": 75,
+                        "performance_1w": 1.5,
+                        "performance_1m": 4.0,
+                        "performance_6m": 10.0,
+                        "rank_1w": 1,
+                        "rank_1m": 2,
+                        "rank_6m": 3,
+                        "coverage_1w": 2 / 3,
+                        "coverage_1m": 2 / 3,
+                        "coverage_6m": 2 / 3,
+                        "stocks": [{"ticker": "7203.T", "performance": 1.0}],
+                        "component_count": 2,
+                        "total_components": 3,
+                    }
+                ],
+                "quality_warnings": [],
+            },
             source="test",
             fetched_at="2026-07-28T00:00:00+00:00",
         )

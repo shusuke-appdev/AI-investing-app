@@ -1,31 +1,57 @@
+from src.provider_result import FetchResult
 from src.services import trend_ranking_service as service
 
 
 def test_trend_ranking_reflects_marketdata_option_asymmetry(monkeypatch):
     option_calls = []
 
-    def fake_ranked(periods, market_type):
-        raw = {
-            "1週間": {"AI半導体": 4.0, "石油・ガス": 1.0},
-            "1ヶ月": {"AI半導体": 8.0, "石油・ガス": 2.0},
-            "6ヶ月": {"AI半導体": 20.0, "石油・ガス": 3.0},
-        }
-        return {
-            period: [
-                {"theme": theme, "performance": performance}
-                for theme, performance in raw[period].items()
-            ]
-            for period in periods
-        }
-
-    monkeypatch.setattr(service, "get_ranked_theme_periods", fake_ranked)
     monkeypatch.setattr(
         service,
-        "get_themes",
-        lambda market_type: {
-            "AI半導体": ["NVDA", "AMD"],
-            "石油・ガス": ["XOM", "CVX"],
-        },
+        "get_comprehensive_theme_ranking_result",
+        lambda market_type: FetchResult(
+            data={
+                "market": market_type,
+                "status": "available",
+                "items": [
+                    {
+                        "theme": "AI半導体",
+                        "market": market_type,
+                        "total_score": 50.0,
+                        "rank_1w": 1,
+                        "rank_1m": 1,
+                        "rank_6m": 1,
+                        "rank_acceleration": 0,
+                        "performance_1w": 4.0,
+                        "performance_1m": 8.0,
+                        "performance_6m": 20.0,
+                        "representative_tickers": ["NVDA", "AMD"],
+                        "proxy_ticker": "SMH",
+                        "option_proxy_ticker": "SMH",
+                        "parent_sector": "情報技術",
+                        "data_quality": "available",
+                    },
+                    {
+                        "theme": "石油・ガス",
+                        "market": market_type,
+                        "total_score": 10.0,
+                        "rank_1w": 2,
+                        "rank_1m": 2,
+                        "rank_6m": 2,
+                        "rank_acceleration": 0,
+                        "performance_1w": 1.0,
+                        "performance_1m": 2.0,
+                        "performance_6m": 3.0,
+                        "representative_tickers": ["XOM", "CVX"],
+                        "parent_sector": "エネルギー",
+                        "data_quality": "available",
+                    },
+                ],
+                "quality_warnings": [],
+                "fetched_at": "2026-06-16T00:00:00+00:00",
+            },
+            source="test",
+            status="available",
+        ),
     )
 
     def fake_option_sentiment(ticker, *, allow_marketdata=True, cache_only=False):
@@ -75,6 +101,10 @@ def test_trend_ranking_reflects_marketdata_option_asymmetry(monkeypatch):
     assert result["items"][0]["option_score"] == 4.0
     assert result["items"][0]["option_source"] == "marketdata.app"
     assert result["items"][0]["rank_points"] == 10
+    assert result["items"][0]["rank_1w"] == 1
+    assert result["items"][0]["rank_1m"] == 1
+    assert result["items"][0]["rank_6m"] == 1
+    assert result["items"][0]["rank_acceleration"] == 0
     assert result["option_mode"] == "cache_only"
     assert option_calls
     assert all(cache_only for _, _, cache_only in option_calls)

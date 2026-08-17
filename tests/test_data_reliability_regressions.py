@@ -142,17 +142,6 @@ def test_market_option_summary_formats_price_server_side():
     assert formatted[0].data_quality == "partial"
 
 
-def test_market_state_classifies_gemini_recap_failure():
-    from frontend.state.market_state import MarketState
-
-    assert (
-        MarketState._classify_recap_failure(
-            MarketState, "Gemini APIが利用できません。APIキーを設定してください。"
-        )
-        == "gemini"
-    )
-
-
 def test_market_state_keeps_quality_warnings_out_of_global_error(monkeypatch):
     from frontend.state.market_state import MarketState
     from src.services import provider_health

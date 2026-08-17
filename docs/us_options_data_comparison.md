@@ -1,6 +1,6 @@
 # 米国株オプションデータ取得方法の比較
 
-現在の `yfinance` (無料・非公式) と、より詳細なGreeks / IVを取得するAPIの比較です。2026-08-10時点ではMarketData.appをSPY / QQQ / IWMと主要テーマETF proxyのpreferred経路として実装済みです。Market Watch では current / 1W / 1M の満期別チェーンからオプション市場の想定変動幅・歪みを読み、AI Recap と市場時間軸別見通しにも同じ context を渡します。
+現在の `yfinance` (無料・非公式) と、より詳細なGreeks / IVを取得するAPIの比較です。2026-08-10時点ではMarketData.appをSPY / QQQ / IWMと主要テーマETF proxyのpreferred経路として実装済みです。Market Watch では current / 1W / 1M の満期別チェーンからオプション市場の想定変動幅・歪みを読み、市場時間軸別見通しにも同じ context を渡します。
 
 | 特徴 | yfinance | **MarketData.app（実装済み）** | ThetaData | Polygon.io | Interactive Brokers (IBKR) |
 | :--- | :--- | :--- | :--- | :--- | :--- |

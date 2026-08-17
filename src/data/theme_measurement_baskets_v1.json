@@ -1,0 +1,1820 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-17T09:32:51.019431+00:00",
+  "method": "two_year_rolling_return_and_cross_section_rank_audit",
+  "audit_passed": true,
+  "markets": {
+    "US": {
+      "baskets": {
+        "AI半導体": [
+          "MU",
+          "NVDA",
+          "AMD",
+          "AVGO"
+        ],
+        "AIインフラ/データセンター": [
+          "NVDA",
+          "DELL",
+          "ANET",
+          "SMCI",
+          "VRT"
+        ],
+        "AI利活用/ソフトウェア": [
+          "MSFT",
+          "GOOGL",
+          "META",
+          "PLTR",
+          "NOW"
+        ],
+        "AIエッジ/オンデバイスAI": [
+          "AAPL",
+          "INTC",
+          "MRVL",
+          "QCOM"
+        ],
+        "自動運転AI": [
+          "TSLA",
+          "GOOGL",
+          "ON",
+          "APTV",
+          "MBLY"
+        ],
+        "医療AI": [
+          "ISRG",
+          "DXCM",
+          "HIMS",
+          "VEEV",
+          "GEHC",
+          "DOCS"
+        ],
+        "クラウド": [
+          "MSFT",
+          "GOOGL",
+          "AMZN",
+          "SNOW",
+          "DDOG",
+          "NET"
+        ],
+        "サイバーセキュリティ": [
+          "PANW",
+          "CRWD",
+          "FTNT",
+          "OKTA"
+        ],
+        "量子コンピュータ": [
+          "MSFT",
+          "GOOGL",
+          "IBM",
+          "IONQ",
+          "RGTI",
+          "QUBT"
+        ],
+        "AR/VR/空間コンピューティング": [
+          "AAPL",
+          "META",
+          "RBLX",
+          "U",
+          "SNAP"
+        ],
+        "フィンテック": [
+          "HOOD",
+          "SOFI",
+          "COIN",
+          "NU",
+          "PYPL",
+          "XYZ"
+        ],
+        "ブロックチェーン/暗号資産": [
+          "MSTR",
+          "COIN",
+          "MARA",
+          "RIOT",
+          "CLSK"
+        ],
+        "AIエージェント": [
+          "PLTR",
+          "NOW",
+          "CRM",
+          "PATH"
+        ],
+        "生成AI": [
+          "NVDA",
+          "MSFT",
+          "GOOGL",
+          "META",
+          "ADBE",
+          "UPST"
+        ],
+        "宇宙/衛星": [
+          "RKLB",
+          "ASTS",
+          "RDW",
+          "LUNR",
+          "PL"
+        ],
+        "防衛": [
+          "BA",
+          "RTX",
+          "LMT",
+          "LHX"
+        ],
+        "衛星通信/スターリンク関連": [
+          "ASTS",
+          "VSAT",
+          "GSAT",
+          "IRDM",
+          "GILT"
+        ],
+        "ドローン/eVTOL": [
+          "JOBY",
+          "AVAV",
+          "ACHR",
+          "RCAT"
+        ],
+        "軍事AI/サイバー防衛": [
+          "PLTR",
+          "LDOS",
+          "BAH",
+          "CACI"
+        ],
+        "核抑止/原子力防衛": [
+          "LMT",
+          "NOC",
+          "GD",
+          "BWXT"
+        ],
+        "ミサイル防衛": [
+          "RTX",
+          "LMT",
+          "LHX",
+          "NOC"
+        ],
+        "レアアース/戦略金属": [
+          "MP",
+          "ALB",
+          "UUUU",
+          "REMX"
+        ],
+        "リチウム": [
+          "ALB",
+          "SQM",
+          "LAC"
+        ],
+        "ウラン": [
+          "CCJ",
+          "URA",
+          "LEU",
+          "UUUU"
+        ],
+        "銅": [
+          "FCX",
+          "TECK",
+          "COPX",
+          "IVPAF"
+        ],
+        "金・貴金属": [
+          "GLD",
+          "GDX",
+          "NEM",
+          "AEM"
+        ],
+        "銀": [
+          "SLV",
+          "HL",
+          "WPM",
+          "AG"
+        ],
+        "石油・ガス": [
+          "XOM",
+          "CVX",
+          "COP",
+          "SLB"
+        ],
+        "LNG": [
+          "LNG",
+          "EQT",
+          "AR",
+          "GLNG"
+        ],
+        "原子力/SMR": [
+          "OKLO",
+          "CCJ",
+          "SMR",
+          "URA"
+        ],
+        "太陽光": [
+          "FSLR",
+          "ENPH",
+          "SEDG",
+          "RUN"
+        ],
+        "風力/再エネ": [
+          "NEE",
+          "AES",
+          "BEPC",
+          "CWEN"
+        ],
+        "水素/燃料電池": [
+          "BE",
+          "FCEL",
+          "PLUG",
+          "BLDP"
+        ],
+        "エネルギー貯蔵/蓄電池": [
+          "ENPH",
+          "SEDG",
+          "STEM",
+          "FLUX"
+        ],
+        "CCS/炭素回収": [
+          "XOM",
+          "CVX",
+          "OXY",
+          "ET"
+        ],
+        "メガバンク": [
+          "JPM",
+          "GS",
+          "BAC",
+          "C"
+        ],
+        "地銀/リージョナルバンク": [
+          "USB",
+          "PNC",
+          "TFC",
+          "FITB"
+        ],
+        "保険": [
+          "BRK-B",
+          "TRV",
+          "PGR",
+          "MET"
+        ],
+        "資産運用": [
+          "COIN",
+          "SCHW",
+          "BLK",
+          "TROW"
+        ],
+        "REIT（商業）": [
+          "SPG",
+          "O",
+          "REG",
+          "KIM"
+        ],
+        "REIT（物流/データセンター）": [
+          "EQIX",
+          "PLD",
+          "AMT",
+          "DLR",
+          "CCI"
+        ],
+        "仮想通貨関連": [
+          "HOOD",
+          "MSTR",
+          "COIN",
+          "BITO",
+          "MARA"
+        ],
+        "決済/ペイメント": [
+          "V",
+          "MA",
+          "PYPL",
+          "GPN"
+        ],
+        "ネオバンク/デジタル銀行": [
+          "HOOD",
+          "SOFI",
+          "NU",
+          "LZ"
+        ],
+        "バイオテック": [
+          "XBI",
+          "AMGN",
+          "GILD",
+          "REGN",
+          "VRTX",
+          "MRNA"
+        ],
+        "医薬品大手": [
+          "LLY",
+          "JNJ",
+          "ABBV",
+          "MRK"
+        ],
+        "医療機器": [
+          "ISRG",
+          "ABT",
+          "BSX",
+          "SYK",
+          "MDT"
+        ],
+        "遺伝子治療/CRISPR": [
+          "CRSP",
+          "BEAM",
+          "NTLA",
+          "EDIT"
+        ],
+        "肥満治療薬 (GLP-1)": [
+          "LLY",
+          "AMGN",
+          "NVO",
+          "VKTX"
+        ],
+        "ヘルステック": [
+          "HIMS",
+          "VEEV",
+          "OSCR",
+          "DOCS"
+        ],
+        "介護・高齢化": [
+          "HCA",
+          "DVA",
+          "UHS",
+          "EHC",
+          "ENSG"
+        ],
+        "CRO/CDMO": [
+          "TMO",
+          "IQV",
+          "CRL",
+          "WST"
+        ],
+        "核医学/放射性医薬品": [
+          "LLY",
+          "AZN",
+          "NVS"
+        ],
+        "半導体製造装置": [
+          "AMAT",
+          "LRCX",
+          "ASML",
+          "KLAC"
+        ],
+        "EV/電池": [
+          "TSLA",
+          "F",
+          "GM",
+          "RIVN",
+          "QS",
+          "LCID"
+        ],
+        "ロボティクス/自動化": [
+          "ISRG",
+          "ABBV",
+          "TER",
+          "PATH",
+          "ROK",
+          "FANUY"
+        ],
+        "産業オートメーション": [
+          "HON",
+          "EMR",
+          "ROK",
+          "GNRC"
+        ],
+        "電力インフラ": [
+          "VRT",
+          "APH",
+          "ETN",
+          "PWR"
+        ],
+        "変圧器/送電/グリッド": [
+          "GE",
+          "VRT",
+          "ETN",
+          "VICR"
+        ],
+        "データセンターREIT": [
+          "EQIX",
+          "AMT",
+          "DLR",
+          "CCI",
+          "SBAC"
+        ],
+        "5G/通信インフラ": [
+          "T",
+          "VZ",
+          "NOK",
+          "TMUS",
+          "AMT",
+          "CCI",
+          "ERIC"
+        ],
+        "電力/ユーティリティ": [
+          "NEE",
+          "DUK",
+          "AEP",
+          "SO"
+        ],
+        "Eコマース": [
+          "AMZN",
+          "SHOP",
+          "BABA",
+          "MELI",
+          "SE",
+          "PDD"
+        ],
+        "ストリーミング": [
+          "NFLX",
+          "DIS",
+          "SPOT",
+          "WBD"
+        ],
+        "ゲーム/Eスポーツ": [
+          "MSFT",
+          "TTWO",
+          "RBLX",
+          "NTDOY"
+        ],
+        "高級ブランド": [
+          "TPR",
+          "RL",
+          "RACE",
+          "LVMUY"
+        ],
+        "ペット関連": [
+          "ZTS",
+          "IDXX",
+          "CHWY",
+          "FRPT",
+          "WOOF"
+        ],
+        "大麻/CBD": [
+          "TLRY",
+          "MSOS",
+          "ACB",
+          "CGC"
+        ],
+        "飲食/QSR": [
+          "MCD",
+          "SBUX",
+          "CMG",
+          "YUM",
+          "DPZ"
+        ],
+        "スポーツベッティング": [
+          "FLUT",
+          "DKNG",
+          "MGM",
+          "PENN"
+        ],
+        "AI PC/エッジAIデバイス": [
+          "AAPL",
+          "MSFT",
+          "AMD",
+          "DELL"
+        ],
+        "合成生物学": [
+          "BEAM",
+          "DNA",
+          "CDXS"
+        ],
+        "長寿/アンチエイジング": [
+          "ABBV",
+          "REGN",
+          "ALNY",
+          "FATE"
+        ],
+        "気候テック": [
+          "TSLA",
+          "ENPH",
+          "PLUG",
+          "RUN",
+          "STEM"
+        ],
+        "インドテック": [
+          "INDA",
+          "INFY",
+          "HDB",
+          "IBN"
+        ],
+        "日本株ADR": [
+          "SONY",
+          "TM",
+          "MUFG",
+          "SMFG"
+        ]
+      },
+      "audit": {
+        "status": "available",
+        "rank_correlation_1w": 0.9207,
+        "top10_overlap_1w": 0.9,
+        "rank_correlation_1m": 0.9675,
+        "top10_overlap_1m": 0.9,
+        "rank_correlation_6m": 0.977,
+        "top10_overlap_6m": 0.8,
+        "passed": true,
+        "warnings": []
+      },
+      "theme_audits": {
+        "AI半導体": {
+          "theme": "AI半導体",
+          "all_count": 8,
+          "measurement_count": 4,
+          "correlation_20d": 0.9316,
+          "correlation_63d": 0.9574,
+          "direction_agreement": 0.8891,
+          "passed": true,
+          "reason": ""
+        },
+        "AIインフラ/データセンター": {
+          "theme": "AIインフラ/データセンター",
+          "all_count": 7,
+          "measurement_count": 5,
+          "correlation_20d": 0.9689,
+          "correlation_63d": 0.9829,
+          "direction_agreement": 0.9363,
+          "passed": true,
+          "reason": ""
+        },
+        "AI利活用/ソフトウェア": {
+          "theme": "AI利活用/ソフトウェア",
+          "all_count": 8,
+          "measurement_count": 5,
+          "correlation_20d": 0.909,
+          "correlation_63d": 0.9404,
+          "direction_agreement": 0.8928,
+          "passed": true,
+          "reason": ""
+        },
+        "AIエッジ/オンデバイスAI": {
+          "theme": "AIエッジ/オンデバイスAI",
+          "all_count": 6,
+          "measurement_count": 4,
+          "correlation_20d": 0.9497,
+          "correlation_63d": 0.9764,
+          "direction_agreement": 0.9013,
+          "passed": true,
+          "reason": ""
+        },
+        "自動運転AI": {
+          "theme": "自動運転AI",
+          "all_count": 5,
+          "measurement_count": 5,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "医療AI": {
+          "theme": "医療AI",
+          "all_count": 6,
+          "measurement_count": 6,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "クラウド": {
+          "theme": "クラウド",
+          "all_count": 7,
+          "measurement_count": 6,
+          "correlation_20d": 0.9611,
+          "correlation_63d": 0.9654,
+          "direction_agreement": 0.9616,
+          "passed": true,
+          "reason": ""
+        },
+        "サイバーセキュリティ": {
+          "theme": "サイバーセキュリティ",
+          "all_count": 6,
+          "measurement_count": 4,
+          "correlation_20d": 0.9814,
+          "correlation_63d": 0.9896,
+          "direction_agreement": 0.9453,
+          "passed": true,
+          "reason": ""
+        },
+        "量子コンピュータ": {
+          "theme": "量子コンピュータ",
+          "all_count": 6,
+          "measurement_count": 6,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "AR/VR/空間コンピューティング": {
+          "theme": "AR/VR/空間コンピューティング",
+          "all_count": 5,
+          "measurement_count": 5,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "フィンテック": {
+          "theme": "フィンテック",
+          "all_count": 7,
+          "measurement_count": 6,
+          "correlation_20d": 0.9654,
+          "correlation_63d": 0.9797,
+          "direction_agreement": 0.9371,
+          "passed": true,
+          "reason": ""
+        },
+        "ブロックチェーン/暗号資産": {
+          "theme": "ブロックチェーン/暗号資産",
+          "all_count": 6,
+          "measurement_count": 5,
+          "correlation_20d": 0.9805,
+          "correlation_63d": 0.9677,
+          "direction_agreement": 0.9559,
+          "passed": true,
+          "reason": ""
+        },
+        "AIエージェント": {
+          "theme": "AIエージェント",
+          "all_count": 6,
+          "measurement_count": 4,
+          "correlation_20d": 0.9773,
+          "correlation_63d": 0.9705,
+          "direction_agreement": 0.9667,
+          "passed": true,
+          "reason": ""
+        },
+        "生成AI": {
+          "theme": "生成AI",
+          "all_count": 7,
+          "measurement_count": 6,
+          "correlation_20d": 0.9727,
+          "correlation_63d": 0.9734,
+          "direction_agreement": 0.9324,
+          "passed": true,
+          "reason": ""
+        },
+        "宇宙/衛星": {
+          "theme": "宇宙/衛星",
+          "all_count": 7,
+          "measurement_count": 5,
+          "correlation_20d": 0.9591,
+          "correlation_63d": 0.9474,
+          "direction_agreement": 0.9424,
+          "passed": true,
+          "reason": ""
+        },
+        "防衛": {
+          "theme": "防衛",
+          "all_count": 7,
+          "measurement_count": 4,
+          "correlation_20d": 0.925,
+          "correlation_63d": 0.9594,
+          "direction_agreement": 0.9224,
+          "passed": true,
+          "reason": ""
+        },
+        "衛星通信/スターリンク関連": {
+          "theme": "衛星通信/スターリンク関連",
+          "all_count": 5,
+          "measurement_count": 5,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "ドローン/eVTOL": {
+          "theme": "ドローン/eVTOL",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "軍事AI/サイバー防衛": {
+          "theme": "軍事AI/サイバー防衛",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9726,
+          "correlation_63d": 0.9573,
+          "direction_agreement": 0.9329,
+          "passed": true,
+          "reason": ""
+        },
+        "核抑止/原子力防衛": {
+          "theme": "核抑止/原子力防衛",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9591,
+          "correlation_63d": 0.9562,
+          "direction_agreement": 0.9373,
+          "passed": true,
+          "reason": ""
+        },
+        "ミサイル防衛": {
+          "theme": "ミサイル防衛",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "レアアース/戦略金属": {
+          "theme": "レアアース/戦略金属",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9543,
+          "correlation_63d": 0.9265,
+          "direction_agreement": 0.9166,
+          "passed": true,
+          "reason": ""
+        },
+        "リチウム": {
+          "theme": "リチウム",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "ウラン": {
+          "theme": "ウラン",
+          "all_count": 7,
+          "measurement_count": 4,
+          "correlation_20d": 0.9702,
+          "correlation_63d": 0.971,
+          "direction_agreement": 0.9666,
+          "passed": true,
+          "reason": ""
+        },
+        "銅": {
+          "theme": "銅",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9892,
+          "correlation_63d": 0.9841,
+          "direction_agreement": 0.9437,
+          "passed": true,
+          "reason": ""
+        },
+        "金・貴金属": {
+          "theme": "金・貴金属",
+          "all_count": 7,
+          "measurement_count": 4,
+          "correlation_20d": 0.9893,
+          "correlation_63d": 0.9914,
+          "direction_agreement": 0.9741,
+          "passed": true,
+          "reason": ""
+        },
+        "銀": {
+          "theme": "銀",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9795,
+          "correlation_63d": 0.9875,
+          "direction_agreement": 0.9382,
+          "passed": true,
+          "reason": ""
+        },
+        "石油・ガス": {
+          "theme": "石油・ガス",
+          "all_count": 7,
+          "measurement_count": 4,
+          "correlation_20d": 0.9586,
+          "correlation_63d": 0.9748,
+          "direction_agreement": 0.9211,
+          "passed": true,
+          "reason": ""
+        },
+        "LNG": {
+          "theme": "LNG",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "原子力/SMR": {
+          "theme": "原子力/SMR",
+          "all_count": 7,
+          "measurement_count": 4,
+          "correlation_20d": 0.9304,
+          "correlation_63d": 0.9594,
+          "direction_agreement": 0.9304,
+          "passed": true,
+          "reason": ""
+        },
+        "太陽光": {
+          "theme": "太陽光",
+          "all_count": 6,
+          "measurement_count": 4,
+          "correlation_20d": 0.9342,
+          "correlation_63d": 0.9267,
+          "direction_agreement": 0.9131,
+          "passed": true,
+          "reason": ""
+        },
+        "風力/再エネ": {
+          "theme": "風力/再エネ",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9486,
+          "correlation_63d": 0.9605,
+          "direction_agreement": 0.9413,
+          "passed": true,
+          "reason": ""
+        },
+        "水素/燃料電池": {
+          "theme": "水素/燃料電池",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9728,
+          "correlation_63d": 0.9806,
+          "direction_agreement": 0.9349,
+          "passed": true,
+          "reason": ""
+        },
+        "エネルギー貯蔵/蓄電池": {
+          "theme": "エネルギー貯蔵/蓄電池",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "CCS/炭素回収": {
+          "theme": "CCS/炭素回収",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "メガバンク": {
+          "theme": "メガバンク",
+          "all_count": 6,
+          "measurement_count": 4,
+          "correlation_20d": 0.9901,
+          "correlation_63d": 0.9857,
+          "direction_agreement": 0.9767,
+          "passed": true,
+          "reason": ""
+        },
+        "地銀/リージョナルバンク": {
+          "theme": "地銀/リージョナルバンク",
+          "all_count": 6,
+          "measurement_count": 4,
+          "correlation_20d": 0.9954,
+          "correlation_63d": 0.9974,
+          "direction_agreement": 0.9829,
+          "passed": true,
+          "reason": ""
+        },
+        "保険": {
+          "theme": "保険",
+          "all_count": 6,
+          "measurement_count": 4,
+          "correlation_20d": 0.9616,
+          "correlation_63d": 0.9688,
+          "direction_agreement": 0.9308,
+          "passed": true,
+          "reason": ""
+        },
+        "資産運用": {
+          "theme": "資産運用",
+          "all_count": 6,
+          "measurement_count": 4,
+          "correlation_20d": 0.9498,
+          "correlation_63d": 0.9376,
+          "direction_agreement": 0.924,
+          "passed": true,
+          "reason": ""
+        },
+        "REIT（商業）": {
+          "theme": "REIT（商業）",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9698,
+          "correlation_63d": 0.957,
+          "direction_agreement": 0.9128,
+          "passed": true,
+          "reason": ""
+        },
+        "REIT（物流/データセンター）": {
+          "theme": "REIT（物流/データセンター）",
+          "all_count": 5,
+          "measurement_count": 5,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "仮想通貨関連": {
+          "theme": "仮想通貨関連",
+          "all_count": 6,
+          "measurement_count": 5,
+          "correlation_20d": 0.9706,
+          "correlation_63d": 0.9648,
+          "direction_agreement": 0.9159,
+          "passed": true,
+          "reason": ""
+        },
+        "決済/ペイメント": {
+          "theme": "決済/ペイメント",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9383,
+          "correlation_63d": 0.942,
+          "direction_agreement": 0.9051,
+          "passed": true,
+          "reason": ""
+        },
+        "ネオバンク/デジタル銀行": {
+          "theme": "ネオバンク/デジタル銀行",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "バイオテック": {
+          "theme": "バイオテック",
+          "all_count": 7,
+          "measurement_count": 6,
+          "correlation_20d": 0.9587,
+          "correlation_63d": 0.9489,
+          "direction_agreement": 0.923,
+          "passed": true,
+          "reason": ""
+        },
+        "医薬品大手": {
+          "theme": "医薬品大手",
+          "all_count": 7,
+          "measurement_count": 4,
+          "correlation_20d": 0.9088,
+          "correlation_63d": 0.9017,
+          "direction_agreement": 0.9156,
+          "passed": true,
+          "reason": ""
+        },
+        "医療機器": {
+          "theme": "医療機器",
+          "all_count": 7,
+          "measurement_count": 5,
+          "correlation_20d": 0.9561,
+          "correlation_63d": 0.921,
+          "direction_agreement": 0.9025,
+          "passed": true,
+          "reason": ""
+        },
+        "遺伝子治療/CRISPR": {
+          "theme": "遺伝子治療/CRISPR",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "肥満治療薬 (GLP-1)": {
+          "theme": "肥満治療薬 (GLP-1)",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9047,
+          "correlation_63d": 0.9018,
+          "direction_agreement": 0.8916,
+          "passed": true,
+          "reason": ""
+        },
+        "ヘルステック": {
+          "theme": "ヘルステック",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.927,
+          "correlation_63d": 0.9146,
+          "direction_agreement": 0.905,
+          "passed": true,
+          "reason": ""
+        },
+        "介護・高齢化": {
+          "theme": "介護・高齢化",
+          "all_count": 5,
+          "measurement_count": 5,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "CRO/CDMO": {
+          "theme": "CRO/CDMO",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "核医学/放射性医薬品": {
+          "theme": "核医学/放射性医薬品",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "半導体製造装置": {
+          "theme": "半導体製造装置",
+          "all_count": 7,
+          "measurement_count": 4,
+          "correlation_20d": 0.9611,
+          "correlation_63d": 0.9737,
+          "direction_agreement": 0.939,
+          "passed": true,
+          "reason": ""
+        },
+        "EV/電池": {
+          "theme": "EV/電池",
+          "all_count": 6,
+          "measurement_count": 6,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "ロボティクス/自動化": {
+          "theme": "ロボティクス/自動化",
+          "all_count": 6,
+          "measurement_count": 6,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "産業オートメーション": {
+          "theme": "産業オートメーション",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9462,
+          "correlation_63d": 0.9419,
+          "direction_agreement": 0.8875,
+          "passed": true,
+          "reason": ""
+        },
+        "電力インフラ": {
+          "theme": "電力インフラ",
+          "all_count": 6,
+          "measurement_count": 4,
+          "correlation_20d": 0.9614,
+          "correlation_63d": 0.9622,
+          "direction_agreement": 0.9554,
+          "passed": true,
+          "reason": ""
+        },
+        "変圧器/送電/グリッド": {
+          "theme": "変圧器/送電/グリッド",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9289,
+          "correlation_63d": 0.9106,
+          "direction_agreement": 0.9242,
+          "passed": true,
+          "reason": ""
+        },
+        "データセンターREIT": {
+          "theme": "データセンターREIT",
+          "all_count": 5,
+          "measurement_count": 5,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "5G/通信インフラ": {
+          "theme": "5G/通信インフラ",
+          "all_count": 7,
+          "measurement_count": 7,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "電力/ユーティリティ": {
+          "theme": "電力/ユーティリティ",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9777,
+          "correlation_63d": 0.9721,
+          "direction_agreement": 0.9253,
+          "passed": true,
+          "reason": ""
+        },
+        "Eコマース": {
+          "theme": "Eコマース",
+          "all_count": 7,
+          "measurement_count": 6,
+          "correlation_20d": 0.957,
+          "correlation_63d": 0.9352,
+          "direction_agreement": 0.9039,
+          "passed": true,
+          "reason": ""
+        },
+        "ストリーミング": {
+          "theme": "ストリーミング",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9377,
+          "correlation_63d": 0.93,
+          "direction_agreement": 0.8959,
+          "passed": true,
+          "reason": ""
+        },
+        "ゲーム/Eスポーツ": {
+          "theme": "ゲーム/Eスポーツ",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "高級ブランド": {
+          "theme": "高級ブランド",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "ペット関連": {
+          "theme": "ペット関連",
+          "all_count": 5,
+          "measurement_count": 5,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "大麻/CBD": {
+          "theme": "大麻/CBD",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9752,
+          "correlation_63d": 0.9821,
+          "direction_agreement": 0.9306,
+          "passed": true,
+          "reason": ""
+        },
+        "飲食/QSR": {
+          "theme": "飲食/QSR",
+          "all_count": 5,
+          "measurement_count": 5,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "スポーツベッティング": {
+          "theme": "スポーツベッティング",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "AI PC/エッジAIデバイス": {
+          "theme": "AI PC/エッジAIデバイス",
+          "all_count": 6,
+          "measurement_count": 4,
+          "correlation_20d": 0.9353,
+          "correlation_63d": 0.9594,
+          "direction_agreement": 0.9241,
+          "passed": true,
+          "reason": ""
+        },
+        "合成生物学": {
+          "theme": "合成生物学",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "長寿/アンチエイジング": {
+          "theme": "長寿/アンチエイジング",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "気候テック": {
+          "theme": "気候テック",
+          "all_count": 5,
+          "measurement_count": 5,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "インドテック": {
+          "theme": "インドテック",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9501,
+          "correlation_63d": 0.9564,
+          "direction_agreement": 0.9164,
+          "passed": true,
+          "reason": ""
+        },
+        "日本株ADR": {
+          "theme": "日本株ADR",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9468,
+          "correlation_63d": 0.9506,
+          "direction_agreement": 0.9408,
+          "passed": true,
+          "reason": ""
+        }
+      },
+      "fetched_tickers": 318,
+      "requested_tickers": 318
+    },
+    "JP": {
+      "baskets": {
+        "半導体製造装置": [
+          "6857.T",
+          "8035.T",
+          "6920.T",
+          "6146.T"
+        ],
+        "半導体部材": [
+          "6981.T",
+          "4063.T",
+          "4004.T",
+          "6988.T"
+        ],
+        "電子部品": [
+          "6981.T",
+          "6976.T",
+          "6762.T",
+          "6594.T"
+        ],
+        "自動車大手": [
+          "7203.T",
+          "7267.T",
+          "7270.T",
+          "7201.T"
+        ],
+        "自動車部品": [
+          "5108.T",
+          "6902.T",
+          "7259.T",
+          "7282.T"
+        ],
+        "EV/電池": [
+          "7203.T",
+          "6752.T",
+          "6645.T",
+          "6674.T"
+        ],
+        "産業機械": [
+          "6301.T",
+          "6273.T",
+          "6326.T",
+          "6305.T"
+        ],
+        "FA・ロボティクス": [
+          "6861.T",
+          "6954.T",
+          "6506.T",
+          "6273.T"
+        ],
+        "建設機械": [
+          "7011.T",
+          "6301.T",
+          "6305.T"
+        ],
+        "メガバンク": [
+          "8306.T",
+          "8411.T",
+          "8316.T"
+        ],
+        "保険": [
+          "8766.T",
+          "8725.T",
+          "8750.T",
+          "8630.T"
+        ],
+        "証券": [
+          "8604.T",
+          "8601.T",
+          "8628.T"
+        ],
+        "リース": [
+          "8593.T",
+          "8439.T",
+          "8566.T"
+        ],
+        "総合化学": [
+          "4188.T",
+          "4005.T",
+          "4183.T",
+          "4631.T"
+        ],
+        "鉄鋼": [
+          "5401.T",
+          "5411.T",
+          "5406.T"
+        ],
+        "非鉄金属": [
+          "5802.T",
+          "5706.T",
+          "5713.T",
+          "5714.T"
+        ],
+        "小売": [
+          "9983.T",
+          "3382.T",
+          "7453.T",
+          "8267.T"
+        ],
+        "EC/デジタルコマース": [
+          "4755.T",
+          "4689.T",
+          "3092.T"
+        ],
+        "外食": [
+          "7550.T",
+          "2702.T",
+          "3197.T"
+        ],
+        "医薬品大手": [
+          "4502.T",
+          "4519.T",
+          "4568.T",
+          "4503.T"
+        ],
+        "医療機器": [
+          "4543.T",
+          "7733.T",
+          "6869.T"
+        ],
+        "CRO/CDMO": [
+          "4901.T",
+          "4587.T",
+          "4552.T"
+        ],
+        "電力・ガス": [
+          "9501.T",
+          "9502.T",
+          "9531.T"
+        ],
+        "通信": [
+          "9432.T",
+          "9433.T",
+          "9434.T"
+        ],
+        "鉄道": [
+          "9020.T",
+          "9022.T",
+          "9021.T"
+        ],
+        "SIer/ITサービス": [
+          "4307.T",
+          "3626.T",
+          "3774.T",
+          "2127.T"
+        ],
+        "ゲーム": [
+          "7974.T",
+          "9766.T",
+          "9697.T",
+          "3659.T"
+        ],
+        "ソフトウェア開発": [
+          "4768.T",
+          "4686.T",
+          "3962.T"
+        ],
+        "不動産大手": [
+          "8802.T",
+          "8801.T",
+          "8830.T"
+        ],
+        "J-REIT": [
+          "8951.T",
+          "8952.T",
+          "8960.T"
+        ],
+        "商社": [
+          "8058.T",
+          "8031.T",
+          "8001.T",
+          "8002.T"
+        ],
+        "海運": [
+          "9101.T",
+          "9104.T",
+          "9107.T"
+        ],
+        "空運": [
+          "9201.T",
+          "9202.T"
+        ],
+        "防衛": [
+          "7011.T",
+          "6503.T",
+          "7012.T"
+        ]
+      },
+      "audit": {
+        "status": "available",
+        "rank_correlation_1w": 0.9976,
+        "top10_overlap_1w": 1.0,
+        "rank_correlation_1m": 0.9746,
+        "top10_overlap_1m": 1.0,
+        "rank_correlation_6m": 0.9985,
+        "top10_overlap_6m": 1.0,
+        "passed": true,
+        "warnings": []
+      },
+      "theme_audits": {
+        "半導体製造装置": {
+          "theme": "半導体製造装置",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9724,
+          "correlation_63d": 0.9648,
+          "direction_agreement": 0.9358,
+          "passed": true,
+          "reason": ""
+        },
+        "半導体部材": {
+          "theme": "半導体部材",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "電子部品": {
+          "theme": "電子部品",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9643,
+          "correlation_63d": 0.9657,
+          "direction_agreement": 0.9212,
+          "passed": true,
+          "reason": ""
+        },
+        "自動車大手": {
+          "theme": "自動車大手",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9625,
+          "correlation_63d": 0.9699,
+          "direction_agreement": 0.9244,
+          "passed": true,
+          "reason": ""
+        },
+        "自動車部品": {
+          "theme": "自動車部品",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "EV/電池": {
+          "theme": "EV/電池",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "産業機械": {
+          "theme": "産業機械",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "FA・ロボティクス": {
+          "theme": "FA・ロボティクス",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "建設機械": {
+          "theme": "建設機械",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "メガバンク": {
+          "theme": "メガバンク",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "保険": {
+          "theme": "保険",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "証券": {
+          "theme": "証券",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "リース": {
+          "theme": "リース",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "総合化学": {
+          "theme": "総合化学",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "鉄鋼": {
+          "theme": "鉄鋼",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "非鉄金属": {
+          "theme": "非鉄金属",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "小売": {
+          "theme": "小売",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "EC/デジタルコマース": {
+          "theme": "EC/デジタルコマース",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "外食": {
+          "theme": "外食",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "医薬品大手": {
+          "theme": "医薬品大手",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9163,
+          "correlation_63d": 0.9404,
+          "direction_agreement": 0.8978,
+          "passed": true,
+          "reason": ""
+        },
+        "医療機器": {
+          "theme": "医療機器",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "CRO/CDMO": {
+          "theme": "CRO/CDMO",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "電力・ガス": {
+          "theme": "電力・ガス",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "通信": {
+          "theme": "通信",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "鉄道": {
+          "theme": "鉄道",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "SIer/ITサービス": {
+          "theme": "SIer/ITサービス",
+          "all_count": 4,
+          "measurement_count": 4,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "ゲーム": {
+          "theme": "ゲーム",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9626,
+          "correlation_63d": 0.9674,
+          "direction_agreement": 0.9193,
+          "passed": true,
+          "reason": ""
+        },
+        "ソフトウェア開発": {
+          "theme": "ソフトウェア開発",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "不動産大手": {
+          "theme": "不動産大手",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "J-REIT": {
+          "theme": "J-REIT",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "商社": {
+          "theme": "商社",
+          "all_count": 5,
+          "measurement_count": 4,
+          "correlation_20d": 0.9548,
+          "correlation_63d": 0.9814,
+          "direction_agreement": 0.9283,
+          "passed": true,
+          "reason": ""
+        },
+        "海運": {
+          "theme": "海運",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "空運": {
+          "theme": "空運",
+          "all_count": 2,
+          "measurement_count": 2,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        },
+        "防衛": {
+          "theme": "防衛",
+          "all_count": 3,
+          "measurement_count": 3,
+          "correlation_20d": 1.0,
+          "correlation_63d": 1.0,
+          "direction_agreement": 1.0,
+          "passed": true,
+          "reason": ""
+        }
+      },
+      "fetched_tickers": 117,
+      "requested_tickers": 117
+    }
+  }
+}

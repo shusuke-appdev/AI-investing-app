@@ -15,7 +15,6 @@ from frontend.state.request_tracking import is_current_request
 from src.log_config import get_logger
 from src.services.analysis_context import MarketContext
 from src.services.market_analysis_inputs import build_market_analysis_inputs
-from src.services.market_analyst_service import generate_market_analysis_report
 from src.services.market_dashboard_service import (
     build_fomo_scan_context,
     build_market_high_context,
@@ -130,12 +129,6 @@ class MarketState(rx.State):
     fomo_scan_summary: str = ""
     fomo_scan_items: list[FomoScanDisplay] = []
 
-    ai_recap: str = ""
-    is_generating_recap: bool = False
-    ai_recap_error_type: str = ""
-    ai_recap_notice_msg: str = ""
-    recap_focus_visible: bool = False
-    custom_recap_focus: str = ""
     market_context: dict[str, Any] = {}
     data_status: list[DataStatusDisplay] = []
     provenance: list[ProvenanceDisplay] = []
@@ -144,20 +137,12 @@ class MarketState(rx.State):
     context_is_stale: bool = False
     context_is_partial: bool = False
     market_request_id: int = 0
-    recap_request_id: int = 0
 
     def set_market_type(self, m_type: str):
         if m_type != self.market_type:
             self.market_request_id += 1
-            self.recap_request_id += 1
         self.market_type = m_type
         return MarketState.fetch_market_summary_fast
-
-    def toggle_recap_focus(self):
-        self.recap_focus_visible = not self.recap_focus_visible
-
-    def set_custom_recap_focus(self, value: str):
-        self.custom_recap_focus = value
 
     async def fetch_market_summary_fast(self):
         request_id, market_type = self._begin_market_request()
@@ -587,83 +572,6 @@ class MarketState(rx.State):
         async for _ in self.refresh_market_details():
             yield
 
-    async def generate_ai_recap(self):
-        request_id, market_type = self._begin_recap_request()
-        self.is_generating_recap = True
-        self.ai_recap_error_type = ""
-        self.ai_recap_notice_msg = ""
-        yield
-
-        try:
-            recap = await asyncio.to_thread(
-                generate_market_analysis_report,
-                market_type,
-                market_context=self.market_context or None,
-                custom_focus=None,
-            )
-            if not self._is_current_recap_request(request_id, market_type):
-                return
-            if recap:
-                self.ai_recap = recap
-                self.ai_recap_error_type = self._classify_recap_failure(recap)
-                if self.ai_recap_error_type:
-                    self.ai_recap_notice_msg = (
-                        "AI Recapは利用不可または簡易結果です: "
-                        + self.ai_recap_error_type
-                    )
-            else:
-                self.ai_recap_error_type = "unknown"
-                self.ai_recap_notice_msg = "AI Recapを生成できませんでした。"
-        except Exception as exc:
-            if not self._is_current_recap_request(request_id, market_type):
-                return
-            error = log_state_exception(logger, "AI Market Recapの生成", exc)
-            self.ai_recap_error_type = "exception"
-            self.ai_recap_notice_msg = error.message
-        finally:
-            if self._is_current_recap_request(request_id, market_type):
-                self.is_generating_recap = False
-                yield
-
-    async def generate_ai_recap_with_focus(self):
-        request_id, market_type = self._begin_recap_request()
-        custom_focus = self.custom_recap_focus.strip()
-        self.is_generating_recap = True
-        self.ai_recap_error_type = ""
-        self.ai_recap_notice_msg = ""
-        yield
-
-        try:
-            recap = await asyncio.to_thread(
-                generate_market_analysis_report,
-                market_type,
-                market_context=self.market_context or None,
-                custom_focus=custom_focus,
-            )
-            if not self._is_current_recap_request(request_id, market_type):
-                return
-            if recap:
-                self.ai_recap = recap
-                self.ai_recap_error_type = self._classify_recap_failure(recap)
-                if self.ai_recap_error_type:
-                    self.ai_recap_notice_msg = (
-                        "AI Recapは利用不可または簡易結果です: "
-                        + self.ai_recap_error_type
-                    )
-            else:
-                self.ai_recap_error_type = "unknown"
-                self.ai_recap_notice_msg = "AI Recapを生成できませんでした。"
-        except Exception as exc:
-            if not self._is_current_recap_request(request_id, market_type):
-                return
-            error = log_state_exception(logger, "AI Market Recapの生成", exc)
-            self.ai_recap_error_type = "exception"
-            self.ai_recap_notice_msg = error.message
-        finally:
-            if self._is_current_recap_request(request_id, market_type):
-                self.is_generating_recap = False
-                yield
-
     def _begin_market_request(self) -> tuple[int, str]:
         self.market_request_id += 1
         return self.market_request_id, self.market_type
@@ -671,18 +579,6 @@ class MarketState(rx.State):
     def _is_current_market_request(self, request_id: int, market_type: str) -> bool:
         return is_current_request(
             current_id=self.market_request_id,
-            current_key=self.market_type,
-            request_id=request_id,
-            request_key=market_type,
-        )
-
-    def _begin_recap_request(self) -> tuple[int, str]:
-        self.recap_request_id += 1
-        return self.recap_request_id, self.market_type
-
-    def _is_current_recap_request(self, request_id: int, market_type: str) -> bool:
-        return is_current_request(
-            current_id=self.recap_request_id,
             current_key=self.market_type,
             request_id=request_id,
             request_key=market_type,
@@ -904,12 +800,3 @@ class MarketState(rx.State):
             "failed": "取得失敗",
         }
         return labels.get(status, status)
-
-    def _classify_recap_failure(self, recap: str) -> str:
-        if "Gemini API" in recap or "APIキー" in recap:
-            return "gemini"
-        if "データ取得" in recap or "data" in recap.lower():
-            return "data"
-        if "レポート生成エラー" in recap:
-            return "generation"
-        return ""

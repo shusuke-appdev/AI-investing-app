@@ -72,24 +72,10 @@ def detect_bases(df: pd.DataFrame) -> dict:
                 }
             )
 
-    # 3. ダブルボトム (W型) 判定
-    # 深さ40%以下、2回目の底が1回目を下回る（アンダーカット）
-    if max_drawdown <= 40.0:
-        # W型の簡易検知（谷が2つあるか）は scipy.signal.find_peaks等が必要だが、
-        # ここではプレースホルダーとして、下落幅が条件を満たしている場合に可能性としてフラグを立てる
-        pass
-
-    # ブレイクアウト判定とカウント制御 (モック実装)
-    # 本来はデータベースやセッションで過去のブレイクアウト回数を保存する
-    breakout_count = 1  # 実際には状態管理から取得する
-    is_warning = breakout_count >= 3
-
     return {
         "detected": len(patterns) > 0,
         "patterns": patterns,
-        "breakout_count": breakout_count,
-        "warning": is_warning,
-        "message": "3回目以上のベースブレイクアウトは下落リスクが高いため警告"
-        if is_warning
-        else "ベース形成中 / ブレイクアウト初期",
+        "breakout_count": None,
+        "warning": False,
+        "message": "履歴を保存していないため、ブレイクアウト回数は判定不能です。",
     }

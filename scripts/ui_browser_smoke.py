@@ -11,11 +11,19 @@ from playwright.sync_api import Page, sync_playwright
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXPORT_DIR = REPO_ROOT / ".web" / "build" / "client"
-ROUTES = ("/", "/market-watch", "/theme", "/stock", "/data-quality")
+ROUTES = (
+    "/",
+    "/market-watch",
+    "/theme",
+    "/theme-leaders",
+    "/stock",
+    "/data-quality",
+)
 ROUTE_FILES = {
     "/": "/index.html",
     "/market-watch": "/market-watch.html",
     "/theme": "/theme.html",
+    "/theme-leaders": "/theme-leaders.html",
     "/stock": "/stock.html",
     "/data-quality": "/data-quality.html",
 }

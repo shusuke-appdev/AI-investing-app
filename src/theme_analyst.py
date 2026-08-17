@@ -13,7 +13,7 @@ from src.cache import ttl_cache
 from src.log_config import get_logger
 from src.persistent_cache import repo_state_cache
 from src.provider_result import FetchResult
-from src.themes_config import PERIODS, THEMES, get_themes
+from src.themes_config import PERIODS, get_themes
 from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
@@ -430,32 +430,3 @@ def _rank_themes_from_observations(
     theme_performances.sort(key=lambda x: x["performance"], reverse=True)
 
     return theme_performances
-
-
-def get_top_themes(period_name: str, top_n: int = 10) -> list[RankedTheme]:
-    """
-    指定期間での上位テーマを取得します（互換性維持）。
-    """
-    ranked = get_ranked_themes(period_name)
-    return ranked[:top_n]
-
-
-def get_theme_details(theme_name: str, period_name: str = "1ヶ月") -> dict:
-    """
-    テーマの詳細情報を取得します。
-    """
-    # 既存互換のため残すが、内部でget_top_themes的なロジックを使うか、
-    # 単独ダウンロードする。単独の場合は従来のロジックで良いが、
-    # 整合性を取るため再実装してもよい。ここでは簡易的に。
-    # 「詳細」機能は現状UIであまり使われていない（Expander内はget_top_themesで返されたデータを使っている）。
-    return {}  # 必要なら実装
-
-
-def get_all_theme_names() -> list[str]:
-    """
-    定義されている全テーマ名を取得します。
-
-    Returns:
-        テーマ名のリスト
-    """
-    return list(THEMES.keys())

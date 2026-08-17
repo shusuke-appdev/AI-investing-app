@@ -406,6 +406,7 @@ def _extract_yfinance_profile(
         info["country"] = _first(profile, "country", "")
         info["employees"] = _first(profile, "fullTimeEmployees", 0)
         info["exchange"] = _first(profile, "exchange", "")
+        info["quote_type"] = _first(profile, "quoteType", "")
         info["currency"] = _first(profile, "currency", "")
 
     if profile or fast_info:
@@ -514,6 +515,7 @@ def get_stock_info(
         "country": "",
         "employees": 0,
         "exchange": "",
+        "quote_type": "",
         "currency": "",
         "revenueGrowth": None,
         "earningsGrowth": None,

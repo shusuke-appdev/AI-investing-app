@@ -264,9 +264,9 @@ def analyze_technical(
     ):
         entry_signal = "買いシグナル発火（出来高を伴うブレイクアウト）"
 
-    # 損切り・収益ライン
+    # 損切りライン。利益目標は価格履歴だけでは根拠を作れないため未設定とする。
     stop_loss = current_price * 0.92  # 買値（現在値）から8%下落
-    profit_line = current_price * 1.2  # モック: 本来は企業価値やEPS成長率から算出
+    profit_line = None
 
     if current_price <= contrarian_zone[1]:
         c_sig = "買い検討ゾーン"

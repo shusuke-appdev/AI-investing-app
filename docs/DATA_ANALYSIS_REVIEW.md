@@ -27,10 +27,10 @@
 
 本アプリのデータ取得・分析機能は、投資調査用の「現在の市場環境を読む機能」と「個別銘柄を評価する機能」に大きく分かれる。
 
-- 市場分析: `MarketContext` を中心に、Market Intelligence UI、`/market-watch`、AI Market Recap が同じ市場監視データを共有する
+- 市場分析: `MarketContext` を中心に、Market Intelligence UIと`/market-watch`が同じ市場監視データを共有する
 - 個別銘柄分析: `StockSignalContext` を中心に、Stock UI と AI Stock Recap が同じ銘柄データ、テクニカル、確率シグナル、トレンド診断、セクター/テーマ評価を共有する
 - トレード分析: `StockSignalContext.trade_setup` と個別銘柄分析済みデータを使い、Stock UIの明示ボタン押下後に売買タイミング、重要水準、無効化条件、需給根拠を整理する
-- データ取得: yfinance、Finnhub、FRED、J-Quants、EDINET、Google News を無料・公開データ優先で使う
+- データ取得: yfinance、Finnhub、FRED、J-Quants、EDINETを無料・公開データ優先で使う
 - キャッシュ: `.states` 配下の persistent cache と TTL cache で、重い取得や失敗時の stale fallback を扱う
 
 ## 市場分析の配置
@@ -62,7 +62,6 @@
 ## 解消した重複・干渉
 
 - 市場表示整形が `frontend/state/market_state.py` に集中していた問題を、UI非依存の presentation service へ移した
-- AI Market Recap が通常経路でテーマや市場トレンドを追加取得する重複を減らし、`MarketContext` の momentum / option / monitoring 情報を優先するようにした
 - 個別銘柄AIが表示済みニュースを使っていなかった問題を修正した
 - 個別銘柄AIが `StockSignalContext` のテクニカル/SMART評価を使わずに再計算しうる経路を縮小した
 

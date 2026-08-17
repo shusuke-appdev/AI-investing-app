@@ -33,8 +33,9 @@ flowchart LR
 | 市場マイクロストラクチャー | CTA proxy、流動性proxy、VRP、巻き戻しリスクはどうか | SPY OHLCV、明示的に渡されたoption | `microstructure` | Theme/Flowではoptionを暗黙取得しない。Options取得後だけ同じチェーンを反映 | option要素だけ欠損 | Theme/Flow、Options |
 | ETFリーダーシップ | 市場全体のリスクオン/オフ圧力はどうか | ETF価格・出来高 | `flow_monitor` | 市場全体の確認proxy | `partial` | Theme/Flow |
 | セクター・テーマ資金流入 | 具体的にどの候補群が相対優位か | 代表ETF・構成銘柄 | `sector_flow` | 候補抽出proxy。ETFリーダーシップと役割を分離 | 取得率不足を警告 | Theme/Flow |
-| トレンド/テーマ | 指定期間で相対的に強い調査候補群はどれか | US/JPテーマ構成銘柄の終値 | `FetchResult[list[RankedTheme]]` | 対象市場・期間ごとの観測順位。売買指示ではない | provider失敗、空結果、取得率不足、persistent/stale cacheを区別し、旧リクエスト結果は破棄 | 市場/期間変更・再試行 |
-| 統合トレンド順位 | 複数期間・flow・optionから何を優先調査するか | sector flow、歪み、明示option | `trend_ranking` | テーマ候補順位。負Gammaは直接25Δ IVスキューと十分なGamma品質が揃う場合だけ下方向警戒へ反映し、それ以外は上下双方向・スコア中立 | itemsなし | Theme/Flow、Credit、Options |
+| 総合テーマ順位 | 価格・相対強度・価格出来高・広がりを総合して、どのテーマを優先調査するか | 版管理済み代表銘柄、ETF proxy、市場benchmarkの2年日足 | `ComprehensiveThemeRankingContext` | 100点の決定論的順位。資金注目度は純流入額ではなくproxy。ETFは確認表示のみ | 必須分類、3銘柄、取得率60%、benchmarkのいずれかが不足したテーマは0点化せず順位対象外 | `/theme`表示・12時間cache |
+| 次期リーダー候補 | 強い・浮上中テーマの中で追加調査を優先する銘柄はどれか | 登録代表、引用・一次資料を検証したGemini探索銘柄、最大40銘柄と市場benchmarkの2年日足、最大15社の企業指標 | `ThemeLeaderDiscoveryContext` | Stage 2、相対強度、VCP/ATR/節目/RVOL、適応型ファンダメンタルによる研究候補。Geminiは母集団を拡張するだけ | 履歴・流動性・benchmark・相対強度・ファンダメンタル・鮮度不足を0点化せず、除外または確認待ちへ分離 | `/theme-leaders`の明示操作。ニュース・option・保存・通知なし |
+| 統合トレンド順位 | 他画面が同じテーマ順位をどう参照するか | `ComprehensiveThemeRankingContext`、任意option観測 | `trend_ranking` | 総合点は共通contextから変更しない。optionは参考併記だけ | itemsなし | Theme/Flow、Credit、Options |
 | 信用ストレス | 株安が信用市場へ波及しているか | FRED等の信用系列 | `credit_stress` | Vol/Sentimentより先に計算し予測・戦略へ渡す | stale/cacheまたはunavailable | Credit/Risk |
 | 市場歪み | ファンダメンタルとflowに乖離があるか | 企業・テーマ・flow | `market_distortions` | 調査候補を作るmodel output | 候補なし | Credit/Risk |
 | ボラティリティ・レジーム | ボラの水準・期間構造・変化はどの状態か | Cboe、価格、信用ストレス | `volatility_regime` | リスク姿勢の入力 | `unavailable` | Vol/Sentiment |

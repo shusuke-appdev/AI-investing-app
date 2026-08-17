@@ -8,12 +8,14 @@
 - [市場監視・予測](MARKET_MONITORING_PREDICTION.md): 市場レイヤー間の役割分担と予測の利用制約
 - [分析データ来歴台帳](ANALYSIS_DATA_PROVENANCE.md): direct / proxy / model output / unavailable の区別
 - [適応型個別株分析](ADAPTIVE_STOCK_ANALYSIS.md): Stock分析の評価境界
+- [テーマ主導の次期リーダー候補](THEME_LEADER_DISCOVERY.md): 候補選定、採点、欠損、取得、UI契約
 - [米国オプションデータ比較](us_options_data_comparison.md): MarketData.appとyfinance/cacheの使い分け
 - [Supabase Data API権限](SUPABASE_DATA_API_GRANTS.md): 個人データ保存の権限設計
 
 ## 補助レビュー
 
 - [データ取得・分析機能レビュー](DATA_ANALYSIS_REVIEW.md): 継続的な品質監査の記録
+- [全コード監査 2026-08-17](CODE_REVIEW_2026-08-17.md): Recap廃止後の全体監査、修正、残課題
 
 ## 履歴資料
 
