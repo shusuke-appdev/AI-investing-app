@@ -9,7 +9,6 @@ from typing import Any, TypedDict
 from urllib.parse import urlparse
 
 import pandas as pd
-import yfinance as yf
 
 from src.advisor.minervini_analyzer import analyze_stage, detect_vcp
 from src.advisor.price_action_metrics import (
@@ -27,6 +26,7 @@ from src.advisor.price_action_metrics import (
 from src.log_config import get_logger
 from src.persistent_cache import PersistentCacheRead, repo_state_cache
 from src.provider_result import FetchResult
+from src.services.batched_history_provider import fetch_batched_history
 from src.services.fundamental_profile_service import evaluate_fundamental_profile
 from src.services.theme_grounded_research_service import (
     ValidatedExternalTicker,
@@ -36,10 +36,8 @@ from src.services.trend_ranking_service import build_trend_ranking_context
 from src.stock_data_provider import get_stock_info
 from src.theme_measurement import get_theme_measurement_baskets
 from src.themes_config import get_themes
-from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
-configure_yfinance_cache()
 
 BENCHMARKS = {"US": "SPY", "JP": "1306.T"}
 MIN_HISTORY_SESSIONS = 200
@@ -281,19 +279,8 @@ def _build_live_discovery(
     if benchmark not in request_tickers:
         request_tickers.append(benchmark)
 
-    try:
-        raw = yf.download(
-            request_tickers,
-            period="2y",
-            interval="1d",
-            group_by="ticker",
-            auto_adjust=True,
-            threads=True,
-            progress=False,
-            timeout=20,
-        )
-    except Exception as exc:
-        logger.exception("Theme leader OHLCV batch download failed")
+    batch = fetch_batched_history(request_tickers, period="2y", timeout=20)
+    if not batch.is_available:
         return FetchResult(
             data=_empty_context(
                 market_type,
@@ -305,30 +292,10 @@ def _build_live_discovery(
             fetched_at=fetched_at,
             status="unavailable",
             warnings=["候補銘柄の日足を取得できませんでした。"],
-            error_code="provider_error",
-            error=str(exc),
+            error_code=batch.error_code,
+            error=batch.error,
         )
-
-    if raw is None or raw.empty:
-        return FetchResult(
-            data=_empty_context(
-                market_type,
-                status="unavailable",
-                warnings=["候補銘柄の日足応答が空でした。"],
-                fetched_at=fetched_at,
-            ),
-            source="yfinance_batch",
-            fetched_at=fetched_at,
-            status="unavailable",
-            warnings=["候補銘柄の日足応答が空でした。"],
-            error_code="empty_response",
-        )
-
-    frames = {
-        ticker: frame
-        for ticker in request_tickers
-        if not (frame := _extract_ticker_frame(raw, ticker, request_tickers)).empty
-    }
+    frames = dict(batch.data or {})
     benchmark_frame = frames.pop(benchmark, pd.DataFrame())
     context = build_theme_leader_discovery(
         market_type=market_type,
@@ -348,6 +315,7 @@ def _build_live_discovery(
             [
                 *ranking.get("quality_warnings", []),
                 *external.get("warnings", []),
+                *batch.warnings,
                 *context.get("warnings", []),
             ]
         )

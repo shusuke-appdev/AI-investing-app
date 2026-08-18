@@ -13,6 +13,7 @@ from typing import Any
 
 from src.app_mode import require_personal_data_enabled, require_writes_enabled
 from src.log_config import get_logger
+from src.services.untrusted_prompt import untrusted_prompt_block
 from src.settings_storage import get_storage_type
 from src.storage.atomic_json import read_json, update_json
 from src.storage.base import BaseStorage
@@ -298,7 +299,7 @@ def get_knowledge_for_ai_context(max_items: int = 10) -> str:
     for index, item in enumerate(items, start=1):
         lines.append(item.to_prompt_block(index))
 
-    return "\n".join(lines)
+    return untrusted_prompt_block("user_knowledge", "\n".join(lines))
 
 
 def get_knowledge_context_items(max_items: int = 10) -> list[KnowledgeContextItem]:

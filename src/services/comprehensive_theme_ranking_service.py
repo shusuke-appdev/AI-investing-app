@@ -8,21 +8,19 @@ from typing import Any, TypedDict
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 
 from src.advisor.price_action_metrics import normalize_price_frame, period_returns
 from src.log_config import get_logger
 from src.persistent_cache import PersistentCacheRead, repo_state_cache
 from src.provider_result import FetchResult
+from src.services.batched_history_provider import fetch_batched_history
 from src.theme_measurement import (
     ThemeMeasurementBasket,
     get_theme_measurement_baskets,
     measurement_universe,
 )
-from src.yfinance_runtime import configure_yfinance_cache
 
 logger = get_logger(__name__)
-configure_yfinance_cache()
 
 BENCHMARKS = {"US": "SPY", "JP": "1306.T"}
 MIN_COVERAGE = 0.60
@@ -138,19 +136,8 @@ def _build_live_ranking(
     request_tickers = [*tickers]
     if benchmark not in request_tickers:
         request_tickers.append(benchmark)
-    try:
-        raw = yf.download(
-            request_tickers,
-            period="2y",
-            interval="1d",
-            group_by="ticker",
-            auto_adjust=True,
-            threads=True,
-            progress=False,
-            timeout=20,
-        )
-    except Exception as exc:
-        logger.exception("Comprehensive theme OHLCV batch failed")
+    batch = fetch_batched_history(request_tickers, period="2y", timeout=20)
+    if not batch.is_available:
         return FetchResult(
             data=_empty_context(
                 market_type,
@@ -161,30 +148,11 @@ def _build_live_ranking(
             source="yfinance_batch",
             fetched_at=fetched_at,
             status="unavailable",
-            error_code="provider_error",
-            error=str(exc),
+            error_code=batch.error_code,
+            error=batch.error,
             warnings=["テーマ総合順位の日足を取得できませんでした。"],
         )
-    if raw is None or raw.empty:
-        return FetchResult(
-            data=_empty_context(
-                market_type,
-                status="unavailable",
-                fetched_at=fetched_at,
-                warnings=["テーマ総合順位の日足応答が空でした。"],
-            ),
-            source="yfinance_batch",
-            fetched_at=fetched_at,
-            status="unavailable",
-            error_code="empty_response",
-            warnings=["テーマ総合順位の日足応答が空でした。"],
-        )
-
-    frames = {
-        ticker: frame
-        for ticker in request_tickers
-        if not (frame := _extract_ticker_frame(raw, ticker, request_tickers)).empty
-    }
+    frames = dict(batch.data or {})
     benchmark_frame = frames.pop(benchmark, pd.DataFrame())
     context = build_comprehensive_theme_ranking(
         market_type=market_type,
@@ -201,7 +169,7 @@ def _build_live_ranking(
         fetched_at=fetched_at,
         status=status if status in {"available", "partial"} else "unavailable",
         is_partial=status == "partial",
-        warnings=context.get("quality_warnings", []),
+        warnings=[*batch.warnings, *context.get("quality_warnings", [])],
         error_code="" if context.get("items") else "insufficient_coverage",
     )
 

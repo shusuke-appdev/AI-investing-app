@@ -60,7 +60,11 @@ def render_knowledge_item(item: dict) -> rx.Component:
                 ),
                 rx.button(
                     rx.icon("trash-2", size=16),
-                    "削除",
+                    rx.cond(
+                        KnowledgeState.pending_delete_id == item["id"],
+                        "削除を確定",
+                        "削除",
+                    ),
                     size="2",
                     color_scheme="red",
                     variant="soft",
@@ -301,10 +305,17 @@ def knowledge() -> rx.Component:
         ),
         rx.cond(
             KnowledgeState.success_msg != "",
-            rx.callout(
-                KnowledgeState.success_msg,
-                icon="check",
-                color_scheme="green",
+            rx.hstack(
+                rx.callout(
+                    KnowledgeState.success_msg,
+                    icon="check",
+                    color_scheme="green",
+                    width="100%",
+                ),
+                rx.cond(
+                    KnowledgeState.last_deleted_item.length() > 0,
+                    rx.button("元に戻す", on_click=KnowledgeState.undo_delete),
+                ),
                 width="100%",
             ),
         ),

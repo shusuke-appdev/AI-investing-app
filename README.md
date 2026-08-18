@@ -58,9 +58,12 @@ Python 3.12 を推奨します。このワークスペースでは `py -3.12` �
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements-dev.txt -c constraints.txt
+python -m pip install pip==25.3 setuptools==82.0.1 wheel==0.48.0
+python -m pip install -r requirements-dev-lock.txt
 ```
+
+`requirements.txt` / `requirements-dev.txt` は直接依存、`requirements-lock.txt` /
+`requirements-dev-lock.txt` はPython 3.12向けの推移依存を含む固定済み環境です。
 
 `.env.example` を参考に `.env` を作成します。
 
@@ -82,10 +85,10 @@ SUPABASE_SECRET_KEY=your_supabase_secret_key_here
 既存Trading Plan互換データは保存層に残りますが、通常UIではStockページ内の「トレード分析」を使います。
 保存先の既定値はローカルJSONです。
 
-MarketData.app の live オプション取得を厳格に検証するには、ローカル `.env` に `MARKETDATA_TOKEN` と `MARKETDATA_OPTIONS_MODE=preferred` を設定してください。未設定時はアプリ障害ではなく `MarketData未設定 / yfinance・cache fallback中` として扱います。SPY の current / 1W / 1M 期間構造まで確認する場合は次を実行します。
+MarketData.app の live オプション取得を厳格に検証するには、ローカル `.env` に `MARKETDATA_TOKEN` と `MARKETDATA_OPTIONS_MODE=preferred` を設定し、クレジット消費を `--allow-marketdata-credits` で明示承認してください。承認フラグなしでは通信せず `SKIP` とします。SPY の current / 1W / 1M 期間構造まで確認する場合は次を実行します。
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\live_smoke.py --require-marketdata --marketdata-tickers SPY --marketdata-min-dte 1 --marketdata-horizon-dtes 7,30
+.\.venv\Scripts\python.exe scripts\live_smoke.py --allow-marketdata-credits --require-marketdata --marketdata-tickers SPY --marketdata-min-dte 1 --marketdata-horizon-dtes 7,30
 ```
 
 その他の実APIを必須検証にする場合は、用途に応じて `--require-supabase`、`--require-finnhub`、`--require-edinet`、`--require-yfinance-options` を付けます。従来の `--require-optional` は `--require-supabase` の互換エイリアスです。

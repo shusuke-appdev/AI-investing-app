@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -80,9 +81,15 @@ def test_hugging_face_deploy_is_serialized_and_health_checked():
 
 def test_docker_runtime_is_non_root_and_excludes_build_toolchain():
     dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
-    runtime = dockerfile.split("FROM python:3.12-slim AS runtime", maxsplit=1)[1]
+    pinned_base = (
+        "python:3.12-slim@sha256:"
+        "2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a"
+    )
+    runtime = dockerfile.split(f"FROM {pinned_base} AS runtime", maxsplit=1)[1]
 
-    assert "FROM python:3.12-slim AS builder" in dockerfile
+    assert f"FROM {pinned_base} AS builder" in dockerfile
+    assert "COPY requirements-lock.txt ./" in dockerfile
+    assert "pip==25.3 setuptools==82.0.1 wheel==0.48.0" in dockerfile
     assert "USER appuser" in runtime
     assert "HEALTHCHECK" in runtime
     assert "127.0.0.1:7860/_health" in runtime
@@ -90,6 +97,90 @@ def test_docker_runtime_is_non_root_and_excludes_build_toolchain():
     assert "chown appuser:appuser /app" in runtime
     assert "build-essential" not in runtime
     assert "python3-dev" not in runtime
+
+
+def test_ci_actions_and_dependency_install_are_immutable():
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in workflow
+    assert "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1" in workflow
+    assert (
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in workflow
+    )
+    assert "python -m pip install -r requirements-dev-lock.txt" in workflow
+    assert "python -m pip install --upgrade pip" not in workflow
+
+
+def test_hf_force_push_rollback_restores_previous_revision_locally(tmp_path):
+    remote = tmp_path / "space.git"
+    worktree = tmp_path / "deploy"
+    subprocess.run(
+        ["git", "init", "--bare", str(remote)], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "init", "-b", "main", str(worktree)], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "-C", str(worktree), "config", "user.name", "rollback-test"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(worktree), "config", "user.email", "test@example.invalid"],
+        check=True,
+    )
+    deployed = worktree / "revision.txt"
+    deployed.write_text("previous", encoding="utf-8")
+    subprocess.run(["git", "-C", str(worktree), "add", "revision.txt"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-m", "previous"], check=True)
+    previous = subprocess.check_output(
+        ["git", "-C", str(worktree), "rev-parse", "HEAD"], text=True
+    ).strip()
+    subprocess.run(
+        ["git", "-C", str(worktree), "push", str(remote), "main"], check=True
+    )
+
+    deployed.write_text("failed", encoding="utf-8")
+    subprocess.run(["git", "-C", str(worktree), "commit", "-am", "failed"], check=True)
+    subprocess.run(
+        ["git", "-C", str(worktree), "push", "--force", str(remote), "main"],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(worktree),
+            "push",
+            "--force",
+            str(remote),
+            f"{previous}:refs/heads/main",
+        ],
+        check=True,
+    )
+
+    restored = subprocess.check_output(
+        ["git", "--git-dir", str(remote), "rev-parse", "refs/heads/main"],
+        text=True,
+    ).strip()
+    assert restored == previous
+
+
+def test_direct_and_transitive_dependencies_are_fully_pinned():
+    for path in (Path("requirements.txt"), Path("requirements-dev.txt")):
+        specifications = [
+            line.strip()
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.startswith(("#", "-r "))
+        ]
+        assert specifications
+        assert all("==" in specification for specification in specifications)
+
+    runtime_lock = Path("requirements-lock.txt").read_text(encoding="utf-8")
+    development_lock = Path("requirements-dev-lock.txt").read_text(encoding="utf-8")
+    assert "pytest==" not in runtime_lock
+    assert "playwright==" not in runtime_lock
+    assert "pytest==9.0.3" in development_lock
+    assert "playwright==1.61.0" in development_lock
 
 
 def test_market_dashboard_extracted_modules_have_explicit_dependencies():

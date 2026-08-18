@@ -176,7 +176,9 @@ def generate_portfolio_advice(
             news_lines = ["【保有銘柄関連ニュース】"]
             for n in news[:8]:
                 news_lines.append(f"- [{n.get('ticker', '')}] {n.get('title', '')}")
-            news_text = "\n".join(news_lines)
+            from src.services.untrusted_prompt import untrusted_prompt_block
+
+            news_text = untrusted_prompt_block("news_headlines", "\n".join(news_lines))
 
     # ユーザー参照知識を取得
     from src.knowledge_storage import get_knowledge_for_ai_context

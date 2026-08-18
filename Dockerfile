@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     VIRTUAL_ENV=/opt/venv
@@ -13,12 +13,12 @@ RUN python -m venv "${VIRTUAL_ENV}"
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 WORKDIR /build
-COPY requirements.txt constraints.txt ./
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    python -m pip install --no-cache-dir -r requirements.txt -c constraints.txt
+COPY requirements-lock.txt ./
+RUN python -m pip install --no-cache-dir pip==25.3 setuptools==82.0.1 wheel==0.48.0 && \
+    python -m pip install --no-cache-dir -r requirements-lock.txt
 
 
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a AS runtime
 
 ENV HOME=/home/appuser \
     PATH="/opt/venv/bin:${PATH}" \

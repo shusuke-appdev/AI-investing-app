@@ -6,6 +6,7 @@ import pytest
 
 from src.persistent_cache import PersistentCacheRead
 from src.provider_result import FetchResult
+from src.services import batched_history_provider
 from src.services import theme_leader_service as service
 
 
@@ -244,20 +245,17 @@ def test_live_discovery_uses_one_candidate_price_batch(monkeypatch):
         "enrich_theme_leader_fundamentals",
         lambda context, **kwargs: context,
     )
-    raw = pd.concat(
-        {
-            "LEAD": _frame(final_jump=0.015, final_volume=10_000_000),
-            "PEER": _frame(daily_growth=0.001),
-            "SPY": _frame(daily_growth=0.0004),
-        },
-        axis=1,
-    )
+    frames = {
+        "LEAD": _frame(final_jump=0.015, final_volume=10_000_000),
+        "PEER": _frame(daily_growth=0.001),
+        "SPY": _frame(daily_growth=0.0004),
+    }
 
-    def fake_download(tickers, **kwargs):
+    def fake_batch(tickers, **kwargs):
         calls.append((list(tickers), kwargs))
-        return raw
+        return FetchResult(data=frames, source="test", status="available")
 
-    monkeypatch.setattr(service.yf, "download", fake_download)
+    monkeypatch.setattr(service, "fetch_batched_history", fake_batch)
 
     result = service._build_live_discovery("US")
 
@@ -289,6 +287,26 @@ def test_partial_fetch_keeps_valid_candidate_and_warns(monkeypatch):
     assert context["candidates"]
     assert context["fetched_count"] == 2
     assert any("一部銘柄" in warning for warning in context["warnings"])
+
+
+def test_batched_history_provider_reports_partial_without_per_ticker_requests():
+    calls = []
+    raw = pd.concat({"7203.T": _frame(), "SPY": _frame()}, axis=1)
+
+    def downloader(tickers, **kwargs):
+        calls.append((tickers, kwargs))
+        return raw
+
+    result = batched_history_provider.fetch_batched_history(
+        ["7203.T", "6758.T", "SPY"], downloader=downloader
+    )
+
+    assert len(calls) == 1
+    assert calls[0][0] == ["7203.T", "6758.T", "SPY"]
+    assert result.status == "partial"
+    assert result.is_partial is True
+    assert set(result.data) == {"7203.T", "SPY"}
+    assert "6758.T" in result.warnings[0]
 
 
 def test_setup_score_rewards_vcp_contraction_pivot_and_volume():

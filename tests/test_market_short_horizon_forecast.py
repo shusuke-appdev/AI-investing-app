@@ -120,6 +120,28 @@ def test_implied_move_prefers_matching_vix_horizon():
     assert five_day == 0.25 * np.sqrt(5 / 252)
 
 
+def test_validation_uses_predeclared_ensemble_without_oos_model_selection():
+    oos = {
+        "actual": [1.0, 0.0, 1.0, 0.0],
+        "actual_return": [0.02, -0.01, 0.03, -0.02],
+        "baseline": [0.5, 0.5, 0.5, 0.5],
+        "full": [0.9, 0.1, 0.8, 0.2],
+        "trend": [0.8, 0.2, 0.7, 0.3],
+        # Deliberately poor; it must remain in the predeclared evaluation ensemble.
+        "analog": [0.1, 0.9, 0.2, 0.8],
+        "analog_p10": [-0.03, -0.03, -0.03, -0.03],
+        "analog_p90": [0.03, 0.03, 0.03, 0.03],
+    }
+
+    metrics = module._validation_metrics(oos)
+    fixed = np.mean([oos[name] for name in module.PREDECLARED_MODELS], axis=0)
+    expected_brier = np.mean((np.asarray(oos["actual"]) - fixed) ** 2)
+
+    assert metrics["ensemble_models"] == list(module.PREDECLARED_MODELS)
+    assert metrics["brier"] == round(float(expected_brier), 6)
+    assert "eligible_models" not in metrics
+
+
 def test_horizon_stops_when_required_current_sentiment_is_missing(monkeypatch):
     frames, cboe = _inputs()
     monkeypatch.setattr(module, "MIN_TRAIN_ROWS", 120)

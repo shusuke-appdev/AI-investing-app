@@ -1,6 +1,8 @@
 import pandas as pd
+import pytest
 
 from src.advisor import sector_theme_diagnostics as diagnostics
+from src.provider_result import FetchResult
 
 
 def _history(start: float, end: float):
@@ -8,6 +10,17 @@ def _history(start: float, end: float):
     return pd.DataFrame(
         {"Close": values},
         index=pd.date_range("2025-01-01", periods=len(values)),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _disable_live_theme_history(monkeypatch):
+    monkeypatch.setattr(
+        diagnostics,
+        "fetch_batched_history",
+        lambda *args, **kwargs: FetchResult(
+            data={}, status="unavailable", error_code="isolated_test"
+        ),
     )
 
 
@@ -50,7 +63,15 @@ def test_market_distortions_detects_bullish_and_bearish_gaps(monkeypatch):
         return _history(100, 155)
 
     monkeypatch.setattr(diagnostics, "get_stock_info", fake_info)
-    monkeypatch.setattr(diagnostics, "get_stock_data", fake_history)
+    monkeypatch.setattr(
+        diagnostics,
+        "fetch_batched_history",
+        lambda tickers, **kwargs: FetchResult(
+            data={ticker: fake_history(ticker, "6mo") for ticker in tickers},
+            source="test_batch",
+            status="available",
+        ),
+    )
 
     result = diagnostics.detect_market_distortions("US", max_themes=2, top_n=5)
 
@@ -58,6 +79,42 @@ def test_market_distortions_detects_bullish_and_bearish_gaps(monkeypatch):
     assert result["bullish"][0]["tickers"] == ["AAA", "AAB"]
     assert result["bearish"][0]["theme"] == "Flow crowded"
     assert result["bearish"][0]["tickers"] == ["BBB", "BBC"]
+
+
+def test_jp_theme_history_is_fetched_in_one_status_aware_batch(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        diagnostics,
+        "get_themes",
+        lambda market_type: {"半導体": ["8035.T", "6857.T"]},
+    )
+    monkeypatch.setattr(
+        diagnostics,
+        "get_stock_info",
+        lambda ticker, include_summary=False: {
+            "revenueGrowth": 20,
+            "earningsGrowth": 20,
+            "operatingMargins": 20,
+            "returnOnEquity": 20,
+        },
+    )
+
+    def batch(tickers, **kwargs):
+        calls.append((list(tickers), kwargs))
+        return FetchResult(
+            data={ticker: _history(100, 120) for ticker in tickers},
+            source="test_batch",
+            status="available",
+        )
+
+    monkeypatch.setattr(diagnostics, "fetch_batched_history", batch)
+
+    result = diagnostics.evaluate_theme_diagnostics("JP")
+
+    assert len(calls) == 1
+    assert calls[0][0] == ["1306.T", "8035.T", "6857.T"]
+    assert calls[0][1] == {"period": "6mo", "timeout": 20}
+    assert result[0].flow_score is not None
 
 
 def test_stock_sector_theme_context_rates_both_advantages_high(monkeypatch):

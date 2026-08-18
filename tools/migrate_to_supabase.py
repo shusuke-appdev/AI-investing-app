@@ -53,6 +53,7 @@ class MigrationOptions:
     tables: tuple[str, ...] = TABLES
     backup_dir: Path = Path(".states/supabase_backups")
     allow_empty: tuple[str, ...] = ()
+    restore_manifest: Path | None = None
     print_setup_sql: bool = False
 
 
@@ -60,6 +61,11 @@ def parse_args(argv: list[str] | None = None) -> MigrationOptions:
     """Parse CLI arguments into migration options."""
 
     parser = argparse.ArgumentParser(description="Migrate local data to Supabase.")
+    parser.add_argument(
+        "--restore-manifest",
+        type=Path,
+        help="Restore a verified backup manifest through the transactional stage/RPC path.",
+    )
     parser.add_argument(
         "--execute",
         action="store_true",
@@ -102,6 +108,7 @@ def parse_args(argv: list[str] | None = None) -> MigrationOptions:
         tables=tuple(args.tables),
         backup_dir=args.backup_dir,
         allow_empty=tuple(args.allow_empty),
+        restore_manifest=args.restore_manifest,
         print_setup_sql=bool(args.print_setup_sql),
     )
 
@@ -121,6 +128,37 @@ def migrate(options: MigrationOptions | None = None) -> int:
     options = options or parse_args()
     if options.print_setup_sql:
         print(load_setup_sql())
+        return 0
+
+    if options.restore_manifest is not None:
+        if options.confirm_destroy:
+            print("[ERR] --restore-manifest cannot be combined with --confirm-destroy.")
+            return 1
+        try:
+            restore_payload, restore_tables = load_backup_manifest(
+                options.restore_manifest
+            )
+        except LocalPayloadError as exc:
+            print(f"[ERR] Backup validation failed: {exc}")
+            return 1
+        print("=== Supabase Restore Tool ===")
+        print_migration_plan(restore_payload)
+        if options.dry_run:
+            print("\nRestore dry run only. Re-run with --execute after review.")
+            return 0
+        client = get_supabase_client()
+        if not client:
+            print("[ERR] Could not connect to Supabase for restore.")
+            return 1
+        if backup_remote_tables(client, restore_tables, options.backup_dir) is None:
+            print("[ERR] Current remote backup failed. Restore was not started.")
+            return 1
+        try:
+            replace_remote_tables(client, restore_payload, restore_tables)
+        except Exception as exc:
+            print(f"[ERR] Transactional restore failed: {exc}")
+            return 1
+        print("\n=== Restore Complete ===")
         return 0
 
     print("=== Supabase Migration Tool ===")
@@ -355,6 +393,45 @@ def backup_remote_tables(
     )
     print(f"[OK] Wrote backup manifest to {manifest_path}")
     return manifest
+
+
+def load_backup_manifest(
+    path: Path,
+) -> tuple[dict[str, list[dict[str, Any]]], tuple[str, ...]]:
+    """Validate a manifest and return its exact table payloads."""
+
+    try:
+        manifest_path = path.resolve(strict=True)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LocalPayloadError(f"could not read manifest: {exc}") from exc
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        raise LocalPayloadError("unsupported backup manifest schema")
+    table_entries = manifest.get("tables")
+    if not isinstance(table_entries, dict) or not table_entries:
+        raise LocalPayloadError("backup manifest has no tables")
+    base = manifest_path.parent.resolve()
+    payload: dict[str, list[dict[str, Any]]] = {}
+    for table, entry in table_entries.items():
+        if table not in TABLES or not isinstance(entry, dict):
+            raise LocalPayloadError(f"unsupported backup table: {table}")
+        backup_path = (base / str(entry.get("path") or "")).resolve()
+        if backup_path.parent != base:
+            raise LocalPayloadError(f"backup path escapes manifest directory: {table}")
+        try:
+            encoded = backup_path.read_text(encoding="utf-8")
+            rows = json.loads(encoded)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise LocalPayloadError(f"could not read {table} backup: {exc}") from exc
+        digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        if digest != entry.get("sha256"):
+            raise LocalPayloadError(f"{table} backup SHA-256 mismatch")
+        if not isinstance(rows, list) or len(rows) != entry.get("row_count"):
+            raise LocalPayloadError(f"{table} backup row-count mismatch")
+        if any(not isinstance(row, dict) for row in rows):
+            raise LocalPayloadError(f"{table} backup contains a non-object row")
+        payload[table] = rows
+    return payload, tuple(payload)
 
 
 def clear_remote_tables(client: Any, tables: tuple[str, ...]) -> None:

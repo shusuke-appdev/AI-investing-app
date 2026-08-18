@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 
 from src.market_data import get_stock_data, get_stock_info
+from src.services.batched_history_provider import fetch_batched_history
 from src.services.trend_ranking_service import find_theme_rankings
 from src.theme_taxonomy import get_theme_profile
 from src.themes_config import get_themes
@@ -95,14 +96,24 @@ def evaluate_theme_diagnostics(
         themes = themes[:max_themes]
 
     benchmark = "SPY" if market_type == "US" else "1306.T"
-    benchmark_returns = _return_profile(_safe_history(benchmark, "6mo"))
+    requested = [
+        benchmark,
+        *(
+            ticker
+            for _theme, tickers in themes
+            for ticker in tickers[:THEME_TICKER_LIMIT]
+        ),
+    ]
+    batch = fetch_batched_history(requested, period="6mo", timeout=20)
+    history_frames = dict(batch.data or {}) if batch.is_available else {}
+    benchmark_returns = _return_profile(history_frames.get(benchmark, pd.DataFrame()))
     diagnostics: list[ThemeDiagnostic] = []
 
     for theme, tickers in themes:
         selected = tickers[:THEME_TICKER_LIMIT]
         fundamentals = []
         flows = []
-        warnings = []
+        warnings = list(batch.warnings)
         for ticker in selected:
             try:
                 value = _fundamental_score(
@@ -113,7 +124,9 @@ def evaluate_theme_diagnostics(
             except Exception as exc:
                 warnings.append(f"{ticker} fundamental data failed: {exc}")
             try:
-                value = _flow_score(_safe_history(ticker, "6mo"), benchmark_returns)
+                value = _flow_score(
+                    history_frames.get(ticker, pd.DataFrame()), benchmark_returns
+                )
                 if value is not None:
                     flows.append(value)
             except Exception as exc:
@@ -171,7 +184,7 @@ def evaluate_stock_sector_theme_context(
     """Build the sector/theme context used by the individual stock page and AI."""
 
     normalized = ticker.strip().upper()
-    history_provider = history_provider or get_stock_data
+    stock_history_provider = history_provider or get_stock_data
     info_provider = info_provider or get_stock_info
     themes = [
         theme
@@ -200,14 +213,14 @@ def evaluate_stock_sector_theme_context(
     stock_flow = _flow_score(
         _normalize_history(stock_price_df)
         if stock_price_df is not None
-        else _safe_history(normalized, "6mo", history_provider),
+        else _safe_history(normalized, "6mo", stock_history_provider),
         _return_profile(
             _normalize_history(benchmark_price_df)
             if benchmark_price_df is not None
             else _safe_history(
                 "1306.T" if market_type == "JP" else "SPY",
                 "6mo",
-                history_provider,
+                stock_history_provider,
             )
         ),
     )
@@ -307,14 +320,26 @@ def _evaluate_selected_theme_diagnostics(
     info_provider: Callable[..., dict[str, Any]] | None = None,
     benchmark_price_df: pd.DataFrame | None = None,
 ) -> list[ThemeDiagnostic]:
-    history_provider = history_provider or get_stock_data
     info_provider = info_provider or get_stock_info
     theme_map = get_themes(market_type)
     diagnostics = []
     benchmark = "SPY" if market_type == "US" else "1306.T"
+    selected_tickers = [
+        ticker
+        for theme in selected_themes
+        for ticker in theme_map.get(theme, [])[:THEME_TICKER_LIMIT]
+    ]
+    batch = (
+        fetch_batched_history([benchmark, *selected_tickers], period="6mo", timeout=20)
+        if history_provider is None
+        else None
+    )
+    history_frames = dict(batch.data or {}) if batch and batch.is_available else {}
     benchmark_returns = _return_profile(
         _normalize_history(benchmark_price_df)
         if benchmark_price_df is not None
+        else history_frames.get(benchmark, pd.DataFrame())
+        if history_provider is None
         else _safe_history(benchmark, "6mo", history_provider)
     )
     for theme in selected_themes:
@@ -323,7 +348,7 @@ def _evaluate_selected_theme_diagnostics(
             continue
         fundamentals = []
         flows = []
-        warnings = []
+        warnings = list(batch.warnings) if batch else []
         for ticker in tickers:
             try:
                 value = _fundamental_score(info_provider(ticker, include_summary=False))
@@ -333,7 +358,9 @@ def _evaluate_selected_theme_diagnostics(
                 warnings.append(f"{ticker} fundamental data failed: {exc}")
             try:
                 value = _flow_score(
-                    _safe_history(ticker, "6mo", history_provider),
+                    history_frames.get(ticker, pd.DataFrame())
+                    if history_provider is None
+                    else _safe_history(ticker, "6mo", history_provider),
                     benchmark_returns,
                 )
                 if value is not None:

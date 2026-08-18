@@ -18,7 +18,8 @@ from src.services.cftc_positioning_service import (
     fetch_cftc_positioning,
 )
 
-MODEL_VERSION = "market-short-horizon-v1"
+MODEL_VERSION = "market-short-horizon-v2-fixed-ensemble"
+PREDECLARED_MODELS = ("full", "trend", "analog")
 FORECAST_TICKERS = ("SPY", "QQQ")
 INPUT_TICKERS = ("SPY", "QQQ", "RSP", "IWM", "HYG", "IEF", "XLY", "XLP", "SMH")
 HORIZONS = (1, 5, 20)
@@ -287,7 +288,6 @@ def _forecast_horizon(
 
     oos = _walk_forward(dataset, selected, horizon)
     validation = _validation_metrics(oos)
-    eligible = validation.pop("eligible_models")
     current_x = features[selected].iloc[[-1]]
     training_x = dataset[selected]
     training_returns = dataset["forward_return"]
@@ -307,9 +307,7 @@ def _forecast_horizon(
     if analog["sample_size"] >= MIN_ANALOGS:
         model_probabilities["analog"] = float(analog["probability_up"])
 
-    active_models = eligible or [
-        name for name in ("full", "trend", "analog") if name in model_probabilities
-    ]
+    active_models = [name for name in PREDECLARED_MODELS if name in model_probabilities]
     probability_up = float(
         np.mean([model_probabilities[name] for name in active_models])
     )
@@ -317,7 +315,12 @@ def _forecast_horizon(
     downside_probability = _downside_probability(analog["returns"], expected_move)
     p10, p50, p90 = analog["p10"], analog["p50"], analog["p90"]
     risk_level = _forecast_risk(downside_probability, p10, expected_move)
-    status = "validated" if _passes_validation(validation, analog) else "research_only"
+    status = (
+        "validated"
+        if len(active_models) == len(PREDECLARED_MODELS)
+        and _passes_validation(validation, analog)
+        else "research_only"
+    )
     direction = (
         "upside_bias"
         if probability_up >= 0.58
@@ -422,14 +425,13 @@ def _validation_metrics(oos: dict[str, list[float]]) -> dict[str, Any]:
             "baseline_log_loss": None,
             "ece": None,
             "interval_coverage": None,
-            "eligible_models": [],
+            "ensemble_models": list(PREDECLARED_MODELS),
         }
     baseline = np.asarray(oos["baseline"], dtype=float)
     baseline_brier = _brier(actual, baseline)
     baseline_log_loss = _log_loss(actual, baseline)
     model_metrics: dict[str, Any] = {}
-    eligible: list[str] = []
-    for name in ("full", "trend", "analog"):
+    for name in PREDECLARED_MODELS:
         predictions = np.asarray(oos[name], dtype=float)
         brier = _brier(actual, predictions)
         log_loss = _log_loss(actual, predictions)
@@ -439,10 +441,9 @@ def _validation_metrics(oos: dict[str, list[float]]) -> dict[str, Any]:
             "log_loss": round(log_loss, 6),
             "ece": round(ece, 6),
         }
-        if brier < baseline_brier and log_loss <= baseline_log_loss:
-            eligible.append(name)
-    active = eligible or ["full", "trend", "analog"]
-    ensemble = np.mean([np.asarray(oos[name], dtype=float) for name in active], axis=0)
+    ensemble = np.mean(
+        [np.asarray(oos[name], dtype=float) for name in PREDECLARED_MODELS], axis=0
+    )
     ensemble_brier = _brier(actual, ensemble)
     lower = np.asarray(oos["analog_p10"], dtype=float)
     upper = np.asarray(oos["analog_p90"], dtype=float)
@@ -460,7 +461,7 @@ def _validation_metrics(oos: dict[str, list[float]]) -> dict[str, Any]:
         "ece": round(_ece(actual, ensemble), 6),
         "interval_coverage": round(interval_coverage, 6),
         "model_metrics": model_metrics,
-        "eligible_models": eligible,
+        "ensemble_models": list(PREDECLARED_MODELS),
     }
 
 

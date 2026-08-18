@@ -68,6 +68,7 @@ def analyze_stock(
 
     # ユーザー参照知識を取得
     from src.knowledge_storage import get_knowledge_for_ai_context
+    from src.services.untrusted_prompt import untrusted_prompt_block
 
     knowledge_context = get_knowledge_for_ai_context(max_items=5)
 
@@ -91,9 +92,11 @@ def analyze_stock(
         sector_theme_context=sector_theme_context,
         data_quality_context=data_quality_context,
         smart_criteria_summary=smart_criteria_summary,
-        news_headlines=chr(10).join(news_headlines[:5])
-        if news_headlines
-        else "ニュースなし",
+        news_headlines=(
+            untrusted_prompt_block("news_headlines", chr(10).join(news_headlines[:5]))
+            if news_headlines
+            else "ニュースなし"
+        ),
         knowledge_context=knowledge_context if knowledge_context else "特になし",
     )
 

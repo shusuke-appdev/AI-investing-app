@@ -33,7 +33,8 @@
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt -c constraints.txt
+python -m pip install pip==25.3 setuptools==82.0.1 wheel==0.48.0
+python -m pip install -r requirements-lock.txt
 reflex run
 ```
 
@@ -102,10 +103,10 @@ python scripts/verify_hf_deployment.py --space owner/name --expected-sha <sha> -
 ```
 
 Supabaseを必須にするには `--require-supabase` を付けます。`--require-optional` は後方互換のSupabase専用エイリアスで、予測など無関係なSKIPを失敗扱いしません。Finnhub、EDINET、yfinance optionsを必須にする場合は、それぞれ `--require-finnhub`、`--require-edinet`、`--require-yfinance-options` を使います。
-MarketData.app の live オプション取得を必須検証にするには、`.env` に `MARKETDATA_TOKEN=<token>` と `MARKETDATA_OPTIONS_MODE=preferred` を設定したうえで `--require-marketdata` を付けます。token 未設定の状態は `SKIP` とし、アプリ本体は yfinance/cache fallback で継続します。live smoke は 0DTE の時刻依存を避けるため、既定で `--marketdata-min-dte 1` の次回有効満期を確認し、追加で `--marketdata-horizon-dtes 7,30` の満期別チェーンも確認します。その後、`analyze_option_sentiment()` が current / 1W / 1M の `term_structure` を MarketData.app 系 source で組み立て、各期限の`skew_detail`にmethod、Put/Call両脚、流動性、as-ofがあることまで確認します。
+MarketData.app の live オプション取得を必須検証にするには、`.env` に `MARKETDATA_TOKEN=<token>` と `MARKETDATA_OPTIONS_MODE=preferred` を設定したうえで、クレジット消費を明示承認する `--allow-marketdata-credits` と `--require-marketdata` の両方を付けます。承認フラグがなければtokenの有無にかかわらず通信せず `SKIP` とし、アプリ本体は yfinance/cache fallback で継続します。live smoke は 0DTE の時刻依存を避けるため、既定で `--marketdata-min-dte 1` の次回有効満期を確認し、追加で `--marketdata-horizon-dtes 7,30` の満期別チェーンも確認します。その後、`analyze_option_sentiment()` が current / 1W / 1M の `term_structure` を MarketData.app 系 source で組み立て、各期限の`skew_detail`にmethod、Put/Call両脚、流動性、as-ofがあることまで確認します。
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\live_smoke.py --require-marketdata --marketdata-tickers SPY --marketdata-min-dte 1 --marketdata-horizon-dtes 7,30
+.\.venv\Scripts\python.exe scripts\live_smoke.py --allow-marketdata-credits --require-marketdata --marketdata-tickers SPY --marketdata-min-dte 1 --marketdata-horizon-dtes 7,30
 ```
 
 MarketData.app smoke の `calls=100/100`、`puts=100/100` は `strikeLimit=100` の片側取得上限に到達したという意味で、完全チェーン件数ではありません。IVやDTEを読むときは同じ行の `as_of` を確認してください。週末・祝日・休場日前後は、APIのlive応答でも最終取引日時点の `updated` に基づく値になることがあります。
@@ -212,8 +213,8 @@ Reflex のフロントエンド検証では、Codex アプリの WindowsApps 配
 Remove-Item -Recurse -Force .venv
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install --no-cache-dir -r requirements.txt -c constraints.txt
+python -m pip install pip==25.3 setuptools==82.0.1 wheel==0.48.0
+python -m pip install --no-cache-dir -r requirements-lock.txt
 ```
 
 削除前に、ローカルだけで必要な仮想環境内ファイルがないことを確認してください。

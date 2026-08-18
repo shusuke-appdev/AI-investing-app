@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from typing import Any
 
 import reflex as rx
@@ -19,6 +20,9 @@ class KnowledgeState(rx.State):
     is_loading: bool = False
     error_msg: str = ""
     success_msg: str = ""
+    pending_delete_id: str = ""
+    last_deleted_item: dict[str, Any] = {}
+    undo_expires_at: float = 0.0
 
     # 追加用ステート
     input_type: str = "text"
@@ -120,16 +124,48 @@ class KnowledgeState(rx.State):
     async def delete_item(self, item_id: str):
         self.error_msg = ""
         self.success_msg = ""
+        if self.pending_delete_id != item_id:
+            self.pending_delete_id = item_id
+            self.error_msg = "もう一度「削除を確定」を押すと削除します。"
+            return
         try:
-            from src.knowledge_storage import delete_knowledge
+            from src.knowledge_storage import delete_knowledge, get_knowledge_by_id
 
+            item = await asyncio.to_thread(get_knowledge_by_id, item_id)
+            if item is None:
+                raise ValueError("削除対象が存在しません")
             deleted = await asyncio.to_thread(delete_knowledge, item_id)
             if not deleted:
                 raise ValueError("削除対象が存在しないか、削除に失敗しました")
-            self.success_msg = "参照知識を削除しました。"
+            self.pending_delete_id = ""
+            self.last_deleted_item = item.to_dict()
+            self.undo_expires_at = time.monotonic() + 30.0
+            self.success_msg = "参照知識を削除しました。30秒以内なら元に戻せます。"
             return KnowledgeState.load_items
         except Exception as e:
             self.error_msg = log_state_exception(logger, "参照知識の削除", e).message
+
+    async def undo_delete(self):
+        """Restore the last deleted item within the short undo window."""
+
+        if not self.last_deleted_item or time.monotonic() > self.undo_expires_at:
+            self.last_deleted_item = {}
+            self.error_msg = "元に戻せる時間を過ぎました。"
+            return
+        try:
+            from src.knowledge_storage import KnowledgeItem, save_knowledge
+
+            restored = dict(self.last_deleted_item)
+            restored["metadata"] = dict(restored.get("metadata") or {})
+            item = KnowledgeItem.from_dict(restored)
+            if not await asyncio.to_thread(save_knowledge, item):
+                raise ValueError("復元保存に失敗しました")
+            self.last_deleted_item = {}
+            self.undo_expires_at = 0.0
+            self.success_msg = "削除した参照知識を元に戻しました。"
+            return KnowledgeState.load_items
+        except Exception as e:
+            self.error_msg = log_state_exception(logger, "参照知識の復元", e).message
 
     def prepare_edit(self, item_id: str):
         from src.knowledge_storage import get_knowledge_by_id

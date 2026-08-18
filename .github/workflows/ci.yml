@@ -14,17 +14,17 @@ jobs:
     name: Lint and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
           cache: pip
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -r requirements-dev.txt -c constraints.txt
+          python -m pip install pip==25.3 setuptools==82.0.1 wheel==0.48.0
+          python -m pip install -r requirements-dev-lock.txt
 
       - name: Read-only release checks with coverage
         run: python scripts/check.py --coverage
@@ -74,7 +74,7 @@ jobs:
 
       - name: Upload coverage artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-${{ github.run_id }}
           path: |
@@ -95,9 +95,9 @@ jobs:
     env:
       HF_SPACE_REPO: ${{ vars.HF_SPACE_REPO || 'shusuke12345/AI-investing-app' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
@@ -193,7 +193,7 @@ jobs:
 
       - name: Upload deployment metadata
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: hf-deploy-${{ github.run_id }}
           path: .states/hf-deploy-metadata.txt

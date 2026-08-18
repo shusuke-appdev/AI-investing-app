@@ -1,4 +1,8 @@
+import json
+from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from src.storage.supabase_paging import fetch_all_rows
 from tools import migrate_to_supabase
@@ -166,8 +170,173 @@ def test_execute_without_confirm_destroy_uploads_without_delete(monkeypatch):
 def test_clear_remote_tables_is_disabled_fail_closed():
     client = FakeClient()
 
-    import pytest
-
     with pytest.raises(RuntimeError, match="transactional"):
         migrate_to_supabase.clear_remote_tables(client, ("portfolios",))
     assert not any(call[1] == "delete" for call in client.calls if len(call) > 1)
+
+
+class MemoryQuery:
+    def __init__(self, client, table):
+        self.client = client
+        self.table = table
+        self.payload = None
+        self.start = 0
+        self.end = 999
+        self.filter = None
+        self.operation = "select"
+
+    def select(self, _columns):
+        self.operation = "select"
+        return self
+
+    def order(self, _column):
+        return self
+
+    def range(self, start, end):
+        self.start, self.end = start, end
+        return self
+
+    def insert(self, payload):
+        self.operation = "insert"
+        self.payload = payload
+        return self
+
+    def delete(self):
+        self.operation = "delete"
+        return self
+
+    def eq(self, column, value):
+        self.filter = (column, value)
+        return self
+
+    def execute(self):
+        rows = self.client.tables.setdefault(self.table, [])
+        if self.operation == "insert":
+            values = self.payload if isinstance(self.payload, list) else [self.payload]
+            rows.extend(values)
+            return SimpleNamespace(data=values)
+        if self.operation == "delete":
+            column, value = self.filter
+            self.client.tables[self.table] = [
+                row for row in rows if row.get(column) != value
+            ]
+            return SimpleNamespace(data=[])
+        return SimpleNamespace(data=rows[self.start : self.end + 1])
+
+
+class MemoryRpc:
+    def __init__(self, client, name, params):
+        self.client = client
+        self.name = name
+        self.params = params
+
+    def execute(self):
+        assert self.name == "apply_personal_data_migration"
+        batch_id = self.params["p_batch_id"]
+        batch = next(
+            row
+            for row in self.client.tables["personal_data_migration_batches"]
+            if row["id"] == batch_id
+        )
+        staged = [
+            row
+            for row in self.client.tables["personal_data_migration_rows"]
+            if row["batch_id"] == batch_id
+        ]
+        for table in batch["requested_tables"]:
+            self.client.tables[table] = [
+                row["payload"] for row in staged if row["table_name"] == table
+            ]
+        return SimpleNamespace(data={"status": "applied"})
+
+
+class MemoryClient:
+    def __init__(self, tables):
+        self.tables = {name: list(rows) for name, rows in tables.items()}
+        self.tables.setdefault("personal_data_migration_batches", [])
+        self.tables.setdefault("personal_data_migration_rows", [])
+
+    def table(self, name):
+        return MemoryQuery(self, name)
+
+    def rpc(self, name, params):
+        return MemoryRpc(self, name, params)
+
+
+def test_manifest_restore_round_trips_all_1200_rows(monkeypatch, tmp_path):
+    original = [
+        {"id": f"item-{index:04d}", "summary": str(index)} for index in range(1200)
+    ]
+    client = MemoryClient({"knowledge_items": original})
+    original_dir = tmp_path / "original"
+
+    manifest = migrate_to_supabase.backup_remote_tables(
+        client, ("knowledge_items",), original_dir
+    )
+    assert manifest is not None
+    manifest_path = next(original_dir.glob("*_manifest.json"))
+    assert manifest["tables"]["knowledge_items"]["row_count"] == 1200
+
+    client.tables["knowledge_items"] = [{"id": "replacement", "summary": "new"}]
+    monkeypatch.setattr(migrate_to_supabase, "get_supabase_client", lambda: client)
+    result = migrate_to_supabase.migrate(
+        migrate_to_supabase.MigrationOptions(
+            dry_run=False,
+            restore_manifest=manifest_path,
+            backup_dir=tmp_path / "pre_restore",
+        )
+    )
+
+    assert result == 0
+    assert client.tables["knowledge_items"] == original
+    assert migrate_to_supabase._payload_hash(
+        client.tables["knowledge_items"], "id"
+    ) == migrate_to_supabase._payload_hash(original, "id")
+
+
+def test_manifest_tampering_aborts_before_remote_connection(monkeypatch, tmp_path):
+    backup_path = tmp_path / "knowledge.json"
+    backup_path.write_text('[{"id":"safe"}]', encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "tables": {
+                    "knowledge_items": {
+                        "path": backup_path.name,
+                        "row_count": 1,
+                        "sha256": "incorrect",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        migrate_to_supabase,
+        "get_supabase_client",
+        lambda: pytest.fail("tampered restore must not connect"),
+    )
+
+    result = migrate_to_supabase.migrate(
+        migrate_to_supabase.MigrationOptions(
+            dry_run=False,
+            restore_manifest=manifest_path,
+        )
+    )
+
+    assert result == 1
+
+
+def test_versioned_migration_matches_canonical_schema():
+    migrations = sorted(
+        Path("supabase/migrations").glob("*_personal_data_storage_v1.sql")
+    )
+
+    assert len(migrations) == 1
+    assert migrations[0].read_bytes() == Path("supabase/public_tables.sql").read_bytes()
+    sql = migrations[0].read_text(encoding="utf-8")
+    assert "personal_data_schema_readiness" in sql
+    assert "grant execute" in sql
+    assert "to service_role" in sql

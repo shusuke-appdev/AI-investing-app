@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from src.app_mode import require_writes_enabled
 from src.log_config import get_logger
 from src.storage.atomic_json import read_json, write_json
+from src.storage.readiness import check_supabase_readiness
 
 from .supabase_client import get_supabase_client
 
@@ -167,15 +168,10 @@ def set_storage_type_setting(storage_type: str) -> bool:
 
 def _supabase_backend_ready() -> bool:
     client = get_supabase_client()
-    if client is None:
-        return False
-    try:
-        for table in ("user_settings", "portfolios", "knowledge_items", "trade_plans"):
-            client.table(table).select("*").limit(1).execute()
-    except Exception as exc:
-        logger.error("Supabase storage readiness failed: %s", exc)
-        return False
-    return True
+    readiness = check_supabase_readiness(client)
+    if not readiness.ready:
+        logger.error("Supabase storage readiness failed: %s", readiness.error_code)
+    return readiness.ready
 
 
 def get_finnhub_api_key() -> str:

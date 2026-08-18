@@ -430,7 +430,7 @@ def _failed_checks(checks: list[Check], required_names: set[str]) -> list[Check]
     return list(failures.values())
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--require-optional",
@@ -458,6 +458,11 @@ def main() -> int:
         help="Run and require a live SPY yfinance option chain.",
     )
     parser.add_argument(
+        "--allow-marketdata-credits",
+        action="store_true",
+        help="Explicitly permit credit-consuming MarketData.app option requests.",
+    )
+    parser.add_argument(
         "--require-marketdata",
         action="store_true",
         help="Treat MarketData.app options skip/degraded as a failure.",
@@ -483,7 +488,14 @@ def main() -> int:
         default="7,30",
         help="Comma-separated target DTEs for MarketData.app horizon smoke.",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    if args.require_marketdata and not args.allow_marketdata_credits:
+        parser.error("--require-marketdata also requires --allow-marketdata-credits")
     marketdata_tickers = [
         item.strip().upper()
         for item in args.marketdata_tickers.split(",")
@@ -509,10 +521,18 @@ def main() -> int:
         ),
         _run(
             "marketdata_options",
-            lambda: _marketdata_options_check(
-                tickers=marketdata_tickers,
-                min_dte=max(0, args.marketdata_min_dte),
-                horizon_dtes=marketdata_horizon_dtes,
+            (
+                (
+                    lambda: _marketdata_options_check(
+                        tickers=marketdata_tickers,
+                        min_dte=max(0, args.marketdata_min_dte),
+                        horizon_dtes=marketdata_horizon_dtes,
+                    )
+                )
+                if args.allow_marketdata_credits
+                else (
+                    lambda: "SKIP: MarketData.app credits were not explicitly allowed"
+                )
             ),
         ),
         _run("deployment_guard", _deployment_guard_check),

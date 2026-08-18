@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import pandas as pd
+import pytest
 
 
 @dataclass
@@ -18,6 +19,38 @@ class _FakeMarketDataResult:
     @property
     def puts(self) -> pd.DataFrame:
         return pd.DataFrame({"strike": [600], "impliedVolatility": [0.12]})
+
+
+def test_live_smoke_skips_marketdata_without_credit_consent(monkeypatch, capsys):
+    from scripts import live_smoke
+
+    marketdata_calls = []
+
+    def fail_marketdata(**kwargs):
+        marketdata_calls.append(kwargs)
+        raise AssertionError("MarketData.app must not be called without consent")
+
+    def isolated_run(name, callback):
+        if name == "marketdata_options":
+            detail = callback()
+            return live_smoke.Check(name, "SKIP", detail)
+        return live_smoke.Check(name, "SKIP", "SKIP: isolated test")
+
+    monkeypatch.setattr(live_smoke, "_marketdata_options_check", fail_marketdata)
+    monkeypatch.setattr(live_smoke, "_run", isolated_run)
+
+    assert live_smoke.main([]) == 0
+    assert marketdata_calls == []
+    assert "credits were not explicitly allowed" in capsys.readouterr().out
+
+
+def test_require_marketdata_rejects_missing_credit_consent():
+    from scripts import live_smoke
+
+    with pytest.raises(SystemExit) as exc:
+        live_smoke.main(["--require-marketdata"])
+
+    assert exc.value.code == 2
 
 
 def test_marketdata_live_smoke_reports_app_term_structure(monkeypatch):

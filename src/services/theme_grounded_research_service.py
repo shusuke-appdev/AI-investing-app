@@ -499,9 +499,14 @@ def _discovery_schema(themes: list[str]) -> dict[str, Any]:
 
 
 def _deep_dive_prompt(market: str, candidates: list[dict[str, str]]) -> str:
+    from src.services.untrusted_prompt import untrusted_prompt_block
+
+    candidate_block = untrusted_prompt_block(
+        "machine_ranked_candidates", json.dumps(candidates, ensure_ascii=False)
+    )
     return (
         f"{market}市場の次の機械抽出済み研究候補を、直近の一次資料を優先して調査してください: "
-        f"{json.dumps(candidates, ensure_ascii=False)}。各銘柄についてテーマとの事業関係、"
+        f"{candidate_block}。各銘柄についてテーマとの事業関係、"
         "業績加速の有無、最新材料、反証、次回確認事項、検索で確認した出典URLを整理してください。"
         "順位、スコア、売買推奨は生成・変更しないでください。"
     )
