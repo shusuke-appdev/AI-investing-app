@@ -80,7 +80,14 @@ def calculate_sp_oscillator(breadth_df: pd.DataFrame) -> dict:
     10日間のSMA（Net Advancesの平均）、および全体に対するパーセンテージ。
     """
     if breadth_df is None or breadth_df.empty or len(breadth_df) < 10:
-        return {"oscillator_value": 0.0, "oscillator_percent": 0.0, "signal": "中立"}
+        return {
+            "oscillator_value": None,
+            "oscillator_percent": None,
+            "signal": "算出不可",
+            "status": "unavailable",
+            "required_rows": 10,
+            "available_rows": 0 if breadth_df is None else len(breadth_df),
+        }
 
     sma_10 = breadth_df["Net_Advances"].rolling(10).mean()
     avg_total = breadth_df["Total_Issues"].rolling(10).mean()
@@ -101,6 +108,7 @@ def calculate_sp_oscillator(breadth_df: pd.DataFrame) -> dict:
         "oscillator_value": round(current_osc, 2),
         "oscillator_percent": round(percent, 2),
         "signal": signal,
+        "status": "available",
     }
 
 
@@ -110,7 +118,13 @@ def calculate_mcclellan_oscillator(breadth_df: pd.DataFrame) -> dict:
     19日EMA(Net Advances) - 39日EMA(Net Advances)
     """
     if breadth_df is None or breadth_df.empty or len(breadth_df) < 39:
-        return {"mcclellan_value": 0.0, "signal": "中立"}
+        return {
+            "mcclellan_value": None,
+            "signal": "算出不可",
+            "status": "unavailable",
+            "required_rows": 39,
+            "available_rows": 0 if breadth_df is None else len(breadth_df),
+        }
 
     net_advances = breadth_df["Net_Advances"]
     ema_19 = net_advances.ewm(span=19, adjust=False).mean()
@@ -131,4 +145,8 @@ def calculate_mcclellan_oscillator(breadth_df: pd.DataFrame) -> dict:
     else:
         signal = "弱気"
 
-    return {"mcclellan_value": round(current_val, 2), "signal": signal}
+    return {
+        "mcclellan_value": round(current_val, 2),
+        "signal": signal,
+        "status": "available",
+    }

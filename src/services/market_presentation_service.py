@@ -126,7 +126,8 @@ def format_option_summaries(option_data: list[dict[str, Any]]) -> list[dict[str,
     for opt in option_data:
         pcr = opt.get("pcr") or {}
         gex = opt.get("gex")
-        pcr_val = float(pcr.get("volume_pcr", 0.0))
+        raw_pcr = pcr.get("volume_pcr")
+        pcr_val = float(raw_pcr) if isinstance(raw_pcr, (int, float)) else None
         has_gex = isinstance(gex, dict) and gex.get("nearby_net_gex") is not None
         gex_val = float(gex.get("nearby_net_gex", 0.0)) if has_gex else 0.0
         current_price = float(opt.get("current_price") or 0.0)
@@ -141,7 +142,7 @@ def format_option_summaries(option_data: list[dict[str, Any]]) -> list[dict[str,
                 if current_price > 0
                 else "",
                 "pcr_vol": pcr_val,
-                "pcr_vol_str": f"{pcr_val:.2f}",
+                "pcr_vol_str": f"{pcr_val:.2f}" if pcr_val is not None else "-",
                 "net_gex": gex_val,
                 "net_gex_str": f"{gex_val / 1e6:+.0f}M" if has_gex else "-",
                 "net_gex_available": has_gex,

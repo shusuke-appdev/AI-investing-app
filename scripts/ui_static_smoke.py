@@ -13,6 +13,7 @@ ROUTE_FILES = (
     "market-watch.html",
     "stock.html",
     "theme.html",
+    "theme-leaders.html",
     "data-quality.html",
     "portfolio.html",
     "knowledge.html",
@@ -41,6 +42,12 @@ def validate_route(path: Path) -> list[str]:
         errors.append(
             f"{path.name}: empty headings found ({', '.join(empty_headings)})"
         )
+    if soup.find("main") is None:
+        errors.append(f"{path.name}: main landmark is missing")
+    if soup.find("nav") is None:
+        errors.append(f"{path.name}: nav landmark is missing")
+    if soup.select("a button, button a"):
+        errors.append(f"{path.name}: nested interactive controls found")
     return errors
 
 

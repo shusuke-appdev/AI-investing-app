@@ -18,6 +18,8 @@ ROUTES = (
     "/theme-leaders",
     "/stock",
     "/data-quality",
+    "/portfolio",
+    "/knowledge",
 )
 ROUTE_FILES = {
     "/": "/index.html",
@@ -26,6 +28,8 @@ ROUTE_FILES = {
     "/theme-leaders": "/theme-leaders.html",
     "/stock": "/stock.html",
     "/data-quality": "/data-quality.html",
+    "/portfolio": "/portfolio.html",
+    "/knowledge": "/knowledge.html",
 }
 VIEWPORTS = (
     ("mobile", {"width": 390, "height": 844}),

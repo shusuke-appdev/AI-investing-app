@@ -68,7 +68,7 @@ data_file = ".states/.coverage"
 show_missing = true
 skip_covered = true
 precision = 1
-fail_under = 62
+fail_under = 67
 
 [tool.mypy]
 python_version = "3.12"

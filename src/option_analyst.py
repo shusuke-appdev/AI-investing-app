@@ -110,7 +110,14 @@ def calculate_pcr(
     # Volume PCR (NaN値の安全な処理)
     call_volume = calls["volume"].fillna(0).sum() if "volume" in calls.columns else 0
     put_volume = puts["volume"].fillna(0).sum() if "volume" in puts.columns else 0
-    volume_pcr = put_volume / call_volume if call_volume > 0 else 0
+    volume_pcr = put_volume / call_volume if call_volume > 0 else None
+    volume_status = (
+        "available"
+        if call_volume > 0
+        else "zero_denominator"
+        if put_volume > 0
+        else "no_activity"
+    )
 
     # Open Interest PCR
     call_oi = (
@@ -119,12 +126,21 @@ def calculate_pcr(
     put_oi = (
         puts["openInterest"].fillna(0).sum() if "openInterest" in puts.columns else 0
     )
-    oi_pcr = put_oi / call_oi if call_oi > 0 else 0
+    oi_pcr = put_oi / call_oi if call_oi > 0 else None
+    oi_status = (
+        "available"
+        if call_oi > 0
+        else "zero_denominator"
+        if put_oi > 0
+        else "no_activity"
+    )
 
     return {
         "ticker": ticker,
         "volume_pcr": volume_pcr,
+        "volume_status": volume_status,
         "oi_pcr": oi_pcr,
+        "oi_status": oi_status,
         "total_call_volume": call_volume,
         "total_put_volume": put_volume,
         "total_call_oi": call_oi,
@@ -163,12 +179,18 @@ def assess_option_data_quality(
     if call_volume + put_volume <= 0:
         quality = _worse_quality(quality, "partial")
         warnings.append("Option volume is missing or zero.")
+    elif call_volume <= 0:
+        quality = _worse_quality(quality, "partial")
+        warnings.append("Call volume is zero; Volume PCR is unavailable.")
 
     if call_oi + put_oi <= 0:
         quality = _worse_quality(quality, "unreliable")
         warnings.append(
             "Open interest is missing or zero; Max Pain and GEX are disabled."
         )
+    elif call_oi <= 0:
+        quality = _worse_quality(quality, "partial")
+        warnings.append("Call open interest is zero; OI PCR is unavailable.")
 
     if _real_gamma_count(calls, puts) == 0:
         quality = _worse_quality(quality, "partial")
@@ -399,26 +421,15 @@ def calculate_max_pain(
     if "strike" not in calls or "strike" not in puts:
         return None
 
-    # 建玉データがない場合のフォールバック（週末などのyfinance不具合対策）
     call_oi = calls["openInterest"].fillna(0).sum() if "openInterest" in calls else 0
     put_oi = puts["openInterest"].fillna(0).sum() if "openInterest" in puts else 0
     total_oi = call_oi + put_oi
-    use_vol = total_oi == 0
-    total_vol = 0
-    if use_vol and "volume" in calls.columns and "volume" in puts.columns:
-        total_vol = calls["volume"].fillna(0).sum() + puts["volume"].fillna(0).sum()
-        if total_vol > 0:
-            logger.warning(
-                f"[OptionAnalyst] {ticker}: OpenInterest is 0. Falling back to Volume for Max Pain."
-            )
-
-    if total_oi == 0 and total_vol == 0:
+    if total_oi == 0:
         logger.warning(
-            f"[OptionAnalyst] {ticker}: No valid OI or Volume data. Cannot calculate Max Pain."
+            f"[OptionAnalyst] {ticker}: No valid OI data. Cannot calculate Max Pain."
         )
         return None
-
-    weight_col = "volume" if use_vol else "openInterest"
+    weight_col = "openInterest"
 
     # NaNを0で埋めて計算可能な状態にする
     calls_clean = calls.copy()
@@ -923,7 +934,9 @@ def _analyze_fetched_option_data(
 
     if pcr:
         vol_pcr = pcr["volume_pcr"]
-        if vol_pcr > 1.2:
+        if vol_pcr is None:
+            analysis.append(f"{horizon_label} PCR(Vol) はコール出来高不足で算出不可")
+        elif vol_pcr > 1.2:
             sentiment = "弱気"
             analysis.append(
                 f"{horizon_label} PCR(Vol) ({vol_pcr:.2f}) が高く、プット取引活発"
@@ -1209,11 +1222,41 @@ def analyze_option_sentiment(
     }
 
 
-from src.option_market_aggregate import (  # noqa: E402, F401
-    _aggregate_cache_status,
-    _complete_status,
-    _max_cache_age_seconds,
-    _option_underlying_price,
-    get_major_indices_option_status,
-    get_major_indices_options,
-)
+def _aggregate_cache_status(horizons):
+    from src.option_market_aggregate import _aggregate_cache_status as implementation
+
+    return implementation(horizons)
+
+
+def _complete_status(*args, **kwargs):
+    from src.option_market_aggregate import _complete_status as implementation
+
+    return implementation(*args, **kwargs)
+
+
+def _max_cache_age_seconds(horizons):
+    from src.option_market_aggregate import _max_cache_age_seconds as implementation
+
+    return implementation(horizons)
+
+
+def _option_underlying_price(calls, puts):
+    from src.option_market_aggregate import _option_underlying_price as implementation
+
+    return implementation(calls, puts)
+
+
+_AGGREGATE_COMPAT_EXPORTS = {
+    "get_major_indices_option_status",
+    "get_major_indices_options",
+}
+
+
+def __getattr__(name: str):
+    """Load historical aggregation exports lazily to avoid an import cycle."""
+
+    if name in _AGGREGATE_COMPAT_EXPORTS:
+        from src import option_market_aggregate
+
+        return getattr(option_market_aggregate, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

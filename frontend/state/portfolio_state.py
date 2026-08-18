@@ -42,12 +42,16 @@ class PortfolioState(rx.State):
     new_shares: str = ""
     new_cost: str = ""
     save_name: str = ""
+    pending_overwrite_name: str = ""
+    pending_delete_name: str = ""
 
     # 分析結果
     analysis_result: dict[str, Any] = {}
     provenance: list[ProvenanceDisplay] = []
     analysis_warnings: list[str] = []
     ai_advice: str = ""
+    analysis_revision: int = 0
+    advice_request_id: int = 0
 
     # UI状態
     is_loading: bool = False
@@ -75,6 +79,7 @@ class PortfolioState(rx.State):
 
     def set_save_name(self, value: str):
         self.save_name = value
+        self.pending_overwrite_name = ""
 
     @rx.var
     def storage_type_label(self) -> str:
@@ -160,10 +165,13 @@ class PortfolioState(rx.State):
         """保存済みポートフォリオ一覧を取得"""
         try:
             self._sync_storage_type()
-            from src.portfolio_storage import list_portfolios
+            from src.portfolio_storage import list_portfolios_result
 
-            names = await asyncio.to_thread(list_portfolios)
-            self.portfolio_names = names
+            result = await asyncio.to_thread(list_portfolios_result)
+            if result.is_available:
+                self.portfolio_names = result.data
+            else:
+                self.error_msg = result.warnings[0]
         except Exception as e:
             self.error_msg = log_state_exception(
                 logger, "ポートフォリオ一覧の取得", e
@@ -201,14 +209,19 @@ class PortfolioState(rx.State):
                 return
             self.storage_type = value
             self.current_portfolio_name = "新規ポートフォリオ"
+            self.save_name = ""
             self.holdings = []
             self.analysis_result = {}
             self.provenance = []
             self.analysis_warnings = []
             self.ai_advice = ""
-            from src.portfolio_storage import list_portfolios
+            from src.portfolio_storage import list_portfolios_result
 
-            self.portfolio_names = await asyncio.to_thread(list_portfolios)
+            result = await asyncio.to_thread(list_portfolios_result)
+            if not result.is_available:
+                self.error_msg = result.warnings[0]
+                return
+            self.portfolio_names = result.data
             self.success_msg = f"保存先を「{storage_type_label(value)}」に変更しました"
         except Exception as e:
             self.error_msg = log_state_exception(logger, "保存先設定", e).message
@@ -240,6 +253,11 @@ class PortfolioState(rx.State):
                     for h in raw_holdings
                 ]
                 self.current_portfolio_name = name
+                self.save_name = ""
+                self.analysis_result = {}
+                self.provenance = []
+                self.analysis_warnings = []
+                self.ai_advice = ""
                 self.success_msg = f"「{name}」を読み込みました"
             else:
                 self.error_msg = f"「{name}」の読み込みに失敗しました"
@@ -294,11 +312,31 @@ class PortfolioState(rx.State):
         self.holdings = [h for h in self.holdings if h.ticker != ticker]
 
     async def save_portfolio(self):
-        """現在の保有情報をポートフォリオとして保存"""
-        name = self.save_name or self.current_portfolio_name
-        if name == "新規ポートフォリオ" and not self.save_name:
-            self.error_msg = "ポートフォリオ名を入力してください"
+        """Save only to the currently selected portfolio name."""
+        name = self.current_portfolio_name
+        if name == "新規ポートフォリオ":
+            self.error_msg = (
+                "新規ポートフォリオは名前を入力して「別名で保存」してください"
+            )
             return
+        async for update in self._save_named_portfolio(name):
+            yield update
+
+    async def save_portfolio_as(self):
+        """Save under the explicitly entered name, confirming overwrites."""
+        name = self.save_name.strip()
+        if not name:
+            self.error_msg = "別名保存するポートフォリオ名を入力してください"
+            return
+        if name in self.portfolio_names and self.pending_overwrite_name != name:
+            self.pending_overwrite_name = name
+            self.error_msg = f"「{name}」は既に存在します。上書きを確認してください"
+            return
+        async for update in self._save_named_portfolio(name):
+            yield update
+
+    async def _save_named_portfolio(self, name: str):
+        """Persist holdings after the public handler has selected a safe name."""
 
         self.is_loading = True
         self.error_msg = ""
@@ -315,13 +353,17 @@ class PortfolioState(rx.State):
             success = await asyncio.to_thread(save_portfolio, name, holdings_data)
             if success:
                 self.current_portfolio_name = name
+                self.save_name = ""
+                self.pending_overwrite_name = ""
                 self.success_msg = (
                     f"「{name}」を{storage_type_label(self.storage_type)}へ保存しました"
                 )
                 # リストを更新
-                from src.portfolio_storage import list_portfolios
+                from src.portfolio_storage import list_portfolios_result
 
-                self.portfolio_names = await asyncio.to_thread(list_portfolios)
+                result = await asyncio.to_thread(list_portfolios_result)
+                if result.is_available:
+                    self.portfolio_names = result.data
             else:
                 self.error_msg = "保存に失敗しました"
         except Exception as e:
@@ -333,8 +375,14 @@ class PortfolioState(rx.State):
             yield
 
     async def delete_current_portfolio(self):
-        """現在選択中のポートフォリオを削除"""
+        """Delete only after a separate confirmation action."""
         if self.current_portfolio_name == "新規ポートフォリオ":
+            return
+        if self.pending_delete_name != self.current_portfolio_name:
+            self.pending_delete_name = self.current_portfolio_name
+            self.error_msg = (
+                "削除を確定するには、もう一度「削除を確定」を押してください"
+            )
             return
 
         self.is_loading = True
@@ -351,6 +399,8 @@ class PortfolioState(rx.State):
                 raise ValueError("削除対象が存在しないか、削除に失敗しました")
             self.holdings = []
             self.current_portfolio_name = "新規ポートフォリオ"
+            self.save_name = ""
+            self.pending_delete_name = ""
             self.success_msg = "ポートフォリオを削除しました"
             from src.portfolio_storage import list_portfolios
 
@@ -371,6 +421,9 @@ class PortfolioState(rx.State):
 
         self.is_analyzing = True
         self.error_msg = ""
+        self.ai_advice = ""
+        self.analysis_revision += 1
+        self.advice_request_id += 1
         yield
 
         try:
@@ -432,6 +485,10 @@ class PortfolioState(rx.State):
 
         self.is_generating_advice = True
         self.error_msg = ""
+        self.advice_request_id += 1
+        request_id = self.advice_request_id
+        source_revision = self.analysis_revision
+        analysis_result = dict(self.analysis_result)
         yield
 
         try:
@@ -452,11 +509,15 @@ class PortfolioState(rx.State):
                 market_context = cached.to_dict() if cached else None
             advice = await asyncio.to_thread(
                 generate_portfolio_advice,
-                self.analysis_result,
+                analysis_result,
                 market_context=market_context,
                 include_news=False,
             )
-            if advice:
+            if (
+                advice
+                and request_id == self.advice_request_id
+                and source_revision == self.analysis_revision
+            ):
                 self.ai_advice = advice
             else:
                 self.error_msg = "アドバイスの生成に失敗しました"
@@ -472,6 +533,11 @@ class PortfolioState(rx.State):
         """新しいポートフォリオを開始"""
         self.holdings = []
         self.current_portfolio_name = "新規ポートフォリオ"
+        self.save_name = ""
+        self.pending_overwrite_name = ""
+        self.pending_delete_name = ""
+        self.analysis_revision += 1
+        self.advice_request_id += 1
         self.analysis_result = {}
         self.provenance = []
         self.analysis_warnings = []

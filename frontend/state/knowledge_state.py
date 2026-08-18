@@ -27,6 +27,9 @@ class KnowledgeState(rx.State):
     extracted_content: str = ""
     is_extracting: bool = False
     is_saving: bool = False
+    source_revision: int = 0
+    extracted_revision: int = -1
+    extract_request_id: int = 0
 
     edit_id: str = ""
     edit_title: str = ""
@@ -35,12 +38,22 @@ class KnowledgeState(rx.State):
 
     def set_input_type(self, val: str):
         self.input_type = val
+        self._invalidate_extraction()
 
     def set_text_content(self, val: str):
         self.text_content = val
+        self._invalidate_extraction()
 
     def set_url_input(self, val: str):
         self.url_input = val
+        self._invalidate_extraction()
+
+    def _invalidate_extraction(self):
+        self.source_revision += 1
+        self.extract_request_id += 1
+        self.extracted_revision = -1
+        self.extracted_content = ""
+        self.is_extracting = False
 
     def set_edit_title(self, val: str):
         self.edit_title = val
@@ -57,6 +70,7 @@ class KnowledgeState(rx.State):
             self.text_content = ""
             self.url_input = ""
             self.extracted_content = ""
+            self.extracted_revision = -1
 
     async def load_items(self):
         async for update in self._load_items_impl():
@@ -76,9 +90,13 @@ class KnowledgeState(rx.State):
         self.error_msg = ""
         yield
         try:
-            from src.knowledge_storage import load_all_knowledge
+            from src.knowledge_storage import load_all_knowledge_result
 
-            db_items = await asyncio.to_thread(load_all_knowledge)
+            result = await asyncio.to_thread(load_all_knowledge_result)
+            if not result.is_available:
+                self.error_msg = result.warnings[0]
+                return
+            db_items = result.data
             # Serialize for Reflex
             self.items = [
                 {
@@ -92,7 +110,6 @@ class KnowledgeState(rx.State):
                 for item in db_items
             ]
         except Exception as e:
-            self.items = []
             self.error_msg = log_state_exception(
                 logger, "参照知識の読み込み", e
             ).message
@@ -142,6 +159,12 @@ class KnowledgeState(rx.State):
             self.error_msg = log_state_exception(logger, "参照知識の更新", e).message
 
     async def extract_content(self):
+        self.extract_request_id += 1
+        request_id = self.extract_request_id
+        revision = self.source_revision
+        input_type = self.input_type
+        text_content = self.text_content
+        url_input = self.url_input
         self.is_extracting = True
         self.extracted_content = ""
         self.error_msg = ""
@@ -150,25 +173,43 @@ class KnowledgeState(rx.State):
         try:
             from src.knowledge_extractor import extract_from_url, extract_from_youtube
 
-            if self.input_type == "text":
-                self.extracted_content = self.text_content
-            elif self.input_type == "url":
-                self.extracted_content = await asyncio.to_thread(
-                    extract_from_url, self.url_input
-                )
-            elif self.input_type == "youtube":
-                self.extracted_content = await asyncio.to_thread(
-                    extract_from_youtube, self.url_input
-                )
+            if input_type == "text":
+                content = text_content
+            elif input_type == "url":
+                content = await asyncio.to_thread(extract_from_url, url_input)
+            elif input_type == "youtube":
+                content = await asyncio.to_thread(extract_from_youtube, url_input)
+            else:
+                content = ""
+            if (
+                request_id != self.extract_request_id
+                or revision != self.source_revision
+            ):
+                return
+            self.extracted_content = content
+            self.extracted_revision = revision
         except Exception as e:
             self.error_msg = log_state_exception(logger, "コンテンツ抽出", e).message
         finally:
-            self.is_extracting = False
+            if request_id == self.extract_request_id:
+                self.is_extracting = False
             yield
 
     async def save_new_knowledge(self):
-        if not self.extracted_content or self.extracted_content.startswith("["):
+        if (
+            not self.extracted_content
+            or self.extracted_revision != self.source_revision
+        ):
+            self.error_msg = "入力内容を抽出し直してから保存してください"
             return
+        if self.extracted_content.startswith("["):
+            self.error_msg = "抽出に成功した内容がありません"
+            return
+
+        revision = self.source_revision
+        content = self.extracted_content
+        input_type = self.input_type
+        url_input = self.url_input
 
         self.is_saving = True
         self.error_msg = ""
@@ -179,23 +220,23 @@ class KnowledgeState(rx.State):
             from src.knowledge_extractor import generate_title, summarize_content
             from src.knowledge_storage import KnowledgeItem, save_knowledge
 
-            summary = await asyncio.to_thread(
-                summarize_content, self.extracted_content, self.input_type
-            )
-            title = await asyncio.to_thread(
-                generate_title, self.extracted_content, self.input_type
-            )
+            summary = await asyncio.to_thread(summarize_content, content, input_type)
+            title = await asyncio.to_thread(generate_title, content, input_type)
+
+            if revision != self.source_revision:
+                self.error_msg = "入力内容が変更されたため保存を中止しました"
+                return
 
             metadata = {}
-            if self.input_type == "url":
-                metadata["page_url"] = self.url_input
-            elif self.input_type == "youtube":
-                metadata["video_url"] = self.url_input
+            if input_type == "url":
+                metadata["page_url"] = url_input
+            elif input_type == "youtube":
+                metadata["video_url"] = url_input
 
             item = KnowledgeItem.create(
                 title=title,
-                source_type=self.input_type,
-                original_content=self.extracted_content,
+                source_type=input_type,
+                original_content=content,
                 summary=summary,
                 metadata=metadata,
             )
@@ -214,6 +255,9 @@ class KnowledgeState(rx.State):
 
     async def handle_upload(self, files: list[rx.UploadFile]):
         """File upload handler"""
+        self.extract_request_id += 1
+        request_id = self.extract_request_id
+        revision = self.source_revision
         self.is_extracting = True
         yield
 
@@ -236,14 +280,22 @@ class KnowledgeState(rx.State):
                 if len(upload_data) > MAX_UPLOAD_BYTES:
                     self.extracted_content = f"[ファイルサイズ上限は{MAX_UPLOAD_BYTES // (1024 * 1024)}MBです]"
                     return
-                self.extracted_content = await asyncio.to_thread(
+                content = await asyncio.to_thread(
                     extract_from_file, upload_data, file.filename
                 )
+                if (
+                    request_id != self.extract_request_id
+                    or revision != self.source_revision
+                ):
+                    return
+                self.extracted_content = content
+                self.extracted_revision = revision
         except Exception as e:
             error = log_state_exception(logger, "ファイル内容の抽出", e)
             self.extracted_content = f"[エラー] {error.message}"
         finally:
-            self.is_extracting = False
+            if request_id == self.extract_request_id:
+                self.is_extracting = False
             yield
 
 

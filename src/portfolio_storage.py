@@ -4,6 +4,7 @@
 （Strategyパターンによるリファクタリング適用済）
 """
 
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,8 @@ from src.app_mode import require_personal_data_enabled, require_writes_enabled
 from src.log_config import get_logger
 from src.storage.atomic_json import delete_file, read_json, update_json
 from src.storage.base import BaseStorage
+from src.storage.result import StorageResult, available, unavailable
+from src.storage.supabase_paging import fetch_all_rows
 
 from .supabase_client import get_supabase_client
 
@@ -54,12 +57,21 @@ def ensure_portfolio_dir():
 class LocalPortfolioStorage(BaseStorage):
     def _get_portfolio_path(self, name: str) -> Path:
         safe_name = name.replace("/", "_").replace("\\", "_")
+        digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:12]
+        return PORTFOLIO_DIR / f"{safe_name}.{digest}.json"
+
+    def _legacy_portfolio_path(self, name: str) -> Path:
+        safe_name = name.replace("/", "_").replace("\\", "_")
         return PORTFOLIO_DIR / f"{safe_name}.json"
+
+    def _existing_or_new_path(self, name: str) -> Path:
+        legacy = self._legacy_portfolio_path(name)
+        return legacy if legacy.exists() else self._get_portfolio_path(name)
 
     def save(self, id: str, data: Any) -> bool:
         ensure_portfolio_dir()
         now = datetime.now().isoformat()
-        filepath = self._get_portfolio_path(id)
+        filepath = self._existing_or_new_path(id)
         try:
 
             def replace(existing: Any) -> dict[str, Any]:
@@ -78,7 +90,7 @@ class LocalPortfolioStorage(BaseStorage):
             return False
 
     def load(self, id: str) -> Any | None:
-        filepath = self._get_portfolio_path(id)
+        filepath = self._existing_or_new_path(id)
         if not filepath.exists():
             return None
         try:
@@ -88,20 +100,34 @@ class LocalPortfolioStorage(BaseStorage):
             return None
 
     def list_all(self) -> list[Any]:
+        return self.list_result().data
+
+    def list_result(self) -> StorageResult[list[str]]:
         ensure_portfolio_dir()
-        names = []
+        names: list[str] = []
+        errors: list[str] = []
         for f in PORTFOLIO_DIR.glob("*.json"):
             try:
                 data = read_json(f, {})
                 names.append(data.get("name", f.stem))
-            except Exception:
-                names.append(f.stem)
-        return sorted(names)
+            except Exception as exc:
+                errors.append(f"{f.name}: {exc}")
+        if errors:
+            return unavailable(
+                sorted(names),
+                "local",
+                warning="一部のポートフォリオファイルを読み込めませんでした。",
+                error_code="local_read_failed",
+            )
+        return available(sorted(names), "local")
 
     def delete(self, id: str) -> bool:
-        filepath = self._get_portfolio_path(id)
+        paths = {self._get_portfolio_path(id), self._legacy_portfolio_path(id)}
         try:
-            return delete_file(filepath)
+            deleted = False
+            for filepath in paths:
+                deleted = delete_file(filepath) or deleted
+            return deleted
         except Exception as e:
             logger.error(f"Local delete error: {e}")
             return False
@@ -145,20 +171,33 @@ class SupabasePortfolioStorage(BaseStorage):
             return None
 
     def list_all(self) -> list[Any]:
+        return self.list_result().data
+
+    def list_result(self) -> StorageResult[list[str]]:
         client = get_supabase_client()
         if not client:
-            return []
+            return unavailable(
+                [],
+                "supabase",
+                warning="Supabaseへ接続できません。保存済みデータは削除されていません。",
+                error_code="backend_unconfigured",
+            )
         try:
-            response = client.table("portfolios").select("name").execute()
+            rows = fetch_all_rows(client, "portfolios", "name", order_column="name")
             names = set(
                 str(r.get("name"))
-                for r in response.data
+                for r in rows
                 if isinstance(r, dict) and r.get("name")
             )
-            return sorted(list(names))
+            return available(sorted(names), "supabase")
         except Exception as e:
             logger.error(f"Supabase list error: {e}")
-            return []
+            return unavailable(
+                [],
+                "supabase",
+                warning="Supabaseのポートフォリオ一覧を取得できません。",
+                error_code="backend_read_failed",
+            )
 
     def delete(self, id: str) -> bool:
         client = get_supabase_client()
@@ -196,9 +235,19 @@ def load_portfolio(name: str, storage: StorageType | None = None) -> dict | None
 
 
 def list_portfolios(storage: StorageType | None = None) -> list[str]:
+    return list_portfolios_result(storage).data
+
+
+def list_portfolios_result(
+    storage: StorageType | None = None,
+) -> StorageResult[list[str]]:
     require_personal_data_enabled()
     st_type = storage or get_storage_type()
-    return PortfolioStorageFactory.get_storage(st_type).list_all()
+    backend = PortfolioStorageFactory.get_storage(st_type)
+    result_method = getattr(backend, "list_result", None)
+    if callable(result_method):
+        return result_method()
+    return available(backend.list_all(), st_type)
 
 
 def delete_portfolio(name: str, storage: StorageType | None = None) -> bool:

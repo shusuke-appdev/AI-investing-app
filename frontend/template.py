@@ -12,6 +12,13 @@ def template(page: Callable[[], rx.Component]) -> rx.Component:
     左側にナビゲーション、上部にヘッダー、中央にコンテンツを配置する。
     """
     return rx.box(
+        rx.el.a(
+            "本文へ移動",
+            href="#main-content",
+            position="absolute",
+            left="-10000px",
+            _focus={"left": "1rem", "top": "1rem", "z_index": "1000"},
+        ),
         rx.hstack(
             # サイドバー (左側固定)
             sidebar_nav(),
@@ -21,8 +28,9 @@ def template(page: Callable[[], rx.Component]) -> rx.Component:
                 # トップナビゲーションバー
                 navbar(),
                 # ページ固有のコンテンツ
-                rx.box(
+                rx.el.main(
                     page(),
+                    id="main-content",
                     width="100%",
                     padding=rx.breakpoints(
                         initial="1rem",
@@ -44,5 +52,5 @@ def template(page: Callable[[], rx.Component]) -> rx.Component:
             min_height="100vh",
             spacing="0",
             align_items="flex-start",
-        )
+        ),
     )

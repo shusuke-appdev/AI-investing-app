@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: quality-deploy-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
@@ -94,7 +94,6 @@ jobs:
     environment: hugging-face-production
     env:
       HF_SPACE_REPO: ${{ vars.HF_SPACE_REPO || 'shusuke12345/AI-investing-app' }}
-      HF_SPACE_HEALTH_URL: ${{ vars.HF_SPACE_HEALTH_URL || 'https://shusuke12345-ai-investing-app.hf.space/_health' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -122,14 +121,15 @@ jobs:
             echo "::error::HF_TOKEN secret is not configured"
             exit 1
           fi
-          if [ -z "${HF_SPACE_REPO:-}" ] || [ -z "${HF_SPACE_HEALTH_URL:-}" ]; then
-            echo "::error::HF_SPACE_REPO and HF_SPACE_HEALTH_URL must be configured"
+          if [ -z "${HF_SPACE_REPO:-}" ]; then
+            echo "::error::HF_SPACE_REPO must be configured"
             exit 1
           fi
 
           hf_owner="${HF_SPACE_REPO%%/*}"
           remote_url="https://${hf_owner}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}"
-          previous_commit="$(git ls-remote "${remote_url}" refs/heads/main | awk '{print $1}')"
+          git fetch --no-tags "${remote_url}" refs/heads/main:refs/hf/previous
+          previous_commit="$(git rev-parse refs/hf/previous)"
           mkdir -p "${GITHUB_WORKSPACE}/.states"
           {
             echo "github_sha=${GITHUB_SHA}"
@@ -154,17 +154,42 @@ jobs:
           git push --force "${remote_url}" main
 
       - name: Verify deployed Space
+        id: verify
+        continue-on-error: true
         timeout-minutes: 17
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_READ_TOKEN: ${{ secrets.HF_SPACE_READ_TOKEN }}
         run: >-
           python scripts/verify_hf_deployment.py
           --space "${HF_SPACE_REPO}"
           --expected-sha "${{ steps.deploy.outputs.hf_commit }}"
-          --health-url "${HF_SPACE_HEALTH_URL}"
           --require-private
           --timeout-seconds 900
           --metadata-path .states/hf-deploy-metadata.txt
+
+      - name: Restore previous Space revision after failed verification
+        if: steps.verify.outcome == 'failure'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_READ_TOKEN: ${{ secrets.HF_SPACE_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          hf_owner="${HF_SPACE_REPO%%/*}"
+          remote_url="https://${hf_owner}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}"
+          previous_commit="$(git rev-parse refs/hf/previous)"
+          git push --force "${remote_url}" "${previous_commit}:refs/heads/main"
+          python scripts/verify_hf_deployment.py \
+            --space "${HF_SPACE_REPO}" \
+            --expected-sha "${previous_commit}" \
+            --require-private \
+            --timeout-seconds 900 \
+            --metadata-path .states/hf-deploy-metadata.txt
+
+      - name: Preserve failed deployment result
+        if: steps.verify.outcome == 'failure'
+        run: |
+          echo "::error::New Space revision failed verification and was rolled back"
+          exit 1
 
       - name: Upload deployment metadata
         if: always()

@@ -29,7 +29,7 @@ def test_home_and_market_watch_use_direct_navigation_and_compact_theme_summary()
     assert "トレンド/テーマ" in sidebar
     assert "上位5テーマ" in market_watch
     assert "詳細はトレンド/テーマへ" in market_watch
-    assert 'href="/theme"' in market_watch
+    assert 'rx.redirect("/theme")' in market_watch
     assert "rx.el.details(" in market_watch
     assert "rx.el.summary(" in market_watch
     assert "rx.accordion.item(" not in market_watch

@@ -51,7 +51,7 @@ def _pytest_command(*, coverage: bool, quick: bool) -> list[str]:
             "--cov-report=term-missing",
             "--cov-report=html:.states/coverage_html",
             "--cov-report=json:.states/coverage.json",
-            "--cov-fail-under=62",
+            "--cov-fail-under=67",
         ]
     return command
 

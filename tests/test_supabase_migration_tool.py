@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from src.storage.supabase_paging import fetch_all_rows
 from tools import migrate_to_supabase
 
 
@@ -37,6 +38,41 @@ class FakeClient:
     def table(self, name: str) -> FakeTable:
         self.calls.append(("table", name))
         return FakeTable(name, self.calls)
+
+
+def test_supabase_paging_reads_all_1200_rows():
+    rows = [{"id": index} for index in range(1200)]
+
+    class PagedQuery:
+        def __init__(self):
+            self.start = 0
+            self.end = 0
+
+        def select(self, columns):
+            assert columns == "*"
+            return self
+
+        def order(self, column):
+            assert column == "id"
+            return self
+
+        def range(self, start, end):
+            self.start, self.end = start, end
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=rows[self.start : self.end + 1])
+
+    class PagedClient:
+        def table(self, name):
+            assert name == "knowledge_items"
+            return PagedQuery()
+
+    fetched = fetch_all_rows(
+        PagedClient(), "knowledge_items", "*", order_column="id", page_size=500
+    )
+
+    assert fetched == rows
 
 
 def test_parse_args_defaults_to_dry_run():
@@ -127,10 +163,11 @@ def test_execute_without_confirm_destroy_uploads_without_delete(monkeypatch):
     assert not any(call[1] == "delete" for call in client.calls if len(call) > 1)
 
 
-def test_clear_remote_tables_uses_table_specific_sentinel_filters():
+def test_clear_remote_tables_is_disabled_fail_closed():
     client = FakeClient()
 
-    migrate_to_supabase.clear_remote_tables(client, ("portfolios",))
+    import pytest
 
-    assert ("portfolios", "delete") in client.calls
-    assert ("portfolios", "neq", "name", "__migration_sentinel__") in client.calls
+    with pytest.raises(RuntimeError, match="transactional"):
+        migrate_to_supabase.clear_remote_tables(client, ("portfolios",))
+    assert not any(call[1] == "delete" for call in client.calls if len(call) > 1)

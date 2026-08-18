@@ -200,10 +200,10 @@ def theme_ranking_content(*, embedded: bool = False) -> rx.Component:
         else page_header(
             "トレンド/テーマ：総合順位",
             "価格だけでなく相対強度、価格・出来高による注目度、値動きの広がりを統合します。",
-            rx.link(
-                rx.button("上位・急浮上テーマから候補を探す", variant="solid"),
-                href="/theme-leaders",
-                underline="none",
+            rx.button(
+                "上位・急浮上テーマから候補を探す",
+                variant="solid",
+                on_click=rx.redirect("/theme-leaders"),
             ),
         )
     )

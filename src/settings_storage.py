@@ -4,7 +4,6 @@ API設定や保存先設定をローカルに永続化します。
 """
 
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -30,6 +29,10 @@ SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 _settings_cache: dict | None = None
 
 
+class StorageConfigurationError(RuntimeError):
+    """Raised when a hosted deployment has no safe storage selection."""
+
+
 def _ensure_dir():
     """設定ディレクトリを作成"""
     SETTINGS_DIR.mkdir(exist_ok=True)
@@ -37,8 +40,7 @@ def _ensure_dir():
 
 def load_settings(force_reload: bool = False) -> dict:
     """
-    保存された設定を読み込みます。
-    Localをベースに、Supabaseが有効ならマージします。
+    保存されたローカル設定を読み込みます。
     キャッシュがある場合はファイルI/Oをスキップします。
 
     Args:
@@ -66,17 +68,6 @@ def load_settings(force_reload: bool = False) -> dict:
     except Exception as e:
         logger.info(f"設定読み込みエラー: {e}")
 
-    # 2. Supabase Merge (if enabled locally)
-    if data.get("storage_type") == "supabase":
-        client = get_supabase_client()
-        if client:
-            try:
-                res = client.table("user_settings").select("*").execute()
-                for row in res.data:
-                    data[row["key"]] = row["value"]
-            except Exception as e:
-                logger.error(f"Supabase settings load error: {e}")
-
     _settings_cache = data
     return _settings_cache.copy()
 
@@ -88,24 +79,8 @@ def save_settings(settings: dict) -> bool:
     global _settings_cache
     require_writes_enabled()
     try:
-        # 1. Local Save
         _ensure_dir()
         write_json(SETTINGS_FILE, settings)
-
-        # 2. Supabase Save (if enabled)
-        if settings.get("storage_type") == "supabase":
-            client = get_supabase_client()
-            if client:
-                upsert_data = [
-                    {
-                        "key": k,
-                        "value": str(v),
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }
-                    for k, v in settings.items()
-                ]
-                client.table("user_settings").upsert(upsert_data).execute()
-
         _settings_cache = settings.copy()
         return True
     except Exception as e:
@@ -159,16 +134,48 @@ def set_gemini_api_key(api_key: str) -> bool:
 
 
 def get_storage_type() -> str:
-    """ストレージタイプを取得（local/supabase）。旧GAS設定はlocalへ移行する。"""
+    """Return the authoritative storage backend without remote bootstrap cycles."""
+
+    configured = os.environ.get("APP_STORAGE_BACKEND", "").strip().lower()
+    if configured:
+        if configured not in {"local", "supabase"}:
+            raise StorageConfigurationError(
+                "APP_STORAGE_BACKEND must be 'local' or 'supabase'."
+            )
+        return configured
+    if os.environ.get("SPACE_ID"):
+        raise StorageConfigurationError(
+            "Hosted personal-data storage is disabled until "
+            "APP_STORAGE_BACKEND is explicitly configured."
+        )
     value = get_setting("storage_type", "local")
     return value if value in {"local", "supabase"} else "local"
 
 
 def set_storage_type_setting(storage_type: str) -> bool:
-    """ストレージタイプを保存"""
+    """Validate the target backend before atomically changing local bootstrap state."""
+
     if storage_type not in {"local", "supabase"}:
         raise ValueError("storage_type must be 'local' or 'supabase'.")
+    configured = os.environ.get("APP_STORAGE_BACKEND", "").strip()
+    if configured:
+        return configured == storage_type
+    if storage_type == "supabase" and not _supabase_backend_ready():
+        return False
     return set_setting("storage_type", storage_type)
+
+
+def _supabase_backend_ready() -> bool:
+    client = get_supabase_client()
+    if client is None:
+        return False
+    try:
+        for table in ("user_settings", "portfolios", "knowledge_items", "trade_plans"):
+            client.table(table).select("*").limit(1).execute()
+    except Exception as exc:
+        logger.error("Supabase storage readiness failed: %s", exc)
+        return False
+    return True
 
 
 def get_finnhub_api_key() -> str:

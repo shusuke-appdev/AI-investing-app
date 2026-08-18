@@ -10,6 +10,8 @@ from src.log_config import get_logger
 from src.services.trading_plan_service import TradePlanRecord
 from src.settings_storage import get_storage_type
 from src.storage.atomic_json import read_json, update_json, write_json
+from src.storage.result import StorageResult, available, unavailable
+from src.storage.supabase_paging import fetch_all_rows
 from src.supabase_client import get_supabase_client
 
 logger = get_logger(__name__)
@@ -25,13 +27,27 @@ def save_trade_plan(plan: TradePlanRecord) -> bool:
 
 
 def load_trade_plans() -> list[TradePlanRecord]:
+    return load_trade_plans_result().data
+
+
+def load_trade_plans_result() -> StorageResult[list[TradePlanRecord]]:
     require_personal_data_enabled()
     storage_type = get_storage_type()
-    raw = _load_supabase() if storage_type == "supabase" else _load_local()
+    result = (
+        _load_supabase_result() if storage_type == "supabase" else _load_local_result()
+    )
     plans = [
-        TradePlanRecord.from_mapping(item) for item in raw if isinstance(item, dict)
+        TradePlanRecord.from_mapping(item)
+        for item in result.data
+        if isinstance(item, dict)
     ]
-    return sorted(plans, key=lambda item: item.updated_at, reverse=True)
+    return StorageResult(
+        data=sorted(plans, key=lambda item: item.updated_at, reverse=True),
+        backend=result.backend,
+        status=result.status,
+        warnings=result.warnings,
+        error_code=result.error_code,
+    )
 
 
 def get_trade_plan(plan_id: str) -> TradePlanRecord | None:
@@ -81,14 +97,25 @@ def _save_local(plan: TradePlanRecord) -> bool:
 
 
 def _load_local() -> list[dict[str, Any]]:
+    return _load_local_result().data
+
+
+def _load_local_result() -> StorageResult[list[dict[str, Any]]]:
     if not DATA_PATH.exists():
-        return []
+        return available([], "local")
     try:
         value = read_json(DATA_PATH, [])
-        return value if isinstance(value, list) else []
+        if not isinstance(value, list):
+            raise ValueError("Trading plan storage root must be a list.")
+        return available(value, "local")
     except (OSError, ValueError) as exc:
         logger.error("Trading plan local load failed: %s", exc)
-        return []
+        return unavailable(
+            [],
+            "local",
+            warning="取引計画ファイルを読み込めません。",
+            error_code="local_read_failed",
+        )
 
 
 def _write_local(plans: list[dict[str, Any]]) -> None:
@@ -112,12 +139,33 @@ def _save_supabase(plan: TradePlanRecord) -> bool:
 
 
 def _load_supabase() -> list[dict[str, Any]]:
+    return _load_supabase_result().data
+
+
+def _load_supabase_result() -> StorageResult[list[dict[str, Any]]]:
     client = get_supabase_client()
     if not client:
-        return []
-    response = client.table("trade_plans").select("*").execute()
-    return [
-        dict(item.get("payload") or {})
-        for item in response.data or []
-        if isinstance(item, dict)
-    ]
+        return unavailable(
+            [],
+            "supabase",
+            warning="Supabaseへ接続できません。保存済みデータは削除されていません。",
+            error_code="backend_unconfigured",
+        )
+    try:
+        rows = fetch_all_rows(client, "trade_plans", "*", order_column="id")
+        return available(
+            [
+                dict(item.get("payload") or {})
+                for item in rows
+                if isinstance(item, dict)
+            ],
+            "supabase",
+        )
+    except Exception as exc:
+        logger.error("Trading plan Supabase load failed: %s", exc)
+        return unavailable(
+            [],
+            "supabase",
+            warning="Supabaseの取引計画を取得できません。",
+            error_code="backend_read_failed",
+        )

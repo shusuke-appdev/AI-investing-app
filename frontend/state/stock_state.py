@@ -87,6 +87,8 @@ class StockState(rx.State):
     """State for the individual stock analysis page."""
 
     ticker: str = ""
+    loaded_ticker: str = ""
+    source_revision: int = 0
     is_fetching: bool = False
     error_msg: str = ""
     profile_warning: str = ""
@@ -199,6 +201,8 @@ class StockState(rx.State):
         if normalized != self.ticker:
             self.fetch_request_id += 1
             self.analysis_request_id += 1
+            self.ai_analysis = ""
+            self.is_generating_analysis = False
         self.ticker = normalized
         self._reset_trade_analysis()
 
@@ -243,6 +247,11 @@ class StockState(rx.State):
 
         self.fetch_request_id += 1
         request_id = self.fetch_request_id
+        self.analysis_request_id += 1
+        self.source_revision += 1
+        self.loaded_ticker = ""
+        self.ai_analysis = ""
+        self.is_generating_analysis = False
         self.is_fetching = True
         self.error_msg = ""
         self.profile_warning = ""
@@ -253,6 +262,7 @@ class StockState(rx.State):
             context = await asyncio.to_thread(build_stock_dashboard_context, ticker)
             if not self._is_current_fetch(request_id, ticker):
                 return
+            self.loaded_ticker = ticker
             self.info = plain_state_value(context.info)
             display_info = plain_state_value(context.display_info)
             self.display_name = display_info.get("name", ticker)
@@ -536,11 +546,13 @@ class StockState(rx.State):
     async def generate_ai_analysis(self):
         """Generate the Gemini-backed stock recap only when explicitly requested."""
 
-        ticker = self.ticker.strip()
-        if not ticker or not self.info:
+        ticker = self.loaded_ticker.strip()
+        if not ticker or ticker != self.ticker.strip() or not self.info:
+            self.error_msg = "現在の入力銘柄を取得してからAI分析を実行してください。"
             return
         self.analysis_request_id += 1
         request_id = self.analysis_request_id
+        revision = self.source_revision
         self.is_generating_analysis = True
         yield
 
@@ -558,7 +570,7 @@ class StockState(rx.State):
                 plain_state_value(self.stock_signal_context),
             )
 
-            if not self._is_current_analysis(request_id, ticker):
+            if not self._is_current_analysis(request_id, ticker, revision):
                 return
 
             if recap:
@@ -566,12 +578,12 @@ class StockState(rx.State):
             else:
                 self.error_msg = "分析レポートの生成に失敗しました。"
         except Exception as exc:
-            if not self._is_current_analysis(request_id, ticker):
+            if not self._is_current_analysis(request_id, ticker, revision):
                 return
             error = log_state_exception(logger, "AI銘柄分析の生成", exc)
             self.error_msg = error.message
         finally:
-            if self._is_current_analysis(request_id, ticker):
+            if self._is_current_analysis(request_id, ticker, revision):
                 self.is_generating_analysis = False
                 yield
 
@@ -583,10 +595,10 @@ class StockState(rx.State):
             request_key=ticker,
         )
 
-    def _is_current_analysis(self, request_id: int, ticker: str) -> bool:
-        return is_current_request(
+    def _is_current_analysis(self, request_id: int, ticker: str, revision: int) -> bool:
+        return revision == self.source_revision and is_current_request(
             current_id=self.analysis_request_id,
-            current_key=self.ticker.strip(),
+            current_key=self.loaded_ticker.strip(),
             request_id=request_id,
             request_key=ticker,
         )

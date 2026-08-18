@@ -37,7 +37,7 @@ class OptionSummary(BaseModel):
     sentiment: str = "Neutral"
     current_price: float = 0.0
     current_price_str: str = ""
-    pcr_vol: float = 0.0
+    pcr_vol: float | None = None
     pcr_vol_str: str = ""
     net_gex: float = 0.0
     net_gex_str: str = ""

@@ -125,47 +125,57 @@ def _evaluate_breadth(market_type: str) -> list[MarketSignal]:
             fetch_breadth_data,
         )
 
-        b_df = fetch_breadth_data("1mo")
+        b_df = fetch_breadth_data("6mo")
         if b_df.empty:
             return signals
 
         # 1. S&P Oscillator
         sp_osc = calculate_sp_oscillator(b_df)
-        val = sp_osc.get("oscillator_percent", 0.0)
+        val = sp_osc.get("oscillator_percent")
 
-        if val > 4.0:
+        if isinstance(val, (int, float)) and val > 4.0:
             sp_score = -1.0
             sp_rat = f"極端な買われすぎ({val}%)。反発下落（プルバック）を警戒。"
-        elif val < -4.0:
+        elif isinstance(val, (int, float)) and val < -4.0:
             sp_score = 1.0
             sp_rat = f"極端な売られすぎ({val}%)。反発上昇の可能性あり。"
-        elif val > 0:
+        elif isinstance(val, (int, float)) and val > 0:
             sp_score = 0.2
             sp_rat = f"買われ傾向({val}%)で推移。"
-        else:
+        elif isinstance(val, (int, float)) and val < 0:
             sp_score = -0.2
             sp_rat = f"売られ傾向({val}%)で推移。"
+        else:
+            sp_score = 0.0
+            sp_rat = "中立水準。"
 
-        signals.append(MarketSignal("S&Pオシレーター", sp_osc, sp_score, 0.5, sp_rat))
+        if sp_osc.get("status") == "available":
+            signals.append(
+                MarketSignal("S&Pオシレーター", sp_osc, sp_score, 0.5, sp_rat)
+            )
 
         # 2. McClellan Oscillator
         mc_osc = calculate_mcclellan_oscillator(b_df)
-        mc_val = mc_osc.get("mcclellan_value", 0.0)
+        mc_val = mc_osc.get("mcclellan_value")
 
-        if mc_val > 100:
+        if isinstance(mc_val, (int, float)) and mc_val > 100:
             mc_score = -0.8
             mc_rat = f"買われすぎ({mc_val:.0f})。過熱感からの調整リスク。"
-        elif mc_val < -100:
+        elif isinstance(mc_val, (int, float)) and mc_val < -100:
             mc_score = 0.8
             mc_rat = f"売られすぎ({mc_val:.0f})からの反発期待。"
-        elif mc_val > 0:
+        elif isinstance(mc_val, (int, float)) and mc_val > 0:
             mc_score = 0.2
             mc_rat = f"ゼロラインより上({mc_val:.0f})。短期上昇モメンタム。"
-        else:
+        elif isinstance(mc_val, (int, float)) and mc_val < 0:
             mc_score = -0.2
             mc_rat = f"ゼロラインより下({mc_val:.0f})。短期下落モメンタム。"
+        else:
+            mc_score = 0.0
+            mc_rat = "ゼロライン付近で中立。"
 
-        signals.append(MarketSignal("McClellan", mc_osc, mc_score, 0.5, mc_rat))
+        if mc_osc.get("status") == "available":
+            signals.append(MarketSignal("McClellan", mc_osc, mc_score, 0.5, mc_rat))
 
     except Exception as e:
         logger.error(f"Breadth Evaluation Error: {e}")

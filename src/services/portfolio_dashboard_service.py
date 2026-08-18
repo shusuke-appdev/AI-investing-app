@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -35,7 +36,7 @@ def validate_holding_input(ticker: str, shares: str, avg_cost: str) -> HoldingIn
             ticker=normalized_ticker, error="株数は数値で入力してください"
         )
 
-    if parsed_shares <= 0:
+    if not math.isfinite(parsed_shares) or parsed_shares <= 0:
         return HoldingInput(
             ticker=normalized_ticker, error="株数は0より大きい数値で入力してください"
         )
@@ -50,7 +51,7 @@ def validate_holding_input(ticker: str, shares: str, avg_cost: str) -> HoldingIn
                 shares=parsed_shares,
                 error="取得単価は数値で入力してください",
             )
-        if parsed_cost < 0:
+        if not math.isfinite(parsed_cost) or parsed_cost < 0:
             return HoldingInput(
                 ticker=normalized_ticker,
                 shares=parsed_shares,

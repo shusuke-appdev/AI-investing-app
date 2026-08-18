@@ -204,7 +204,11 @@ def theme_leaders_page() -> rx.Component:
         page_header(
             "次期リーダー候補",
             "登録代表銘柄と、一次資料で検証できたGemini探索銘柄を同じ市場データ条件で比較します。",
-            rx.link(rx.button("テーマ順位へ戻る", variant="surface"), href="/theme"),
+            rx.button(
+                "テーマ順位へ戻る",
+                variant="surface",
+                on_click=rx.redirect("/theme"),
+            ),
         ),
         rx.callout(
             "このページを開いただけではGemini、候補2年足、企業情報を取得しません。下の実行ボタンを押した時だけ分析します。",

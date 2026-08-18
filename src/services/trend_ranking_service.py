@@ -131,6 +131,7 @@ def build_opportunity_themes(
         distortion = distortions.get(str(item.get("theme")), {})
         distortion_score = float(distortion.get("distortion_score") or 0.0)
         opportunity_score = score + option_score * 0.8 + max(distortion_score, 0) * 30
+        absolute_trend_eligible = _absolute_trend_eligible(item)
         rows.append(
             {
                 "theme": item.get("theme", ""),
@@ -139,7 +140,12 @@ def build_opportunity_themes(
                 "option_proxy_ticker": item.get("option_proxy_ticker", ""),
                 "rank": item.get("rank", 0),
                 "opportunity_score": round(opportunity_score, 1),
-                "label": _opportunity_label(opportunity_score, option_score),
+                "label": (
+                    _opportunity_label(opportunity_score, option_score)
+                    if absolute_trend_eligible
+                    else "観察"
+                ),
+                "absolute_trend_eligible": absolute_trend_eligible,
                 "reason": _opportunity_reason(item, distortion),
                 "representative_tickers": item.get("representative_tickers", []),
                 "option_asymmetry": item.get("option_asymmetry", "unavailable"),
@@ -147,7 +153,11 @@ def build_opportunity_themes(
             }
         )
     rows.sort(key=lambda row: row["opportunity_score"], reverse=True)
-    selected = [row for row in rows if row["opportunity_score"] >= 20]
+    selected = [
+        row
+        for row in rows
+        if row["opportunity_score"] >= 20 and row["absolute_trend_eligible"]
+    ]
     selected = selected[:max_items]
     desired_min = min(min_items, max_items)
     if len(selected) < desired_min:
@@ -337,6 +347,26 @@ def _opportunity_label(score: float, option_score: float) -> str:
     if score >= 25:
         return "押し目待ち"
     return "観察"
+
+
+def _absolute_trend_eligible(item: dict[str, Any]) -> bool:
+    """Require absolute participation and returns before an upside label."""
+
+    values = (
+        _float(item.get("performance_1m")),
+        _float(item.get("performance_6m")),
+        _float(item.get("market_relative_20d")),
+        _float(item.get("participation_20d")),
+    )
+    if any(value is None for value in values):
+        return False
+    performance_1m, performance_6m, relative_20d, participation_20d = values
+    return bool(
+        performance_1m > 0
+        and performance_6m > 0
+        and relative_20d > 0
+        and participation_20d >= 0.5
+    )
 
 
 def _opportunity_reason(item: dict[str, Any], distortion: dict[str, Any]) -> str:

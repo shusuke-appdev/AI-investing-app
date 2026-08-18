@@ -147,7 +147,7 @@ def _data_quality_nav_item() -> rx.Component:
 
 def sidebar_nav() -> rx.Component:
     """左側に固定されるメインナビゲーションサイドバー"""
-    return rx.vstack(
+    return rx.el.nav(
         # アプリロゴ/タイトル
         rx.hstack(
             rx.icon("activity", size=24, color=rx.color("blue", 9)),
@@ -182,13 +182,14 @@ def sidebar_nav() -> rx.Component:
         position="sticky",
         top="0",
         display=rx.breakpoints(initial="none", lg="flex"),
+        aria_label="メインナビゲーション",
     )
 
 
 def mobile_nav() -> rx.Component:
     """Drawer navigation used when the fixed sidebar is hidden."""
 
-    return rx.vstack(
+    return rx.el.nav(
         rx.hstack(
             rx.drawer.root(
                 rx.drawer.trigger(
@@ -267,4 +268,5 @@ def mobile_nav() -> rx.Component:
         border_bottom=f"1px solid {rx.color('gray', 4)}",
         bg=rx.color("gray", 1),
         spacing="2",
+        aria_label="モバイルナビゲーション",
     )

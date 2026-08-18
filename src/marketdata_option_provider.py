@@ -127,6 +127,9 @@ def fetch_marketdata_option_chain(
                 strike_limit,
                 data_mode,
                 allow_stale,
+                target_dte,
+                min_dte,
+                expiration_policy,
                 str(exc),
                 getattr(exc, "code", "api_error"),
             )
@@ -559,6 +562,9 @@ def _stale_for_resolution_failure(
     strike_limit: int,
     data_mode: str,
     allow_stale: bool,
+    target_dte: int | None,
+    min_dte: int,
+    expiration_policy: str,
     warning: str,
     error_code: str,
 ) -> MarketDataOptionResult | None:
@@ -571,6 +577,7 @@ def _stale_for_resolution_failure(
         paths = sorted(cache.root.glob(f"{prefix}*{suffix}.json"), reverse=True)
     except OSError:
         paths = []
+    candidates: list[MarketDataOptionResult] = []
     for path in paths:
         key = path.stem
         read = cache.read_path(
@@ -582,9 +589,21 @@ def _stale_for_resolution_failure(
         if not read.is_available:
             continue
         stale = _result_from_cache_read(read)
-        if stale is not None:
-            return _with_warning(stale, warning, error_code=error_code)
-    return None
+        if stale is None:
+            continue
+        if stale.target_dte != target_dte:
+            continue
+        if stale.expiration_policy != expiration_policy:
+            continue
+        if stale.resolved_dte is None or stale.resolved_dte < max(min_dte, 0):
+            continue
+        candidates.append(stale)
+    if not candidates:
+        return None
+    selected = max(candidates, key=lambda item: item.fetched_at or "")
+    selected.is_stale = True
+    selected.cache_status = "stale_cache"
+    return _with_warning(selected, warning, error_code=error_code)
 
 
 def _with_warning(

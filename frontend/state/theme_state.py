@@ -157,6 +157,7 @@ class ThemeState(rx.State):
     error_code: str = ""
     theme_request_id: int = 0
     leader_request_id: int = 0
+    deep_dive_request_id: int = 0
     direction_filter: str = "all"
     sort_mode: str = "performance"
 
@@ -520,6 +521,9 @@ class ThemeState(rx.State):
 
         if not self.leader_candidates:
             return
+        self.deep_dive_request_id += 1
+        request_id = self.deep_dive_request_id
+        market_type = self.requested_market_type
         self.is_deep_diving = True
         self.deep_dive_status = "loading"
         self.deep_dive_error_msg = ""
@@ -532,6 +536,11 @@ class ThemeState(rx.State):
                 payload,
                 force_refresh=force_refresh,
             )
+            if (
+                request_id != self.deep_dive_request_id
+                or market_type != self.requested_market_type
+            ):
+                return
             self.deep_dive_items = [
                 ThemeDeepDiveItem(**item) for item in context.get("items", [])
             ]
@@ -542,11 +551,13 @@ class ThemeState(rx.State):
                 self.deep_dive_error_msg = str(context["error"])
         except Exception as exc:
             error = log_state_exception(logger, "候補のGemini深掘り", exc)
-            self.deep_dive_status = "error"
-            self.deep_dive_error_msg = error.message
+            if request_id == self.deep_dive_request_id:
+                self.deep_dive_status = "error"
+                self.deep_dive_error_msg = error.message
         finally:
-            self.is_deep_diving = False
-            yield
+            if request_id == self.deep_dive_request_id:
+                self.is_deep_diving = False
+                yield
 
     def _apply_leader_context(
         self, context: dict, fetched_at: str, warnings: list[str]
@@ -629,6 +640,7 @@ class ThemeState(rx.State):
         self.gemini_search_query_count = 0
         self.gemini_cache_status = ""
         self.deep_dive_items = []
+        self.deep_dive_request_id += 1
         self.deep_dive_status = "idle"
         self.deep_dive_error_msg = ""
         self.is_deep_diving = False

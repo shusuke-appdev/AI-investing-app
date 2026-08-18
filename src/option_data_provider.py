@@ -30,6 +30,12 @@ _fallback_cache: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
 _fallback_lock = threading.Lock()
 _metadata_cache: dict[str, dict[str, Any]] = {}
 _metadata_lock = threading.Lock()
+_OPTION_FETCH_WORKERS = 4
+_OPTION_FETCH_EXECUTOR = ThreadPoolExecutor(
+    max_workers=_OPTION_FETCH_WORKERS,
+    thread_name_prefix="option-fetch",
+)
+_OPTION_FETCH_SLOTS = threading.BoundedSemaphore(_OPTION_FETCH_WORKERS)
 
 # リトライ設定
 MAX_RETRIES = 1
@@ -180,13 +186,16 @@ def _fetch_with_timeout(
     min_dte: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     """タイムアウト付きでオプションデータを取得"""
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(
+    if not _OPTION_FETCH_SLOTS.acquire(blocking=False):
+        logger.warning("[OptionProvider] Fetch capacity is full for %s", ticker)
+        return None
+    future = _OPTION_FETCH_EXECUTOR.submit(
         _fetch_option_chain_raw,
         ticker,
         target_dte=target_dte,
         min_dte=min_dte,
     )
+    future.add_done_callback(lambda _future: _OPTION_FETCH_SLOTS.release())
     try:
         return future.result(timeout=timeout)
     except FuturesTimeoutError:
@@ -197,8 +206,6 @@ def _fetch_with_timeout(
     except Exception as e:
         logger.warning(f"[OptionProvider] Error fetching options for {ticker}: {e}")
         return None
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def get_option_chain(

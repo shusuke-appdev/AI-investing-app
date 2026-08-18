@@ -135,15 +135,12 @@ def _top_themes() -> rx.Component:
                     spacing="1",
                 ),
                 rx.spacer(),
-                rx.link(
-                    rx.button(
-                        "詳細はトレンド/テーマへ",
-                        rx.icon("arrow-right", size=15),
-                        variant="ghost",
-                        min_height="44px",
-                    ),
-                    href="/theme",
-                    underline="none",
+                rx.button(
+                    "詳細はトレンド/テーマへ",
+                    rx.icon("arrow-right", size=15),
+                    variant="ghost",
+                    min_height="44px",
+                    on_click=rx.redirect("/theme"),
                 ),
                 width="100%",
                 align_items="center",

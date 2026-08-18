@@ -16,6 +16,8 @@ from src.log_config import get_logger
 from src.settings_storage import get_storage_type
 from src.storage.atomic_json import read_json, update_json
 from src.storage.base import BaseStorage
+from src.storage.result import StorageResult, available, unavailable
+from src.storage.supabase_paging import fetch_all_rows
 from src.supabase_client import get_supabase_client
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "knowledge"
@@ -119,17 +121,27 @@ class LocalKnowledgeStorage(BaseStorage):
         return next((x for x in items if x.get("id") == id), None)
 
     def list_all(self) -> list[Any]:
+        return self.list_result().data
+
+    def list_result(self) -> StorageResult[list[dict[str, Any]]]:
         storage_path = _get_storage_path()
         if not storage_path.exists():
-            return []
+            return available([], "local")
         try:
             data = read_json(storage_path, [])
+            if not isinstance(data, list):
+                raise ValueError("Knowledge storage root must be a list.")
             # sort by created_at DESC
             data.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-            return data
+            return available(data, "local")
         except (ValueError, OSError, KeyError) as e:
             logger.error(f"Knowledge storage read error: {e}")
-            return []
+            return unavailable(
+                [],
+                "local",
+                warning="参照知識ファイルを読み込めません。",
+                error_code="local_read_failed",
+            )
 
     def delete(self, id: str) -> bool:
         deleted = False
@@ -161,18 +173,30 @@ class SupabaseKnowledgeStorage(BaseStorage):
         return next((x for x in items if x.get("id") == id), None)
 
     def list_all(self) -> list[Any]:
+        return self.list_result().data
+
+    def list_result(self) -> StorageResult[list[dict[str, Any]]]:
         client = get_supabase_client()
         if client:
             try:
-                res = client.table("knowledge_items").select("*").execute()
-                items: list[dict[str, Any]] = [
-                    i for i in res.data if isinstance(i, dict)
-                ]
+                rows = fetch_all_rows(client, "knowledge_items", "*", order_column="id")
+                items: list[dict[str, Any]] = [i for i in rows if isinstance(i, dict)]
                 items.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
-                return items
+                return available(items, "supabase")
             except Exception as e:
                 logger.error(f"Supabase load error: {e}")
-        return []
+                return unavailable(
+                    [],
+                    "supabase",
+                    warning="Supabaseの参照知識を取得できません。",
+                    error_code="backend_read_failed",
+                )
+        return unavailable(
+            [],
+            "supabase",
+            warning="Supabaseへ接続できません。保存済みデータは削除されていません。",
+            error_code="backend_unconfigured",
+        )
 
     def delete(self, id: str) -> bool:
         client = get_supabase_client()
@@ -204,16 +228,32 @@ def save_knowledge(item: KnowledgeItem) -> bool:
 
 
 def load_all_knowledge() -> list[KnowledgeItem]:
+    return load_all_knowledge_result().data
+
+
+def load_all_knowledge_result() -> StorageResult[list[KnowledgeItem]]:
     require_personal_data_enabled()
     storage = KnowledgeStorageFactory.get_storage()
-    data_list = storage.list_all()
+    result_method = getattr(storage, "list_result", None)
+    if callable(result_method):
+        result = result_method()
+    else:
+        result = available(storage.list_all(), get_storage_type())
     items = []
-    for d in data_list:
+    warnings = list(result.warnings)
+    for d in result.data:
         try:
             items.append(KnowledgeItem.from_dict(d))
         except Exception as e:
             logger.info(f"Skipping invalid item: {e}")
-    return items
+            warnings.append("不正な参照知識レコードを除外しました。")
+    return StorageResult(
+        data=items,
+        backend=result.backend,
+        status=result.status,
+        warnings=warnings,
+        error_code=result.error_code,
+    )
 
 
 def get_knowledge_by_id(item_id: str) -> KnowledgeItem | None:

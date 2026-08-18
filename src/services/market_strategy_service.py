@@ -173,7 +173,6 @@ def build_timeframe_outlooks(
     heuristic_month_score = (
         current_score * 0.35
         + month_option_score
-        + _trend_ranking_score(trend_ranking)
         + _credit_score(credit_stress)
         + _volatility_score(volatility_regime)
     )
@@ -523,11 +522,10 @@ def _driver_score(drivers: dict[str, Any]) -> float:
 
 
 def _trend_ranking_score(trend_ranking: dict[str, Any] | None) -> float:
-    items = (trend_ranking or {}).get("items", [])
-    if not items:
-        return 0.0
-    top = float(items[0].get("total_score", 0.0))
-    return _clamp(top / 100.0)
+    """Theme percentiles rank peers; they do not express market direction."""
+
+    del trend_ranking
+    return 0.0
 
 
 def _credit_score(credit_stress: dict[str, Any] | None) -> float:

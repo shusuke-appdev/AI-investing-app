@@ -574,6 +574,10 @@ class MarketState(rx.State):
 
     def _begin_market_request(self) -> tuple[int, str]:
         self.market_request_id += 1
+        self.is_fetching = False
+        self.is_fetching_summary = False
+        self.is_fetching_details = False
+        self.is_fetching_options = False
         return self.market_request_id, self.market_type
 
     def _is_current_market_request(self, request_id: int, market_type: str) -> bool:

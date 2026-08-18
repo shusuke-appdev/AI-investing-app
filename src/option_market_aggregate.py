@@ -206,6 +206,8 @@ def _aggregate_option_horizons(results: list[dict]) -> list[dict[str, Any]]:
                     "label": str(horizon.get("label") or key),
                     "target_dte": horizon.get("target_dte"),
                     "tickers": [],
+                    "fresh_tickers": [],
+                    "stale_tickers": [],
                     "iv_values": [],
                     "expected_move_values": [],
                     "pcr_values": [],
@@ -220,21 +222,31 @@ def _aggregate_option_horizons(results: list[dict]) -> list[dict[str, Any]]:
             )
             if ticker:
                 bucket["tickers"].append(ticker)
-            _append_number(bucket["iv_values"], horizon.get("iv"))
-            _append_number(
-                bucket["expected_move_values"], horizon.get("expected_move_pct")
-            )
-            _append_number(
-                bucket["pcr_values"], (horizon.get("pcr") or {}).get("volume_pcr")
-            )
+            is_stale = bool(horizon.get("is_stale") or item.get("is_stale"))
+            if ticker:
+                bucket["stale_tickers" if is_stale else "fresh_tickers"].append(ticker)
+            if is_stale:
+                bucket["warnings"].append(
+                    f"{ticker or 'Option data'} is stale and excluded from strategy metrics."
+                )
+            else:
+                _append_number(bucket["iv_values"], horizon.get("iv"))
+                _append_number(
+                    bucket["expected_move_values"], horizon.get("expected_move_pct")
+                )
+                _append_number(
+                    bucket["pcr_values"],
+                    (horizon.get("pcr") or {}).get("volume_pcr"),
+                )
+                _append_number(
+                    bucket["gex_values"],
+                    (horizon.get("gex") or {}).get("nearby_net_gex"),
+                )
+                _append_number(bucket["gamma_values"], horizon.get("gamma_coverage"))
             skew_entry = _skew_entry(ticker, item, horizon)
             if ticker and skew_entry is not None:
                 bucket["skew_by_ticker"][ticker] = skew_entry
                 bucket["warnings"].extend(skew_entry.get("warnings") or [])
-            _append_number(
-                bucket["gex_values"], (horizon.get("gex") or {}).get("nearby_net_gex")
-            )
-            _append_number(bucket["gamma_values"], horizon.get("gamma_coverage"))
             _append_number(bucket["dte_values"], horizon.get("dte"))
             if horizon.get("source"):
                 bucket["sources"].add(str(horizon.get("source")))
@@ -263,6 +275,9 @@ def _aggregate_option_horizons(results: list[dict]) -> list[dict[str, Any]]:
                 "label": bucket["label"],
                 "target_dte": bucket["target_dte"],
                 "tickers": sorted(set(bucket["tickers"])),
+                "fresh_tickers": sorted(set(bucket["fresh_tickers"])),
+                "stale_tickers": sorted(set(bucket["stale_tickers"])),
+                "eligible_for_scoring": bool(bucket["fresh_tickers"]),
                 "dte": round(dte, 1) if dte is not None else None,
                 "iv": iv,
                 "expected_move_pct": expected_move,

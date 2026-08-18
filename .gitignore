@@ -55,6 +55,7 @@ legacy_streamlit/.streamlit/secrets.toml
 data/*.json
 data/knowledge/
 data/portfolios/
+data/supabase_backups/
 
 data/*.csv
 

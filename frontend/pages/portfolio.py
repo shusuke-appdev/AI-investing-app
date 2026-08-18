@@ -127,7 +127,12 @@ def _render_input_section() -> rx.Component:
                 PortfolioState.current_portfolio_name != "新規ポートフォリオ",
                 rx.button(
                     rx.icon("trash-2", size=15),
-                    "削除",
+                    rx.cond(
+                        PortfolioState.pending_delete_name
+                        == PortfolioState.current_portfolio_name,
+                        "削除を確定",
+                        "削除",
+                    ),
                     on_click=PortfolioState.delete_current_portfolio,
                     color_scheme="red",
                     variant="outline",
@@ -238,10 +243,22 @@ def _render_input_section() -> rx.Component:
                     ),
                     rx.button(
                         rx.icon("save", size=15),
-                        "保存",
+                        "現在名で保存",
                         on_click=PortfolioState.save_portfolio,
                         loading=PortfolioState.is_loading,
                         color_scheme="green",
+                    ),
+                    rx.button(
+                        rx.icon("copy", size=15),
+                        rx.cond(
+                            PortfolioState.pending_overwrite_name
+                            == PortfolioState.save_name,
+                            "上書きを確定",
+                            "別名で保存",
+                        ),
+                        on_click=PortfolioState.save_portfolio_as,
+                        loading=PortfolioState.is_loading,
+                        variant="outline",
                     ),
                     rx.button(
                         rx.icon("chart-no-axes-combined", size=15),

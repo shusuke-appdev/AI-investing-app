@@ -59,11 +59,10 @@ def test_hugging_face_deploy_is_serialized_and_health_checked():
 
     assert isinstance(workflow_data, dict)
     assert isinstance(workflow_data.get("jobs"), dict)
-    assert "cancel-in-progress: true" in workflow
+    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in workflow
     assert "environment: hugging-face-production" in workflow
     assert "HF_SPACE_REPO:" in workflow
-    assert "HF_SPACE_HEALTH_URL:" in workflow
-    assert ".hf.space/_health" in workflow
+    assert "HF_SPACE_READ_TOKEN:" in workflow
     assert workflow.index("Verify private Space before push") < workflow.index(
         "id: deploy"
     )
@@ -75,6 +74,8 @@ def test_hugging_face_deploy_is_serialized_and_health_checked():
     assert "--timeout-seconds 900" in workflow
     assert "Verify deployed Space" in workflow
     assert "previous_hf_commit=" in workflow
+    assert "Restore previous Space revision" in workflow
+    assert "Preserve failed deployment result" in workflow
 
 
 def test_docker_runtime_is_non_root_and_excludes_build_toolchain():

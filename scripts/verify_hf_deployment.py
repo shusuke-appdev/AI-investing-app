@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import quote
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 class VerificationError(RuntimeError):
@@ -88,7 +88,8 @@ def fetch_json(url: str, token: str) -> FetchResult:
         },
     )
     try:
-        with urlopen(request, timeout=10) as response:  # noqa: S310
+        opener = build_opener(_RejectRedirects)
+        with opener.open(request, timeout=10) as response:  # noqa: S310
             return FetchResult(int(response.status), _decode_json(response.read()))
     except HTTPError as exc:
         try:
@@ -111,6 +112,24 @@ def _space_api_url(space: str) -> str:
         raise VerificationError("Space must use the owner/name format")
     encoded = "/".join(quote(part, safe="") for part in parts)
     return f"https://huggingface.co/api/spaces/{encoded}"
+
+
+class _RejectRedirects(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        del req, fp, code, msg, headers, newurl
+        return None
+
+
+def _space_health_url(space: str) -> str:
+    parts = space.split("/")
+    if len(parts) != 2 or not all(parts):
+        raise VerificationError("Space must use the owner/name format")
+    host = "-".join(parts).lower()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", host):
+        raise VerificationError(
+            "Space name cannot be converted to a safe health origin"
+        )
+    return f"https://{host}.hf.space/_health"
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -162,7 +181,7 @@ def verify_deployment(
     *,
     space: str,
     expected_sha: str,
-    health_url: str,
+    health_url: str | None,
     token: str,
     require_private: bool,
     timeout_seconds: float,
@@ -178,8 +197,10 @@ def verify_deployment(
     _require_token(token)
     if not expected_sha:
         raise VerificationError("Expected Hugging Face revision is missing")
-    if not health_url:
-        raise VerificationError("Space health URL is missing")
+    derived_health_url = _space_health_url(space)
+    if health_url and health_url != derived_health_url:
+        raise VerificationError("Health URL must match the Space-derived HTTPS origin")
+    health_url = derived_health_url
     if timeout_seconds < 0:
         raise VerificationError("Timeout must be zero or greater")
     if poll_interval_seconds <= 0:
@@ -275,7 +296,9 @@ def main(
     parser = _parser()
     args = parser.parse_args(argv)
     environment = os.environ if environ is None else environ
-    token = environment.get("HF_TOKEN", "")
+    token = environment.get(
+        "HF_TOKEN" if args.preflight_only else "HF_SPACE_READ_TOKEN", ""
+    )
 
     try:
         if args.preflight_only:
@@ -290,8 +313,8 @@ def main(
             )
             return 0
 
-        if not args.expected_sha or not args.health_url:
-            parser.error("--expected-sha and --health-url are required after push")
+        if not args.expected_sha:
+            parser.error("--expected-sha is required after push")
         result = verify_deployment(
             space=args.space,
             expected_sha=args.expected_sha,
