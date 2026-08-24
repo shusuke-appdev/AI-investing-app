@@ -604,3 +604,10 @@ streamlit run legacy_streamlit/app.py
 - Added a local bare-repository rollback simulation proving that the workflow's force-push restores the captured pre-deploy revision. Production still re-verifies the restored revision and preserves the failed deploy result.
 - Validation: `.venv\Scripts\python.exe scripts\check.py --coverage` passed all read-only gates with 435 tests and 67.20% branch coverage, Reflex export, and static semantics for eight routes. Browser smoke passed all eight routes at 390x844 and 1280x720 plus the mobile drawer. The canonical Supabase SQL and versioned migration have identical SHA-256 `FD839CD636B41BDCF8A44B72CF16528AA94BAE629156D741C8A35E1C2D0D7E3E`.
 - Docker CLI is not installed on this workstation, so a local Docker build was not run. No commit, push, database migration, Supabase live CRUD, Hugging Face deployment/rollback, Gemini request, or MarketData credit-consuming request was performed. Live staging acceptance remains required before production use of migration/restore and deploy rollback.
+
+# Session update: 2026-08-24 Gemini 3.7 Flash migration
+- Changed the shared Gemini default from `gemini-3.6-flash` to the stable model ID `gemini-3.7-flash`. The existing `GEMINI_MODEL_NAME` -> `GEMINI_MODEL` -> default precedence remains unchanged, so both standard generation and search-grounded structured theme discovery use the new default without separate call-site overrides.
+- Updated the environment example, README, operations documentation, and theme-leader discovery specification. The grounded-research cache key already includes the model ID, so cached Gemini 3.6 results are not reused for Gemini 3.7 requests.
+- Updated regressions for both `client.models.generate_content()` and `client.interactions.create()`. Focused Gemini tests passed (`6 passed`).
+- Validation: `.venv\Scripts\python.exe scripts\check.py` passed dependency consistency, compileall, Ruff lint/format, mypy critical contracts, all `435` tests, Reflex frontend export, and static UI semantics for eight routes.
+- No Gemini live request, dependency change, commit, push, deployment, or production configuration change was performed.

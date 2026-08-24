@@ -10,7 +10,7 @@ MARKET_JP = "JP"
 
 # AI Configuration
 GEMINI_MODEL_NAME = (
-    os.getenv("GEMINI_MODEL_NAME") or os.getenv("GEMINI_MODEL") or "gemini-3.6-flash"
+    os.getenv("GEMINI_MODEL_NAME") or os.getenv("GEMINI_MODEL") or "gemini-3.7-flash"
 )
 
 # Cache Settings (Seconds)

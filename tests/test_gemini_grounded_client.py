@@ -4,9 +4,7 @@ from unittest.mock import Mock
 from src import gemini_client
 
 
-def test_grounded_structured_uses_one_interaction_and_keeps_annotation_urls(
-    monkeypatch,
-):
+def test_grounded_structured_uses_default_model_and_keeps_annotation_urls(monkeypatch):
     interaction = SimpleNamespace(
         model="gemini-test",
         usage=SimpleNamespace(
@@ -46,7 +44,6 @@ def test_grounded_structured_uses_one_interaction_and_keeps_annotation_urls(
     result = gemini_client.generate_grounded_structured(
         "prompt",
         schema,
-        model="gemini-test",
         max_retries=1,
     )
 
@@ -56,7 +53,7 @@ def test_grounded_structured_uses_one_interaction_and_keeps_annotation_urls(
     assert result["search_query_count"] == 2
     assert result["total_tokens"] == 20
     client.interactions.create.assert_called_once_with(
-        model="gemini-test",
+        model="gemini-3.7-flash",
         input="prompt",
         tools=[{"type": "google_search"}],
         response_format={

@@ -53,7 +53,7 @@ def test_hosted_personal_mode_requires_access_control_ack(monkeypatch):
     assert app_capability_summary()["private_deployment_acknowledged"] is True
 
 
-def test_gemini_generation_uses_gemini_3_6_flash_by_default(monkeypatch):
+def test_gemini_generation_uses_gemini_3_7_flash_by_default(monkeypatch):
     from unittest.mock import MagicMock
 
     from src import gemini_client
@@ -65,7 +65,7 @@ def test_gemini_generation_uses_gemini_3_6_flash_by_default(monkeypatch):
 
     assert gemini_client.generate_content("prompt") == "generated"
     client.models.generate_content.assert_called_once_with(
-        model="gemini-3.6-flash",
+        model="gemini-3.7-flash",
         contents="prompt",
     )
 
