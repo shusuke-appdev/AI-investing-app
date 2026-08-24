@@ -8,6 +8,7 @@ from scripts.verify_hf_deployment import (
     FetchResult,
     VerificationError,
     preflight_space,
+    require_staging_failure_authorization,
     verify_deployment,
 )
 
@@ -82,6 +83,55 @@ def test_target_running_revision_with_valid_health_passes() -> None:
     assert result.observed_sha == EXPECTED_SHA
     assert result.runtime_stage == "RUNNING"
     assert result.health_status == 200
+
+
+def test_forced_staging_failure_happens_only_after_real_health_passes() -> None:
+    with pytest.raises(VerificationError, match="HTTP 200 status=true"):
+        verify_deployment(
+            space=SPACE,
+            expected_sha=EXPECTED_SHA,
+            health_url=HEALTH_URL,
+            token=TOKEN,
+            require_private=True,
+            timeout_seconds=0,
+            fetch_space=lambda _url, _token: space_response(),
+            fetch_health=lambda _url, _token: FetchResult(200, {"status": True}),
+            force_staging_health_failure=True,
+            staging_failure_authorized=True,
+            emit=lambda _message: None,
+        )
+
+
+def test_forced_staging_failure_rejects_unauthorized_library_call() -> None:
+    with pytest.raises(VerificationError, match="lacks staging authorization"):
+        verify_deployment(
+            space=SPACE,
+            expected_sha=EXPECTED_SHA,
+            health_url=HEALTH_URL,
+            token=TOKEN,
+            require_private=True,
+            timeout_seconds=0,
+            fetch_space=lambda _url, _token: pytest.fail("must fail before network"),
+            fetch_health=lambda _url, _token: pytest.fail("must fail before network"),
+            force_staging_health_failure=True,
+            emit=lambda _message: None,
+        )
+
+
+def test_forced_health_failure_requires_isolated_staging_space() -> None:
+    environment = {
+        "HF_STAGING_ACCEPTANCE_ACK": "1",
+        "HF_STAGING_SPACE_REPO": SPACE,
+        "HF_PRODUCTION_SPACE_REPO": SPACE,
+    }
+    with pytest.raises(VerificationError, match="must be different"):
+        require_staging_failure_authorization(SPACE, environment)
+
+    environment["HF_PRODUCTION_SPACE_REPO"] = "owner/production"
+    require_staging_failure_authorization(SPACE, environment)
+
+    with pytest.raises(VerificationError, match="limited to the staging"):
+        require_staging_failure_authorization("owner/production", environment)
 
 
 def test_target_runtime_error_fails_immediately_and_redacts_secrets() -> None:

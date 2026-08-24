@@ -4,6 +4,20 @@ on:
   pull_request:
   push:
   workflow_dispatch:
+    inputs:
+      staging_acceptance:
+        description: Staging action after the quality gate
+        required: true
+        default: quality-only
+        type: choice
+        options:
+          - quality-only
+          - deploy
+          - rollback-exercise
+      staging_confirmation:
+        description: Type STAGING:<owner/name> for a staging deploy
+        required: false
+        type: string
 
 concurrency:
   group: quality-deploy-${{ github.ref }}
@@ -197,5 +211,149 @@ jobs:
         with:
           name: hf-deploy-${{ github.run_id }}
           path: .states/hf-deploy-metadata.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  sync-to-hub-staging:
+    name: Push to Hugging Face staging Space
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.staging_acceptance != 'quality-only'
+    runs-on: ubuntu-latest
+    needs: quality
+    environment: hugging-face-staging
+    env:
+      HF_SPACE_REPO: ${{ vars.HF_SPACE_REPO }}
+      HF_STAGING_SPACE_REPO: ${{ vars.HF_SPACE_REPO }}
+      HF_PRODUCTION_SPACE_REPO: ${{ vars.HF_PRODUCTION_SPACE_REPO }}
+      HF_STAGING_ACCEPTANCE_ACK: ${{ vars.HF_STAGING_ACCEPTANCE_ACK }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Enforce isolated staging target
+        env:
+          STAGING_CONFIRMATION: ${{ inputs.staging_confirmation }}
+        run: |
+          set -euo pipefail
+          if [ "${HF_STAGING_ACCEPTANCE_ACK:-}" != "1" ]; then
+            echo "::error::HF_STAGING_ACCEPTANCE_ACK must be 1"
+            exit 1
+          fi
+          if [ -z "${HF_SPACE_REPO:-}" ] || [ -z "${HF_PRODUCTION_SPACE_REPO:-}" ]; then
+            echo "::error::Both staging and production Space declarations are required"
+            exit 1
+          fi
+          if [ "${HF_SPACE_REPO}" = "${HF_PRODUCTION_SPACE_REPO}" ]; then
+            echo "::error::Staging and production Spaces must be different"
+            exit 1
+          fi
+          if [ "${STAGING_CONFIRMATION:-}" != "STAGING:${HF_SPACE_REPO}" ]; then
+            echo "::error::Staging confirmation does not match the target Space"
+            exit 1
+          fi
+
+      - name: Verify private staging Space before push
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >-
+          python scripts/verify_hf_deployment.py
+          --space "${HF_SPACE_REPO}"
+          --require-private
+          --preflight-only
+
+      - name: Push to Hugging Face staging Space
+        id: staging_deploy
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HF_TOKEN:-}" ]; then
+            echo "::error::HF_TOKEN secret is not configured"
+            exit 1
+          fi
+
+          hf_owner="${HF_SPACE_REPO%%/*}"
+          remote_url="https://${hf_owner}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}"
+          git fetch --no-tags "${remote_url}" refs/heads/main:refs/hf/staging-previous
+          previous_commit="$(git rev-parse refs/hf/staging-previous)"
+          mkdir -p "${GITHUB_WORKSPACE}/.states"
+          {
+            echo "github_sha=${GITHUB_SHA}"
+            echo "hf_space_repo=${HF_SPACE_REPO}"
+            echo "acceptance_mode=${{ inputs.staging_acceptance }}"
+            echo "previous_hf_commit=${previous_commit}"
+          } > "${GITHUB_WORKSPACE}/.states/hf-staging-deploy-metadata.txt"
+
+          deploy_dir="$(mktemp -d)"
+          git archive --format=tar HEAD | tar -x -C "${deploy_dir}"
+          cd "${deploy_dir}"
+          rm -rf docs/ui-audit
+
+          git init -b main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Deploy staging acceptance revision"
+          deploy_commit="$(git rev-parse HEAD)"
+          echo "hf_commit=${deploy_commit}" >> "${GITHUB_OUTPUT}"
+          echo "hf_deploy_commit=${deploy_commit}" >> "${GITHUB_WORKSPACE}/.states/hf-staging-deploy-metadata.txt"
+          git push --force "${remote_url}" main
+
+      - name: Verify deployed staging Space
+        id: staging_verify
+        continue-on-error: true
+        timeout-minutes: 17
+        env:
+          HF_SPACE_READ_TOKEN: ${{ secrets.HF_SPACE_READ_TOKEN }}
+          ACCEPTANCE_MODE: ${{ inputs.staging_acceptance }}
+        run: |
+          set -euo pipefail
+          failure_arg=()
+          if [ "${ACCEPTANCE_MODE}" = "rollback-exercise" ]; then
+            failure_arg=(--staging-force-health-failure)
+          fi
+          python scripts/verify_hf_deployment.py \
+            --space "${HF_SPACE_REPO}" \
+            --expected-sha "${{ steps.staging_deploy.outputs.hf_commit }}" \
+            --require-private \
+            --timeout-seconds 900 \
+            --metadata-path .states/hf-staging-deploy-metadata.txt \
+            "${failure_arg[@]}"
+
+      - name: Restore previous staging revision after failed verification
+        if: steps.staging_verify.outcome == 'failure'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_READ_TOKEN: ${{ secrets.HF_SPACE_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          hf_owner="${HF_SPACE_REPO%%/*}"
+          remote_url="https://${hf_owner}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}"
+          previous_commit="$(git rev-parse refs/hf/staging-previous)"
+          git push --force "${remote_url}" "${previous_commit}:refs/heads/main"
+          python scripts/verify_hf_deployment.py \
+            --space "${HF_SPACE_REPO}" \
+            --expected-sha "${previous_commit}" \
+            --require-private \
+            --timeout-seconds 900 \
+            --metadata-path .states/hf-staging-deploy-metadata.txt
+
+      - name: Preserve failed staging deployment result
+        if: steps.staging_verify.outcome == 'failure'
+        run: |
+          echo "::error::Staging revision failed acceptance and was rolled back"
+          exit 1
+
+      - name: Upload staging deployment metadata
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: hf-staging-deploy-${{ github.run_id }}
+          path: .states/hf-staging-deploy-metadata.txt
           if-no-files-found: warn
           retention-days: 30

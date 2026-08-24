@@ -79,6 +79,35 @@ def test_hugging_face_deploy_is_serialized_and_health_checked():
     assert "Preserve failed deployment result" in workflow
 
 
+def test_hf_staging_acceptance_is_manual_isolated_and_fail_closed():
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    production_job, staging_job = workflow.split("  sync-to-hub-staging:", maxsplit=1)
+
+    assert "workflow_dispatch:" in workflow
+    assert "rollback-exercise" in staging_job
+    assert "environment: hugging-face-staging" in staging_job
+    assert "inputs.staging_acceptance != 'quality-only'" in staging_job
+    assert "HF_PRODUCTION_SPACE_REPO" in staging_job
+    assert "HF_STAGING_ACCEPTANCE_ACK" in staging_job
+    assert '"STAGING:${HF_SPACE_REPO}"' in staging_job
+    assert "Staging and production Spaces must be different" in staging_job
+    assert "--staging-force-health-failure" in staging_job
+    assert "Restore previous staging revision" in staging_job
+    assert "Preserve failed staging deployment result" in staging_job
+    assert "--staging-force-health-failure" not in production_job
+
+
+def test_operations_matches_current_staging_and_backup_contracts():
+    operations = Path("docs/OPERATIONS.md").read_text(encoding="utf-8")
+
+    assert ".states/supabase_backups/" in operations
+    assert "data/supabase_backups/` にバックアップ" not in operations
+    assert "HF_SPACE_HEALTH_URL" not in operations
+    assert "古い実行をキャンセルしてからforce push" not in operations
+    assert "hugging-face-staging" in operations
+    assert "supabase_staging_acceptance.py" in operations
+
+
 def test_docker_runtime_is_non_root_and_excludes_build_toolchain():
     dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
     pinned_base = (

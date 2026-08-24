@@ -204,7 +204,8 @@ def migrate(options: MigrationOptions | None = None) -> int:
             replace_remote_tables(client, local_payload, options.tables)
         except Exception as exc:
             print(
-                f"[ERR] Transactional replace failed; target transaction rolled back: {exc}"
+                "[ERR] Transactional replace or read-back verification failed; "
+                f"inspect remote state and restore the manifest: {exc}"
             )
             return 1
     else:
@@ -454,44 +455,51 @@ def replace_remote_tables(
         table: _payload_hash(payload.get(table, []), PRIMARY_KEYS[table])
         for table in tables
     }
-    client.table("personal_data_migration_batches").insert(
-        {
-            "id": batch_id,
-            "requested_tables": list(tables),
-            "expected_counts": expected_counts,
-            "expected_hashes": expected_hashes,
-            "status": "staged",
-        }
-    ).execute()
-    stage_rows = []
-    for table in tables:
-        primary_key = PRIMARY_KEYS[table]
-        for row in payload.get(table, []):
-            row_key = str(row.get(primary_key) or "")
-            if not row_key:
-                raise LocalPayloadError(f"{table} row is missing {primary_key}")
-            stage_rows.append(
-                {
-                    "batch_id": batch_id,
-                    "table_name": table,
-                    "row_key": row_key,
-                    "payload": row,
-                }
-            )
-    for start in range(0, len(stage_rows), 100):
-        client.table("personal_data_migration_rows").insert(
-            stage_rows[start : start + 100]
+    batch_created = False
+    try:
+        client.table("personal_data_migration_batches").insert(
+            {
+                "id": batch_id,
+                "requested_tables": list(tables),
+                "expected_counts": expected_counts,
+                "expected_hashes": expected_hashes,
+                "status": "staged",
+            }
         ).execute()
-    client.rpc("apply_personal_data_migration", {"p_batch_id": batch_id}).execute()
-    for table in tables:
-        actual = fetch_all_rows(client, table, "*", order_column=PRIMARY_KEYS[table])
-        if len(actual) != expected_counts[table]:
-            raise RuntimeError(f"{table} row-count verification failed")
-        if _payload_hash(actual, PRIMARY_KEYS[table]) != expected_hashes[table]:
-            raise RuntimeError(f"{table} SHA-256 verification failed")
-    client.table("personal_data_migration_batches").delete().eq(
-        "id", batch_id
-    ).execute()
+        batch_created = True
+        stage_rows = []
+        for table in tables:
+            primary_key = PRIMARY_KEYS[table]
+            for row in payload.get(table, []):
+                row_key = str(row.get(primary_key) or "")
+                if not row_key:
+                    raise LocalPayloadError(f"{table} row is missing {primary_key}")
+                stage_rows.append(
+                    {
+                        "batch_id": batch_id,
+                        "table_name": table,
+                        "row_key": row_key,
+                        "payload": row,
+                    }
+                )
+        for start in range(0, len(stage_rows), 100):
+            client.table("personal_data_migration_rows").insert(
+                stage_rows[start : start + 100]
+            ).execute()
+        client.rpc("apply_personal_data_migration", {"p_batch_id": batch_id}).execute()
+        for table in tables:
+            actual = fetch_all_rows(
+                client, table, "*", order_column=PRIMARY_KEYS[table]
+            )
+            if len(actual) != expected_counts[table]:
+                raise RuntimeError(f"{table} row-count verification failed")
+            if _payload_hash(actual, PRIMARY_KEYS[table]) != expected_hashes[table]:
+                raise RuntimeError(f"{table} SHA-256 verification failed")
+    finally:
+        if batch_created:
+            client.table("personal_data_migration_batches").delete().eq(
+                "id", batch_id
+            ).execute()
     print("[OK] Transactional replace and read-back verification completed.")
 
 

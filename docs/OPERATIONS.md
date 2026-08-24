@@ -26,6 +26,8 @@
 | `SUPABASE_SECRET_KEY` | Supabase保存時に推奨 | サーバー側 Supabase Data API 用の secret key。クライアントへ公開しない |
 | `SUPABASE_SERVICE_ROLE_KEY` | 任意 | 旧 service role key との互換用。`SUPABASE_SECRET_KEY` が未設定の場合だけ使う |
 | `SUPABASE_KEY` | 任意 | 旧設定との互換用キー。上記2つが未設定の場合だけ使う |
+| `SUPABASE_STAGING_PROJECT_REF` | staging受け入れ時に必須 | 合成データ受け入れを許可するstaging project ref |
+| `SUPABASE_PRODUCTION_PROJECT_REF` | staging受け入れ時に必須 | stagingとの不一致を検査する本番project ref |
 | `PRIVATE_DEPLOYMENT_ACK` | Private Spaceでは必須 | Space が Private であることを確認した後にだけ `1` を設定する起動ガード確認値 |
 
 ## ローカル起動
@@ -60,8 +62,23 @@ Dockerfile は Hugging Face Spaces の7860番ポートを前提にし、依存�
 内部検証器は `HF_TOKEN` を環境変数からだけ読み、次の形で使用します。token や Supabase secret は引数やログへ渡しません。
 
 ```powershell
-python scripts/verify_hf_deployment.py --space owner/name --expected-sha <sha> --health-url <url> --require-private --timeout-seconds 900
+python scripts/verify_hf_deployment.py --space owner/name --expected-sha <sha> --require-private --timeout-seconds 900
 ```
+
+確認先はSpace名から導出するHTTPSの`https://owner-name.hf.space/_health`に固定されます。任意URLへの上書きは受け付けず、`--health-url`を互換目的で渡す場合も導出URLとの完全一致が必要です。
+
+### Hugging Face staging rollback受け入れ
+
+本番とは別のPrivate SpaceとGitHub Environment `hugging-face-staging`を先に用意します。Environment secretsは`HF_TOKEN`と`HF_SPACE_READ_TOKEN`、Environment variablesはstaging側の`HF_SPACE_REPO`、本番側の`HF_PRODUCTION_SPACE_REPO`、確認値`HF_STAGING_ACCEPTANCE_ACK=1`です。stagingと本番のSpace名が同じ、変数が欠ける、または手入力確認が`STAGING:<staging owner/name>`と一致しない場合はpush前に中断します。
+
+GitHub Actionsの`Quality and deploy`を手動実行し、通常のstaging反映は`deploy`、rollback実証は`rollback-exercise`を選びます。後者は新revisionが`RUNNING`かつ認証付きhealth HTTP 200 / `status=true`になったことを確認してから、staging専用の意図的失敗を発生させます。その後、旧SHAをforce-pushで復元し、旧revisionの`RUNNING`とhealthを再確認します。復旧してもdeploy jobは失敗のままが合格条件です。本番push jobには意図的失敗フラグもstaging Environment変数も渡しません。
+
+```powershell
+gh workflow run ci.yml -f staging_acceptance=rollback-exercise -f staging_confirmation='STAGING:owner/staging-space'
+gh run watch <run-id> --exit-status
+```
+
+上記はSpaceを書き換える外部操作です。実行前に対象EnvironmentとSpace名を再確認し、明示承認を得てください。`rollback-exercise`では`gh run watch --exit-status`が非0で終了し、artifact `hf-staging-deploy-<run-id>`に新SHA、旧SHA、意図的health失敗、復元後SHA・health 200が残ることを確認します。
 
 ## 定期的な確認コマンド
 
@@ -131,6 +148,21 @@ python tools/migrate_to_supabase.py --print-setup-sql
 
 詳細は [Supabase Data API grants 対応](SUPABASE_DATA_API_GRANTS.md) を参照してください。
 
+### Supabase staging transactional replace / restore受け入れ
+
+staging専用projectにversioned migration `supabase/migrations/20260818064355_personal_data_storage_v1.sql`を適用し、projectが`ACTIVE_HEALTHY`になってから実行します。`SUPABASE_URL`と`SUPABASE_SECRET_KEY`はstaging projectの組み合わせだけを安全なプロセス環境へ設定し、値をコマンド履歴やログへ出しません。`SUPABASE_STAGING_PROJECT_REF`、`SUPABASE_PRODUCTION_PROJECT_REF`、`--project-ref`、`SUPABASE_URL`内のrefが一致関係を満たさない場合は接続前に中断します。
+
+```powershell
+$env:SUPABASE_STAGING_PROJECT_REF = '<staging-project-ref>'
+$env:SUPABASE_PRODUCTION_PROJECT_REF = '<production-project-ref>'
+.\.venv\Scripts\python.exe scripts\supabase_staging_acceptance.py --project-ref <staging-project-ref> --confirm-staging STAGING:<staging-project-ref> --run-id <run-id>
+.\.venv\Scripts\python.exe scripts\supabase_staging_acceptance.py --project-ref <staging-project-ref> --confirm-staging STAGING:<staging-project-ref> --run-id <run-id> --execute
+```
+
+1回目は接続も書込もしないdry-runです。`--execute`は`personal_data_schema_readiness`を確認し、staging上の`knowledge_items`だけを`.states/supabase_staging_acceptance/<run-id>/original/`へmanifest付きで退避します。その後、run ID付きの合成データ1,200件以上だけでtransactional replaceし、件数とSHA-256を照合します。最後に元manifestを同じtransactional経路でrestoreし、元の件数・SHA-256、readiness、run ID付き行が0件であることを確認します。ローカルJSONや実ユーザーデータをアップロード元には使いません。途中で失敗しても合成データ投入を試みた後は必ずrestoreを実行し、復元確認に失敗した場合は成功扱いにしません。
+
+これはstagingテーブルを一時的に全件入れ替える外部DB操作です。実行前にproject ref、バックアップ先の空き、manifest保存先、明示承認を確認してください。本番projectでは実行しません。
+
 ## 運用上の注意
 
 - Portfolio・Knowledge、AI生成、URL・YouTube取り込みは単一の個人モードで利用できます。外部ホストではアクセス制御確認値が必須です
@@ -167,9 +199,9 @@ python tools/migrate_to_supabase.py --print-setup-sql
 - AIレポートは入力データに依存するため、データ取得失敗時にはレポート品質も低下します
 - Entry Frameworkは日足データによるproxyです。LoD、ORH、寄付き後30分、1-2時間確認、即時ギャップ抵抗は判定しません
 - `.env`、SQLiteキャッシュ、アップロードファイル、生成zipは原則としてGit管理しません
-- GitHub Actions の Hugging Face Spaces 同期は `main` / `master` へのpushをブランチ単位で直列化し、古い実行をキャンセルしてからforce pushします。push前に token と Private 状態を Hub API で検査します。push時に作成した deploy commit SHA をstep outputとartifactへ保存し、Hubの現在SHAとの一致、対象revisionの`RUNNING`、認証付き`/_health`のHTTP 200と`status=true`を最大15分確認します。旧revisionの200は合格にならず、対象revisionの`RUNTIME_ERROR`は安全な要約を残して即時失敗します。対象はGitHub Environment `hugging-face-production` の `HF_SPACE_REPO`、確認URLは `HF_SPACE_HEALTH_URL` で上書きできます
+- GitHub Actions の Hugging Face Spaces 同期は同一refを直列化し、`pull_request`だけ後続実行で古いrunをcancelします。本番`main` / `master` pushと手動staging deployは途中cancelせず、rollback可能な旧SHAを保持してforce pushします。push前にtokenとPrivate状態をHub APIで検査し、deploy SHA、対象revisionの`RUNNING`、Space名から固定導出した認証付き`/_health`のHTTP 200と`status=true`を最大15分確認します。旧revisionの200は合格にならず、対象revisionの`RUNTIME_ERROR`は安全な要約を残して即時失敗します。本番対象はGitHub Environment `hugging-face-production`、手動staging対象は`hugging-face-staging`です
 - quality jobはHugging Face同期より前にDockerイメージを実ビルドし、ローカル相当の単一モードで非rootコンテナを起動してReflex `/_health` のJSON `status=true`まで確認します。コンテナが早期終了した場合はログを出してdeployを止めます
-- Supabase移行は既定でdry-runです。実行は `python tools/migrate_to_supabase.py --execute`、既存テーブルを消して入れ替える場合のみ `--confirm-destroy` を追加します。破壊実行時は `data/supabase_backups/` にバックアップが取れない限り中断します。新規テーブル作成が必要な場合は、先に `python tools/migrate_to_supabase.py --print-setup-sql` で表示される SQL を Supabase SQL Editor で実行します。
+- Supabase移行は既定でdry-runです。実行は `python tools/migrate_to_supabase.py --execute`、既存テーブルを消して入れ替える場合のみ`--confirm-destroy`を追加します。破壊実行時はGit管理外の`.states/supabase_backups/`に全page・件数・SHA-256付きmanifestを保存できない限り中断し、replace/restoreはstage + restricted RPCの1 transactionで行います。新規テーブル作成が必要な場合は、先に`python tools/migrate_to_supabase.py --print-setup-sql`で表示されるSQLをSupabase SQL Editorで実行します
 
 ## 既知のローカル環境問題
 

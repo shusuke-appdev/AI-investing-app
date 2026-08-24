@@ -191,10 +191,14 @@ def verify_deployment(
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
     emit: Emit = print,
+    force_staging_health_failure: bool = False,
+    staging_failure_authorized: bool = False,
 ) -> VerificationResult:
     """Wait for the intended revision, then verify its authenticated health."""
 
     _require_token(token)
+    if force_staging_health_failure and not staging_failure_authorized:
+        raise VerificationError("Forced health failure lacks staging authorization")
     if not expected_sha:
         raise VerificationError("Expected Hugging Face revision is missing")
     derived_health_url = _space_health_url(space)
@@ -232,6 +236,11 @@ def verify_deployment(
                     last_health = health_response.status
                     health = _mapping(health_response.payload)
                     if last_health == 200 and health.get("status") is True:
+                        if force_staging_health_failure:
+                            raise VerificationError(
+                                "Intentional staging health acceptance failure after "
+                                "HTTP 200 status=true"
+                            )
                         return VerificationResult(
                             expected_sha=expected_sha,
                             observed_sha=last_sha,
@@ -264,6 +273,25 @@ def verify_deployment(
         sleep(min(poll_interval_seconds, deadline - now))
 
 
+def require_staging_failure_authorization(
+    space: str, environment: Mapping[str, str]
+) -> None:
+    """Allow forced health failure only for an explicitly isolated staging Space."""
+
+    staging_space = environment.get("HF_STAGING_SPACE_REPO", "")
+    production_space = environment.get("HF_PRODUCTION_SPACE_REPO", "")
+    if environment.get("HF_STAGING_ACCEPTANCE_ACK") != "1":
+        raise VerificationError("Staging acceptance acknowledgement is missing")
+    if not staging_space or not production_space:
+        raise VerificationError(
+            "Staging and production Space declarations are required"
+        )
+    if staging_space == production_space:
+        raise VerificationError("Staging and production Spaces must be different")
+    if space != staging_space:
+        raise VerificationError("Forced health failure is limited to the staging Space")
+
+
 def append_metadata(path: Path, values: Mapping[str, object]) -> None:
     """Append non-secret deployment evidence to the workflow artifact."""
 
@@ -283,6 +311,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument("--poll-interval-seconds", type=float, default=10)
     parser.add_argument("--metadata-path", type=Path)
+    parser.add_argument(
+        "--staging-force-health-failure",
+        action="store_true",
+        help="Fail after real health succeeds; requires staging-only environment guards.",
+    )
     return parser
 
 
@@ -301,6 +334,12 @@ def main(
     )
 
     try:
+        if args.staging_force_health_failure:
+            if args.preflight_only:
+                raise VerificationError(
+                    "Forced staging health failure cannot be used for preflight"
+                )
+            require_staging_failure_authorization(args.space, environment)
         if args.preflight_only:
             info = preflight_space(
                 space=args.space,
@@ -323,6 +362,8 @@ def main(
             require_private=args.require_private,
             timeout_seconds=args.timeout_seconds,
             poll_interval_seconds=args.poll_interval_seconds,
+            force_staging_health_failure=args.staging_force_health_failure,
+            staging_failure_authorized=args.staging_force_health_failure,
         )
         if args.metadata_path:
             append_metadata(

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from scripts import supabase_staging_acceptance
 from src.storage.supabase_paging import fetch_all_rows
 from tools import migrate_to_supabase
 
@@ -220,6 +221,11 @@ class MemoryQuery:
             self.client.tables[self.table] = [
                 row for row in rows if row.get(column) != value
             ]
+            if self.table == "personal_data_migration_batches" and column == "id":
+                staged = self.client.tables.get("personal_data_migration_rows", [])
+                self.client.tables["personal_data_migration_rows"] = [
+                    row for row in staged if row.get("batch_id") != value
+                ]
             return SimpleNamespace(data=[])
         return SimpleNamespace(data=rows[self.start : self.end + 1])
 
@@ -292,6 +298,130 @@ def test_manifest_restore_round_trips_all_1200_rows(monkeypatch, tmp_path):
     assert migrate_to_supabase._payload_hash(
         client.tables["knowledge_items"], "id"
     ) == migrate_to_supabase._payload_hash(original, "id")
+
+
+def test_failed_stage_validation_removes_migration_batch():
+    client = MemoryClient({"knowledge_items": []})
+
+    with pytest.raises(migrate_to_supabase.LocalPayloadError, match="missing id"):
+        migrate_to_supabase.replace_remote_tables(
+            client,
+            {"knowledge_items": [{"summary": "missing primary key"}]},
+            ("knowledge_items",),
+        )
+
+    assert client.tables["personal_data_migration_batches"] == []
+    assert client.tables["personal_data_migration_rows"] == []
+
+
+def _staging_environment():
+    return {
+        "SUPABASE_URL": "https://stagingref12345.supabase.co",
+        "SUPABASE_SECRET_KEY": "test-only-secret",
+        "SUPABASE_STAGING_PROJECT_REF": "stagingref12345",
+        "SUPABASE_PRODUCTION_PROJECT_REF": "productionref12",
+    }
+
+
+def _acceptance_options(tmp_path):
+    return supabase_staging_acceptance.AcceptanceOptions(
+        project_ref="stagingref12345",
+        confirmation="STAGING:stagingref12345",
+        run_id="run-123",
+        execute=True,
+        backup_root=tmp_path,
+    )
+
+
+def _ready():
+    return SimpleNamespace(ready=True, error_code="")
+
+
+def test_staging_acceptance_round_trip_uses_synthetic_rows_only(monkeypatch, tmp_path):
+    original = [
+        {
+            "id": "original",
+            "title": "existing staging row",
+            "source_type": "test",
+            "original_content": "staging fixture",
+            "summary": "original",
+            "created_at": "2026-08-24T00:00:00+00:00",
+            "updated_at": "2026-08-24T00:00:00+00:00",
+            "metadata": {},
+        }
+    ]
+    client = MemoryClient({"knowledge_items": original})
+    monkeypatch.setattr(
+        supabase_staging_acceptance,
+        "check_supabase_readiness",
+        lambda _client: _ready(),
+    )
+
+    result = supabase_staging_acceptance.run_acceptance(
+        _acceptance_options(tmp_path),
+        environment=_staging_environment(),
+        client_factory=lambda: client,
+    )
+
+    assert result == 0
+    assert client.tables["knowledge_items"] == original
+    assert client.tables["personal_data_migration_batches"] == []
+    assert client.tables["personal_data_migration_rows"] == []
+
+
+def test_staging_acceptance_restores_original_after_acceptance_failure(
+    monkeypatch, tmp_path
+):
+    original = [{"id": "original", "summary": "staging fixture"}]
+    client = MemoryClient({"knowledge_items": original})
+    real_replace = migrate_to_supabase.replace_remote_tables
+    calls = 0
+
+    def replace_then_fail(client_arg, payload, tables):
+        nonlocal calls
+        calls += 1
+        real_replace(client_arg, payload, tables)
+        if calls == 1:
+            raise RuntimeError("simulated post-replace acceptance failure")
+
+    monkeypatch.setattr(
+        supabase_staging_acceptance,
+        "check_supabase_readiness",
+        lambda _client: _ready(),
+    )
+    monkeypatch.setattr(
+        supabase_staging_acceptance, "replace_remote_tables", replace_then_fail
+    )
+
+    result = supabase_staging_acceptance.run_acceptance(
+        _acceptance_options(tmp_path),
+        environment=_staging_environment(),
+        client_factory=lambda: client,
+    )
+
+    assert result == 1
+    assert calls == 2
+    assert client.tables["knowledge_items"] == original
+
+
+def test_staging_acceptance_rejects_production_ref_before_client_creation(tmp_path):
+    environment = _staging_environment()
+    environment["SUPABASE_PRODUCTION_PROJECT_REF"] = "stagingref12345"
+    created = False
+
+    def client_factory():
+        nonlocal created
+        created = True
+        return MemoryClient({"knowledge_items": []})
+
+    result = supabase_staging_acceptance.run_acceptance(
+        _acceptance_options(tmp_path),
+        environment=environment,
+        client_factory=client_factory,
+    )
+
+    assert result == 1
+    assert created is False
 
 
 def test_manifest_tampering_aborts_before_remote_connection(monkeypatch, tmp_path):
