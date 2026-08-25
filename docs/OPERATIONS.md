@@ -69,6 +69,8 @@ python scripts/verify_hf_deployment.py --space owner/name --expected-sha <sha> -
 
 ### Hugging Face staging rollback受け入れ
 
+2026-08-25時点では、CPU Basicの時間単価が無料でも、新規のGradio/Docker compute Space作成には有料planが必要です（[Hugging Face Pricing](https://huggingface.co/pricing)）。本projectは無料運用を優先するため、既存の本番Spaceをstaging代わりにせず、新規有料契約も行いません。したがって以下の実Space受け入れは任意の将来手順として保持し、料金・account条件が変わるか、有料利用が別途承認されるまで実行しません。無料範囲の証拠は、CIのDocker build/health、本番deploy後のrevision-aware health、単体・契約テスト、ローカルbare repositoryでのrollback再現です。
+
 本番とは別のPrivate SpaceとGitHub Environment `hugging-face-staging`を先に用意します。Environment secretsは`HF_TOKEN`と`HF_SPACE_READ_TOKEN`、Environment variablesはstaging側の`HF_SPACE_REPO`、本番側の`HF_PRODUCTION_SPACE_REPO`、確認値`HF_STAGING_ACCEPTANCE_ACK=1`です。stagingと本番のSpace名が同じ、変数が欠ける、または手入力確認が`STAGING:<staging owner/name>`と一致しない場合はpush前に中断します。
 
 GitHub Actionsの`Quality and deploy`を手動実行し、通常のstaging反映は`deploy`、rollback実証は`rollback-exercise`を選びます。後者は新revisionが`RUNNING`かつ認証付きhealth HTTP 200 / `status=true`になったことを確認してから、staging専用の意図的失敗を発生させます。その後、旧SHAをforce-pushで復元し、旧revisionの`RUNNING`とhealthを再確認します。復旧してもdeploy jobは失敗のままが合格条件です。本番push jobには意図的失敗フラグもstaging Environment変数も渡しません。
