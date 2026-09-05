@@ -53,7 +53,7 @@ def test_grounded_structured_uses_default_model_and_keeps_annotation_urls(monkey
     assert result["search_query_count"] == 2
     assert result["total_tokens"] == 20
     client.interactions.create.assert_called_once_with(
-        model="gemini-3.7-flash",
+        model="gemini-3.8-flash",
         input="prompt",
         tools=[{"type": "google_search"}],
         response_format={

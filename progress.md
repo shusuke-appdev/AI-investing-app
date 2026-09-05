@@ -1,5 +1,11 @@
 ﻿# AI投資アプリ - 進捗メモ
 
+## Session update: 2026-09-05 Gemini 3.8 Flash migration
+- Changed the shared Gemini default from `gemini-3.7-flash` to the stable model ID `gemini-3.8-flash`. The existing `GEMINI_MODEL_NAME` -> `GEMINI_MODEL` -> default precedence remains unchanged, so standard generation and search-grounded structured generation use the new default without separate call-site overrides.
+- Updated the environment example, README, operations documentation, and regressions for both `client.models.generate_content()` and `client.interactions.create()`.
+- Google officially lists Gemini 3.8 Flash as generally available and supports both the Generate Content API and Interactions API, including Search grounding and structured outputs. No deprecated sampling parameters or unsupported `minimal` thinking level are configured in this repository.
+- Validation: focused Gemini tests passed (`6 passed`), and the full `.venv\Scripts\python.exe scripts\check.py` gate passed dependency consistency, compileall, Ruff lint/format, critical mypy contracts, all `444` tests, Reflex frontend export, and static UI semantics for eight routes. No live Gemini request, dependency change, commit, push, deployment, or production configuration change was performed.
+
 ## Session update: 2026-08-25 external staging setup
 - Published the nine staging-acceptance files to `main` as commit `4e46fbd6565fdd16aabef553ef1db211f8121cae`. GitHub Actions run `32816138237` passed the full quality gate, production private-Space deploy, revision-aware health verification, and deployment metadata upload; the manual staging job correctly remained skipped on the production push.
 - Created GitHub Environment `hugging-face-staging` with non-secret variables `HF_SPACE_REPO=shusuke12345/AI-investing-app-staging`, `HF_PRODUCTION_SPACE_REPO=shusuke12345/AI-investing-app`, and `HF_STAGING_ACCEPTANCE_ACK=1`. Its secrets remain unset, so no staging workflow dispatch or HF push/rollback has occurred.

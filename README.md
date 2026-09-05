@@ -69,7 +69,7 @@ python -m pip install -r requirements-dev-lock.txt
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL_NAME=gemini-3.7-flash
+GEMINI_MODEL_NAME=gemini-3.8-flash
 FINNHUB_API_KEY=your_finnhub_api_key_here
 JQUANTS_API_KEY=your_jquants_api_key_here
 EDINET_API_KEY=your_edinet_api_key_here
