@@ -100,12 +100,12 @@ def test_hf_staging_acceptance_is_manual_isolated_and_fail_closed():
 def test_operations_matches_current_staging_and_backup_contracts():
     operations = Path("docs/OPERATIONS.md").read_text(encoding="utf-8")
 
-    assert ".states/supabase_backups/" in operations
+    assert "FEATURE_REORGANIZATION.md" in operations
     assert "data/supabase_backups/` にバックアップ" not in operations
     assert "HF_SPACE_HEALTH_URL" not in operations
     assert "古い実行をキャンセルしてからforce push" not in operations
     assert "hugging-face-staging" in operations
-    assert "supabase_staging_acceptance.py" in operations
+    assert "supabase_staging_acceptance.py" not in operations
 
 
 def test_docker_runtime_is_non_root_and_excludes_build_toolchain():

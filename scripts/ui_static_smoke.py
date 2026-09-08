@@ -17,6 +17,7 @@ ROUTE_FILES = (
     "data-quality.html",
     "portfolio.html",
     "knowledge.html",
+    "trading-plan.html",
 )
 PUBLIC_NAV_ROUTES = {"/", "/market-watch", "/theme", "/stock", "/data-quality"}
 
@@ -79,12 +80,16 @@ def validate_navigation(path: Path) -> list[str]:
     errors = []
     if missing:
         errors.append(f"index.html: navigation routes missing ({', '.join(missing)})")
-    if "/trading-plan" in hrefs:
-        errors.append("index.html: retired /trading-plan navigation is present")
-    if (EXPORT_DIR / "trading-plan.html").exists() or (
-        EXPORT_DIR / "trading-plan" / "index.html"
-    ).exists():
-        errors.append("export: retired trading-plan route was generated")
+    for route in ("portfolio", "knowledge", "trading-plan"):
+        if "/" + route in hrefs:
+            errors.append(f"index.html: retired /{route} navigation is present")
+        retired = BeautifulSoup(
+            (EXPORT_DIR / f"{route}.html").read_text(encoding="utf-8"), "html.parser"
+        )
+        if "この機能は廃止しました" not in retired.get_text():
+            errors.append(f"{route}: retirement notice is missing")
+        if retired.select("main form, main input, main textarea"):
+            errors.append(f"{route}: retired input controls remain")
     return errors
 
 

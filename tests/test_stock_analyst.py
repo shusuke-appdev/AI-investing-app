@@ -76,10 +76,6 @@ def test_analyze_stock_reuses_supplied_context_without_recomputing(monkeypatch):
             AssertionError("should not recompute SMART")
         ),
     )
-    monkeypatch.setattr(
-        "src.knowledge_storage.get_knowledge_for_ai_context",
-        lambda max_items=5: "",
-    )
 
     result = stock_analyst.analyze_stock(
         "TEST",
@@ -196,10 +192,6 @@ def test_analyze_stock_keeps_missing_core_metrics_unavailable(monkeypatch):
         stock_analyst,
         "generate_content",
         lambda prompt: captured.setdefault("prompt", prompt) and "ok",
-    )
-    monkeypatch.setattr(
-        "src.knowledge_storage.get_knowledge_for_ai_context",
-        lambda max_items=5: "",
     )
 
     result = stock_analyst.analyze_stock(

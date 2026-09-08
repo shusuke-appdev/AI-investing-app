@@ -5,8 +5,6 @@ from scripts.live_smoke import Check, _failed_checks, _required_check_names
 
 def _args(**overrides) -> Namespace:
     values = {
-        "require_optional": False,
-        "require_supabase": False,
         "require_finnhub": False,
         "require_edinet": False,
         "require_marketdata": False,
@@ -17,16 +15,9 @@ def _args(**overrides) -> Namespace:
     return Namespace(**values)
 
 
-def test_require_optional_is_only_a_supabase_alias():
-    required = _required_check_names(_args(require_optional=True))
-
-    assert required == {"supabase"}
-
-
 def test_explicit_flags_map_to_their_own_checks():
     required = _required_check_names(
         _args(
-            require_supabase=True,
             require_finnhub=True,
             require_edinet=True,
             require_marketdata=True,
@@ -36,7 +27,6 @@ def test_explicit_flags_map_to_their_own_checks():
     )
 
     assert required == {
-        "supabase",
         "finnhub",
         "edinet",
         "marketdata_options",
@@ -45,14 +35,14 @@ def test_explicit_flags_map_to_their_own_checks():
     }
 
 
-def test_unrelated_skips_do_not_fail_required_supabase():
+def test_unrelated_skips_do_not_fail_required_finnhub():
     checks = [
-        Check("supabase", "PASS", "ok"),
+        Check("finnhub", "PASS", "ok"),
         Check("market_forecast", "SKIP", "not requested"),
         Check("edinet", "SKIP", "not configured"),
     ]
 
-    assert _failed_checks(checks, {"supabase"}) == []
+    assert _failed_checks(checks, {"finnhub"}) == []
 
 
 def test_required_degraded_or_skipped_check_fails_once():

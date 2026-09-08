@@ -389,5 +389,5 @@ def test_stock_dashboard_reuses_shared_target_and_benchmark_history(monkeypatch)
     assert calls.count(("TEST", "5y")) == 1
     assert calls.count(("SPY", "5y")) == 1
     assert calls == [("TEST", "5y"), ("SPY", "5y")]
-    assert sector_kwargs["include_theme_options"] is True
+    assert sector_kwargs["include_theme_options"] is False
     assert sector_kwargs["theme_options_cache_only"] is True

@@ -3,6 +3,7 @@
 テクニカル分析を統合した詳細な銘柄分析を提供します。
 """
 
+import json
 from typing import Any
 
 from src.advisor.technical import get_technical_summary_for_ai
@@ -39,10 +40,14 @@ def analyze_stock(
     price_display = _price_display(stock_info.get("current_price"))
     target_price_display = _price_display(stock_info.get("target_price"))
 
-    context = stock_signal_context or {}
+    context = _research_context(stock_signal_context or {})
     technical_summary = _format_technical_context(context)
     if technical_summary == "":
         technical_summary = get_technical_summary_for_ai(ticker)
+    primary_text = json.dumps(context.get("primary_conditions", {}), ensure_ascii=False)
+    technical_summary = (
+        "【主条件】\n" + primary_text + "\n【参考分析】\n" + technical_summary
+    )
     if news_headlines is None:
         news_headlines = _context_news_headlines(context)
     if probabilistic_signal is None and context:
@@ -66,14 +71,9 @@ def analyze_stock(
         smart_res = evaluate_smart_criteria(ticker, stock_info)
         smart_criteria_summary = _format_smart_criteria(smart_res)
 
-    # ユーザー参照知識を取得
-    from src.knowledge_storage import get_knowledge_for_ai_context
-    from src.services.untrusted_prompt import untrusted_prompt_block
-
-    knowledge_context = get_knowledge_for_ai_context(max_items=5)
-
     # プロンプト構築
     from src.prompts.analysis_prompts import STOCK_ANALYSIS_PROMPT_TEMPLATE
+    from src.services.untrusted_prompt import untrusted_prompt_block
 
     prompt = STOCK_ANALYSIS_PROMPT_TEMPLATE.format(
         ticker=ticker,
@@ -97,13 +97,40 @@ def analyze_stock(
             if news_headlines
             else "ニュースなし"
         ),
-        knowledge_context=knowledge_context if knowledge_context else "特になし",
     )
 
     result = generate_content(prompt)
     if result:
         return result
     return "分析エラー: Gemini APIが利用できません"
+
+
+def _research_context(context: dict) -> dict:
+    """Exclude market option-derived references even from legacy cached input."""
+    forbidden = ("option", "gamma", "gex", "market_risk_guardrail")
+
+    def clean(value):
+        if isinstance(value, dict):
+            return {
+                key: clean(item)
+                for key, item in value.items()
+                if not any(token in str(key).lower() for token in forbidden)
+            }
+        if isinstance(value, list):
+            return [
+                clean(item)
+                for item in value
+                if not (
+                    isinstance(item, dict)
+                    and any(
+                        token in str(item.get("name", item.get("key", ""))).lower()
+                        for token in forbidden
+                    )
+                )
+            ]
+        return value
+
+    return clean(context)
 
 
 def get_quick_summary(ticker: str, stock_info: dict) -> str:
@@ -389,9 +416,6 @@ def _format_sector_theme_context(stock_signal_context: dict | None) -> str:
 - Parent Sector: {context.get("parent_sector", "N/A")}
 - Themes: {", ".join(str(item) for item in themes) if themes else "N/A"}
 - Trend Ranking: {context.get("ranking_summary", "N/A")}
-- Theme ETF Option Proxy: {context.get("option_proxy_ticker", "N/A")}
-- Theme Option Signal: {context.get("theme_option_signal", "unavailable")}
-- Theme Option Summary: {context.get("theme_option_summary", "N/A")}
 - Stock Fundamental Advantage: {context.get("fundamental_advantage", False)}
 - Stock Flow Advantage: {context.get("flow_advantage", False)}
 - Combined Rating: {context.get("combined_rating", "unknown")}
@@ -407,8 +431,7 @@ def _format_adaptive_decision_context(stock_signal_context: dict | None) -> str:
     volume = stock_signal_context.get("volume_profile") or {}
     purchase = stock_signal_context.get("purchase_evidence") or {}
     purchase_health = stock_signal_context.get("purchase_evidence_health") or []
-    market_guardrail = stock_signal_context.get("market_risk_guardrail") or {}
-    if not any((fundamental, volume, purchase, market_guardrail)):
+    if not any((fundamental, volume, purchase)):
         return ""
     size = fundamental.get("size") or {}
     style = fundamental.get("style") or {}
@@ -439,9 +462,6 @@ def _format_adaptive_decision_context(stock_signal_context: dict | None) -> str:
 - Purchase Components: technical={purchase.get("technical_score", "N/A")}, fundamental_theme={purchase.get("fundamental_theme_score", "N/A")}
 - Purchase Health: {purchase_health_text}
 - Purchase Caps: {purchase_caps or "None"}
-- Market Risk Guardrail: status={market_guardrail.get("status", "unavailable")}, risk={market_guardrail.get("risk_level", "unknown")}, cap={market_guardrail.get("action_cap", "none")}, as_of={market_guardrail.get("as_of", "N/A")}
-- Market Guardrail Summary: {market_guardrail.get("summary", "unavailable")}
-The market guardrail may downgrade timing only. It must never raise the stock rating or alter the stock probability and purchase-evidence score.
 Respect unavailable fields and every cap. SMART is only a growth-stock proxy and must not be added again to the adaptive score.
 """
 

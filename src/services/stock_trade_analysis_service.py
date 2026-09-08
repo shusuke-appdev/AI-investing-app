@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.services.market_risk_guardrail_service import apply_market_risk_cap
-
 
 def build_stock_trade_analysis(
     stock_signal_context: dict[str, Any],
@@ -65,7 +63,7 @@ def build_stock_trade_analysis(
     )
 
     base_stance_key = _stance_key(technical, setup, sector_theme, fomo)
-    stance_key = apply_market_risk_cap(base_stance_key, market_risk_guardrail)
+    stance_key = base_stance_key
     stance_label = {
         "ready": "仕掛け候補",
         "watch": "条件待ち",
@@ -176,7 +174,7 @@ def _market_guardrail_row(
     status = str(guardrail.get("status") or "unavailable")
     changed = base_stance != final_stance
     return {
-        "label": "市場短期リスク上限",
+        "label": "市場参考情報",
         "status": "fail"
         if changed
         else "pass"
@@ -184,7 +182,7 @@ def _market_guardrail_row(
         else "unknown",
         "value": str(guardrail.get("summary") or "市場短期予測は未連携です。"),
         "rationale": " / ".join(guardrail.get("reasons") or [])
-        or "確率・購入根拠は変更せず、評価の格下げだけに使用します。",
+        or "参考表示のみ。個別銘柄の条件や評価は変更しません。",
     }
 
 

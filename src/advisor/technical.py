@@ -45,7 +45,6 @@ from src.advisor.technical_regimes import (
     calculate_ichimoku,
 )
 from src.advisor.technical_scoring import (
-    analyze_options_data,
     calc_flow_score,
     calc_momentum_score,
     calc_pattern_score,
@@ -59,20 +58,6 @@ from src.stock_data_provider import is_japanese_stock
 SCORE_WEIGHTS_DEFAULT = {
     "trend": 0.30,
     "mom": 0.20,
-    "pat": 0.20,
-    "flow": 0.20,
-    "mtf": 0.10,
-}
-SCORE_WEIGHTS_POS_GAMMA = {
-    "trend": 0.20,
-    "mom": 0.30,
-    "pat": 0.20,
-    "flow": 0.20,
-    "mtf": 0.10,
-}
-SCORE_WEIGHTS_NEG_GAMMA = {
-    "trend": 0.40,
-    "mom": 0.10,
     "pat": 0.20,
     "flow": 0.20,
     "mtf": 0.10,
@@ -201,13 +186,12 @@ def analyze_technical(
     adv_patterns = detect_advanced_patterns(close, high, low)
     long_term_ma = calculate_long_term_ma(close)
 
-    # オプション分析 & スコアリング
-    opt_data = analyze_options_data(ticker, current_price)
+    # 価格・出来高スコアリング
 
     trend_score = calc_trend_score(ma_trend, macd_data, ichimoku, adx_data["adx"])
     momentum_score = calc_momentum_score(dyn_rsi, stoch_data["stoch_rsi"], div_rsi)
     pattern_score = calc_pattern_score(bb_sq, bb, ma_dev, peaks_valleys, candlestick)
-    flow_score = calc_flow_score(obv_data, opt_data["score_adj"])
+    flow_score = calc_flow_score(obv_data)
     mtf_score = (
         1.0
         if mtf_data["alignment"] == "aligned_bullish"
@@ -323,19 +307,8 @@ def analyze_technical(
         peak_valley_signal=peaks_valleys["signal"],
         candlestick_patterns=candlestick["patterns"],
         candlestick_summary=candlestick["summary"],
-        gex_regime=opt_data["gex_regime"],
-        gex_positive_wall=opt_data["gex_positive_wall"],
-        gex_negative_wall=opt_data["gex_negative_wall"],
-        pcr_ratio=opt_data["pcr_ratio"],
-        pcr_signal=opt_data["pcr_signal"],
-        atm_iv=opt_data["atm_iv"],
-        max_pain=opt_data["max_pain"],
-        option_data_available=opt_data["available"],
         stage_data=stage_res,
         vcp_data=vcp_data_out,
-        skew=opt_data.get("skew"),
-        dte=opt_data.get("dte"),
-        price_range=opt_data.get("price_range"),
         mr_parabolic_state=mr_data.get("parabolic_state", {}),
         mr_rebound_state=mr_data.get("rebound_state", {}),
         pinbar_data=pinbar_data,
@@ -373,7 +346,7 @@ def analyze_market_technicals() -> dict:
 
 
 def get_technical_summary_for_ai(ticker: str) -> str:
-    """AI分析用のテクニカルサマリーを生成（Phase 1-3 + Option統合版）"""
+    """AI分析用のテクニカルサマリーを生成（価格・出来高分析版）"""
     tech = analyze_technical(ticker)
     if not tech:
         return "テクニカルデータ取得失敗"
@@ -386,14 +359,6 @@ def get_technical_summary_for_ai(ticker: str) -> str:
         if tech.candlestick_patterns
         else "なし"
     )
-
-    option_line = "- オプション需給: データ未取得"
-    if tech.option_data_available:
-        option_line = (
-            f"- オプション需給: GEX={tech.gex_regime}, "
-            f"PCR={tech.pcr_ratio:.2f}({tech.pcr_signal}), "
-            f"IV={tech.atm_iv:.1%}, MaxPain=${tech.max_pain:.0f}"
-        )
 
     # Mean Reversion拡張テキスト構築
     mr_str = ""
@@ -436,7 +401,6 @@ def get_technical_summary_for_ai(ticker: str) -> str:
 - MACD: {tech.macd_signal} (Hist: {tech.macd_hist_slope})
 - 一目均衡表: {tech.ichimoku_signal} ({tech.ichimoku_regime})
 - ボリンジャー: {tech.bb_position}, スクイズ: {tech.bb_squeeze_signal}
-{option_line}
 - OBV: {tech.obv_trend} (Div: {tech.obv_divergence})
 - パターン: 極値={tech.peak_valley_signal}, ローソク足={cdl_str}
 - サポート/レジスタンス: ${tech.support_price:.2f} / ${tech.resistance_price:.2f}
@@ -446,5 +410,5 @@ def get_technical_summary_for_ai(ticker: str) -> str:
 - ベース認識: {base_str}
 - 戦略別テクニカル: {tech.strategy_context.get("summary", "未算出")}
 - エントリーシグナル: {tech.entry_signal if tech.entry_signal else "なし"}
-- 売買価格の判断: 売買計画機能で確認
+- 売買価格の判断: 銘柄の条件確認・参考分析で確認
 """

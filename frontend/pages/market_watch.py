@@ -295,7 +295,7 @@ def market_watch_page() -> rx.Component:
 
     return rx.vstack(
         page_header(
-            "市場監視",
+            "基本市況・詳細",
             "判断に必要な概要を常時表示し、重い詳細だけを必要時に更新します。",
             _action_button(
                 "概要を更新",

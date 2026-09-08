@@ -2,6 +2,8 @@
 
 ## 現行仕様の正本
 
+- [成長株・順張り再編](FEATURE_REORGANIZATION.md): 主画面・詳細・廃止機能と外部廃止の完了条件
+
 - [分析・予測機能カタログ](ANALYSIS_FEATURE_CATALOG.md): 各機能の目的、入力、出力、責務、連携、欠損時動作
 - [アーキテクチャ](ARCHITECTURE.md): UI、サービス、共有コンテキスト、データ取得の全体構造
 - [運用ガイド](OPERATIONS.md): 環境変数、更新操作、検証、障害時の確認方法
@@ -10,7 +12,7 @@
 - [適応型個別株分析](ADAPTIVE_STOCK_ANALYSIS.md): Stock分析の評価境界
 - [テーマ主導の次期リーダー候補](THEME_LEADER_DISCOVERY.md): 候補選定、採点、欠損、取得、UI契約
 - [米国オプションデータ比較](us_options_data_comparison.md): MarketData.appとyfinance/cacheの使い分け
-- [Supabase Data API権限](SUPABASE_DATA_API_GRANTS.md): 個人データ保存の権限設計
+
 
 ## 補助レビュー
 

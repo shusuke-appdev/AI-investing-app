@@ -14,14 +14,11 @@ flowchart LR
   SI["StockAnalysisInputs"] --> SC["StockSignalContext"]
   G --> SC
   SC --> SU["Stock UI / Trade analysis / Stock AI"]
-  MC --> PC["Portfolio analysis\nUSD/JPY再利用"]
-  PC --> PU["Portfolio UI / Portfolio AI"]
 ```
 
-- `MarketContext` は市場分析の正本です。UI、AI、Stockガードレール、Portfolio為替は同じスナップショットを読みます。
+- `MarketContext` は市場分析の正本です。UI、AI、Stockの市場参考表示は同じスナップショットを読みます。
 - `StockAnalysisInputs` は同一銘柄分析内の企業情報、価格、ベンチマーク、ニュースを一度だけ取得します。
 - `StockSignalContext` は個別株の表示、オンデマンド・トレード分析、AI入力の正本です。
-- Portfolioは保存済み株数・取得単価を変更せず、現地通貨時価と円換算集約を分離します。
 
 ## Market
 
@@ -41,7 +38,7 @@ flowchart LR
 | ボラティリティ・レジーム | ボラの水準・期間構造・変化はどの状態か | Cboe、価格、信用ストレス | `volatility_regime` | リスク姿勢の入力 | `unavailable` | Vol/Sentiment |
 | VIX×SQ週 | SQ週とVIXテクニカルが警戒条件を満たすか | VIX履歴、SQ日程 | `vix_sq_alert` | 研究用警戒材料 | `insufficient_data` | Vol/Sentiment |
 | 短期市場予測 | SPY/QQQは1・5・20営業日後に上昇する確率があるか | 時点整合特徴、walk-forward | `short_horizon_forecast` | 地平ごとに`validated`の結果だけ1W/1M定性判断へ利用 | `research_only`は表示限定 | Vol/Sentiment |
-| 複合センチメント | tail、vol-of-vol、PCR、Gamma、breadthの共同状態は何か | Cboe SKEW指数等、OCC、ETF、完全Gamma | `composite_sentiment` | 確率を変えず、risk floorとStock downgradeだけ許可。Cboe SKEW指数は25Δ IVスキューと別指標 | `partial`は非拘束 | Vol/Sentiment、Options |
+| 複合センチメント | tail、vol-of-vol、PCR、Gamma、breadthの共同状態は何か | Cboe SKEW指数等、OCC、ETF、完全Gamma | `composite_sentiment` | 確率を変えず、risk floorと市場内での警戒強化だけ許可。Cboe SKEW指数は25Δ IVスキューと別指標 | `partial`は非拘束 | Vol/Sentiment、Options |
 | Option current/1W/1M | オプション市場は何を織り込むか | MarketData.app / yfinance / cache | `OptionContext` | 想定変動幅・需給。スキュー正本は流動性合格25Δ Put IV − Call IV。10% OTM/yfinance/旧cacheは表示専用proxy | unavailable/staleを明示しゼロ補完しない | 明示Options更新 |
 | 重要水準・市場ドライバー | 支持抵抗と金利・原油・金・ドル・VIXはどうか | OHLCV、Cboe | `important_levels`, `market_driver_monitor` | 同一更新内で再利用し重複取得しない | 個別行をinsufficient | 最初の詳細段階、以後再利用 |
 | 時間軸別見通し | 現在・1週・1か月の定性方向は何か | 上記の検証済み入力 | `market_timeframes` | `status`と`coverage`を併記。オプションの方向入力はfreshなSPY直接25Δ IVスキューだけ。負値は上昇加点しない | `判定不能` | 各依存段階後 |
@@ -50,6 +47,9 @@ flowchart LR
 詳細更新の依存順は `Theme/Flow → Credit/Risk → Vol/Sentiment → Options` です。OCCはOptions再計算で既存履歴を保持し、暗黙に空へ戻しません。
 
 ## Stock
+
+主画面はStage 2・VCP・相対強度・出来高・成長率・Entryの条件別確認。以下の総合点・確率・逆張り等は詳細・参考欄に置く。個別株オプションは撤去。[現行の配置・境界](FEATURE_REORGANIZATION.md)。
+
 
 | 機能 | 答える問い | 主入力 | 出力・役割 | 欠損時 |
 |---|---|---|---|---|
@@ -63,30 +63,18 @@ flowchart LR
 | セクター・テーマ | 所属群と市場順位はどうか | 企業情報、相対価格、Market cache | `sector_theme_context` | cache優先、必要時だけlive fallback |
 | 根拠一致度 | 技術・Entry・財務・テーマが整合するか | 4つの必須入力 | `purchase_evidence` | 1つでも欠損なら算出不可 |
 | 日本株需給期日 | 信用期日・制度信用・貸借警戒はどうか | 日本株OHLCV、任意の制度信用入力 | `japan_supply_demand` | 日本株以外not applicable、入力不足明示 |
-| 市場ガードレール | 市場tail riskが個別株姿勢を悪化させるか | cached `MarketContext` | downgrade-only。upgrade禁止 | monitoring/unavailable |
+| 市場ガードレール | 市場の警戒情報は何か | cached `MarketContext` | 参考表示のみ。個別株の主条件・評価は不変 | monitoring/unavailable |
 | トレード分析・AI | 表示済み分析をどう条件整理するか | `StockSignalContext` | 再取得・再採点せず同じ根拠を説明 | context不足を明示 |
 
 確率、Trend Follow、FOMO、Entryは異なる問いに答える独立診断です。主要4診断は最大4並列、各8秒・グループ16秒を上限とし、個別失敗を他結果へ波及させません。
-
-## Portfolio
-
-| 機能 | 契約 |
-|---|---|
-| 現地通貨評価 | `value` / `native_value` は銘柄通貨の時価。取得単価も保存形式を変えず現地通貨として扱う |
-| 円換算 | `MarketContext`のUSD/JPYを優先し、なければ`JPY=X`を一度だけ取得する |
-| 集約 | 全銘柄を換算できる場合だけ`total_value_jpy`、`weight_pct`を計算する |
-| 為替欠損 | 通貨別小計を残し、円換算総額・構成比を`None`にする。0やドル総額を作らない |
-| セクター・テーマ | 円換算後の同一基準で集計。US `THEMES` と日本株 `JP_THEMES` を使い分ける |
-| 集中度 | top1、top3、HHIを一度だけ計算しUIとAIが共有する |
-| AI | 現在の`MarketContext`、保存cache、既存live fallbackの順。市場欠損を中立値へ置換しない |
 
 ## 変更時の不変条件
 
 1. 欠損値を0、中立、固定PCR、固定金利へ置換しない。
 2. UIとAIは同じ共有コンテキストを読む。AIだけの再取得・再採点を追加しない。
 3. `validated`でない予測は戦略へ拘束的に使わない。
-4. 複合センチメントと市場ガードレールは警戒を維持・強化するだけで、個別株を格上げしない。
+4. 市場情報は銘柄の参考表示に限定し、主条件・評価を変更しない。
 5. 明示Options更新以外からMarketData.app option chainを暗黙取得しない。
-6. 既存ルート、公開facade、保存スキーマ、互換キーは維持する。
+6. 廃止機能の保存・取り込み・旧イベントを復活させない。
 7. SPY/QQQ/IWMのIVスキューを単純平均しない。市場参照値はfreshなSPY直接25Δ値だけとする。
 8. `proxy`、`legacy_proxy`、`stale`のIVスキューは市場・テーマの方向スコアを変更しない。

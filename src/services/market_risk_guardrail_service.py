@@ -1,4 +1,4 @@
-"""Cache-only market risk cap for on-demand single-stock trade analysis."""
+"""Cache-only market reference; it never changes individual-stock assessments."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def build_cached_market_risk_guardrail(
     stock_info: dict[str, Any] | None = None,
     sector_theme: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Read the latest market context without provider calls and derive a downgrade cap."""
+    """Read market risk for reference display without provider calls."""
 
     normalized = ticker.upper()
     if normalized.endswith(".T"):
@@ -78,7 +78,7 @@ def build_cached_market_risk_guardrail(
     return {
         "status": "active" if action_cap != "none" else "monitoring",
         "risk_level": risk_level,
-        "action_cap": action_cap,
+        "action_cap": "none",
         "reference_targets": targets,
         "binding_target": worst["target"],
         "downside_bias": worst["downside_bias"],
@@ -90,17 +90,6 @@ def build_cached_market_risk_guardrail(
         "probability_changed": False,
         "can_upgrade": False,
     }
-
-
-def apply_market_risk_cap(stance_key: str, guardrail: dict[str, Any]) -> str:
-    """Apply a downgrade-only stance cap."""
-
-    cap = str((guardrail or {}).get("action_cap") or "none")
-    if cap == "protect" and stance_key in {"ready", "watch"}:
-        return "protect"
-    if cap == "watch" and stance_key == "ready":
-        return "watch"
-    return stance_key
 
 
 def _target_assessment(
@@ -179,9 +168,9 @@ def _is_recent_business_as_of(value: str) -> bool:
 
 def _summary(action_cap: str, assessment: dict[str, Any]) -> str:
     if action_cap == "protect":
-        return f"{assessment['target']}の極端な市場リスクにより、評価上限を見送り/防衛へ下げます。"
+        return f"市場参考: {assessment['target']}で極端なリスクを検出。個別銘柄の条件判定は変更しません。"
     if action_cap == "watch":
-        return f"{assessment['target']}の市場警戒により、仕掛け候補の上限を条件待ちへ下げます。"
+        return f"市場参考: {assessment['target']}で警戒情報を検出。個別銘柄の条件判定は変更しません。"
     return "市場予測は監視中ですが、現在のStock評価は変更しません。"
 
 

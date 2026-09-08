@@ -190,7 +190,7 @@ def _analysis_body() -> rx.Component:
                 width="100%",
             ),
             rx.cond(
-                market_guardrail["action_cap"].to(str) != "none",
+                market_guardrail["status"].to(str) == "active",
                 rx.callout(
                     market_guardrail["summary"].to(str),
                     icon="shield-alert",

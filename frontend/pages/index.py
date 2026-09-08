@@ -74,7 +74,7 @@ def index() -> rx.Component:
     """メインダッシュボード画面 (Market Intelligence)"""
     return rx.vstack(
         page_header(
-            "今日の市場",
+            "基本市況",
             "主要資産の変化を、前回データを保ったまま確認します。",
             rx.button(
                 rx.icon("refresh-cw", size=16),
@@ -104,6 +104,7 @@ def index() -> rx.Component:
                 width="100%",
             ),
         ),
+        rx.link("市況詳細：市場予測・オプション・需給・逆張り", href="/market-watch"),
         flash_summary(),
         _market_status_strip(),
         width="100%",

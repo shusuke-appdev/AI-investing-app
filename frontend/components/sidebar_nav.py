@@ -114,8 +114,7 @@ def _navigation_groups(*, close_drawer: bool = False) -> list[rx.Component]:
         _nav_group(
             "市場を見る",
             [
-                ("今日の市場", "globe", "/"),
-                ("市場監視", "radar", "/market-watch"),
+                ("基本市況", "globe", "/"),
             ],
             close_drawer=close_drawer,
         ),
@@ -128,16 +127,6 @@ def _navigation_groups(*, close_drawer: bool = False) -> list[rx.Component]:
             close_drawer=close_drawer,
         ),
     ]
-    groups.append(
-        _nav_group(
-            "自分の情報",
-            [
-                ("Portfolio", "pie-chart", "/portfolio"),
-                ("Knowledge", "book-open", "/knowledge"),
-            ],
-            close_drawer=close_drawer,
-        )
-    )
     return groups
 
 
@@ -219,7 +208,7 @@ def mobile_nav() -> rx.Component:
                                 align_items="center",
                             ),
                             rx.drawer.description(
-                                "分析画面と管理画面を移動します。",
+                                "市況・テーマ・銘柄分析を移動します。",
                                 color=rx.color("gray", 10),
                             ),
                             rx.vstack(

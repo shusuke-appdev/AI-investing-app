@@ -11,13 +11,10 @@ python-dotenv==1.2.2
 beautifulsoup4==4.14.3
 lxml==6.1.0
 requests==2.34.1
-PyPDF2==3.0.1
-youtube-transcript-api==1.2.4
 pandas-datareader==0.10.0
 pandas-ta==0.4.71b0
 requests-cache==1.2.1
 setuptools==82.0.1
-supabase==2.30.0
 arch==8.0.0
 statsmodels==0.14.6
 edinet-tools==0.6.0

@@ -73,15 +73,6 @@ class MeanReversionResult(TypedDict, total=False):
 
 
 @dataclass
-class PortfolioHolding:
-    """ポートフォリオ保有銘柄"""
-
-    ticker: str
-    shares: float
-    avg_cost: float | None = None
-
-
-@dataclass
 class TechnicalScore:
     """テクニカル分析スコア（拡張版）"""
 
@@ -174,16 +165,8 @@ class TechnicalScore:
 
     # GEX環境
     # GEX環境
-    gex_regime: str = ""  # positive_gamma/negative_gamma/unknown
-    gex_positive_wall: float = 0.0  # 上値抵抗(Gamma Wall)
-    gex_negative_wall: float = 0.0  # 下値支持(Gamma Wall)
 
     # オプション需給
-    pcr_ratio: float = 0.0  # Put/Call Ratio (Open Interest)
-    pcr_signal: str = ""  # 強気/弱気/中立
-    atm_iv: float = 0.0  # ATM Implied Volatility
-    max_pain: float = 0.0  # Max Pain Price
-    option_data_available: bool = False
 
     # === Phase 3 拡張 ===
 
@@ -205,9 +188,6 @@ class TechnicalScore:
     vcp_data: MinerviniVcpResult = field(default_factory=dict)
 
     # === Option Skew & Mean Reversion Extension ===
-    skew: float | None = None
-    dte: float | None = None
-    price_range: tuple[float, float] | None = None
 
     mr_parabolic_state: MeanReversionParabolicState = field(
         default_factory=lambda: MeanReversionParabolicState()

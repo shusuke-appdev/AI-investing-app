@@ -1,3 +1,5 @@
+> 現行再編: [機能対応表](FEATURE_REORGANIZATION.md)。個別株オプションと個人データ管理は撤去。市場予測・オプションは市場側のみ、銘柄主条件は価格・成長性・Entryを使用。
+
 # 分析データ来歴台帳
 
 更新日: 2026-08-10
@@ -67,14 +69,12 @@
 | トレンド/テーマ | 次期リーダー候補 | computed / grounded evidence / unavailable | 総合テーマ順位、登録代表、Gemini検索引用・一次資料、最大40銘柄とSPY/1306.Tの2年日足、最大15社の企業指標 | `/theme-leaders`の明示操作だけ。Geminiは母集団拡張のみ。低流動性、200日未満、Stage条件、市場/テーマRS、4 ATRを検証後、ファンダメンタル55以上を研究優先、40～54を技術先行、40未満を除外、取得率60%未満を確認待ちへ分離。探索・深掘り24時間cache、価格結果12時間cache | 候補由来、検索引用、Stage/RS/VCP/ATR/節目/RVOL、ファンダメンタル、次条件、無効化、未検証・確認待ち・除外理由、使用量 | Gemini出力を事実・順位・売買推奨と誤認 | 引用外URLを破棄し、機械順位をGeminiで変更しない。news・option・保存・通知を呼ばない | 最優先 | 2026-08-17 登録外探索・F評価追加 |
 | Stock / Market | 日本株現在値・価格履歴 | direct | yfinance | J-Quants Free価格系列は遅延するため汎用価格経路から除外 | 通常の価格・履歴表示 | 遅延価格を現在値と誤認 | 公式リアルタイム契約がある場合だけ別経路で追加 | 最優先 | 2026-06-14 修正 |
 | Market Intelligence | 取得失敗した指数・セクター価格 | unavailable | なし | Finnhub・yfinance等の取得失敗 | `0.0` を表示せず項目を省略 | 市場価格ゼロ・中立と誤認 | 失敗理由を結果型へ保持 | 最優先 | 2026-06-14 修正 |
-| Market / Stock / Portfolio | AI生成レポート・助言 | model_output | 画面で使用した構造化context | 明示操作時 | Stock AI分析 / Portfolio AI助言 | 事実・売買指示と誤認 | 使用来歴と制約をプロンプト・UIに常時表示 | 高 | 一部対応 |
-| Portfolio | 価格未取得銘柄の時価 `0` | unavailable | なし | 現在価格欠損時 | 旧実装ではゼロ時価として集計 | 構成比を過大・過小評価 | 集計対象から除外し警告表示 | 最優先 | 2026-06-11 修正 |
-| Portfolio / AI | 混在通貨の円換算総額・構成比 | computed / direct / unavailable | 各銘柄の現地通貨・現在価格、共有MarketContextのUSD/JPY、または1回だけ取得する`JPY=X` | 全保有をJPYへ換算できる場合だけ総額・weight・sector/theme・集中度を算出 | 円換算総額、現地通貨時価、通貨別小計、為替sourceを表示 | USDとJPYを同額単位で合算、為替欠損を固定レートで補完 | 為替欠損時は通貨別小計のみ、総額・weightはunavailable | 最優先 | 2026-07-14 修正 |
+| Market / Stock | AI生成レポート・助言 | model_output | 画面で使用した構造化context | 明示操作時 | Stock AI分析 | 事実・売買指示と誤認 | 使用来歴と制約をプロンプト・UIに常時表示 | 高 | 一部対応 |
 | Market Watch / Microstructure | Theme/Flow更新時のoption入力 | direct / unavailable | 既存OptionContextのSPY行のみ | Theme/Flowではoption chainを暗黙取得しない。明示Options更新後だけ取得済みchainを再利用 | VRP等のoption要素だけ欠損可能 | 画面更新だけでMarketDataクレジットを重複消費 | provided-only方針とcall-count regressionを維持 | 最優先 | 2026-07-14 修正 |
 | 各種provider / presentation | 欠損値の `0.0`・中立化 | unavailable | なし | provider失敗・値欠損 | 一部低レベル経路に残存 | 中立市場・ゼロ値と誤認 | `DataResult` と `ProvenanceItem` を全取得層へ拡張 | 最優先 | 継続対応 |
 | Market / Stock | 価格帯別出来高 | proxy | 直近126営業日の日足OHLCV | 最低60営業日、24価格帯 | POC・70% Value Area・支持/抵抗帯・横棒profile | 取引所約定別の実測Volume Profileと誤認 | 日足安値～高値への均等配分proxy、指数はETF proxyと常時表示 | 高 | 2026-06-23 追加 |
 | Stock / AI Stock分析 | 適応型ファンダメンタル評価 | computed / proxy / unavailable | provider企業指標、J-Quants Scale Category、ローカル2026業種基準 | 時価総額・スタイル・必須業種KPI・60%以上の5軸充足が必要 | Stock要約・詳細・AI入力・既存sector/theme点 | 異業種KPIの誤適用、JP基準を直接値と誤認 | 銀行/REIT/赤字バイオの専用必須KPI、fallback・JP proxy・基準日・上限理由を表示 | 高 | 2026-06-23 追加 |
-| Stock / AI Stock分析 | 根拠一致度 | model_output / unavailable | テクニカル、Entry、適応型ファンダメンタル、テーマ順位 | 4入力必須。いずれか欠損時は算出不可。Entry/FOMO/Stage/確率/部分評価で上限 | Stock上部・詳細ヘルス、Data Quality、トレード分析、AI入力 | 将来確率や購入推奨と誤認 | 高/中/低の調査ラベル、調和平均、上限理由、入力別ヘルスを表示し、既存確率シグナルを置換しない | 高 | 2026-07-01 機能別ヘルス表示追加 |
+| Stock / AI Stock分析 | 根拠一致度 | model_output / unavailable | テクニカル、Entry、適応型ファンダメンタル、テーマ順位 | 4入力必須。いずれか欠損時は算出不可。Entry/FOMO/Stage/確率/部分評価で上限 | Stock参考欄・詳細ヘルス、Data Quality、トレード分析、AI入力 | 将来確率や購入推奨と誤認 | 高/中/低の調査ラベル、調和平均、上限理由、入力別ヘルスを表示し、既存確率シグナルを置換しない | 高 | 2026-07-01 機能別ヘルス表示追加 |
 
 ## 運用ルール
 

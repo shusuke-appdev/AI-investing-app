@@ -11,6 +11,7 @@ confidence = "high"
 limitations = "計算契約と検証ゲートを確認するが、将来の投資成果は保証しない。初回coverageでは分割済みtechnical補助モジュールに0-17%台の未到達が残る"
 profile = "standard"
 files = [
+  "test_research_reorganization.py",
   "test_adaptive_analysis_acceptance.py",
   "test_advisor_phase3.py",
   "test_credit_stress_monitor.py",
@@ -113,7 +114,6 @@ files = [
   "test_stock_trade_analysis_service.py",
   "test_stock_trade_integration.py",
   "test_trade_setup.py",
-  "test_trading_plan_service.py",
 ]
 
 [[suite]]
@@ -129,16 +129,8 @@ files = [
   "test_atomic_json.py",
   "test_cache.py",
   "test_dockerignore_security.py",
-  "test_knowledge_context.py",
-  "test_knowledge_extractor_security.py",
   "test_persistent_cache.py",
-  "test_portfolio_state_storage.py",
-  "test_portfolio_supabase_storage.py",
   "test_runtime_dependency_boundary.py",
-  "test_storage_type_settings.py",
-  "test_supabase_client.py",
-  "test_supabase_migration_tool.py",
-  "test_trading_plan_storage.py",
   "test_verify_hf_deployment.py",
 ]
 
@@ -153,7 +145,6 @@ profile = "standard"
 files = [
   "test_data_reliability_regressions.py",
   "test_display_labels.py",
-  "test_portfolio_dashboard_service.py",
   "test_provider_health.py",
   "test_request_tracking.py",
   "test_stock_state_helpers.py",

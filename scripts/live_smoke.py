@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -379,32 +378,10 @@ def _deployment_guard_check() -> str:
             os.environ["PRIVATE_DEPLOYMENT_ACK"] = previous_ack
 
 
-def _supabase_check() -> str:
-    if not os.getenv("SUPABASE_URL") or not any(
-        os.getenv(name)
-        for name in ("SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_KEY")
-    ):
-        return "SKIP: Supabase credentials are not configured"
-    from src.supabase_client import get_supabase_client
-
-    client = get_supabase_client()
-    if client is None:
-        raise RuntimeError("Supabase client initialization failed")
-    key = f"live_smoke_{uuid.uuid4().hex}"
-    client.table("user_settings").upsert({"key": key, "value": "ok"}).execute()
-    rows = client.table("user_settings").select("key,value").eq("key", key).execute()
-    client.table("user_settings").delete().eq("key", key).execute()
-    if not rows.data or rows.data[0].get("value") != "ok":
-        raise RuntimeError("Supabase CRUD round-trip mismatch")
-    return "user_settings insert/select/delete succeeded"
-
-
 def _required_check_names(args: argparse.Namespace) -> set[str]:
     """Return only the checks explicitly required by CLI flags."""
 
     required: set[str] = set()
-    if args.require_optional or args.require_supabase:
-        required.add("supabase")
     if args.require_finnhub:
         required.add("finnhub")
     if args.require_edinet:
@@ -432,16 +409,6 @@ def _failed_checks(checks: list[Check], required_names: set[str]) -> list[Check]
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--require-optional",
-        action="store_true",
-        help="Compatibility alias for --require-supabase.",
-    )
-    parser.add_argument(
-        "--require-supabase",
-        action="store_true",
-        help="Require the Supabase user_settings CRUD smoke.",
-    )
     parser.add_argument(
         "--require-finnhub",
         action="store_true",
@@ -536,7 +503,6 @@ def main(argv: list[str] | None = None) -> int:
             ),
         ),
         _run("deployment_guard", _deployment_guard_check),
-        _run("supabase", _supabase_check),
     ]
     for check in checks:
         print(f"{check.status} {check.name}: {check.detail}")

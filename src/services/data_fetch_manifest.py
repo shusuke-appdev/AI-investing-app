@@ -127,16 +127,6 @@ DATA_FETCH_MANIFEST: tuple[DataFetchRequirement, ...] = (
         data_result_names=("fundamental_profiles",),
     ),
     DataFetchRequirement(
-        surface="portfolio",
-        name="position_quotes",
-        provider="yfinance",
-        required=True,
-        max_stale_seconds=15 * 60,
-        fallback="exclude unavailable quotes from market-value aggregation",
-        notes="A missing quote must not become a real zero market value.",
-        data_result_names=("position_quotes",),
-    ),
-    DataFetchRequirement(
         surface="news",
         name="company_news",
         provider="Finnhub",

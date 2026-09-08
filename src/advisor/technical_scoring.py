@@ -1,110 +1,4 @@
-"""
-テクニカル指標（スコアリング・オプション統合）モジュール
-
-各テクニカル指標の結果を集約してカテゴリ別スコアを算出するロジックと、
-オプション分析データの統合機能を提供します。
-"""
-
-
-def analyze_options_data(ticker: str, current_price: float) -> dict:
-    """
-    オプションデータを取得し、GEXレジームと需給スコア調整値を返す。
-
-    Returns:
-        dict: {
-            "gex_regime": str,
-            "gex_positive_wall": float,
-            "gex_negative_wall": float,
-            "pcr_ratio": float,
-            "pcr_signal": str,
-            "atm_iv": float,
-            "max_pain": float,
-            "score_adj": float,
-            "skew": Optional[float],
-            "dte": Optional[float],
-            "price_range": Optional[tuple[float, float]]
-        }
-    """
-    from typing import Any
-
-    res: dict[str, Any] = {
-        "available": False,
-        "gex_regime": "unknown",
-        "gex_positive_wall": 0.0,
-        "gex_negative_wall": 0.0,
-        "pcr_ratio": 0.0,
-        "pcr_signal": "中立",
-        "atm_iv": 0.0,
-        "max_pain": 0.0,
-        "score_adj": 0.0,
-        "skew": None,
-        "dte": None,
-        "price_range": None,
-    }
-
-    try:
-        from src.option_analyst import analyze_option_sentiment
-
-        opt_sentiment = analyze_option_sentiment(ticker, cache_only=True)
-        if not opt_sentiment:
-            return res
-        res["available"] = True
-
-        # GEX
-        gex = opt_sentiment.get("gex")
-        if gex and "nearby_net_gex" in gex:
-            gex_val = gex["nearby_net_gex"]
-            res["gex_regime"] = "positive_gamma" if gex_val > 0 else "negative_gamma"
-
-            # Wall判定
-            if gex.get("positive_wall"):
-                res["gex_positive_wall"] = gex["positive_wall"].get("strike", 0.0)
-                if current_price >= res["gex_positive_wall"] * 0.99:
-                    res["score_adj"] -= 0.3
-
-            if gex.get("negative_wall"):
-                res["gex_negative_wall"] = gex["negative_wall"].get("strike", 0.0)
-                if current_price <= res["gex_negative_wall"] * 1.01:
-                    res["score_adj"] += 0.3
-
-        # PCR
-        pcr = opt_sentiment.get("pcr")
-        if pcr:
-            res["pcr_ratio"] = pcr.get("oi_pcr", 0.0)
-            if res["pcr_ratio"] > 1.2:
-                res["score_adj"] -= 0.5
-                res["pcr_signal"] = "弱気"
-            elif res["pcr_ratio"] < 0.7:
-                res["score_adj"] += 0.5
-                res["pcr_signal"] = "強気"
-
-        # IV
-        iv = opt_sentiment.get("iv")
-        if iv is not None:
-            res["atm_iv"] = iv
-            if iv > 0.4:
-                res["score_adj"] -= 0.2
-
-        # Max Pain
-        mp = opt_sentiment.get("max_pain")
-        if mp is not None:
-            res["max_pain"] = mp
-            if current_price < mp * 0.95:
-                res["score_adj"] += 0.3
-            elif current_price > mp * 1.05:
-                res["score_adj"] -= 0.3
-
-        res["skew"] = opt_sentiment.get("skew")
-        res["dte"] = opt_sentiment.get("dte")
-        res["price_range"] = opt_sentiment.get("price_range")
-
-    except ImportError:
-        pass
-    except Exception:
-        pass
-
-    res["score_adj"] = max(-1.0, min(1.0, res["score_adj"]))
-    return res
+"""価格・出来高指標を集約する参考スコアリング。"""
 
 
 def calc_trend_score(ma, macd, ichi, adx) -> float:
@@ -200,7 +94,7 @@ def calc_pattern_score(bb_sq, bb, ma_dev, pv, cdl) -> float:
     return max(-2.0, min(2.0, score))
 
 
-def calc_flow_score(obv, option_adj) -> float:
+def calc_flow_score(obv) -> float:
     score = 0.0
     # OBV
     if obv["divergence"] == "bullish":
@@ -213,6 +107,5 @@ def calc_flow_score(obv, option_adj) -> float:
         score -= 0.3
 
     # Option Analysis Integration
-    score += option_adj
 
     return max(-2.0, min(2.0, score))

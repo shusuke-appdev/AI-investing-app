@@ -2,7 +2,7 @@
 
 ## 目的
 
-このアプリは、投資判断に必要な市場データ、ニュース、テクニカル指標、テーマ別動向、ポートフォリオ情報、個人の参照知識を集約し、AIで要約・分析する調査支援システムです。
+このアプリは、投資判断に必要な市場データ、ニュース、テクニカル指標、テーマ別動向、個別銘柄の成長性と順張り条件を集約し、AIで要約・分析する調査支援システムです。
 
 中核は「外部データを取得し、分析ロジックで構造化し、UIとAIレポートへ渡す」流れです。
 
@@ -16,15 +16,13 @@
   - `/theme`: トレンド/テーマ
   - `/theme-leaders`: 明示操作による次期リーダー候補
   - `/data-quality`: Provider状態・来歴・欠損確認
-  - `/portfolio`: ポートフォリオ分析
-  - `/knowledge`: 参照知識管理
 - 旧Streamlit UI: `codex/archive-streamlit-assets` ブランチへ履歴保全し、現行ツリーから撤去済み
 
 ## 配置方針
 
 - 現行本番はGitHub Actionsで品質確認とDocker health checkを行い、Hugging Face Spacesへ同期する。Vercelプロジェクト、設定、デプロイは持たない
 - ReflexのPythonバックエンド、WebSocket、ローカルJSON、`.states`、`.reflex_states`を前提にするため、Vercelプラグイン導入やVercel移行は現時点では行わない
-- Vercelは、PR preview・即時rollback・保護環境・Vercel実行ログが実需要になり、状態をSupabase等の共有基盤へ移し、別プロジェクトでWebSocket再接続・長時間分析・Dockerサイズ・scale-down後の復元を検証できた場合だけ再評価する
+- Vercelは、PR preview・即時rollback・保護環境・Vercel実行ログが実需要になり、状態共有の必要性を再検討し、別プロジェクトでWebSocket再接続・長時間分析・Dockerサイズ・scale-down後の復元を検証できた場合だけ再評価する
 - 再評価時は先に`VERCEL`を外部ホスト検出対象へ追加し、アクセス制御確認なしの起動を拒否する。プラグイン接続はその後に行い、最初は一覧・ログ取得など読み取り用途に限定する
 
 ## レイヤー構成
@@ -41,7 +39,6 @@ UI
   src/services/temporal_alignment.py
   src/services/analysis_run.py
   src/services/analysis_jobs.py
-  src/portfolio_advisor.py
   src/stock_analyst.py
 
 ドメイン分析
@@ -64,11 +61,8 @@ UI
   src/edinet_client.py
 
 永続化
-  src/storage/base.py
-  src/portfolio_storage.py
-  src/knowledge_storage.py
+  src/storage/atomic_json.py
   src/settings_storage.py
-  src/supabase_client.py
 
 横断関心
   src/cache.py
@@ -117,26 +111,11 @@ UI
 8. `StockSignalContext` は表示済みニュース見出し、SMART基準、テクニカル、Entry Frameworkも保持し、AI分析は `stock_analyst.analyze_stock()` が同じ入力を再利用してプロンプトを組み立てる
 9. `StockState.show_trade_analysis()` はユーザーが「トレード分析」を押した場合だけ、既存の `StockSignalContext` から重要水準、押し目/ブレイク条件、無効化条件、需給根拠を生成する
 
-### Trading Plan互換コード
+### 条件確認と参考分析
 
-1. 独立した `/trading-plan` ルートと通常ナビゲーションは廃止し、通常利用はStockページ内の「トレード分析」に統合する
-2. `trading_plan_state`、`trading_plan_service`、`trading_plan_storage`、Supabase `trade_plans` は既存データ互換用に残す
-3. 新規の通常ワークフローでは保存・レビュー機能をStockへ移植せず、分析データを使った条件整理だけを行う
+主条件は`stock_primary_conditions`が価格・業績・日足Entryだけから作ります。市場参考情報と総合点・短期予測・逆張りを主条件に混ぜません。個別株オプションは計算・表示・AIから撤去しました。
 
-### ポートフォリオ
-
-1. UI入力を `PortfolioState.holdings` に保持
-2. `portfolio_storage` が local / Supabase の保存先を抽象化
-3. `portfolio_advisor.analyze_portfolio()` が各銘柄を現地通貨で評価し、共有`MarketContext`のUSD/JPY、なければ1回だけの`JPY=X` quoteで円換算する
-4. 全銘柄を換算できる場合だけ円換算総額・構成比・セクター/日米テーマ露出・top1/top3/HHIを計算する。為替不足時は通貨別小計だけを返す
-5. `portfolio_advisor.generate_portfolio_advice()` は同じ集約結果と現在/保存済み`MarketContext`を再利用してAIアドバイスを生成する
-
-### 参照知識
-
-1. `KnowledgeState` がテキスト、URL、YouTube、ファイルアップロードを受け取る
-2. `knowledge_extractor` が本文抽出・要約・タイトル生成を行う
-3. `knowledge_storage` が local / Supabase に保存する
-4. `knowledge_storage.get_knowledge_for_ai_context()` が銘柄分析プロンプトに注入される
+ポートフォリオ・知識・旧Trading Plan保存とSupabase接続は廃止しました。旧URLは廃止案内です。[機能対応表と外部廃止](FEATURE_REORGANIZATION.md)を参照してください。
 
 ## 重要な設計判断
 
@@ -152,7 +131,7 @@ UI
 - ETFリーダーシップproxyは市場全体のリスクオン/オフ確認に使い、資金流入セクター判定は選択市場ごとに分離する。USは広義セクターETFと細分化テーマETF proxyを優先し、JPは日本テーマ代表銘柄バスケットで具体候補を出す。スコアは相対騰落率、5日/20日継続性、出来高比、上昇参加率から作り、売買指示ではなく「乗る候補」「押し目待ち」「観察」「見送り」の調査支援ラベルに留める
 - HTTPキャッシュは `src/network.py` が `.states/http_cache` 配下で用途別セッションとして管理し、ルート直下にSQLiteを作らない
 - yfinanceオプションデータはGreeks欠損が多いため、Gammaが取得できない場合はGEXを非表示にし、`data_quality` と `quality_warnings` でUIとAIに明示する
-- MarketData.appは米国オプションのpreferred経路として使う。対象はSPY / QQQ / IWM、統合トレンドランキング上位のテーマETF proxy、個別銘柄分析で所属テーマのETF option proxyを明示分析する場合に限定する。`off`ではyfinanceのみ、`shadow`ではyfinance表示を維持しながら比較取得、`preferred`ではMarketData.appを優先して失敗時にyfinance/cacheへフォールバックする。起動時や単なる描画時にはMarketData.appを呼ばない
+- MarketData.appは米国オプションのpreferred経路として使う。対象はSPY / QQQ / IWM、統合トレンドランキング上位のテーマETF proxyに限定する。`off`ではyfinanceのみ、`shadow`ではyfinance表示を維持しながら比較取得、`preferred`ではMarketData.appを優先して失敗時にyfinance/cacheへフォールバックする。起動時や単なる描画時にはMarketData.appを呼ばない
 - MarketData.appの解決済み満期チェーンは専用キャッシュへ保存し、IV・Greeks・OI・Volumeを直接値として扱う。同日満期は米国東部時間の有効時間帯だけ使い、引け後・週末・live smokeでは次回有効満期へ切り替える。1W / 1M は満期一覧から目標DTEに最も近い有効満期を選ぶ。PCR、Max Pain、GEXはローカル算出であり、GEXのディーラー方向は簡易仮定として来歴へ残す
 - `src/services/data_fetch_manifest.py` は画面・分析ごとの必須/任意データ、許容鮮度、fallback/cache方針を定義する軽量マニフェスト。欠損監査やlive smoke拡張時はここを基準にする
 - 分析機能の責務、許可される連携、欠損契約は `docs/ANALYSIS_FEATURE_CATALOG.md` を正本とする
@@ -166,7 +145,6 @@ UI
 - 旧課題だったUI正本の曖昧さは、Reflexへの一本化とStreamlit資産の履歴ブランチ退避で解消済み
 - データ取得、分析、UI整形が `frontend/state/*` と `src/services/*` にまたがって重複している
 - 外部APIエラーが握りつぶされる箇所が多く、ユーザーに「何が古いデータか」「何が取得失敗か」が伝わりにくい
-- 保存先の抽象化はあるが、local / Supabase のスキーマ契約・移行手順が不足している
 - AIプロンプトへの入力データが一部文字列連結中心で、検証可能な中間データ構造が不足している
 
 ## トレンドフォロー診断レイヤー

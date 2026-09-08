@@ -8,7 +8,6 @@ from frontend.components.data_provenance import (
 from frontend.components.ui_primitives import page_header, section_heading
 from frontend.state.data_quality_state import DataQualityState
 from frontend.state.market_state import MarketState
-from frontend.state.portfolio_state import PortfolioState
 from frontend.state.stock_state import StockState
 from frontend.template import template
 
@@ -248,7 +247,7 @@ def data_quality_page() -> rx.Component:
         ),
         section_heading(
             "データ取得元の直近状態",
-            "Market / Stock / Portfolioで最後に観測した成功・失敗・キャッシュ状態です。",
+            "Market / Stockで最後に観測した成功・失敗・キャッシュ状態です。",
         ),
         rx.cond(
             DataQualityState.provider_health.length() > 0,
@@ -259,7 +258,7 @@ def data_quality_page() -> rx.Component:
                 width="100%",
             ),
             rx.text(
-                "まだ取得ヘルスは記録されていません。Market / Stock / Portfolioを一度実行すると表示されます。",
+                "まだ取得ヘルスは記録されていません。Market / Stockを一度実行すると表示されます。",
                 size="2",
                 color="gray",
             ),
@@ -295,9 +294,6 @@ def data_quality_page() -> rx.Component:
             empty_text="個別銘柄分析を一度実行すると、根拠一致度の入力ヘルスが表示されます。",
         ),
         provenance_panel(StockState.provenance),
-        section_heading("Portfolio", "ポートフォリオ分析で最後に作成した来歴です。"),
-        _warning_list(PortfolioState.analysis_warnings),
-        provenance_panel(PortfolioState.provenance),
         width="100%",
         max_width="1200px",
         margin="0 auto",

@@ -83,6 +83,14 @@ def smart_criteria_from_mapping(value: Mapping[str, Any] | None) -> SmartCriteri
     return SmartCriteria(**plain_state_value(value))
 
 
+class PrimaryConditionDisplay(BaseModel):
+    label: str = ""
+    status: str = "unknown"
+    status_label: str = "判定不能"
+    value: str = ""
+    reason: str = ""
+
+
 class StockState(rx.State):
     """State for the individual stock analysis page."""
 
@@ -105,6 +113,11 @@ class StockState(rx.State):
     news: list[dict[str, Any]] = []
     news_source_status: str = ""
     news_error_reason: str = ""
+    primary_conditions: list[PrimaryConditionDisplay] = []
+    primary_as_of: str = ""
+    primary_stop: str = "判定不能"
+    primary_invalidation: str = ""
+    market_reference: str = "未取得"
     technical_data: dict[str, Any] = {}
     smart_criteria: SmartCriteria = SmartCriteria()
     earnings: list[dict[str, Any]] = []
@@ -133,18 +146,9 @@ class StockState(rx.State):
     sector_theme_flow_advantage: bool = False
     sector_theme_parent_sector: str = ""
     sector_theme_proxy_ticker: str = ""
-    sector_theme_option_proxy: str = ""
     sector_theme_best_rank: str = ""
     sector_theme_rank_points: str = ""
     sector_theme_ranking_summary: str = ""
-    sector_theme_option_signal: str = ""
-    sector_theme_option_score: str = ""
-    sector_theme_option_summary: str = ""
-    sector_theme_option_source: str = ""
-    sector_theme_option_complete_status: str = ""
-    sector_theme_option_provider_active: bool = False
-    sector_theme_option_fallback_reason: str = ""
-    sector_theme_option_gamma_coverage: str = "-"
     fundamental_profile: dict[str, Any] = {}
     fundamental_size_label: str = ""
     fundamental_size_borderline: bool = False
@@ -169,8 +173,6 @@ class StockState(rx.State):
     purchase_evidence_available: bool = False
     purchase_evidence_health: list[FeatureHealthDisplay] = []
     japan_supply_demand: dict[str, Any] = {}
-    sector_theme_option_data_as_of: str = ""
-    sector_theme_option_data_quality: str = ""
     stock_signal_context: dict[str, Any] = {}
     trade_analysis_visible: bool = False
     trade_analysis: dict[str, Any] = {}
@@ -201,6 +203,11 @@ class StockState(rx.State):
         if normalized != self.ticker:
             self.fetch_request_id += 1
             self.analysis_request_id += 1
+            self.primary_conditions = []
+            self.primary_as_of = ""
+            self.primary_stop = "判定不能"
+            self.primary_invalidation = ""
+            self.market_reference = "未取得"
             self.ai_analysis = ""
             self.is_generating_analysis = False
         self.ticker = normalized
@@ -278,6 +285,22 @@ class StockState(rx.State):
             self.news_error_reason = context.news_error_reason
             self.smart_criteria = smart_criteria_from_mapping(context.smart_criteria)
             self.technical_data = plain_state_value(context.technical_data)
+            self.primary_conditions = [
+                PrimaryConditionDisplay(**item)
+                for item in context.primary_conditions.get("conditions", [])
+            ]
+            self.primary_as_of = str(context.primary_conditions.get("as_of", "不明"))
+            self.primary_stop = str(
+                context.primary_conditions.get("stop_reference", "判定不能")
+            )
+            self.primary_invalidation = str(
+                context.primary_conditions.get("invalidation", "")
+            )
+            self.market_reference = str(
+                context.market_risk_guardrail.get("summary")
+                or "市場参考情報は未取得です。基本市況で更新してください。"
+            )
+
             self.probabilistic_signal = plain_state_value(context.probabilistic_signal)
             self.trend_follow_diagnostics = plain_state_value(
                 context.trend_follow_diagnostics
@@ -324,9 +347,6 @@ class StockState(rx.State):
             self.sector_theme_proxy_ticker = str(
                 self.sector_theme_context.get("proxy_ticker", "")
             )
-            self.sector_theme_option_proxy = str(
-                self.sector_theme_context.get("option_proxy_ticker", "")
-            )
             rank = self.sector_theme_context.get("best_theme_rank")
             self.sector_theme_best_rank = "" if rank in (None, "") else str(rank)
             rank_points = self.sector_theme_context.get("best_theme_rank_points")
@@ -335,40 +355,6 @@ class StockState(rx.State):
             )
             self.sector_theme_ranking_summary = str(
                 self.sector_theme_context.get("ranking_summary", "")
-            )
-            self.sector_theme_option_signal = str(
-                self.sector_theme_context.get("theme_option_signal", "")
-            )
-            option_score = self.sector_theme_context.get("theme_option_score")
-            self.sector_theme_option_score = (
-                "" if option_score is None else f"{float(option_score):+.1f}"
-            )
-            self.sector_theme_option_summary = str(
-                self.sector_theme_context.get("theme_option_summary", "")
-            )
-            self.sector_theme_option_source = str(
-                self.sector_theme_context.get("theme_option_source", "")
-            )
-            self.sector_theme_option_complete_status = str(
-                self.sector_theme_context.get("theme_option_complete_status", "")
-            )
-            self.sector_theme_option_provider_active = bool(
-                self.sector_theme_context.get("theme_option_provider_active", False)
-            )
-            self.sector_theme_option_fallback_reason = str(
-                self.sector_theme_context.get("theme_option_fallback_reason", "")
-            )
-            gamma_coverage = self.sector_theme_context.get(
-                "theme_option_gamma_coverage"
-            )
-            self.sector_theme_option_gamma_coverage = (
-                "-" if gamma_coverage is None else f"{float(gamma_coverage):.0%}"
-            )
-            self.sector_theme_option_data_as_of = str(
-                self.sector_theme_context.get("theme_option_data_as_of", "")
-            )
-            self.sector_theme_option_data_quality = str(
-                self.sector_theme_context.get("theme_option_data_quality", "")
             )
             self.fundamental_profile = plain_state_value(context.fundamental_profile)
             size_profile = self.fundamental_profile.get("size") or {}
@@ -494,13 +480,9 @@ class StockState(rx.State):
             self.sector_theme_flow_advantage = False
             self.sector_theme_parent_sector = ""
             self.sector_theme_proxy_ticker = ""
-            self.sector_theme_option_proxy = ""
             self.sector_theme_best_rank = ""
             self.sector_theme_rank_points = ""
             self.sector_theme_ranking_summary = ""
-            self.sector_theme_option_signal = ""
-            self.sector_theme_option_score = ""
-            self.sector_theme_option_summary = ""
             self.fundamental_profile = {}
             self.fundamental_size_label = ""
             self.fundamental_size_borderline = False
@@ -525,13 +507,6 @@ class StockState(rx.State):
             self.purchase_evidence_available = False
             self.purchase_evidence_health = []
             self.japan_supply_demand = {}
-            self.sector_theme_option_source = ""
-            self.sector_theme_option_complete_status = ""
-            self.sector_theme_option_provider_active = False
-            self.sector_theme_option_fallback_reason = ""
-            self.sector_theme_option_gamma_coverage = "-"
-            self.sector_theme_option_data_as_of = ""
-            self.sector_theme_option_data_quality = ""
             self.stock_signal_context = {}
             self._reset_trade_analysis()
             self.data_status = []

@@ -68,23 +68,6 @@ def mock_gemini_client():
         yield mock_gen
 
 
-@pytest.fixture
-def mock_supabase_client():
-    """Mock Supabase client for all tests."""
-    with patch("src.supabase_client.get_supabase_client") as mock_get:
-        mock_client = MagicMock()
-        mock_get.return_value = mock_client
-        yield mock_client
-
-
-@pytest.fixture
-def mock_settings_storage():
-    """Mock settings storage to force local storage."""
-    with patch("src.settings_storage.get_storage_type") as mock_get:
-        mock_get.return_value = "local"
-        yield mock_get
-
-
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Apply execution markers from the canonical test inventory."""
 

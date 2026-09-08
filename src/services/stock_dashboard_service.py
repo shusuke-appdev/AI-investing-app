@@ -38,6 +38,7 @@ from src.services.market_risk_guardrail_service import (
 from src.services.provenance_service import stock_provenance
 from src.services.purchase_evidence_service import evaluate_purchase_evidence
 from src.services.stock_analysis_inputs import StockAnalysisInputs
+from src.services.stock_primary_conditions import build_primary_conditions
 from src.services.volume_profile_service import build_volume_profile
 from src.stock_data_provider import normalize_ticker
 
@@ -79,6 +80,7 @@ class StockDashboardContext:
     purchase_evidence_health: list[dict[str, Any]] = field(default_factory=list)
     market_risk_guardrail: dict[str, Any] = field(default_factory=dict)
     japan_supply_demand: dict[str, Any] = field(default_factory=dict)
+    primary_conditions: dict[str, Any] = field(default_factory=dict)
     stock_signal_context: dict[str, Any] = field(default_factory=dict)
     data_status: list[DataResult] = field(default_factory=list)
     provenance: list[ProvenanceItem] = field(default_factory=list)
@@ -265,7 +267,7 @@ def build_stock_dashboard_context(
                 history_provider=inputs.history,
                 info_provider=inputs.info,
                 include_market_ranking=True,
-                include_theme_options=not normalized_ticker.endswith(".T"),
+                include_theme_options=False,
                 theme_options_cache_only=True,
                 fundamental_profile=fundamental_profile,
             )
@@ -370,6 +372,10 @@ def build_stock_dashboard_context(
         purchase_evidence=purchase_evidence,
         news_status=news_source_status,
     )
+    sector_theme_context = _without_options(sector_theme_context)
+    primary_conditions = build_primary_conditions(
+        history_df, benchmark_df, info_dict, trade_setup_dict
+    )
     stock_signal_context = StockSignalContext(
         ticker=normalized_ticker,
         stock_info=info_dict,
@@ -393,6 +399,7 @@ def build_stock_dashboard_context(
         provenance=provenance,
     ).to_dict()
 
+    stock_signal_context["primary_conditions"] = primary_conditions
     chart_data = _history_to_chart_data(history_df)
     return StockDashboardContext(
         info=info_dict,
@@ -408,6 +415,7 @@ def build_stock_dashboard_context(
         fomo_regime=fomo_regime,
         trade_setup=trade_setup_dict,
         sector_theme_context=sector_theme_context,
+        primary_conditions=primary_conditions,
         stock_signal_context=stock_signal_context,
         data_status=data_status,
         provenance=provenance,
@@ -998,3 +1006,16 @@ from src.services.stock_health_presenter import (  # noqa: E402, F401
     _smart_error_message,
     _smart_has_unknowns,
 )
+
+
+def _without_options(value: Any) -> Any:
+    """Remove all option metadata from a stock's nested sector evidence."""
+    if isinstance(value, dict):
+        return {
+            key: _without_options(item)
+            for key, item in value.items()
+            if "option" not in key.lower()
+        }
+    if isinstance(value, list):
+        return [_without_options(item) for item in value]
+    return value

@@ -21,34 +21,6 @@ from frontend.state.stock_state import StockState
 from frontend.template import template
 
 
-def _option_signal_label(value) -> rx.Var:
-    return rx.cond(
-        value == "upside_squeeze_candidate",
-        "上方向ガンマ候補",
-        rx.cond(
-            value == "downside_vol_expansion",
-            "下方向ボラ警戒",
-            rx.cond(
-                value == "pinning_resistance",
-                "抵抗/Pin",
-                rx.cond(value == "pinning", "中立/Pin", "判定不能"),
-            ),
-        ),
-    )
-
-
-def _option_signal_color(value) -> rx.Var:
-    return rx.cond(
-        value == "upside_squeeze_candidate",
-        "green",
-        rx.cond(
-            value == "downside_vol_expansion",
-            "red",
-            rx.cond(value == "pinning_resistance", "orange", "gray"),
-        ),
-    )
-
-
 def _stock_summary_tile(title: str, value, detail, color: str) -> rx.Component:
     return rx.card(
         rx.vstack(
@@ -204,7 +176,17 @@ def _news_panel() -> rx.Component:
 def _stock_detail_accordion() -> rx.Component:
     return rx.accordion.root(
         rx.accordion.item(
-            header="テクニカル / Entry / 確率",
+            header="参考総合評価",
+            content=rx.vstack(
+                _existing_evaluation(), _stock_decision_summary(), width="100%"
+            ),
+        ),
+        rx.accordion.item(
+            header="ファンダメンタル / SMART / テーマ詳細",
+            content=_fundamental_theme_details(),
+        ),
+        rx.accordion.item(
+            header="参考分析：テクニカル / Entry / 確率・逆張り",
             content=rx.vstack(
                 technical_analysis(),
                 stock_trade_analysis_panel(),
@@ -241,7 +223,7 @@ def _stock_detail_accordion() -> rx.Component:
             ),
         ),
         type="multiple",
-        default_value=["テクニカル / Entry / 確率"],
+        default_value=[],
         width="100%",
     )
 
@@ -351,6 +333,375 @@ def _stock_status_summary() -> rx.Component:
     )
 
 
+def _existing_evaluation() -> rx.Component:
+    return rx.vstack(
+        # 現在の評価
+        rx.cond(
+            StockState.technical_data.contains("overall_signal"),
+            rx.card(
+                rx.vstack(
+                    rx.text(
+                        "現在の評価",
+                        size="2",
+                        weight="bold",
+                        color=rx.color("gray", 10),
+                    ),
+                    rx.hstack(
+                        evaluation_badge(
+                            StockState.technical_data["overall_signal_display"].to(str),
+                            rx.cond(
+                                StockState.technical_data["overall_score"].to(int)
+                                >= 60,
+                                "green",
+                                rx.cond(
+                                    StockState.technical_data["overall_score"].to(int)
+                                    < 40,
+                                    "red",
+                                    "yellow",
+                                ),
+                            ),
+                        ),
+                        rx.text(
+                            StockState.technical_data["overall_score"].to(str) + "点",
+                            size="6",
+                            weight="bold",
+                            font_variant_numeric="tabular-nums",
+                        ),
+                        rx.badge(
+                            "分析モード: "
+                            + StockState.technical_data["analysis_mode"].to(str),
+                            size="2",
+                            color_scheme="purple",
+                            variant="surface",
+                        ),
+                        rx.cond(
+                            StockState.technical_data["entry_signal"].to(str) != "",
+                            rx.badge(
+                                StockState.technical_data["entry_signal"].to(str),
+                                size="2",
+                                color_scheme="orange",
+                            ),
+                        ),
+                        spacing="3",
+                        align_items="center",
+                        wrap="wrap",
+                    ),
+                    rx.text(
+                        "テクニカル・確率シグナル・トレンド堅牢性は異なる評価軸です。単独で売買判断に使わず、各説明とデータ品質を確認してください。",
+                        size="2",
+                        color=rx.color("gray", 11),
+                    ),
+                    width="100%",
+                    align_items="start",
+                ),
+                width="100%",
+                margin_bottom="1rem",
+            ),
+        ),
+        width="100%",
+        spacing="4",
+    )
+
+
+def _fundamental_theme_details() -> rx.Component:
+    return rx.vstack(
+        # SMART基準セクション
+        rx.cond(
+            StockState.smart_criteria.S.value != "",
+            rx.card(
+                rx.hstack(
+                    rx.heading("SMART基準評価", size="4", as_="h3"),
+                    rx.cond(
+                        StockState.smart_criteria.all_met,
+                        evaluation_badge("全条件達成", "green"),
+                        rx.cond(
+                            StockState.smart_criteria.overall_status == "pending",
+                            evaluation_badge("判定不能あり", "gray"),
+                            evaluation_badge("条件未達", "orange"),
+                        ),
+                    ),
+                    align_items="center",
+                    margin_bottom="1rem",
+                ),
+                rx.vstack(
+                    rx.text(
+                        rx.cond(
+                            StockState.smart_criteria.S.status == "met",
+                            "✅ ",
+                            rx.cond(
+                                StockState.smart_criteria.S.status == "unknown",
+                                "❓ ",
+                                "❌ ",
+                            ),
+                        )
+                        + "S（売上成長）: "
+                        + StockState.smart_criteria.S.desc
+                        + " - "
+                        + StockState.smart_criteria.S.value
+                    ),
+                    rx.text(
+                        rx.cond(
+                            StockState.smart_criteria.M.status == "met",
+                            "✅ ",
+                            rx.cond(
+                                StockState.smart_criteria.M.status == "unknown",
+                                "❓ ",
+                                "❌ ",
+                            ),
+                        )
+                        + "M（利益率）: "
+                        + StockState.smart_criteria.M.desc
+                        + " - "
+                        + StockState.smart_criteria.M.value
+                    ),
+                    rx.text(
+                        rx.cond(
+                            StockState.smart_criteria.A.status == "met",
+                            "✅ ",
+                            rx.cond(
+                                StockState.smart_criteria.A.status == "unknown",
+                                "❓ ",
+                                "❌ ",
+                            ),
+                        )
+                        + "A（利益成長加速）: "
+                        + StockState.smart_criteria.A.desc
+                        + " - "
+                        + StockState.smart_criteria.A.value
+                    ),
+                    rx.text(
+                        rx.cond(
+                            StockState.smart_criteria.R.status == "met",
+                            "✅ ",
+                            rx.cond(
+                                StockState.smart_criteria.R.status == "unknown",
+                                "❓ ",
+                                "❌ ",
+                            ),
+                        )
+                        + "R（自己資本利益率）: "
+                        + StockState.smart_criteria.R.desc
+                        + " - "
+                        + StockState.smart_criteria.R.value
+                    ),
+                    rx.text(
+                        rx.cond(
+                            StockState.smart_criteria.T.status == "met",
+                            "✅ ",
+                            rx.cond(
+                                StockState.smart_criteria.T.status == "unknown",
+                                "❓ ",
+                                "❌ ",
+                            ),
+                        )
+                        + "T（市場タイミング）: "
+                        + StockState.smart_criteria.T.desc
+                        + " - "
+                        + StockState.smart_criteria.T.value
+                    ),
+                ),
+                width="100%",
+                margin_bottom="2rem",
+            ),
+        ),
+        fundamental_profile_panel(),
+        rx.cond(
+            StockState.sector_theme_rating != "",
+            rx.card(
+                rx.vstack(
+                    rx.hstack(
+                        rx.heading("セクター/テーマ評価", size="4", as_="h3"),
+                        evaluation_badge(
+                            StockState.sector_theme_rating_display,
+                            rx.cond(
+                                StockState.sector_theme_rating == "high",
+                                "green",
+                                rx.cond(
+                                    StockState.sector_theme_rating == "conditional",
+                                    "orange",
+                                    rx.cond(
+                                        StockState.sector_theme_rating == "weak",
+                                        "red",
+                                        "gray",
+                                    ),
+                                ),
+                            ),
+                        ),
+                        rx.spacer(),
+                        rx.link(
+                            rx.button(
+                                rx.icon("list-ordered", size=15),
+                                "トレンド/テーマへ",
+                                variant="surface",
+                                size="2",
+                                aria_label="トレンド/テーマを開く",
+                            ),
+                            href="/theme",
+                            underline="none",
+                        ),
+                        width="100%",
+                        align_items="center",
+                        wrap="wrap",
+                    ),
+                    rx.hstack(
+                        rx.badge(
+                            rx.cond(
+                                StockState.sector_theme_fundamental_advantage,
+                                "Fundamental優位",
+                                "Fundamental未確認",
+                            ),
+                            color_scheme=rx.cond(
+                                StockState.sector_theme_fundamental_advantage,
+                                "green",
+                                "gray",
+                            ),
+                        ),
+                        rx.badge(
+                            rx.cond(
+                                StockState.sector_theme_flow_advantage,
+                                "Flow優位",
+                                "Flow未確認",
+                            ),
+                            color_scheme=rx.cond(
+                                StockState.sector_theme_flow_advantage,
+                                "green",
+                                "gray",
+                            ),
+                        ),
+                        rx.text(
+                            "ファンダメンタル "
+                            + StockState.sector_theme_fundamental_score_display
+                            + " / フロー "
+                            + StockState.sector_theme_flow_score_display,
+                            size="2",
+                            color=rx.color("gray", 10),
+                        ),
+                        spacing="2",
+                        wrap="wrap",
+                    ),
+                    rx.hstack(
+                        rx.cond(
+                            StockState.sector_theme_parent_sector != "",
+                            rx.badge(
+                                "親セクター: " + StockState.sector_theme_parent_sector,
+                                color_scheme="gray",
+                                variant="surface",
+                            ),
+                            rx.fragment(),
+                        ),
+                        rx.cond(
+                            StockState.sector_theme_proxy_ticker != "",
+                            rx.badge(
+                                "Theme ETF: " + StockState.sector_theme_proxy_ticker,
+                                color_scheme="cyan",
+                                variant="surface",
+                            ),
+                            rx.fragment(),
+                        ),
+                        rx.cond(
+                            StockState.sector_theme_best_rank != "",
+                            rx.badge(
+                                "Trend "
+                                + StockState.sector_theme_best_rank
+                                + "位 / +"
+                                + StockState.sector_theme_rank_points
+                                + "pt",
+                                color_scheme="blue",
+                                variant="surface",
+                            ),
+                            rx.fragment(),
+                        ),
+                        spacing="2",
+                        wrap="wrap",
+                    ),
+                    rx.cond(
+                        StockState.sector_theme_ranking_summary != "",
+                        rx.text(
+                            StockState.sector_theme_ranking_summary,
+                            size="2",
+                            color=rx.color("gray", 10),
+                        ),
+                        rx.fragment(),
+                    ),
+                    rx.fragment(),
+                    rx.text(
+                        StockState.sector_theme_rationale,
+                        size="2",
+                        color=rx.color("gray", 11),
+                    ),
+                    rx.cond(
+                        StockState.sector_theme_themes.length() > 0,
+                        rx.hstack(
+                            rx.foreach(
+                                StockState.sector_theme_themes,
+                                lambda theme: rx.badge(theme, variant="surface"),
+                            ),
+                            spacing="2",
+                            wrap="wrap",
+                        ),
+                        rx.fragment(),
+                    ),
+                    width="100%",
+                    align_items="start",
+                ),
+                width="100%",
+                margin_bottom="2rem",
+            ),
+        ),
+        width="100%",
+        spacing="4",
+    )
+
+
+def _primary_condition_row(item) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.text(item.label, weight="bold"),
+                rx.badge(
+                    item.status_label,
+                    color_scheme=rx.cond(
+                        item.status == "pass",
+                        "green",
+                        rx.cond(item.status == "fail", "orange", "gray"),
+                    ),
+                ),
+                wrap="wrap",
+            ),
+            rx.text(item.value, size="3"),
+            rx.text(item.reason, size="1", color=rx.color("gray", 11)),
+            align_items="start",
+            width="100%",
+        ),
+        width="100%",
+    )
+
+
+def _primary_conditions_panel() -> rx.Component:
+    return rx.vstack(
+        rx.heading("成長株・順張りの条件確認", size="5", as_="h2"),
+        rx.text(
+            "条件ごとの根拠を確認します。総合点や短期予測は下の参考分析にあります。",
+            size="2",
+        ),
+        rx.text("価格基準日: " + StockState.primary_as_of, size="1"),
+        rx.grid(
+            rx.foreach(StockState.primary_conditions, _primary_condition_row),
+            columns=rx.breakpoints(initial="1", md="2"),
+            spacing="3",
+            width="100%",
+        ),
+        rx.text("損切り参考水準: " + StockState.primary_stop),
+        rx.text(StockState.primary_invalidation, size="2"),
+        rx.callout(StockState.market_reference, icon="info", color_scheme="gray"),
+        rx.link("市場の参考情報を基本市況で確認", href="/market-watch"),
+        width="100%",
+        align_items="start",
+        spacing="3",
+        margin_bottom="2rem",
+    )
+
+
 @template
 def stock_page() -> rx.Component:
     """個別銘柄分析画面 (Stock)"""
@@ -452,86 +803,7 @@ def stock_page() -> rx.Component:
                         margin_bottom="1rem",
                     ),
                     _stock_status_summary(),
-                    # 現在の評価
-                    rx.cond(
-                        StockState.technical_data.contains("overall_signal"),
-                        rx.card(
-                            rx.vstack(
-                                rx.text(
-                                    "現在の評価",
-                                    size="2",
-                                    weight="bold",
-                                    color=rx.color("gray", 10),
-                                ),
-                                rx.hstack(
-                                    evaluation_badge(
-                                        StockState.technical_data[
-                                            "overall_signal_display"
-                                        ].to(str),
-                                        rx.cond(
-                                            StockState.technical_data[
-                                                "overall_score"
-                                            ].to(int)
-                                            >= 60,
-                                            "green",
-                                            rx.cond(
-                                                StockState.technical_data[
-                                                    "overall_score"
-                                                ].to(int)
-                                                < 40,
-                                                "red",
-                                                "yellow",
-                                            ),
-                                        ),
-                                    ),
-                                    rx.text(
-                                        StockState.technical_data["overall_score"].to(
-                                            str
-                                        )
-                                        + "点",
-                                        size="6",
-                                        weight="bold",
-                                        font_variant_numeric="tabular-nums",
-                                    ),
-                                    rx.badge(
-                                        "分析モード: "
-                                        + StockState.technical_data["analysis_mode"].to(
-                                            str
-                                        ),
-                                        size="2",
-                                        color_scheme="purple",
-                                        variant="surface",
-                                    ),
-                                    rx.cond(
-                                        StockState.technical_data["entry_signal"].to(
-                                            str
-                                        )
-                                        != "",
-                                        rx.badge(
-                                            StockState.technical_data[
-                                                "entry_signal"
-                                            ].to(str),
-                                            size="2",
-                                            color_scheme="orange",
-                                        ),
-                                    ),
-                                    spacing="3",
-                                    align_items="center",
-                                    wrap="wrap",
-                                ),
-                                rx.text(
-                                    "テクニカル・確率シグナル・トレンド堅牢性は異なる評価軸です。単独で売買判断に使わず、各説明とデータ品質を確認してください。",
-                                    size="2",
-                                    color=rx.color("gray", 11),
-                                ),
-                                width="100%",
-                                align_items="start",
-                            ),
-                            width="100%",
-                            margin_bottom="1rem",
-                        ),
-                    ),
-                    _stock_decision_summary(),
+                    _primary_conditions_panel(),
                     # メトリックカード（主要指標）
                     rx.grid(
                         metric_card(
@@ -657,367 +929,6 @@ def stock_page() -> rx.Component:
                         spacing="4",
                         width="100%",
                         margin_bottom="2rem",
-                    ),
-                    # SMART基準セクション
-                    rx.cond(
-                        StockState.smart_criteria.S.value != "",
-                        rx.card(
-                            rx.hstack(
-                                rx.heading("SMART基準評価", size="4", as_="h3"),
-                                rx.cond(
-                                    StockState.smart_criteria.all_met,
-                                    evaluation_badge("全条件達成", "green"),
-                                    rx.cond(
-                                        StockState.smart_criteria.overall_status
-                                        == "pending",
-                                        evaluation_badge("判定不能あり", "gray"),
-                                        evaluation_badge("条件未達", "orange"),
-                                    ),
-                                ),
-                                align_items="center",
-                                margin_bottom="1rem",
-                            ),
-                            rx.vstack(
-                                rx.text(
-                                    rx.cond(
-                                        StockState.smart_criteria.S.status == "met",
-                                        "✅ ",
-                                        rx.cond(
-                                            StockState.smart_criteria.S.status
-                                            == "unknown",
-                                            "❓ ",
-                                            "❌ ",
-                                        ),
-                                    )
-                                    + "S（売上成長）: "
-                                    + StockState.smart_criteria.S.desc
-                                    + " - "
-                                    + StockState.smart_criteria.S.value
-                                ),
-                                rx.text(
-                                    rx.cond(
-                                        StockState.smart_criteria.M.status == "met",
-                                        "✅ ",
-                                        rx.cond(
-                                            StockState.smart_criteria.M.status
-                                            == "unknown",
-                                            "❓ ",
-                                            "❌ ",
-                                        ),
-                                    )
-                                    + "M（利益率）: "
-                                    + StockState.smart_criteria.M.desc
-                                    + " - "
-                                    + StockState.smart_criteria.M.value
-                                ),
-                                rx.text(
-                                    rx.cond(
-                                        StockState.smart_criteria.A.status == "met",
-                                        "✅ ",
-                                        rx.cond(
-                                            StockState.smart_criteria.A.status
-                                            == "unknown",
-                                            "❓ ",
-                                            "❌ ",
-                                        ),
-                                    )
-                                    + "A（利益成長加速）: "
-                                    + StockState.smart_criteria.A.desc
-                                    + " - "
-                                    + StockState.smart_criteria.A.value
-                                ),
-                                rx.text(
-                                    rx.cond(
-                                        StockState.smart_criteria.R.status == "met",
-                                        "✅ ",
-                                        rx.cond(
-                                            StockState.smart_criteria.R.status
-                                            == "unknown",
-                                            "❓ ",
-                                            "❌ ",
-                                        ),
-                                    )
-                                    + "R（自己資本利益率）: "
-                                    + StockState.smart_criteria.R.desc
-                                    + " - "
-                                    + StockState.smart_criteria.R.value
-                                ),
-                                rx.text(
-                                    rx.cond(
-                                        StockState.smart_criteria.T.status == "met",
-                                        "✅ ",
-                                        rx.cond(
-                                            StockState.smart_criteria.T.status
-                                            == "unknown",
-                                            "❓ ",
-                                            "❌ ",
-                                        ),
-                                    )
-                                    + "T（市場タイミング）: "
-                                    + StockState.smart_criteria.T.desc
-                                    + " - "
-                                    + StockState.smart_criteria.T.value
-                                ),
-                            ),
-                            width="100%",
-                            margin_bottom="2rem",
-                        ),
-                    ),
-                    fundamental_profile_panel(),
-                    rx.cond(
-                        StockState.sector_theme_rating != "",
-                        rx.card(
-                            rx.vstack(
-                                rx.hstack(
-                                    rx.heading(
-                                        "セクター/テーマ評価", size="4", as_="h3"
-                                    ),
-                                    evaluation_badge(
-                                        StockState.sector_theme_rating_display,
-                                        rx.cond(
-                                            StockState.sector_theme_rating == "high",
-                                            "green",
-                                            rx.cond(
-                                                StockState.sector_theme_rating
-                                                == "conditional",
-                                                "orange",
-                                                rx.cond(
-                                                    StockState.sector_theme_rating
-                                                    == "weak",
-                                                    "red",
-                                                    "gray",
-                                                ),
-                                            ),
-                                        ),
-                                    ),
-                                    rx.spacer(),
-                                    rx.link(
-                                        rx.button(
-                                            rx.icon("list-ordered", size=15),
-                                            "トレンド/テーマへ",
-                                            variant="surface",
-                                            size="2",
-                                            aria_label="トレンド/テーマを開く",
-                                        ),
-                                        href="/theme",
-                                        underline="none",
-                                    ),
-                                    width="100%",
-                                    align_items="center",
-                                    wrap="wrap",
-                                ),
-                                rx.hstack(
-                                    rx.badge(
-                                        rx.cond(
-                                            StockState.sector_theme_fundamental_advantage,
-                                            "Fundamental優位",
-                                            "Fundamental未確認",
-                                        ),
-                                        color_scheme=rx.cond(
-                                            StockState.sector_theme_fundamental_advantage,
-                                            "green",
-                                            "gray",
-                                        ),
-                                    ),
-                                    rx.badge(
-                                        rx.cond(
-                                            StockState.sector_theme_flow_advantage,
-                                            "Flow優位",
-                                            "Flow未確認",
-                                        ),
-                                        color_scheme=rx.cond(
-                                            StockState.sector_theme_flow_advantage,
-                                            "green",
-                                            "gray",
-                                        ),
-                                    ),
-                                    rx.text(
-                                        "ファンダメンタル "
-                                        + StockState.sector_theme_fundamental_score_display
-                                        + " / フロー "
-                                        + StockState.sector_theme_flow_score_display,
-                                        size="2",
-                                        color=rx.color("gray", 10),
-                                    ),
-                                    spacing="2",
-                                    wrap="wrap",
-                                ),
-                                rx.hstack(
-                                    rx.cond(
-                                        StockState.sector_theme_parent_sector != "",
-                                        rx.badge(
-                                            "親セクター: "
-                                            + StockState.sector_theme_parent_sector,
-                                            color_scheme="gray",
-                                            variant="surface",
-                                        ),
-                                        rx.fragment(),
-                                    ),
-                                    rx.cond(
-                                        StockState.sector_theme_proxy_ticker != "",
-                                        rx.badge(
-                                            "Theme ETF: "
-                                            + StockState.sector_theme_proxy_ticker,
-                                            color_scheme="cyan",
-                                            variant="surface",
-                                        ),
-                                        rx.fragment(),
-                                    ),
-                                    rx.cond(
-                                        StockState.sector_theme_best_rank != "",
-                                        rx.badge(
-                                            "Trend "
-                                            + StockState.sector_theme_best_rank
-                                            + "位 / +"
-                                            + StockState.sector_theme_rank_points
-                                            + "pt",
-                                            color_scheme="blue",
-                                            variant="surface",
-                                        ),
-                                        rx.fragment(),
-                                    ),
-                                    spacing="2",
-                                    wrap="wrap",
-                                ),
-                                rx.cond(
-                                    StockState.sector_theme_ranking_summary != "",
-                                    rx.text(
-                                        StockState.sector_theme_ranking_summary,
-                                        size="2",
-                                        color=rx.color("gray", 10),
-                                    ),
-                                    rx.fragment(),
-                                ),
-                                rx.cond(
-                                    StockState.sector_theme_option_proxy != "",
-                                    rx.box(
-                                        rx.hstack(
-                                            rx.text(
-                                                "テーマETFオプション",
-                                                weight="bold",
-                                                size="2",
-                                            ),
-                                            rx.badge(
-                                                StockState.sector_theme_option_proxy,
-                                                color_scheme="cyan",
-                                                variant="surface",
-                                            ),
-                                            rx.badge(
-                                                _option_signal_label(
-                                                    StockState.sector_theme_option_signal
-                                                ),
-                                                color_scheme=_option_signal_color(
-                                                    StockState.sector_theme_option_signal
-                                                ),
-                                                variant="surface",
-                                            ),
-                                            rx.badge(
-                                                rx.cond(
-                                                    StockState.sector_theme_option_provider_active,
-                                                    "MarketData.app active",
-                                                    "direct Greeksなし",
-                                                ),
-                                                color_scheme=rx.cond(
-                                                    StockState.sector_theme_option_provider_active,
-                                                    "green",
-                                                    "gray",
-                                                ),
-                                                variant="surface",
-                                            ),
-                                            rx.badge(
-                                                "Gamma "
-                                                + StockState.sector_theme_option_gamma_coverage,
-                                                color_scheme=rx.cond(
-                                                    StockState.sector_theme_option_gamma_coverage
-                                                    == "100%",
-                                                    "green",
-                                                    "amber",
-                                                ),
-                                                variant="surface",
-                                            ),
-                                            rx.cond(
-                                                StockState.sector_theme_option_score
-                                                != "",
-                                                rx.badge(
-                                                    StockState.sector_theme_option_score,
-                                                    color_scheme="gray",
-                                                ),
-                                                rx.fragment(),
-                                            ),
-                                            spacing="2",
-                                            wrap="wrap",
-                                            align_items="center",
-                                        ),
-                                        rx.cond(
-                                            StockState.sector_theme_option_fallback_reason
-                                            != "",
-                                            rx.callout(
-                                                StockState.sector_theme_option_fallback_reason,
-                                                icon="info",
-                                                color_scheme="amber",
-                                                width="100%",
-                                                margin_top="0.5rem",
-                                            ),
-                                            rx.fragment(),
-                                        ),
-                                        rx.cond(
-                                            StockState.sector_theme_option_summary
-                                            != "",
-                                            rx.text(
-                                                StockState.sector_theme_option_summary,
-                                                size="2",
-                                                color=rx.color("gray", 10),
-                                                margin_top="0.25rem",
-                                            ),
-                                            rx.fragment(),
-                                        ),
-                                        rx.cond(
-                                            StockState.sector_theme_option_source != "",
-                                            rx.text(
-                                                "source: "
-                                                + StockState.sector_theme_option_source
-                                                + " / quality: "
-                                                + StockState.sector_theme_option_data_quality
-                                                + " / as_of: "
-                                                + StockState.sector_theme_option_data_as_of,
-                                                size="1",
-                                                color=rx.color("gray", 9),
-                                                margin_top="0.25rem",
-                                            ),
-                                            rx.fragment(),
-                                        ),
-                                        width="100%",
-                                        padding="0.75rem",
-                                        border=f"1px solid {rx.color('gray', 4)}",
-                                        border_radius="8px",
-                                    ),
-                                    rx.fragment(),
-                                ),
-                                rx.text(
-                                    StockState.sector_theme_rationale,
-                                    size="2",
-                                    color=rx.color("gray", 11),
-                                ),
-                                rx.cond(
-                                    StockState.sector_theme_themes.length() > 0,
-                                    rx.hstack(
-                                        rx.foreach(
-                                            StockState.sector_theme_themes,
-                                            lambda theme: rx.badge(
-                                                theme, variant="surface"
-                                            ),
-                                        ),
-                                        spacing="2",
-                                        wrap="wrap",
-                                    ),
-                                    rx.fragment(),
-                                ),
-                                width="100%",
-                                align_items="start",
-                            ),
-                            width="100%",
-                            margin_bottom="2rem",
-                        ),
                     ),
                     _stock_detail_accordion(),
                     width="100%",

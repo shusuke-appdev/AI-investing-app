@@ -20,6 +20,7 @@ ROUTES = (
     "/data-quality",
     "/portfolio",
     "/knowledge",
+    "/trading-plan",
 )
 ROUTE_FILES = {
     "/": "/index.html",
@@ -30,6 +31,7 @@ ROUTE_FILES = {
     "/data-quality": "/data-quality.html",
     "/portfolio": "/portfolio.html",
     "/knowledge": "/knowledge.html",
+    "/trading-plan": "/trading-plan.html",
 }
 VIEWPORTS = (
     ("mobile", {"width": 390, "height": 844}),

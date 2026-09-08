@@ -24,24 +24,12 @@ def app_capability_summary() -> dict[str, str | bool]:
     mode = get_app_mode()
     return {
         "mode": mode,
-        "personal_data": True,
+        "personal_data": False,
         "ai_generation": True,
-        "external_content_fetch": True,
+        "external_content_fetch": False,
         "hosted_environment": hosted_environment_detected(),
         "private_deployment_acknowledged": private_deployment_acknowledged(),
     }
-
-
-def writes_enabled() -> bool:
-    require_safe_deployment()
-    return True
-
-
-def personal_data_enabled() -> bool:
-    """Return whether personal portfolio, plan, and knowledge data may be read."""
-
-    require_safe_deployment()
-    return True
 
 
 def ai_generation_enabled() -> bool:
@@ -51,24 +39,5 @@ def ai_generation_enabled() -> bool:
     return True
 
 
-def external_content_fetch_enabled() -> bool:
-    """Return whether users may ask the server to fetch arbitrary external content."""
-
-    require_safe_deployment()
-    return True
-
-
-def require_writes_enabled() -> None:
-    require_safe_deployment()
-
-
-def require_personal_data_enabled() -> None:
-    require_safe_deployment()
-
-
 def require_ai_generation_enabled() -> None:
-    require_safe_deployment()
-
-
-def require_external_content_fetch_enabled() -> None:
     require_safe_deployment()

@@ -13,13 +13,10 @@ python-dotenv==1.2.2
 beautifulsoup4==4.14.3
 lxml==6.1.0
 requests==2.34.1
-PyPDF2==3.0.1
-youtube-transcript-api==1.2.4
 pandas-datareader==0.10.0
 pandas-ta==0.4.71b0
 requests-cache==1.2.1
 setuptools==82.0.1
-supabase==2.30.0
 ruff==0.15.12
 pytest==9.0.3
 pytest-cov==7.1.0
