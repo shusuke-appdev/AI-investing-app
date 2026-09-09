@@ -115,14 +115,14 @@ def build_primary_conditions(
         rows[-1]["status"] = "reference"
         rows[-1]["status_label"] = "参考値"
     for key, label in (
-        ("revenue_growth", "売上成長率"),
-        ("earnings_growth", "利益成長率"),
+        ("revenueGrowth", "売上成長率"),
+        ("earningsGrowth", "利益成長率"),
     ):
         value = _number(info.get(key))
         row(
             label,
             None if value is None else value > 0,
-            _display(value * 100 if value is not None else None, "%"),
+            _display(value, "%"),
             "取得元の成長率が正かを表示。期間・算出方法は企業データに依存し、独自の合格点は設けません。",
         )
     valid_setup = setup.get("status") in {"ready", "wait", "blocked"}

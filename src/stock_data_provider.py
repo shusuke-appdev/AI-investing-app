@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -444,7 +445,20 @@ def _merge_yfinance_metrics(
     info["priceToBook"] = _first(metrics, "priceToBook")
     info["beta"] = _first(metrics, "beta")
     info["forward_pe"] = _first(metrics, "forwardPE")
-    info["dividend_yield"] = _percent(_first(metrics, "dividendYield"))
+    # Yahoo's dividendYield has used both ratio and percent units. Derive the
+    # percentage from explicit annual dividend and price, never by magnitude.
+    dividend = _safe_float(metrics.get("dividendRate"))
+    dividend_price = _safe_float(metrics.get("currentPrice"))
+    info["dividend_yield"] = (
+        dividend / dividend_price * 100
+        if dividend is not None
+        and dividend_price is not None
+        and math.isfinite(dividend)
+        and math.isfinite(dividend_price)
+        and dividend >= 0
+        and dividend_price > 0
+        else None
+    )
     info["fifty_two_week_high"] = _first(metrics, "fiftyTwoWeekHigh")
     info["fifty_two_week_low"] = _first(metrics, "fiftyTwoWeekLow")
     info["target_price"] = _first(metrics, "targetMeanPrice")

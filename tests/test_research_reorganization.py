@@ -25,7 +25,7 @@ def prices(sessions=260):
 
 def test_primary_conditions_keep_missing_growth_and_history_unknown():
     result = build_primary_conditions(
-        prices(30), prices(30), {"revenue_growth": float("nan")}, {}
+        prices(30), prices(30), {"revenueGrowth": float("nan")}, {}
     )
     conditions = {item["label"]: item for item in result["conditions"]}
     for label in (
@@ -44,11 +44,12 @@ def test_primary_conditions_keep_missing_growth_and_history_unknown():
 def test_primary_conditions_use_shared_stage_and_volume_evidence():
     from src.advisor.minervini_analyzer import analyze_stage
     from src.advisor.price_action_metrics import volume_contraction
+    from src.stock_data_provider import _merge_yfinance_metrics
 
     frame = prices()
-    result = build_primary_conditions(
-        frame, frame, {"revenue_growth": 0.25, "earnings_growth": -0.1}, {}
-    )
+    info = {}
+    _merge_yfinance_metrics(info, {"revenueGrowth": 0.25, "earningsGrowth": -0.1})
+    result = build_primary_conditions(frame, frame, info, {})
     rows = {row["label"]: row for row in result["conditions"]}
     for condition in analyze_stage(frame)["conditions"]:
         assert rows[condition["label"]]["status"] == condition["status"]

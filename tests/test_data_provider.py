@@ -4,6 +4,31 @@ import pandas as pd
 
 from src.data_provider import DataProvider
 from src.persistent_cache import PersistentJsonCache
+from src.stock_data_provider import _merge_yfinance_metrics
+
+
+def test_dividend_yield_uses_rate_and_price_without_ambiguous_yield_units():
+    import pytest
+
+    for ambiguous_yield in (0.34, 0.0034, None):
+        info = {}
+        _merge_yfinance_metrics(
+            info,
+            {
+                "dividendYield": ambiguous_yield,
+                "dividendRate": 1.08,
+                "currentPrice": 316.22,
+            },
+        )
+        assert info["dividend_yield"] == pytest.approx(1.08 / 316.22 * 100)
+    for metrics in (
+        {"dividendYield": 0.34},
+        {"dividendRate": 1.08, "currentPrice": 0},
+        {"dividendRate": float("inf"), "currentPrice": 316.22},
+    ):
+        info = {}
+        _merge_yfinance_metrics(info, metrics)
+        assert info["dividend_yield"] is None
 
 
 class FakeYFinanceTicker:

@@ -2,7 +2,9 @@
 
 # 分析データ来歴台帳
 
-更新日: 2026-08-10
+更新日: 2026-09-09
+
+銘柄の成長率はStockInfoの `revenueGrowth` / `earningsGrowth`（百分率）を主条件・SMARTで共用する。配当利回りは `dividendRate / currentPrice × 100` の `computed` 値。Yahooの `dividendYield` は単位の判別に使用せず、年額配当か価格が欠損・不正なら `unavailable` とする。既存の企業情報キャッシュの鮮度契約は変更しない。
 
 ## 目的
 
