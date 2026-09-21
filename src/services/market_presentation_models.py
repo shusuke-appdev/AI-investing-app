@@ -301,6 +301,23 @@ class MarketDriverDisplay(BaseModel):
     data_quality: str = "unavailable"
 
 
+class MarketChartDisplay(BaseModel):
+    name: str = ""
+    ticker: str = ""
+    price: str = "-"
+    change: float = 0.0
+    change_str: str = "-"
+    source_label: str = "direct"
+    fetched_at: str = ""
+    points: list[dict[str, Any]] = []
+
+
+class MarketIndexGroupDisplay(BaseModel):
+    key: str = ""
+    label: str = ""
+    rows: list[dict[str, Any]] = []
+
+
 class TrendRankingDisplay(BaseModel):
     rank: int = 0
     theme: str = ""
@@ -456,6 +473,10 @@ class MarketDisplayContext(BaseModel):
     japan_conditions_score_label: str = ""
     japan_conditions_score: float = 0.0
     indices_data: list[dict[str, Any]] = []
+    index_groups: list[MarketIndexGroupDisplay] = []
+    rates_data: list[dict[str, Any]] = []
+    volatility_data: list[dict[str, Any]] = []
+    hero_index_charts: list[MarketChartDisplay] = []
     sectors_data: list[dict[str, Any]] = []
     others_data: list[dict[str, Any]] = []
     watch_indices_data: list[dict[str, Any]] = []

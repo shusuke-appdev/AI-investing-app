@@ -10,21 +10,22 @@ def test_us_and_jp_share_non_sector_market_configuration():
         "Nasdaq 100",
         "Dow 30",
         "Russell 2000",
+        "TOPIX",
         "日経平均",
         "Euro 600",
         "Hang Seng",
         "Sensex",
         "KOSPI",
-        "US 10Y Yield",
-        "US 30Y Yield",
-        "VIX",
     ]
     assert us["indices"] == jp["indices"]
+    assert list(us["treasuries"]) == ["US 10Y Yield", "US 30Y Yield"]
+    assert us["volatility"] == {"VIX": "^VIX"}
     assert us["commodities"] == jp["commodities"]
     assert us["forex"] == jp["forex"]
     assert us["crypto"] == jp["crypto"]
     assert "GBP/USD" not in us["forex"]
-    assert list(us["crypto"].keys()) == ["Ethereum", "Bitcoin"]
+    assert list(us["crypto"].keys()) == ["Bitcoin"]
+    assert "Silver" not in us["commodities"]
 
 
 def test_jp_sectors_use_next_funds_topix17_etfs():

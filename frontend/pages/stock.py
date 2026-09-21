@@ -17,7 +17,12 @@ from frontend.components.ui_primitives import (
     page_header,
 )
 from frontend.state.market_state import MarketState
-from frontend.state.stock_state import StockState
+from frontend.state.stock_state import (
+    ResearchEvidenceDisplay,
+    ResearchSourceDisplay,
+    StockState,
+    ValuationCaseDisplay,
+)
 from frontend.template import template
 
 
@@ -173,6 +178,249 @@ def _news_panel() -> rx.Component:
     )
 
 
+def _valuation_case_card(item: ValuationCaseDisplay) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.badge(item.label, variant="soft"),
+                rx.spacer(),
+                rx.text(item.upside_display, size="2", weight="bold"),
+                width="100%",
+            ),
+            rx.text(item.value_display, size="6", weight="bold"),
+            rx.text(
+                item.assumptions_display,
+                size="1",
+                color=rx.color("gray", 10),
+            ),
+            align_items="start",
+            spacing="2",
+            width="100%",
+        ),
+        width="100%",
+    )
+
+
+def _research_evidence_card(item: ResearchEvidenceDisplay) -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.text(item.name, weight="bold"),
+                rx.cond(
+                    item.period != "",
+                    rx.badge(item.period, variant="outline", color_scheme="gray"),
+                ),
+                wrap="wrap",
+            ),
+            rx.text(item.summary, size="2"),
+            rx.flex(
+                rx.cond(
+                    item.revenue_display != "-",
+                    rx.text("売上 " + item.revenue_display + " " + item.unit, size="1"),
+                ),
+                rx.cond(
+                    item.profit_display != "-",
+                    rx.text("利益 " + item.profit_display + " " + item.unit, size="1"),
+                ),
+                rx.cond(
+                    item.margin_display != "-",
+                    rx.text("利益率 " + item.margin_display, size="1"),
+                ),
+                gap="0.75rem",
+                wrap="wrap",
+            ),
+            rx.cond(
+                item.source_url != "",
+                rx.link(
+                    rx.icon("external-link", size=13),
+                    "一次資料",
+                    href=item.source_url,
+                    is_external=True,
+                    size="1",
+                ),
+            ),
+            align_items="start",
+            spacing="2",
+            width="100%",
+        ),
+        width="100%",
+    )
+
+
+def _research_source_link(item: ResearchSourceDisplay) -> rx.Component:
+    return rx.link(
+        rx.icon("external-link", size=13),
+        item.title,
+        href=item.url,
+        is_external=True,
+        size="1",
+    )
+
+
+def _research_list(title: str, items) -> rx.Component:
+    return rx.vstack(
+        rx.heading(title, size="3", as_="h3"),
+        rx.cond(
+            items.length() > 0,
+            rx.grid(
+                rx.foreach(items, _research_evidence_card),
+                columns=rx.breakpoints(initial="1", lg="2"),
+                spacing="3",
+                width="100%",
+            ),
+            rx.text(
+                "検証済みの一次資料から表示できる項目がありません。",
+                size="2",
+                color=rx.color("gray", 10),
+            ),
+        ),
+        align_items="start",
+        width="100%",
+    )
+
+
+def _company_research_panel() -> rx.Component:
+    return rx.vstack(
+        rx.flex(
+            rx.vstack(
+                rx.heading("企業価値・セグメント分析", size="5", as_="h2"),
+                rx.text(
+                    "公開一次資料と取得済み財務指標を使い、理論株価・割安性・カタリスト・リスクを銘柄ごとに分析します。",
+                    size="2",
+                    color=rx.color("gray", 10),
+                ),
+                align_items="start",
+                spacing="1",
+            ),
+            rx.spacer(),
+            rx.button(
+                rx.icon("search", size=16),
+                "分析を実行",
+                on_click=StockState.run_company_research,
+                loading=StockState.is_researching,
+                color_scheme="indigo",
+            ),
+            align_items=rx.breakpoints(initial="stretch", md="center"),
+            direction=rx.breakpoints(initial="column", md="row"),
+            gap="0.75rem",
+            width="100%",
+        ),
+        rx.callout(
+            "理論値はscreen-gradeの調査用推計であり、売買推奨や価格保証ではありません。一次資料を確認し、不足データは算出不可のまま表示します。",
+            icon="info",
+            color_scheme="gray",
+            width="100%",
+        ),
+        rx.cond(
+            StockState.research_status == "idle",
+            empty_state(
+                "企業価値分析は未実行です",
+                "上のボタンから、現在表示中の銘柄をオンデマンドで分析できます。",
+            ),
+            rx.vstack(
+                rx.grid(
+                    _stock_summary_tile(
+                        "現在株価",
+                        StockState.valuation_current_display,
+                        "取得済み株価との比較基準",
+                        "gray",
+                    ),
+                    _stock_summary_tile(
+                        "基本ケース理論値",
+                        StockState.valuation_base_display,
+                        StockState.valuation_method,
+                        "blue",
+                    ),
+                    _stock_summary_tile(
+                        "割安性",
+                        StockState.valuation_discount_label,
+                        StockState.valuation_method_reason,
+                        "green",
+                    ),
+                    _stock_summary_tile(
+                        "市場織込み",
+                        StockState.valuation_reverse_dcf,
+                        "現在株価から逆算",
+                        "amber",
+                    ),
+                    columns=rx.breakpoints(initial="1", md="2", xl="4"),
+                    spacing="3",
+                    width="100%",
+                ),
+                rx.cond(
+                    StockState.valuation_cases.length() > 0,
+                    rx.grid(
+                        rx.foreach(StockState.valuation_cases, _valuation_case_card),
+                        columns=rx.breakpoints(initial="1", md="3"),
+                        spacing="3",
+                        width="100%",
+                    ),
+                ),
+                _research_list("セグメント分析", StockState.research_segments),
+                _research_list("会社見通し・ガイダンス", StockState.research_guidance),
+                _research_list("カタリスト", StockState.research_catalysts),
+                _research_list("下振れリスク", StockState.research_risks),
+                rx.cond(
+                    StockState.research_outlook != "",
+                    rx.callout(
+                        StockState.research_outlook,
+                        title="半年～2年の条件付き見通し",
+                        icon="telescope",
+                        color_scheme="blue",
+                        width="100%",
+                    ),
+                ),
+                rx.cond(
+                    StockState.research_sources.length() > 0,
+                    rx.vstack(
+                        rx.text("検証済み一次資料", size="2", weight="bold"),
+                        rx.flex(
+                            rx.foreach(
+                                StockState.research_sources, _research_source_link
+                            ),
+                            gap="0.75rem",
+                            wrap="wrap",
+                        ),
+                        align_items="start",
+                        width="100%",
+                    ),
+                ),
+                rx.cond(
+                    StockState.research_warnings.length() > 0,
+                    rx.callout(
+                        rx.vstack(
+                            rx.foreach(
+                                StockState.research_warnings,
+                                lambda warning: rx.text("・" + warning, size="2"),
+                            ),
+                            align_items="start",
+                            spacing="1",
+                        ),
+                        title="確認事項",
+                        icon="triangle-alert",
+                        color_scheme="amber",
+                        width="100%",
+                    ),
+                ),
+                rx.cond(
+                    StockState.research_fetched_at != "",
+                    rx.text(
+                        "分析取得時刻: " + StockState.research_fetched_at,
+                        size="1",
+                        color=rx.color("gray", 10),
+                    ),
+                ),
+                spacing="4",
+                align_items="start",
+                width="100%",
+            ),
+        ),
+        spacing="4",
+        align_items="start",
+        width="100%",
+    )
+
+
 def _stock_detail_accordion() -> rx.Component:
     return rx.accordion.root(
         rx.accordion.item(
@@ -184,6 +432,10 @@ def _stock_detail_accordion() -> rx.Component:
         rx.accordion.item(
             header="ファンダメンタル / SMART / テーマ詳細",
             content=_fundamental_theme_details(),
+        ),
+        rx.accordion.item(
+            header="企業価値・セグメント分析",
+            content=_company_research_panel(),
         ),
         rx.accordion.item(
             header="参考分析：テクニカル / Entry / 確率・逆張り",

@@ -35,7 +35,9 @@ from src.services.market_presentation_service import (
     IbdRegimeDisplay,
     ImportantLevelDisplay,
     JapanConditionDisplay,
+    MarketChartDisplay,
     MarketDriverDisplay,
+    MarketIndexGroupDisplay,
     MarketMonitorData,
     MarketSignal,
     MicrostructureData,
@@ -82,6 +84,10 @@ class MarketState(rx.State):
     option_complete_status: str = "unavailable"
 
     indices_data: list[dict[str, Any]] = []
+    index_groups: list[MarketIndexGroupDisplay] = []
+    rates_data: list[dict[str, Any]] = []
+    volatility_data: list[dict[str, Any]] = []
+    hero_index_charts: list[MarketChartDisplay] = []
     sectors_data: list[dict[str, Any]] = []
     others_data: list[dict[str, Any]] = []
 
@@ -654,6 +660,10 @@ class MarketState(rx.State):
         self.sentiment_coverage = str(context.sentiment.get("coverage", ""))
         self.top_risk_summary = str(context.top_risk_signposts.get("summary", ""))
         self.indices_data = display.indices_data
+        self.index_groups = display.index_groups
+        self.rates_data = display.rates_data
+        self.volatility_data = display.volatility_data
+        self.hero_index_charts = display.hero_index_charts
         self.sectors_data = display.sectors_data
         self.others_data = display.others_data
         self.watch_indices_data = display.watch_indices_data
@@ -674,6 +684,7 @@ class MarketState(rx.State):
         merged.market_type = summary.market_type
         merged.market_data = summary.market_data
         merged.market_config = summary.market_config
+        merged.market_charts = summary.market_charts
         if summary.detail_stages.get("core"):
             merged.detail_stages = {
                 **merged.detail_stages,

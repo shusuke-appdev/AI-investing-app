@@ -5,9 +5,34 @@ from dataclasses import replace
 import pandas as pd
 
 from src.persistent_cache import PersistentJsonCache
+from src.provider_result import FetchResult
 from src.services import market_dashboard_service as service
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.services.market_analysis_inputs import build_market_analysis_inputs
+
+
+def test_market_chart_context_builds_three_ordered_benchmarks(monkeypatch):
+    index = pd.date_range("2026-01-01", periods=4, freq="D")
+    frames = {
+        ticker: pd.DataFrame({"Close": [100.0, 101.0, 102.0, 103.0]}, index=index)
+        for ticker in ("^GSPC", "^NDX", "1306.T")
+    }
+    monkeypatch.setattr(
+        service,
+        "fetch_batched_history",
+        lambda tickers, period: FetchResult(
+            data=frames,
+            source="test",
+            fetched_at="2026-01-04T00:00:00+00:00",
+        ),
+    )
+
+    result = service.build_market_chart_context()
+
+    assert list(result) == ["S&P 500", "Nasdaq 100", "TOPIX"]
+    assert result["S&P 500"]["change"] == result["Nasdaq 100"]["change"]
+    assert result["TOPIX"]["source_label"] == "ETF proxy"
+    assert result["TOPIX"]["points"][-1] == {"date": "01/04", "price": 103.0}
 
 
 def test_market_analysis_inputs_fetch_each_ticker_once_and_slice_shared_history():
@@ -706,12 +731,16 @@ def test_market_context_round_trip_preserves_forecast_and_composite_layers():
             "status": "confirmed",
             "targets": {"SPY": {"state": "hidden_tail_hedging"}},
         },
+        market_charts={
+            "TOPIX": {"ticker": "1306.T", "points": [{"date": "09/01", "price": 3100}]}
+        },
     )
 
     restored = MarketContext.from_mapping(context.to_dict())
 
     assert restored.short_horizon_forecast == context.short_horizon_forecast
     assert restored.composite_sentiment == context.composite_sentiment
+    assert restored.market_charts == context.market_charts
 
 
 def test_market_details_reuses_supplied_context(monkeypatch):

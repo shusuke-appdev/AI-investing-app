@@ -24,6 +24,7 @@ class ThemeItem(BaseModel):
     """テーマランキングの1行"""
 
     theme: str = ""
+    parent_sector: str = "業種未分類"
     performance: float = 0.0
     total_score: float = 0.0
     momentum_score: float = 0.0
@@ -338,6 +339,7 @@ class ThemeState(rx.State):
                     items.append(
                         ThemeItem(
                             theme=td["theme"],
+                            parent_sector=str(td.get("parent_sector") or "業種未分類"),
                             performance=round(float(td.get("performance_1w") or 0), 1),
                             total_score=round(float(td.get("total_score") or 0), 1),
                             momentum_score=round(

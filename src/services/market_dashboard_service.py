@@ -44,6 +44,7 @@ from src.option_analyst import get_major_indices_option_status
 from src.persistent_cache import PersistentJsonCache, utc_now_iso
 from src.sector_flow_monitor import build_sector_flow_monitor
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
+from src.services.batched_history_provider import fetch_batched_history
 from src.services.data_fetch_manifest import requirement_failures
 from src.services.japan_market_conditions import build_japan_conditions_context
 from src.services.market_analysis_inputs import MarketAnalysisInputs, shared_history
@@ -177,6 +178,7 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
     errors: list[str] = []
     market_data = _safe_call(lambda: get_market_indices(market_type), {}, errors)
     market_config = _safe_call(lambda: get_market_config(market_type), {}, errors)
+    market_charts = _safe_call(build_market_chart_context, {}, errors)
     data_status = [
         DataResult(
             name="market_indices",
@@ -193,6 +195,16 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
             is_partial=not bool(market_config),
             cache_status="live",
         ),
+        DataResult(
+            name="market_index_charts",
+            source="yfinance_batch",
+            fetched_at=_utc_now(),
+            is_partial=len(market_charts) < 3,
+            error="主要3指数チャートの一部を取得できませんでした。"
+            if len(market_charts) < 3
+            else "",
+            cache_status="live",
+        ),
     ]
     manifest_failures = requirement_failures("market_summary", data_status)
     errors = _merge_warnings(errors, manifest_failures)
@@ -200,6 +212,7 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
         market_type=market_type,
         market_data=market_data,
         market_config=market_config,
+        market_charts=market_charts,
         data_status=data_status,
         provenance=market_summary_provenance(
             fetched_at=_utc_now(), has_market_data=bool(market_data)
@@ -223,6 +236,47 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
     if market_data:
         _save_context_cache(context, "summary")
     return context
+
+
+def build_market_chart_context() -> dict[str, Any]:
+    """Build compact six-month chart payloads for the three home benchmarks."""
+
+    targets = {
+        "S&P 500": "^GSPC",
+        "Nasdaq 100": "^NDX",
+        "TOPIX": "1306.T",
+    }
+    result = fetch_batched_history(list(targets.values()), period="6mo")
+    charts: dict[str, Any] = {}
+    for name, ticker in targets.items():
+        frame = result.data.get(ticker)
+        if frame is None or frame.empty or "Close" not in frame:
+            continue
+        close = pd.to_numeric(frame["Close"], errors="coerce").dropna()
+        if close.empty:
+            continue
+        latest = float(close.iloc[-1])
+        previous = float(close.iloc[-2]) if len(close) > 1 else latest
+        change = ((latest / previous) - 1) * 100 if previous else 0.0
+        sampled = close.iloc[:: max(1, len(close) // 90)]
+        if sampled.index[-1] != close.index[-1]:
+            sampled = pd.concat([sampled, close.iloc[[-1]]])
+        charts[name] = {
+            "name": name,
+            "ticker": ticker,
+            "price": latest,
+            "change": change,
+            "source_label": "ETF proxy" if name == "TOPIX" else "direct index",
+            "fetched_at": result.fetched_at,
+            "points": [
+                {
+                    "date": pd.Timestamp(index).strftime("%m/%d"),
+                    "price": round(float(value), 2),
+                }
+                for index, value in sampled.items()
+            ],
+        }
+    return charts
 
 
 def build_market_details_context(
@@ -436,6 +490,7 @@ def build_market_theme_flow_context(
         market_type=market_type,
         market_data=base.market_data,
         market_config=base.market_config,
+        market_charts=base.market_charts,
         options=options,
         evaluation=evaluation,
         ibd_regime=ibd_regime,
@@ -588,6 +643,7 @@ def build_market_volatility_sentiment_context(
         market_type=market_type,
         market_data=base.market_data,
         market_config=base.market_config,
+        market_charts=base.market_charts,
         options=base.options,
         evaluation=base.evaluation,
         ibd_regime=base.ibd_regime,
@@ -808,6 +864,7 @@ def build_market_high_context(
         market_type=market_type,
         market_data=base.market_data,
         market_config=base.market_config,
+        market_charts=base.market_charts,
         options=base.options,
         evaluation=base.evaluation,
         ibd_regime=base.ibd_regime,

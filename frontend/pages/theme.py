@@ -57,7 +57,17 @@ def _theme_card(item: ThemeItem) -> rx.Component:
                 rx.hstack(
                     rx.badge("#", item.rank, color_scheme="gray", variant="solid"),
                     rx.vstack(
-                        rx.text(item.theme, size="4", weight="bold"),
+                        rx.flex(
+                            rx.text(item.theme, size="4", weight="bold"),
+                            rx.badge(
+                                item.parent_sector,
+                                color_scheme="cyan",
+                                variant="surface",
+                            ),
+                            align="center",
+                            wrap="wrap",
+                            gap="0.4rem",
+                        ),
                         rx.text(
                             item.component_count,
                             "/",

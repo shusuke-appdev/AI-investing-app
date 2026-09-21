@@ -26,8 +26,9 @@ class MarketSettings(TypedDict):
     default_ticker: str
     options_available: bool
     indices: dict[str, str]
-    sectors: dict[str, str]
     treasuries: dict[str, str]
+    volatility: dict[str, str]
+    sectors: dict[str, str]
     commodities: dict[str, str]
     crypto: dict[str, str]
     forex: dict[str, str]
@@ -38,24 +39,27 @@ SHARED_INDICES: dict[str, str] = {
     "Nasdaq 100": "^NDX",
     "Dow 30": "^DJI",
     "Russell 2000": "^RUT",
+    "TOPIX": "1306.T",
     "日経平均": "^N225",
     "Euro 600": "^STOXX",
     "Hang Seng": "^HSI",
     "Sensex": "^BSESN",
     "KOSPI": "^KS11",
+}
+
+SHARED_TREASURIES: dict[str, str] = {
     "US 10Y Yield": "^TNX",
     "US 30Y Yield": "^TYX",
-    "VIX": "^VIX",
 }
+
+SHARED_VOLATILITY: dict[str, str] = {"VIX": "^VIX"}
 
 SHARED_COMMODITIES: dict[str, str] = {
     "WTI Oil": "CL=F",
     "Gold": "GC=F",
-    "Silver": "SI=F",
 }
 
 SHARED_CRYPTO: dict[str, str] = {
-    "Ethereum": "ETH-USD",
     "Bitcoin": "BTC-USD",
 }
 
@@ -110,10 +114,9 @@ US_CONFIG: MarketSettings = {
     "default_ticker": "AAPL",
     "options_available": True,
     "indices": SHARED_INDICES,
+    "treasuries": SHARED_TREASURIES,
+    "volatility": SHARED_VOLATILITY,
     "sectors": US_SECTORS,
-    "treasuries": {
-        # indices に統合済み
-    },
     "commodities": SHARED_COMMODITIES,
     "crypto": SHARED_CRYPTO,
     "forex": SHARED_FOREX,
@@ -130,11 +133,9 @@ JP_CONFIG: MarketSettings = {
     "default_ticker": "7203.T",  # トヨタ
     "options_available": False,  # yfinanceでは日本株オプション取得不可
     "indices": SHARED_INDICES,
+    "treasuries": SHARED_TREASURIES,
+    "volatility": SHARED_VOLATILITY,
     "sectors": JP_TOPIX17_SECTORS,
-    "treasuries": {
-        # 日本国債はyfinanceで直接取得困難
-        # Stooq経由で取得
-    },
     "commodities": SHARED_COMMODITIES,
     "crypto": SHARED_CRYPTO,
     "forex": SHARED_FOREX,

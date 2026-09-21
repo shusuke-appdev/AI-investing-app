@@ -110,7 +110,18 @@ def _market_decision_summary() -> rx.Component:
 def _theme_row(item) -> rx.Component:
     return rx.hstack(
         rx.badge("#" + item.rank.to_string(), color_scheme="blue", variant="surface"),
-        rx.text(item.theme, weight="bold", size="2", flex="1"),
+        rx.flex(
+            rx.text(item.theme, weight="bold", size="2"),
+            rx.badge(
+                rx.cond(item.parent_sector != "", item.parent_sector, "業種未分類"),
+                color_scheme="cyan",
+                variant="surface",
+            ),
+            flex="1",
+            align="center",
+            wrap="wrap",
+            gap="0.35rem",
+        ),
         rx.text(item.performance_1m_str, size="2", color=rx.color("gray", 11)),
         rx.badge(item.total_score_str, color_scheme="gray", variant="surface"),
         width="100%",

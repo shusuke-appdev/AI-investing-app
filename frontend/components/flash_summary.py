@@ -54,17 +54,134 @@ def flash_summary() -> rx.Component:
     """Render cross-asset market summary."""
 
     return rx.box(
-        rx.heading("アセットクラス別概要", size="5", as_="h2", margin_bottom="1rem"),
+        _hero_index_charts(),
+        rx.heading("市場を俯瞰", size="5", as_="h2", margin_bottom="1rem"),
+        rx.card(
+            rx.vstack(
+                rx.text("株式指数", weight="bold", size="4"),
+                rx.text(
+                    "米国・日本・その他地域を一つのカテゴリ内で比較します。",
+                    size="1",
+                    color=rx.color("gray", 10),
+                ),
+                rx.grid(
+                    rx.foreach(MarketState.index_groups, _index_group),
+                    columns=rx.breakpoints(initial="1", md="3"),
+                    spacing="3",
+                    width="100%",
+                ),
+                width="100%",
+                align_items="start",
+            ),
+            width="100%",
+            margin_bottom="1rem",
+        ),
         rx.grid(
-            _market_group("株式指数・金利", MarketState.indices_data),
+            _market_group("金利", MarketState.rates_data),
             _market_group("セクター別指数", MarketState.sectors_data),
-            _market_group("商品・FX・暗号資産", MarketState.others_data),
+            _market_group(
+                "商品・FX・暗号資産・ボラティリティ",
+                MarketState.others_data + MarketState.volatility_data,
+            ),
             columns=rx.breakpoints(initial="1", md="3"),
             spacing="4",
             width="100%",
         ),
         width="100%",
         margin_bottom="2rem",
+    )
+
+
+def _hero_index_charts() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.heading("主要3指数", size="5", as_="h2"),
+            rx.badge("6か月・日足", variant="surface"),
+            align_items="center",
+            margin_bottom="1rem",
+        ),
+        rx.cond(
+            MarketState.hero_index_charts.length() > 0,
+            rx.grid(
+                rx.foreach(MarketState.hero_index_charts, _index_chart_card),
+                columns=rx.breakpoints(initial="1", md="3"),
+                spacing="3",
+                width="100%",
+            ),
+            rx.card(
+                rx.text(
+                    "概要更新後にS&P 500、Nasdaq 100、TOPIXを表示します。",
+                    color=rx.color("gray", 10),
+                ),
+                width="100%",
+            ),
+        ),
+        width="100%",
+        margin_bottom="1.25rem",
+    )
+
+
+def _index_chart_card(item) -> rx.Component:
+    positive = item.change >= 0
+    return rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.vstack(
+                    rx.text(item.name, weight="bold", size="3"),
+                    rx.text(item.ticker, size="1", color=rx.color("gray", 10)),
+                    spacing="0",
+                    align_items="start",
+                ),
+                rx.spacer(),
+                rx.vstack(
+                    rx.text(item.price, weight="bold", size="4"),
+                    rx.badge(
+                        item.change_str,
+                        color_scheme=rx.cond(positive, "green", "red"),
+                        variant="surface",
+                    ),
+                    spacing="1",
+                    align_items="end",
+                ),
+                width="100%",
+                align_items="start",
+            ),
+            rx.recharts.area_chart(
+                rx.recharts.area(
+                    data_key="price",
+                    stroke=rx.cond(positive, rx.color("green", 9), rx.color("red", 9)),
+                    fill=rx.cond(positive, rx.color("green", 4), rx.color("red", 4)),
+                    dot=False,
+                ),
+                rx.recharts.x_axis(data_key="date", hide=True),
+                rx.recharts.y_axis(domain=["auto", "auto"], hide=True),
+                rx.recharts.tooltip(),
+                data=item.points,
+                height=150,
+                width="100%",
+            ),
+            rx.hstack(
+                rx.badge(item.source_label, color_scheme="gray", variant="surface"),
+                rx.spacer(),
+                rx.text(item.fetched_at, size="1", color=rx.color("gray", 9)),
+                width="100%",
+            ),
+            width="100%",
+            spacing="2",
+        ),
+        width="100%",
+    )
+
+
+def _index_group(group) -> rx.Component:
+    return rx.box(
+        rx.text(group.label, weight="bold", size="2", margin_bottom="0.35rem"),
+        rx.cond(
+            group.rows.length() > 0,
+            rx.vstack(rx.foreach(group.rows, market_item), width="100%", spacing="0"),
+            rx.text("データがありません", size="1", color=rx.color("gray", 9)),
+        ),
+        min_width="0",
     )
 
 

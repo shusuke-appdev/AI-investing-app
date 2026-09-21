@@ -21,8 +21,10 @@ from src.services.market_presentation_models import (
     IbdRegimeDisplay,
     ImportantLevelDisplay,
     JapanConditionDisplay,
+    MarketChartDisplay,
     MarketDisplayContext,
     MarketDriverDisplay,
+    MarketIndexGroupDisplay,
     MarketMonitorData,
     MarketSignal,
     MicrostructureData,
@@ -60,8 +62,8 @@ from src.services.market_presentation_models import (
 def build_market_display_context(context: MarketContext) -> MarketDisplayContext:
     """Convert a market analysis context into Reflex-safe display models."""
 
-    indices_data, sectors_data, others_data = _market_lists(
-        context.market_data, context.market_config
+    indices_data, sectors_data, others_data, rates_data, volatility_data = (
+        _market_lists(context.market_data, context.market_config)
     )
     distortions = context.market_distortions or {}
     return MarketDisplayContext(
@@ -109,6 +111,10 @@ def build_market_display_context(context: MarketContext) -> MarketDisplayContext
         japan_conditions_score_label=context.japan_conditions.get("score_label", ""),
         japan_conditions_score=float(context.japan_conditions.get("score", 0.0)),
         indices_data=indices_data,
+        index_groups=_index_groups(indices_data),
+        rates_data=rates_data,
+        volatility_data=volatility_data,
+        hero_index_charts=_format_market_charts(context.market_charts),
         sectors_data=sectors_data,
         others_data=others_data,
         watch_indices_data=[
@@ -904,15 +910,67 @@ def _driver_value_str(label: str, value: Any) -> str:
 
 def _market_lists(
     raw_data: dict[str, Any], config: dict[str, Any]
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     indices = _ordered_market_items(raw_data, config.get("indices", {}))
     sectors = _ordered_market_items(raw_data, config.get("sectors", {}))
+    rates = _ordered_market_items(raw_data, config.get("treasuries", {}))
+    volatility = _ordered_market_items(raw_data, config.get("volatility", {}))
     others = [
         *_ordered_market_items(raw_data, config.get("commodities", {})),
         *_ordered_market_items(raw_data, config.get("forex", {})),
         *_ordered_market_items(raw_data, config.get("crypto", {})),
     ]
-    return indices, sectors, others
+    return indices, sectors, others, rates, volatility
+
+
+def _index_groups(indices: list[dict[str, Any]]) -> list[MarketIndexGroupDisplay]:
+    names = {
+        "us": {"S&P 500", "Nasdaq 100", "Dow 30", "Russell 2000"},
+        "jp": {"TOPIX", "日経平均"},
+    }
+    groups = (
+        ("us", "米国", [item for item in indices if item["name"] in names["us"]]),
+        ("jp", "日本", [item for item in indices if item["name"] in names["jp"]]),
+        (
+            "other",
+            "その他地域",
+            [item for item in indices if item["name"] not in names["us"] | names["jp"]],
+        ),
+    )
+    return [
+        MarketIndexGroupDisplay(key=key, label=label, rows=items)
+        for key, label, items in groups
+    ]
+
+
+def _format_market_charts(raw: dict[str, Any]) -> list[MarketChartDisplay]:
+    order = ("S&P 500", "Nasdaq 100", "TOPIX")
+    charts: list[MarketChartDisplay] = []
+    for name in order:
+        item = raw.get(name)
+        if not isinstance(item, dict):
+            continue
+        price = _optional_float(item.get("price"))
+        change = _optional_float(item.get("change")) or 0.0
+        charts.append(
+            MarketChartDisplay(
+                name=name,
+                ticker=str(item.get("ticker") or ""),
+                price="-" if price is None else f"{price:,.2f}",
+                change=round(change, 2),
+                change_str=f"{change:+.2f}%",
+                source_label=str(item.get("source_label") or "direct"),
+                fetched_at=str(item.get("fetched_at") or ""),
+                points=list(item.get("points") or []),
+            )
+        )
+    return charts
 
 
 def _ordered_market_items(

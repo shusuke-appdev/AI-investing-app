@@ -7,13 +7,26 @@ def test_market_display_context_formats_market_context_for_reflex_state():
         market_type="US",
         market_data={
             "S&P 500": {"ticker": "SPY", "price": 5300.4, "change": 0.54},
+            "TOPIX": {"ticker": "1306.T", "price": 3120.0, "change": 0.2},
             "Technology": {"ticker": "XLK", "price": 240.12, "change": 1.2},
             "Bitcoin": {"ticker": "BTC-USD", "price": 68000.0, "change": -2.4},
+            "US 10Y Yield": {"ticker": "^TNX", "price": 4.15, "change": 0.1},
+            "VIX": {"ticker": "^VIX", "price": 17.2, "change": -1.0},
         },
         market_config={
-            "indices": {"S&P 500": "SPY"},
+            "indices": {"S&P 500": "SPY", "TOPIX": "1306.T"},
             "sectors": {"Technology": "XLK"},
             "crypto": {"Bitcoin": "BTC-USD"},
+            "treasuries": {"US 10Y Yield": "^TNX"},
+            "volatility": {"VIX": "^VIX"},
+        },
+        market_charts={
+            "S&P 500": {
+                "ticker": "^GSPC",
+                "price": 5300.4,
+                "change": 0.54,
+                "points": [{"date": "07/10", "price": 5300.4}],
+            }
         },
         options=OptionContext(
             items=[
@@ -207,8 +220,18 @@ def test_market_display_context_formats_market_context_for_reflex_state():
     display = build_market_display_context(context)
 
     assert display.indices_data == [
-        {"name": "S&P 500", "price": "5,300", "change": 0.5}
+        {"name": "S&P 500", "price": "5,300", "change": 0.5},
+        {"name": "TOPIX", "price": "3,120", "change": 0.2},
     ]
+    assert [group.label for group in display.index_groups] == [
+        "米国",
+        "日本",
+        "その他地域",
+    ]
+    assert display.index_groups[1].rows[0]["name"] == "TOPIX"
+    assert display.rates_data[0]["name"] == "US 10Y Yield"
+    assert display.volatility_data[0]["name"] == "VIX"
+    assert display.hero_index_charts[0].name == "S&P 500"
     assert display.sectors_data[0]["name"] == "Technology"
     assert display.others_data[0]["price"] == "$68.0K"
     assert display.option_analysis[0].net_gex_str == "+12M"
@@ -245,7 +268,6 @@ def test_market_display_context_uses_configured_market_order():
             "Bitcoin": {"ticker": "BTC-USD", "price": 68000.0, "change": 2.0},
             "Sensex": {"ticker": "^BSESN", "price": 75000.0, "change": 0.1},
             "S&P 500": {"ticker": "^GSPC", "price": 5300.0, "change": 0.2},
-            "Ethereum": {"ticker": "ETH-USD", "price": 3500.0, "change": 3.0},
             "Dow 30": {"ticker": "^DJI", "price": 39000.0, "change": -0.1},
             "Gold": {"ticker": "GC=F", "price": 2300.0, "change": 0.4},
             "USD/JPY": {"ticker": "JPY=X", "price": 155.0, "change": 0.2},
@@ -259,7 +281,7 @@ def test_market_display_context_uses_configured_market_order():
             "sectors": {},
             "commodities": {"Gold": "GC=F"},
             "forex": {"USD/JPY": "JPY=X"},
-            "crypto": {"Ethereum": "ETH-USD", "Bitcoin": "BTC-USD"},
+            "crypto": {"Bitcoin": "BTC-USD"},
         },
     )
 
@@ -273,6 +295,5 @@ def test_market_display_context_uses_configured_market_order():
     assert [item["name"] for item in display.others_data] == [
         "Gold",
         "USD/JPY",
-        "Ethereum",
         "Bitcoin",
     ]

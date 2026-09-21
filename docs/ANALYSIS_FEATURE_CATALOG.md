@@ -1,6 +1,6 @@
 # 分析・予測機能カタログ
 
-更新日: 2026-08-10
+更新日: 2026-09-21
 
 本書は分析系・予測系機能の正本です。各機能が答える問い、共有する入力、他機能へ影響してよい範囲を固定し、似た指標を単一スコアへ混ぜないために使用します。
 
@@ -24,7 +24,7 @@ flowchart LR
 
 | 機能 | 答える問い | 主入力 | 主出力 | 位置づけ・許可される連携 | 欠損時 | 更新契機 |
 |---|---|---|---|---|---|---|
-| 市場サマリー | 主要指数・金利・商品・為替は今どう動いたか | 市場価格provider | `market_data` | 他分析の観測値。予測ではない | 項目を省略し`partial` | 初期表示・サマリー更新 |
+| 市場サマリー | 主要指数・金利・商品・為替は今どう動いたか | 市場価格provider、主要3指数の6か月日足 | `market_data`, `market_charts` | 株式指数を米国・日本・その他地域に小分類し、金利を別枠表示。S&P 500・Nasdaq 100・TOPIX ETF proxyを上段チャートに固定。予測ではない | 項目を省略し`partial` | 初期表示・サマリー更新 |
 | IBD式市場状態 | 価格・出来高から市場状態をどう分類するか | SPY/NDX OHLCV | `ibd_regime` | 公式IBDではないproxy。戦略の状態入力 | 判定不能 | Theme/Flow |
 | 市場環境評価 | トレンド、モメンタム、breadth等は総合して強いか | OHLCV、breadth、取得済みoption、市場構造 | `evaluation` | 市場の現状評価。短期予測確率を上書きしない | `データなし` | Theme/Flow、Options |
 | 市場マイクロストラクチャー | CTA proxy、流動性proxy、VRP、巻き戻しリスクはどうか | SPY OHLCV、明示的に渡されたoption | `microstructure` | Theme/Flowではoptionを暗黙取得しない。Options取得後だけ同じチェーンを反映 | option要素だけ欠損 | Theme/Flow、Options |
@@ -62,6 +62,7 @@ flowchart LR
 | 適応型ファンダメンタル | 業種・規模に合う財務評価は何か | 企業指標 | `fundamental_profile` | 必須KPI不足は部分評価 |
 | セクター・テーマ | 所属群と市場順位はどうか | 企業情報、相対価格、Market cache | `sector_theme_context` | cache優先、必要時だけlive fallback |
 | 根拠一致度 | 技術・Entry・財務・テーマが整合するか | 4つの必須入力 | `purchase_evidence` | 1つでも欠損なら算出不可 |
+| 企業価値・セグメント分析 | 現在株価に対する理論値レンジ、割安性、事業実体、カタリストとリスクは何か | 取得済み企業指標、SEC/EDGAR・EDINET・JPX・会社公式IRの検索引用 | `company_research`, `valuation_cases` | 明示操作時のみ。一般企業はprovider FCFをFCFF proxyとする簡易DCF、金融は残余利益法、REITはFFO/AFFO倍率。弱気・基本・強気、reverse DCF、一次資料に結びつくセグメント・見通し・リスクを分離表示 | FCF・株式数等が不足すれば理論値は算出不可。公式引用で検証できない資料項目・見通しは破棄 |
 | 日本株需給期日 | 信用期日・制度信用・貸借警戒はどうか | 日本株OHLCV、任意の制度信用入力 | `japan_supply_demand` | 日本株以外not applicable、入力不足明示 |
 | 市場ガードレール | 市場の警戒情報は何か | cached `MarketContext` | 参考表示のみ。個別株の主条件・評価は不変 | monitoring/unavailable |
 | トレード分析・AI | 表示済み分析をどう条件整理するか | `StockSignalContext` | 再取得・再採点せず同じ根拠を説明 | context不足を明示 |
@@ -78,3 +79,4 @@ flowchart LR
 6. 廃止機能の保存・取り込み・旧イベントを復活させない。
 7. SPY/QQQ/IWMのIVスキューを単純平均しない。市場参照値はfreshなSPY直接25Δ値だけとする。
 8. `proxy`、`legacy_proxy`、`stale`のIVスキューは市場・テーマの方向スコアを変更しない。
+9. 理論株価はscreen-gradeの調査用推計であり、売買推奨・価格保証・既存の根拠一致度スコアへの加点には使わない。

@@ -102,6 +102,7 @@ limitations = "実注文、約定、投資成果は対象外"
 profile = "standard"
 migration = "test_option_analyst.py のPCR・欠損・Gamma境界は test_option_logic.py へ統合し、製品関数に対する契約を残した"
 files = [
+  "test_company_research_service.py",
   "test_fundamental_profile_service.py",
   "test_option_analyst_logic.py",
   "test_option_logic.py",

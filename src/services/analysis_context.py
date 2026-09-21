@@ -204,6 +204,7 @@ class MarketContext:
     market_type: str
     market_data: dict[str, Any] = field(default_factory=dict)
     market_config: dict[str, Any] = field(default_factory=dict)
+    market_charts: dict[str, Any] = field(default_factory=dict)
     options: OptionContext = field(default_factory=OptionContext)
     evaluation: dict[str, Any] = field(default_factory=dict)
     ibd_regime: dict[str, Any] = field(default_factory=dict)
@@ -254,6 +255,7 @@ class MarketContext:
             "market_type": self.market_type,
             "market_data": self.market_data,
             "market_config": self.market_config,
+            "market_charts": self.market_charts,
             "options": self.options.to_dict(),
             "evaluation": self.evaluation,
             "ibd_regime": self.ibd_regime,
@@ -315,6 +317,7 @@ class MarketContext:
             market_type=value.get("market_type", "US"),
             market_data=value.get("market_data") or {},
             market_config=value.get("market_config") or {},
+            market_charts=value.get("market_charts") or {},
             options=OptionContext(
                 items=list(options.get("items") or []),
                 error_message=str(options.get("error_message") or ""),

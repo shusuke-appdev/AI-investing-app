@@ -107,6 +107,8 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
             **config.get("sectors", {}),
             **config.get("commodities", {}),
             **config.get("crypto", {}),
+            **config.get("treasuries", {}),
+            **config.get("volatility", {}),
             **config.get("forex", {}),
         }
         if jp_yf_targets:
@@ -126,6 +128,7 @@ def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
         **config.get("sectors", {}),
         **config.get("commodities", {}),
         **config.get("crypto", {}),
+        **config.get("volatility", {}),
     }
 
     yf_targets = {**config.get("treasuries", {}), **config.get("forex", {})}
@@ -214,6 +217,7 @@ def get_market_indices_result(
             "commodities",
             "crypto",
             "treasuries",
+            "volatility",
             "forex",
         )
         for ticker in config.get(group, {}).values()

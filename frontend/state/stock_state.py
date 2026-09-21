@@ -58,13 +58,43 @@ class VolumeProfileBinDisplay(BaseModel):
     in_value_area: bool = False
 
 
+class ValuationCaseDisplay(BaseModel):
+    key: str = ""
+    label: str = ""
+    value_display: str = "算出不可"
+    upside_display: str = "-"
+    assumptions_display: str = ""
+
+
+class ResearchEvidenceDisplay(BaseModel):
+    name: str = ""
+    summary: str = ""
+    period: str = ""
+    source_url: str = ""
+    unit: str = ""
+    revenue_display: str = "-"
+    profit_display: str = "-"
+    margin_display: str = "-"
+
+
+class ResearchSourceDisplay(BaseModel):
+    title: str = ""
+    url: str = ""
+    source_type: str = "primary"
+
+
 def _number_text(value: Any) -> str:
     if value is None:
         return "-"
     try:
-        return f"{float(value):.2f}"
+        return f"{float(value):,.2f}"
     except (TypeError, ValueError):
         return "-"
+
+
+def _percent_text(value: Any) -> str:
+    number = _number_text(value)
+    return "-" if number == "-" else f"{number}%"
 
 
 def plain_state_value(value: Any) -> Any:
@@ -182,12 +212,34 @@ class StockState(rx.State):
     data_issue_summary: str = ""
     fetch_request_id: int = 0
     analysis_request_id: int = 0
+    research_request_id: int = 0
+    is_researching: bool = False
+    company_research: dict[str, Any] = {}
+    research_status: str = "idle"
+    research_readiness: str = "not-decision-ready"
+    valuation_method: str = ""
+    valuation_method_reason: str = ""
+    valuation_base_display: str = "算出不可"
+    valuation_current_display: str = "算出不可"
+    valuation_discount_label: str = "判定不能"
+    valuation_reverse_dcf: str = "算出不可"
+    valuation_cases: list[ValuationCaseDisplay] = []
+    valuation_sensitivity: list[dict[str, Any]] = []
+    research_segments: list[ResearchEvidenceDisplay] = []
+    research_guidance: list[ResearchEvidenceDisplay] = []
+    research_catalysts: list[ResearchEvidenceDisplay] = []
+    research_risks: list[ResearchEvidenceDisplay] = []
+    research_outlook: str = ""
+    research_sources: list[ResearchSourceDisplay] = []
+    research_warnings: list[str] = []
+    research_fetched_at: str = ""
 
     def prepare_page(self):
         """Normalize transient flags before the stock page renders."""
 
         self.is_fetching = False
         self.is_generating_analysis = False
+        self.is_researching = False
         self.error_msg = ""
         self.profile_warning = ""
         route_ticker = self.router.page.params.get("ticker", "")
@@ -203,6 +255,7 @@ class StockState(rx.State):
         if normalized != self.ticker:
             self.fetch_request_id += 1
             self.analysis_request_id += 1
+            self.research_request_id += 1
             self.primary_conditions = []
             self.primary_as_of = ""
             self.primary_stop = "判定不能"
@@ -210,6 +263,7 @@ class StockState(rx.State):
             self.market_reference = "未取得"
             self.ai_analysis = ""
             self.is_generating_analysis = False
+            self._reset_company_research()
         self.ticker = normalized
         self._reset_trade_analysis()
 
@@ -255,6 +309,7 @@ class StockState(rx.State):
         self.fetch_request_id += 1
         request_id = self.fetch_request_id
         self.analysis_request_id += 1
+        self.research_request_id += 1
         self.source_revision += 1
         self.loaded_ticker = ""
         self.ai_analysis = ""
@@ -263,6 +318,7 @@ class StockState(rx.State):
         self.error_msg = ""
         self.profile_warning = ""
         self._reset_trade_analysis()
+        self._reset_company_research()
         yield
 
         try:
@@ -562,6 +618,45 @@ class StockState(rx.State):
                 self.is_generating_analysis = False
                 yield
 
+    async def run_company_research(self):
+        """Run source-grounded company research and deterministic valuation."""
+
+        ticker = self.loaded_ticker.strip()
+        if not ticker or ticker != self.ticker.strip() or not self.info:
+            self.error_msg = (
+                "現在の入力銘柄を取得してから企業価値分析を実行してください。"
+            )
+            return
+        self.research_request_id += 1
+        request_id = self.research_request_id
+        revision = self.source_revision
+        self.is_researching = True
+        self.research_status = "loading"
+        self.research_warnings = []
+        yield
+
+        try:
+            from src.services.company_research_service import build_company_research
+
+            context = await asyncio.to_thread(
+                build_company_research,
+                ticker,
+                plain_state_value(self.info),
+            )
+            if not self._is_current_research(request_id, ticker, revision):
+                return
+            self._apply_company_research(context)
+        except Exception as exc:
+            if not self._is_current_research(request_id, ticker, revision):
+                return
+            error = log_state_exception(logger, "企業価値分析", exc)
+            self.research_status = "failed"
+            self.research_warnings = [error.message]
+        finally:
+            if self._is_current_research(request_id, ticker, revision):
+                self.is_researching = False
+                yield
+
     def _is_current_fetch(self, request_id: int, ticker: str) -> bool:
         return is_current_request(
             current_id=self.fetch_request_id,
@@ -577,6 +672,91 @@ class StockState(rx.State):
             request_id=request_id,
             request_key=ticker,
         )
+
+    def _is_current_research(self, request_id: int, ticker: str, revision: int) -> bool:
+        return revision == self.source_revision and is_current_request(
+            current_id=self.research_request_id,
+            current_key=self.loaded_ticker.strip(),
+            request_id=request_id,
+            request_key=ticker,
+        )
+
+    def _apply_company_research(self, context: dict[str, Any]) -> None:
+        self.company_research = plain_state_value(context)
+        self.research_status = str(context.get("status") or "unavailable")
+        self.research_readiness = str(context.get("readiness") or "not-decision-ready")
+        valuation = dict(context.get("valuation") or {})
+        self.valuation_method = str(valuation.get("method") or "")
+        self.valuation_method_reason = str(valuation.get("method_reason") or "")
+        self.valuation_base_display = str(
+            valuation.get("base_value_display") or "算出不可"
+        )
+        self.valuation_current_display = str(
+            valuation.get("current_price_display") or "算出不可"
+        )
+        self.valuation_discount_label = str(
+            valuation.get("discount_label") or "判定不能"
+        )
+        self.valuation_reverse_dcf = str(valuation.get("reverse_dcf") or "算出不可")
+        self.valuation_cases = [
+            ValuationCaseDisplay(**item)
+            for item in valuation.get("cases", [])
+            if isinstance(item, dict)
+        ]
+        self.valuation_sensitivity = list(valuation.get("sensitivity") or [])
+        self.research_segments = self._research_rows(context.get("segments"))
+        self.research_guidance = self._research_rows(context.get("guidance"))
+        self.research_catalysts = self._research_rows(context.get("catalysts"))
+        self.research_risks = self._research_rows(context.get("risks"))
+        self.research_outlook = str(context.get("outlook") or "")
+        self.research_sources = [
+            ResearchSourceDisplay(**item)
+            for item in context.get("sources", [])
+            if isinstance(item, dict)
+        ]
+        self.research_warnings = list(context.get("warnings") or [])
+        self.research_fetched_at = str(context.get("fetched_at") or "")
+
+    def _research_rows(self, value: Any) -> list[ResearchEvidenceDisplay]:
+        rows = []
+        for item in value if isinstance(value, list) else []:
+            if not isinstance(item, dict):
+                continue
+            rows.append(
+                ResearchEvidenceDisplay(
+                    name=str(item.get("name") or ""),
+                    summary=str(item.get("summary") or ""),
+                    period=str(item.get("period") or ""),
+                    source_url=str(item.get("source_url") or ""),
+                    unit=str(item.get("unit") or ""),
+                    revenue_display=_number_text(item.get("revenue")),
+                    profit_display=_number_text(item.get("operating_profit")),
+                    margin_display=_percent_text(item.get("margin")),
+                )
+            )
+        return rows
+
+    def _reset_company_research(self) -> None:
+        self.is_researching = False
+        self.company_research = {}
+        self.research_status = "idle"
+        self.research_readiness = "not-decision-ready"
+        self.valuation_method = ""
+        self.valuation_method_reason = ""
+        self.valuation_base_display = "算出不可"
+        self.valuation_current_display = "算出不可"
+        self.valuation_discount_label = "判定不能"
+        self.valuation_reverse_dcf = "算出不可"
+        self.valuation_cases = []
+        self.valuation_sensitivity = []
+        self.research_segments = []
+        self.research_guidance = []
+        self.research_catalysts = []
+        self.research_risks = []
+        self.research_outlook = ""
+        self.research_sources = []
+        self.research_warnings = []
+        self.research_fetched_at = ""
 
     def _news_headlines(self) -> list[str]:
         headlines = []

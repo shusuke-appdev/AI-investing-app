@@ -2,7 +2,7 @@
 
 # 分析データ来歴台帳
 
-更新日: 2026-09-09
+更新日: 2026-09-21
 
 銘柄の成長率はStockInfoの `revenueGrowth` / `earningsGrowth`（百分率）を主条件・SMARTで共用する。配当利回りは `dividendRate / currentPrice × 100` の `computed` 値。Yahooの `dividendYield` は単位の判別に使用せず、年額配当か価格が欠損・不正なら `unavailable` とする。既存の企業情報キャッシュの鮮度契約は変更しない。
 
@@ -71,6 +71,9 @@
 | トレンド/テーマ | 次期リーダー候補 | computed / grounded evidence / unavailable | 総合テーマ順位、登録代表、Gemini検索引用・一次資料、最大40銘柄とSPY/1306.Tの2年日足、最大15社の企業指標 | `/theme-leaders`の明示操作だけ。Geminiは母集団拡張のみ。低流動性、200日未満、Stage条件、市場/テーマRS、4 ATRを検証後、ファンダメンタル55以上を研究優先、40～54を技術先行、40未満を除外、取得率60%未満を確認待ちへ分離。探索・深掘り24時間cache、価格結果12時間cache | 候補由来、検索引用、Stage/RS/VCP/ATR/節目/RVOL、ファンダメンタル、次条件、無効化、未検証・確認待ち・除外理由、使用量 | Gemini出力を事実・順位・売買推奨と誤認 | 引用外URLを破棄し、機械順位をGeminiで変更しない。news・option・保存・通知を呼ばない | 最優先 | 2026-08-17 登録外探索・F評価追加 |
 | Stock / Market | 日本株現在値・価格履歴 | direct | yfinance | J-Quants Free価格系列は遅延するため汎用価格経路から除外 | 通常の価格・履歴表示 | 遅延価格を現在値と誤認 | 公式リアルタイム契約がある場合だけ別経路で追加 | 最優先 | 2026-06-14 修正 |
 | Market Intelligence | 取得失敗した指数・セクター価格 | unavailable | なし | Finnhub・yfinance等の取得失敗 | `0.0` を表示せず項目を省略 | 市場価格ゼロ・中立と誤認 | 失敗理由を結果型へ保持 | 最優先 | 2026-06-14 修正 |
+| Market Intelligence | S&P 500・Nasdaq 100・TOPIX上段チャート | direct / proxy / unavailable | yfinance batchの日足。S&P 500=`^GSPC`、Nasdaq 100=`^NDX`、TOPIX=`1306.T` | 6か月履歴を最大約90点へ間引き。TOPIXはETF proxy | 基本市況の最上段に3列表示し、TOPIXにはproxy表示。欠損チャートは省略 | ETF価格をTOPIX指数値そのものと誤認 | 公式指数系列を安定取得できる場合に別系列として置換 | 高 | 2026-09-21 追加 |
+| Stock | 理論株価・割安性 | computed / proxy / unavailable | 企業指標のFCF、株式数、現金、負債、成長率、BPS、ROE、FFO/AFFO | 一般企業はprovider FCFをunlevered FCFF proxyとする5年簡易DCF、金融は残余利益法、REITは倍率法。弱気・基本・強気と感応度、現在株価からの逆算を決定論的に計算 | Stock詳細欄でscreen-grade、方式、仮定、現在株価との差を表示。必須値不足は算出不可 | 精密な目標株価・厳密なFCFF・下値保証・売買推奨と誤認 | FCF proxy、WACC・成長率等の仮定と欠損理由を常時表示し、既存総合評価へ混ぜない | 最優先 | 2026-09-21 追加 |
+| Stock | 決算・見通し・セグメント詳細分析 | grounded evidence / model_output / unavailable | Gemini検索引用のうちSEC/EDGAR、EDINET、JPX、会社公式IRとして検証できるURL | 明示操作時のみ。事業・地域・製品セグメント、会社見通し、カタリスト、リスク、半年～2年の条件付き見通しを構造化。24時間cache | 各項目に一次資料リンクを付け、引用と一致しない行を破棄。公式引用なしはpartial/unavailable | モデルの要約や予測を会社開示の事実・確定見通しと誤認 | 数値非開示はnull、一次資料と解釈を分離し、出典検証を維持 | 最優先 | 2026-09-21 追加 |
 | Market / Stock | AI生成レポート・助言 | model_output | 画面で使用した構造化context | 明示操作時 | Stock AI分析 | 事実・売買指示と誤認 | 使用来歴と制約をプロンプト・UIに常時表示 | 高 | 一部対応 |
 | Market Watch / Microstructure | Theme/Flow更新時のoption入力 | direct / unavailable | 既存OptionContextのSPY行のみ | Theme/Flowではoption chainを暗黙取得しない。明示Options更新後だけ取得済みchainを再利用 | VRP等のoption要素だけ欠損可能 | 画面更新だけでMarketDataクレジットを重複消費 | provided-only方針とcall-count regressionを維持 | 最優先 | 2026-07-14 修正 |
 | 各種provider / presentation | 欠損値の `0.0`・中立化 | unavailable | なし | provider失敗・値欠損 | 一部低レベル経路に残存 | 中立市場・ゼロ値と誤認 | `DataResult` と `ProvenanceItem` を全取得層へ拡張 | 最優先 | 継続対応 |
