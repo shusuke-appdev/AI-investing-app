@@ -212,7 +212,8 @@ def test_jp_discovery_uses_japan_benchmark(monkeypatch):
     assert context["candidates"]
 
 
-def test_live_discovery_uses_one_candidate_price_batch(monkeypatch):
+@pytest.mark.parametrize("registered_only", [False, True])
+def test_live_discovery_uses_one_candidate_price_batch(monkeypatch, registered_only):
     calls = []
     monkeypatch.setattr(
         service,
@@ -257,7 +258,24 @@ def test_live_discovery_uses_one_candidate_price_batch(monkeypatch):
 
     monkeypatch.setattr(service, "fetch_batched_history", fake_batch)
 
-    result = service._build_live_discovery("US")
+    if registered_only:
+        monkeypatch.setattr(
+            service,
+            "discover_external_theme_tickers",
+            lambda *a, **k: pytest.fail("Model discovery forbidden"),
+        )
+        result = service.build_evidence_theme_leaders(
+            "US",
+            lambda *a: {
+                "status": "not_supplied",
+                "validated": [],
+                "unverified": [],
+                "warnings": [],
+                "excluded_reasons": {},
+            },
+        )
+    else:
+        result = service._build_live_discovery("US")
 
     assert result.is_available
     assert len(calls) == 1

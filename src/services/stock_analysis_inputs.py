@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 
 from src.market_data import get_stock_data, get_stock_info, get_stock_news_with_status
+from src.services.price_integrity import usable_history
 
 PERIOD_SESSIONS = {
     "5d": 5,
@@ -45,7 +46,7 @@ class StockAnalysisInputs:
         key = (ticker.strip().upper(), period)
         if key not in self.history_cache:
             reusable = self._reusable_history(*key)
-            self.history_cache[key] = (
+            self.history_cache[key] = usable_history(
                 reusable if reusable is not None else self.history_provider(*key)
             )
         return self.history_cache[key]

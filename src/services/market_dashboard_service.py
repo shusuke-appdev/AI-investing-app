@@ -62,6 +62,7 @@ from src.services.market_short_horizon_forecast import (
     build_market_short_horizon_forecast,
 )
 from src.services.market_strategy_service import build_market_strategy_context
+from src.services.price_integrity import usable_history
 from src.services.provenance_service import (
     market_forecast_provenance,
     market_high_provenance,
@@ -84,65 +85,17 @@ from src.stock_data_provider import get_valuation_metrics
 MARKET_SUMMARY_FRESH_SECONDS = 300
 MARKET_SUMMARY_STALE_SECONDS = 86400
 MARKET_DETAILS_STALE_SECONDS = 3 * 86400
-MARKET_CONTEXT_CACHE_NAMESPACE = "market_context_cache"
-MARKET_STAGE_TASK_TIMEOUT_SECONDS = 10.0
-MARKET_STAGE_TOTAL_TIMEOUT_SECONDS = 20.0
-_MARKET_STAGE_EXECUTORS = {
-    workers: ThreadPoolExecutor(
-        max_workers=workers,
-        thread_name_prefix=f"market-stage-{workers}",
-    )
-    for workers in (2, 7)
-}
-DETAIL_STAGE_ORDER = (
-    "core",
-    "theme_flow",
-    "volatility_sentiment",
-    "credit_distortion",
-    "options",
+from src.services.market_stage_contract import (  # noqa: E402
+    DETAIL_STAGE_DEFAULTS,
+    DETAIL_STAGE_ORDER,
+    MARKET_CONTEXT_CACHE_NAMESPACE,
+    MARKET_STAGE_TASK_TIMEOUT_SECONDS,
+    MARKET_STAGE_TOTAL_TIMEOUT_SECONDS,
+    StageTaskResult,
 )
-DETAIL_STAGE_DEFAULTS = {
-    "core": {
-        "label": "Core: 市場概要/キャッシュ",
-        "difficulty": "低",
-        "target": "主要指数、設定、前回成功キャッシュ",
-        "summary": "主要指数と前回成功した監視結果を先に表示します。",
-    },
-    "theme_flow": {
-        "label": "Theme/Flow: 市場状態/資金流入",
-        "difficulty": "中",
-        "target": "IBD式市場状態、モメンタム、統合トレンド、セクター/テーマ資金流入",
-        "summary": "IBD式市場状態、モメンタム、ETF proxy、セクター資金流入を更新します。",
-    },
-    "volatility_sentiment": {
-        "label": "Vol/Sentiment: ボラ/センチメント",
-        "difficulty": "中",
-        "target": "ボラティリティ、1/5/20日短期予測、複合センチメント、時間軸別方向感",
-        "summary": "ボラティリティ、検証付き短期予測、複合センチメントを更新します。",
-    },
-    "credit_distortion": {
-        "label": "Credit/Risk: 信用/歪み/天井警戒",
-        "difficulty": "高",
-        "target": "FRED信用ストレス、市場の歪み検知、天井警戒サインポスト",
-        "summary": "FRED信用ストレス、市場の歪み検知、天井警戒サインポストを更新します。",
-    },
-    "options": {
-        "label": "高: オプション",
-        "difficulty": "高",
-        "target": "SPY/QQQ/IWMと上位テーマETF proxyのPCR、IV、Greeks、GEX可否",
-        "summary": "主要ETFのオプション分析を更新します。",
-    },
-}
-
-
-@dataclass(frozen=True)
-class StageTaskResult:
-    """Bounded background task result for detailed market stages."""
-
-    value: Any = None
-    status: str = "ok"
-    error: str = ""
-    timed_out: bool = False
+from src.services.market_stage_contract import (  # noqa: E402
+    MARKET_STAGE_EXECUTORS as _MARKET_STAGE_EXECUTORS,
+)
 
 
 def load_cached_market_summary_context(
@@ -171,6 +124,27 @@ def load_cached_market_full_context(
     )
 
 
+def _input_acquisition_state(rows: dict) -> dict:
+    items = [r for r in rows.values() if isinstance(r, dict)]
+    timestamps = [
+        r["fetched_at"]
+        for r in items
+        if isinstance(r.get("fetched_at"), str) and r["fetched_at"]
+    ]
+    unknown = len(timestamps) != len(items) or not items
+    stale = any(r.get("is_stale") for r in items)
+    return {
+        "fetched_at": min(timestamps) if timestamps else "",
+        "cache_status": "stale_cache" if stale else "unknown" if unknown else "mixed",
+        "is_stale": stale,
+        "is_partial": unknown
+        or any(r.get("is_partial") or r.get("error") for r in items),
+        "error": "元系列の取得来歴が一部未記録。最新取得とは確認できません。"
+        if unknown
+        else "",
+    }
+
+
 def build_market_summary_context(market_type: str = "US") -> MarketContext:
     """Fetch only the lightweight market overview used by initial page load."""
 
@@ -179,14 +153,17 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
     market_data = _safe_call(lambda: get_market_indices(market_type), {}, errors)
     market_config = _safe_call(lambda: get_market_config(market_type), {}, errors)
     market_charts = _safe_call(build_market_chart_context, {}, errors)
+    index_state = _input_acquisition_state(market_data)
+    chart_state = _input_acquisition_state(market_charts)
     data_status = [
         DataResult(
             name="market_indices",
             source="market_data",
-            fetched_at=_utc_now(),
-            is_partial=bool(errors) or not bool(market_data),
-            error="; ".join(errors) if errors else "",
-            cache_status="live",
+            fetched_at=index_state["fetched_at"],
+            is_partial=bool(errors) or index_state["is_partial"],
+            is_stale=index_state["is_stale"],
+            error="; ".join(errors) if errors else index_state["error"],
+            cache_status=index_state["cache_status"],
         ),
         DataResult(
             name="market_config",
@@ -198,12 +175,13 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
         DataResult(
             name="market_index_charts",
             source="yfinance_batch",
-            fetched_at=_utc_now(),
-            is_partial=len(market_charts) < 3,
+            fetched_at=chart_state["fetched_at"],
+            is_partial=len(market_charts) < 3 or chart_state["is_partial"],
+            is_stale=chart_state["is_stale"],
             error="主要3指数チャートの一部を取得できませんでした。"
             if len(market_charts) < 3
-            else "",
-            cache_status="live",
+            else chart_state["error"],
+            cache_status=chart_state["cache_status"],
         ),
     ]
     manifest_failures = requirement_failures("market_summary", data_status)
@@ -215,14 +193,17 @@ def build_market_summary_context(market_type: str = "US") -> MarketContext:
         market_charts=market_charts,
         data_status=data_status,
         provenance=market_summary_provenance(
-            fetched_at=_utc_now(), has_market_data=bool(market_data)
+            fetched_at=index_state["fetched_at"], has_market_data=bool(market_data)
         ),
-        source="live_summary",
-        fetched_at=_utc_now(),
-        is_partial=bool(errors),
+        source="computed_summary",
+        fetched_at=index_state["fetched_at"],
+        is_stale=index_state["is_stale"] or chart_state["is_stale"],
+        is_partial=bool(errors)
+        or index_state["is_partial"]
+        or chart_state["is_partial"],
         quality_warnings=list(errors),
         errors=errors,
-        cache_status="live",
+        cache_status=index_state["cache_status"],
         detail_stages=_updated_stage_statuses(
             {},
             "core",
@@ -252,6 +233,9 @@ def build_market_chart_context() -> dict[str, Any]:
         frame = result.data.get(ticker)
         if frame is None or frame.empty or "Close" not in frame:
             continue
+        frame = usable_history(frame)
+        if frame.empty:
+            continue
         close = pd.to_numeric(frame["Close"], errors="coerce").dropna()
         if close.empty:
             continue
@@ -268,9 +252,14 @@ def build_market_chart_context() -> dict[str, Any]:
             "change": change,
             "source_label": "ETF proxy" if name == "TOPIX" else "direct index",
             "fetched_at": result.fetched_at,
+            "cache_status": result.cache_status,
+            "is_stale": result.is_stale,
+            "is_partial": result.is_partial,
+            "observed_on": pd.Timestamp(close.index[-1]).date().isoformat(),
             "points": [
                 {
                     "date": pd.Timestamp(index).strftime("%m/%d"),
+                    "observed_on": pd.Timestamp(index).date().isoformat(),
                     "price": round(float(value), 2),
                 }
                 for index, value in sampled.items()
@@ -316,6 +305,13 @@ def build_market_theme_flow_context(
         ).to_dict()
 
     def microstructure_task() -> dict[str, Any]:
+        if market_type != "US":
+            return {
+                "status": "not_applicable",
+                "market": "US",
+                "reference_only": True,
+                "reason": "米国専用の市場構造監視は日本の主分析に使用しません。",
+            }
         return _normalize_microstructure(
             analyze_market_structure(
                 "SPY",
@@ -328,6 +324,12 @@ def build_market_theme_flow_context(
         return get_momentum_themes(market_type)
 
     def monitor_task() -> dict[str, Any]:
+        if market_type != "US":
+            return {
+                "status": "not_applicable",
+                "market": market_type,
+                "reason": "米国専用監視は日本の判定には使用しません。",
+            }
         if inputs is None:
             return build_market_monitor_context(options.items)
         return build_market_monitor_context(options.items, inputs=inputs)

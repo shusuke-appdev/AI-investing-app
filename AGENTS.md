@@ -2,6 +2,7 @@
 
 ## Product and Context
 
+- Daily investment research runs in Codex chat through the repository Skill and Python CLI. Default delivery is Japanese text/Markdown plus saved JSON; do not launch a browser/server, build a new app or deploy unless explicitly requested. See `docs/CODEX_OPERATION.md`.
 - The active app is Reflex; treat Streamlit code as archived unless the task explicitly targets the legacy branch.
 - Read `progress.md` before non-trivial work and keep it limited to repository state.
 - Trace market features through provider -> service or context -> UI -> AI before changing ownership or adding analysis.
@@ -16,6 +17,7 @@
 
 ## Publication
 
+- Codex-only research work is preserved on `codex/codex-research-operation`. Completing ordinary research or saving this workflow does not authorize merging into the production branch or deploying the legacy app. Production publication requires a separate explicit request.
 - In this repository, an explicit user request to `push` authorizes committing the scoped, validated current-task changes when needed and pushing them directly to `main`.
 - Before publishing, verify the intended file set, a clean staging boundary, and that local `main` can advance from `origin/main` without rewriting history.
 - Use fast-forward-only publication. Never force-push, rebase published history, or include unrelated changes; stop and ask when the branches diverge, conflicts exist, or task ownership is unclear.

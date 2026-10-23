@@ -1,6 +1,7 @@
 *.db
 *.sqlite
 .states
+backups/research/
 .reflex_states/
 tmp/
 assets/external/

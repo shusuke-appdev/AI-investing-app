@@ -16,7 +16,8 @@ from src.finnhub_client import (
     get_company_news as _finnhub_get_company_news,
 )
 from src.models import NewsItem
-from src.provider_result import FetchResult
+from src.persistent_cache import utc_now_iso
+from src.provider_result import FetchResult, memory_payload, memory_result
 
 
 def _news_status_payload(
@@ -24,12 +25,14 @@ def _news_status_payload(
     items: list[NewsItem] | None = None,
     source_status: str,
     error_reason: str = "",
+    provider_status: dict | None = None,
 ) -> dict:
     return {
         "items": items or [],
         "source": "finnhub",
         "source_status": source_status,
         "error_reason": error_reason,
+        "provider_status": provider_status or {},
     }
 
 
@@ -50,7 +53,7 @@ def _format_news_items(news: list[dict], max_items: int) -> list[NewsItem]:
     return results
 
 
-@ttl_cache(ttl=CACHE_TTL_MEDIUM)
+@ttl_cache(ttl=CACHE_TTL_MEDIUM, on_hit=memory_result)
 def get_stock_news_result(
     ticker: str, max_items: int = 10
 ) -> FetchResult[list[NewsItem]]:
@@ -64,6 +67,7 @@ def get_stock_news_result(
             status=status,
             error_code="not_configured" if status == "missing" else status,
             error=get_auth_error_message(),
+            cache_status="failed",
         )
 
     try:
@@ -75,6 +79,7 @@ def get_stock_news_result(
             status="error",
             error_code="fetch_failed",
             error=str(exc),
+            cache_status="failed",
         )
 
     auth_status = get_auth_status()
@@ -85,19 +90,23 @@ def get_stock_news_result(
             status=auth_status,
             error_code="invalid_auth",
             error=get_auth_error_message(),
+            cache_status="failed",
         )
 
     if not raw_news:
-        return FetchResult(data=[], source="finnhub", status="empty")
+        return FetchResult(
+            data=[], source="finnhub", status="empty", fetched_at=utc_now_iso()
+        )
 
     return FetchResult(
         data=_format_news_items(raw_news, max_items),
         source="finnhub",
         status="available",
+        fetched_at=utc_now_iso(),
     )
 
 
-@ttl_cache(ttl=CACHE_TTL_MEDIUM)
+@ttl_cache(ttl=CACHE_TTL_MEDIUM, on_hit=memory_payload)
 def get_stock_news_with_status(ticker: str, max_items: int = 10) -> dict:
     """Compatibility dictionary for existing UI and AI consumers."""
 
@@ -106,6 +115,14 @@ def get_stock_news_with_status(ticker: str, max_items: int = 10) -> dict:
         items=result.data,
         source_status=result.status,
         error_reason=result.error,
+        provider_status={
+            "source": result.source,
+            "fetched_at": result.fetched_at,
+            "cache_status": result.cache_status,
+            "cache_age_seconds": result.cache_age_seconds,
+            "is_stale": result.is_stale,
+            "is_partial": result.is_partial,
+        },
     )
 
 

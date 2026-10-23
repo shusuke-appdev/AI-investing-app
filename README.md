@@ -13,9 +13,19 @@ short_description: Market intelligence and investment research dashboard
 
 AI Investing App は、米国株・日本株を対象に、基本市況、テーマ・トレンド、成長株の順張り条件と個別銘柄の詳細を分析する投資調査ダッシュボードです。
 
-現行UIは **Reflex** で、画面の入口は `frontend/` です。移行前のStreamlit資産は `codex/archive-streamlit-assets` ブランチへ履歴保全し、現行ツリーから撤去済みです。
+日常の投資調査は **Codexとの会話とローカルPython** で運用します。[運用手順](docs/CODEX_OPERATION.md)を参照してください。画面の自動起動やアプリ公開は行いません。既存Web実装はReflexで、入口は`frontend/`です。移行前のStreamlit資産は `codex/archive-streamlit-assets` ブランチへ履歴保全し、現行ツリーから撤去済みです。
 
 > 注意: 本アプリは投資判断を補助する調査ツールです。売買助言、投資一任、金融商品の推奨を目的としたものではありません。
+
+## Codexでローカル調査を使う
+
+2026-10-24方針：通常はCodexで「投資更新」「保存済み結果を見せて」と依頼します。CLIは`research.py update` / `research.py saved`。結果をチャットとMarkdown/JSONで確認し、以下のローカル画面は希望時だけ利用する補助です。[Codex運用](docs/CODEX_OPERATION.md)。
+
+2026-10-23：ローカル版に地合い4観点、日米業種ETF、強さ・勢い図、銘柄条件一覧、四半期業績加速を追加。市場・価格／業績／両方の更新を選べます。操作とデータ不足の扱いは[地合い・業種・テーマ調査](docs/TOPDOWN_RESEARCH.md)を参照してください。
+
+追加のモデルAPI契約なしでPython分析をCodexから実行し、オフラインのダッシュボードに保存できます。`Open-Investment-Research.cmd` を開き「投資更新」を押すと、日米の市場・テーマ・代表銘柄・接続分析・方針・取得状態を一括更新。標準は5つの問いに整理し、旧29項目の研究詳細も明示更新できます。別のCodexチャットでもこのプロジェクトを選び「投資更新」で利用可能。CLIは `.venv\Scripts\python.exe scripts\research.py update --profile standard --open`。個別株・会計・評価の基準日は一括更新で変更しません。[操作説明](docs/CODEX_RESEARCH.md)、[市場再構成の受入記録](docs/MARKET_REDESIGN_ACCEPTANCE.md)、設計Skill `.agents/skills/research-dashboard/SKILL.md` を参照してください。旧Reflex本番は停止・公開移行していません。
+
+2026-10-07のローカル移行対象は、専門チャート/全操作と日米6社の会計・全セグメント照合まで含みます。[全機能対応表](docs/RESEARCH_FEATURE_PARITY.md)と[実データ・検証記録](docs/RESEARCH_MIGRATION_ACCEPTANCE.md)で、確認済み事実・仮定・取得不能・非開示を区別しています。資料ベースの4評価方式と複数方式表示を備えますが、仮定不足の会社価値は作りません。ChatGPT/Vercelへの公開接続や本番停止は対象外です。
 
 ## 主な機能
 

@@ -7,7 +7,7 @@ class FakeTicker:
     def __init__(self, ticker):
         self.ticker = ticker
 
-    def history(self, period):
+    def history(self, period, auto_adjust=True):
         return pd.DataFrame({"Close": [100.0, 105.0]})
 
 

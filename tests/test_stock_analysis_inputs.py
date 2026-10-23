@@ -44,7 +44,7 @@ def test_full_info_satisfies_later_summary_free_request():
 
 def test_long_history_satisfies_shorter_period_without_refetch():
     calls = []
-    frame = pd.DataFrame({"Close": range(300)})
+    frame = pd.DataFrame({"Close": range(100, 400)})
 
     def history(ticker: str, period: str):
         calls.append((ticker, period))

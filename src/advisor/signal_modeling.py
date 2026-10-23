@@ -9,6 +9,17 @@ import pandas as pd
 
 from src.advisor.stock_feature_engine import FEATURE_COLUMNS
 
+VALIDATION_VERSION = "purged-label-boundary-v2"
+
+
+def purge_training_indices(train_indices, test_indices, original_positions, horizon=5):
+    """Labels must end strictly before the first test observation, even after dropna."""
+    boundary = original_positions[test_indices[0]]
+    return np.asarray(
+        [i for i in train_indices if original_positions[i] + horizon < boundary],
+        dtype=int,
+    )
+
 
 def compare_signal_models(feature_frame: pd.DataFrame) -> dict[str, Any]:
     """Compare simple ML models when scikit-learn is available.
@@ -60,6 +71,7 @@ def compare_signal_models(feature_frame: pd.DataFrame) -> dict[str, Any]:
 
     x = data[feature_cols]
     y = (data["forward_5d_return"] > 0).astype(int)
+    original_positions = feature_frame.index.get_indexer(data.index)
     models = {
         "Logistic Regression": make_pipeline(
             StandardScaler(), LogisticRegression(max_iter=500)
@@ -78,6 +90,15 @@ def compare_signal_models(feature_frame: pd.DataFrame) -> dict[str, Any]:
         accuracies: list[float] = []
         briers: list[float] = []
         for train_idx, test_idx in splitter.split(x):
+            train_idx = purge_training_indices(train_idx, test_idx, original_positions)
+            if len(train_idx) == 0 or y.iloc[train_idx].nunique() < 2:
+                return {
+                    "available": False,
+                    "selected_model": "Baseline",
+                    "reason": "Purged training labels insufficient.",
+                    "models": [],
+                    "validation_version": VALIDATION_VERSION,
+                }
             model.fit(x.iloc[train_idx], y.iloc[train_idx])
             probabilities = model.predict_proba(x.iloc[test_idx])[:, 1]
             predictions = (probabilities >= 0.5).astype(int)
@@ -100,4 +121,5 @@ def compare_signal_models(feature_frame: pd.DataFrame) -> dict[str, Any]:
         "selected_model": selected["model"],
         "reason": "Selected by time-series accuracy minus calibration error.",
         "models": results,
+        "validation_version": VALIDATION_VERSION,
     }

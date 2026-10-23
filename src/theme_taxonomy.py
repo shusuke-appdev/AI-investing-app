@@ -85,8 +85,8 @@ US_THEME_PROFILES: dict[str, tuple[str, str, str]] = {
     "スポーツベッティング": ("一般消費財", "BETZ", "BETZ"),
     "飲食/QSR": ("一般消費財", "XLY", "XLY"),
     "REIT（商業）": ("不動産", "XLRE", "XLRE"),
-    "REIT（物流/データセンター）": ("不動産", "VPN", "XLRE"),
-    "データセンターREIT": ("不動産", "VPN", "XLRE"),
+    "REIT（物流/データセンター）": ("不動産", "DTCR", "XLRE"),
+    "データセンターREIT": ("不動産", "DTCR", "XLRE"),
     "電力/ユーティリティ": ("公益", "XLU", "XLU"),
 }
 

@@ -706,8 +706,16 @@ def _format_market_drivers(raw: dict[str, Any]) -> list[MarketDriverDisplay]:
                 label=item.get("label", ""),
                 ticker=item.get("ticker", ""),
                 value_str=_driver_value_str(item.get("label", ""), item.get("value")),
-                change_5d_str=_pct_str(item.get("change_5d")),
-                change_20d_str=_pct_str(item.get("change_20d")),
+                change_5d_str=(
+                    f"{item['change_5d_bp']:+.2f} bp"
+                    if item.get("change_5d_bp") is not None
+                    else _pct_str(item.get("change_5d"))
+                ),
+                change_20d_str=(
+                    f"{item['change_20d_bp']:+.2f} bp"
+                    if item.get("change_20d_bp") is not None
+                    else _pct_str(item.get("change_20d"))
+                ),
                 interpretation=item.get("interpretation", ""),
                 data_quality=item.get("data_quality", "unavailable"),
             )
@@ -988,9 +996,9 @@ def _ordered_market_items(
 
 def _market_item(name: str, data: dict[str, Any]) -> dict[str, Any]:
     price = float(data.get("price", 0.0))
-    change = round(float(data.get("change", 0.0)), 1)
+    change = round(float(data.get("change") or 0.0), 1)
     ticker = data.get("ticker", "")
-    if "Yield" in name:
+    if "Yield" in name or data.get("unit") == "%":
         price_text = f"{price:.2f}%"
     elif "JPY" in ticker:
         price_text = f"¥{price:.2f}"
@@ -1000,4 +1008,10 @@ def _market_item(name: str, data: dict[str, Any]) -> dict[str, Any]:
         price_text = f"{price:,.0f}"
     else:
         price_text = f"${price:.2f}"
-    return {"name": name, "price": price_text, "change": change}
+    return {
+        "name": name,
+        "price": price_text,
+        "change": change,
+        "change_unit": data.get("change_unit", "%"),
+        "change_available": data.get("change") is not None,
+    }

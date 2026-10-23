@@ -11,6 +11,13 @@ confidence = "high"
 limitations = "計算契約と検証ゲートを確認するが、将来の投資成果は保証しない。初回coverageでは分割済みtechnical補助モジュールに0-17%台の未到達が残る"
 profile = "standard"
 files = [
+  "test_codex_research.py",
+  "test_market_standard.py",
+  "test_topdown_research.py",
+  "test_research_brief.py",
+  "test_research_dashboard_contract.py",
+  "test_research_migration_acceptance.py",
+  "test_research_workbench.py",
   "test_research_reorganization.py",
   "test_adaptive_analysis_acceptance.py",
   "test_advisor_phase3.py",

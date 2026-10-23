@@ -51,6 +51,7 @@ def ttl_cache(
     *,
     namespace: str | None = None,
     max_entries: int | None = _DEFAULT_MAX_ENTRIES,
+    on_hit: Callable[[Any, float], Any] | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     TTL付きキャッシュデコレータ。
@@ -59,6 +60,7 @@ def ttl_cache(
         ttl: キャッシュの有効期間（秒）。
         namespace: 省略時は関数の完全名を名前空間にする。
         max_entries: 名前空間ごとの最大エントリ数。Noneなら制限しない。
+        on_hit: 状態付き経路だけが使うコピー変換。元の取得日時は変更しない。
 
     Returns:
         `.clear_cache()` と `.cache_info()` を持つラップ済み関数。
@@ -84,7 +86,11 @@ def ttl_cache(
                 with _global_lock:
                     entry = _cache_store.get(key)
                     if entry and now < entry.expires_at:
-                        return entry.value
+                        return (
+                            on_hit(entry.value, max(0.0, now - entry.created_at))
+                            if on_hit is not None
+                            else entry.value
+                        )
                     if entry:
                         _cache_store.pop(key, None)
 

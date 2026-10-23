@@ -24,8 +24,10 @@ def build_primary_conditions(
     setup: dict[str, Any],
 ) -> dict[str, Any]:
     """Use only explicit price, volume, profile and daily setup inputs."""
-    frame = normalize_price_frame(prices)
-    market = normalize_price_frame(benchmark)
+    from src.services.price_integrity import usable_history
+
+    frame = normalize_price_frame(usable_history(prices))
+    market = normalize_price_frame(usable_history(benchmark))
     rows: list[dict[str, str]] = []
 
     def row(label: str, passed: bool | None, value: str, reason: str) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from statistics import mean
 from typing import Any
 
@@ -56,8 +57,30 @@ def build_cross_market_context(
     us_top = _first_leader(us)
     jp_top = _first_leader(jp)
 
-    us_score = float(us_top.get("flow_score", 0.0)) if us_top else 0.0
-    jp_score = float(jp_top.get("flow_score", 0.0)) if jp_top else 0.0
+    if not us_top or not jp_top:
+        return {
+            "status": "unavailable",
+            "primary_market": None,
+            "us_leader": us_top,
+            "jp_leader": jp_top,
+            "relative_flow_score": None,
+            "stance": "片方の市場が未確認のため日米の優劣は比較できません。",
+        }
+
+    scores = [us_top.get("flow_score"), jp_top.get("flow_score")]
+    if any(
+        isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+        for v in scores
+    ):
+        return {
+            "status": "unavailable",
+            "primary_market": None,
+            "us_leader": us_top,
+            "jp_leader": jp_top,
+            "relative_flow_score": None,
+            "stance": "両市場の比較値が揃わないため比較できません。",
+        }
+    us_score, jp_score = map(float, scores)
     relative = jp_score - us_score
     if relative >= 20:
         stance = "Japan relative flow is stronger, but treat it as a US-linked satellite theme."

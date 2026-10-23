@@ -310,6 +310,16 @@ def select_strategy_regime(
 
 
 def _level_payload(label: str, ticker: str, frame: pd.DataFrame) -> dict[str, Any]:
+    from src.services.price_integrity import price_integrity
+
+    quality = price_integrity(frame)
+    if quality["status"] != "ok":
+        return {
+            "label": label,
+            "ticker": ticker,
+            "data_quality": quality["status"],
+            "warning": quality["reason"],
+        }
     close = _close(frame)
     if len(close) < 50:
         return {"label": label, "ticker": ticker, "data_quality": "insufficient"}
@@ -375,12 +385,17 @@ def _driver_payload(label: str, ticker: str, frame: pd.DataFrame) -> dict[str, A
     if len(close) < 22:
         return {"label": label, "ticker": ticker, "data_quality": "insufficient"}
     latest = float(close.iloc[-1])
-    if ticker == "^TNX":
-        latest = latest / 10.0
     return {
         "label": label,
         "ticker": ticker,
         "value": round(latest, 3),
+        "unit": "percent" if ticker == "^TNX" else "provider_unit",
+        "change_5d_bp": round((latest - float(close.iloc[-6])) * 100, 2)
+        if ticker == "^TNX"
+        else None,
+        "change_20d_bp": round((latest - float(close.iloc[-21])) * 100, 2)
+        if ticker == "^TNX"
+        else None,
         "change_5d": _period_change(close, 5),
         "change_20d": _period_change(close, 20),
         "interpretation": "変動重視"

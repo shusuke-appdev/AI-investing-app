@@ -17,7 +17,12 @@ from src.edinet_client import get_company_finance
 from src.log_config import get_logger
 from src.models import StockInfo
 from src.persistent_cache import repo_state_cache, utc_now_iso
-from src.provider_result import FetchResult
+from src.provider_result import (
+    FetchResult,
+    memory_history,
+    memory_payload,
+    memory_result,
+)
 from src.translator import translate_to_japanese
 from src.yfinance_runtime import configure_yfinance_cache
 
@@ -130,8 +135,27 @@ def _get_info(stock: yf.Ticker) -> dict[str, Any]:
         fresh_seconds=YFINANCE_PROFILE_FRESH_SECONDS,
         stale_seconds=YFINANCE_PROFILE_STALE_SECONDS,
     )
+
+    def previous_profile() -> dict[str, Any]:
+        profile = (
+            dict(cached.payload.get("profile") or {}) if cached.is_available else {}
+        )
+        profile["_provider_status"] = {
+            "source": "yfinance",
+            "fetched_at": cached.fetched_at,
+            "cache_status": "stale_cache"
+            if cached.is_stale
+            else "persistent_cache"
+            if cached.is_available
+            else "failed",
+            "is_stale": cached.is_stale,
+            "is_partial": not bool(profile),
+            "error": "最新プロフィール取得失敗・前回値を使用。",
+        }
+        return profile
+
     if _rate_limited_until and datetime.now(timezone.utc) < _rate_limited_until:
-        return dict(cached.payload.get("profile") or {}) if cached.is_available else {}
+        return previous_profile()
     try:
         raw_info = getattr(stock, "info", None)
     except Exception as exc:
@@ -142,12 +166,21 @@ def _get_info(stock: yf.Ticker) -> dict[str, Any]:
                 tz=timezone.utc,
             )
         logger.warning(f"yfinance profile fetch failed for {stock.ticker}: {exc}")
-        return dict(cached.payload.get("profile") or {}) if cached.is_available else {}
+        return previous_profile()
     profile = raw_info if isinstance(raw_info, dict) else {}
     if profile:
         cache.write(stock.ticker, {"profile": profile})
-        return profile
-    return dict(cached.payload.get("profile") or {}) if cached.is_available else {}
+        return {
+            **profile,
+            "_provider_status": {
+                "source": "yfinance",
+                "fetched_at": utc_now_iso(),
+                "cache_status": "live",
+                "is_stale": False,
+                "is_partial": False,
+            },
+        }
+    return previous_profile()
 
 
 def _get_history(stock: yf.Ticker, period: str) -> pd.DataFrame:
@@ -155,7 +188,7 @@ def _get_history(stock: yf.Ticker, period: str) -> pd.DataFrame:
     if _rate_limited_until and datetime.now(timezone.utc) < _rate_limited_until:
         return pd.DataFrame()
     try:
-        return stock.history(period=period)
+        return stock.history(period=period, auto_adjust=True)
     except Exception as exc:
         if _is_rate_limit_error(exc):
             _rate_limited_until = datetime.fromtimestamp(
@@ -336,8 +369,7 @@ def get_current_price(ticker: str) -> float | None:
     return price
 
 
-@ttl_cache(ttl=CACHE_TTL_MEDIUM)
-def get_historical_data_with_status(ticker: str, period: str = "1mo") -> HistoryResult:
+def _fetch_historical_data_result(ticker: str, period: str = "1mo") -> HistoryResult:
     """Return historical prices without hiding live/cache/failed status."""
 
     cache = repo_state_cache(YFINANCE_HISTORY_CACHE_NAMESPACE)
@@ -380,7 +412,36 @@ def get_historical_data_with_status(ticker: str, period: str = "1mo") -> History
     )
 
 
-@ttl_cache(ttl=CACHE_TTL_MEDIUM)
+@ttl_cache(ttl=CACHE_TTL_MEDIUM, on_hit=memory_result)
+def get_historical_data_with_status(ticker: str, period: str = "1mo") -> HistoryResult:
+    from src.services.price_integrity import usable_history
+
+    result = _fetch_historical_data_result(ticker, period)
+    result.data = usable_history(result.data)
+    integrity = result.data.attrs["price_integrity"]
+    if integrity["status"] not in {"ok", "insufficient"}:
+        result.is_partial = True
+        result.status = integrity["status"]
+        result.error = integrity["reason"]
+        result.warnings.append(integrity["reason"])
+    result.data.attrs["fetch_metadata"] = {
+        "source": result.source,
+        "fetched_at": result.fetched_at,
+        "is_stale": result.is_stale,
+        "is_partial": result.is_partial,
+        "cache_status": result.cache_status,
+        "cache_age_seconds": result.cache_age_seconds,
+        "error": result.error,
+        "warnings": result.warnings,
+        "observation_date": str(result.data.index[-1])
+        if not result.data.empty
+        else None,
+        "price_basis": "provider adjusted daily OHLC; reported volume",
+    }
+    return result
+
+
+@ttl_cache(ttl=CACHE_TTL_MEDIUM, on_hit=memory_history)
 def get_historical_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
     return get_historical_data_with_status(ticker, period).data
 
@@ -390,6 +451,9 @@ def _extract_yfinance_profile(
 ) -> None:
     stock = yf.Ticker(ticker)
     profile = _get_info(stock)
+    info["provider_status"] = dict(
+        profile.get("_provider_status") or {"cache_status": "unknown"}
+    )
     fast_info = _get_fast_info(stock)
 
     if profile:
@@ -509,7 +573,7 @@ def get_valuation_metrics(ticker: str) -> dict[str, Any]:
     return metrics
 
 
-@ttl_cache(ttl=CACHE_TTL_DAILY)
+@ttl_cache(ttl=CACHE_TTL_DAILY, on_hit=memory_payload)
 def get_stock_info(
     ticker: str,
     *,

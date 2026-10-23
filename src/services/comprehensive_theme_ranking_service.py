@@ -213,12 +213,14 @@ def build_comprehensive_theme_ranking(
         members = basket["measurement_tickers"]
         metrics = []
         stocks = []
+        observation_dates = set()
         for ticker in members:
             frame = normalize_price_frame(price_frames.get(ticker, pd.DataFrame()))
             payload = _ticker_metrics(frame)
             if payload is None:
                 continue
             metrics.append(payload)
+            observation_dates.add(pd.Timestamp(frame.index[-1]).date().isoformat())
             stocks.append(
                 {
                     "ticker": ticker,
@@ -243,6 +245,7 @@ def build_comprehensive_theme_ranking(
             {
                 "theme": theme,
                 "market": market,
+                "observation_dates": sorted(observation_dates),
                 **raw,
                 "coverage_1w": coverage,
                 "coverage_1m": coverage,

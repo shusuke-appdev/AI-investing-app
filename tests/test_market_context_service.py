@@ -32,7 +32,11 @@ def test_market_chart_context_builds_three_ordered_benchmarks(monkeypatch):
     assert list(result) == ["S&P 500", "Nasdaq 100", "TOPIX"]
     assert result["S&P 500"]["change"] == result["Nasdaq 100"]["change"]
     assert result["TOPIX"]["source_label"] == "ETF proxy"
-    assert result["TOPIX"]["points"][-1] == {"date": "01/04", "price": 103.0}
+    assert result["TOPIX"]["points"][-1] == {
+        "date": "01/04",
+        "observed_on": "2026-01-04",
+        "price": 103.0,
+    }
 
 
 def test_market_analysis_inputs_fetch_each_ticker_once_and_slice_shared_history():
@@ -95,7 +99,7 @@ def test_market_monitor_accepts_explicit_dependencies(monkeypatch):
     def fake_stock_data(ticker: str, period: str):
         calls.append((ticker, period))
         if ticker == "^TNX":
-            return pd.DataFrame({"Close": [40.0]})
+            return pd.DataFrame({"Close": [4.0]})
         return pd.DataFrame({"Close": [100.0], "Volume": [1_000.0]})
 
     dependencies = replace(
@@ -652,7 +656,9 @@ def test_market_summary_context_does_not_fetch_options(monkeypatch):
 
     assert context.market_data["S&P 500"]["ticker"] == "SPY"
     assert context.options.items == []
-    assert context.source == "live_summary"
+    assert context.source == "computed_summary"
+    assert context.data_status[0].fetched_at == ""
+    assert context.data_status[0].cache_status == "unknown"
     assert context.provenance[0].kind.value == "direct"
 
 

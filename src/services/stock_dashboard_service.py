@@ -343,6 +343,9 @@ def build_stock_dashboard_context(
         volume_profile,
         purchase_evidence,
         japan_supply_demand,
+        news_metadata=news_result.get("provider_status", {})
+        if isinstance(news_result, dict)
+        else {},
     )
     data_status.append(
         DataResult(
@@ -769,6 +772,7 @@ def _build_data_status(
     volume_profile: dict[str, Any],
     purchase_evidence: dict[str, Any],
     japan_supply_demand: dict[str, Any],
+    news_metadata: dict[str, Any] | None = None,
 ) -> list[DataResult]:
     trend_quality = (
         trend_follow.get("data_quality") if isinstance(trend_follow, dict) else {}
@@ -777,29 +781,71 @@ def _build_data_status(
         trend_follow.get("warnings") if isinstance(trend_follow, dict) else []
     ) or []
     trend_ok = trend_quality.get("status") == "ok"
+    news_metadata = news_metadata or {}
     return [
         DataResult(
             name="stock_profile",
-            source="market_data",
-            is_partial=not bool(info) or _is_limited_profile(info),
-            error=_profile_warning_message(info),
-            cache_status="live",
+            source=str(info.get("provider_status", {}).get("source") or "market_data"),
+            is_partial=not bool(info)
+            or _is_limited_profile(info)
+            or bool(info.get("provider_status", {}).get("is_partial")),
+            error=str(
+                info.get("provider_status", {}).get("error")
+                or _profile_warning_message(info)
+            ),
+            cache_status=str(
+                info.get("provider_status", {}).get("cache_status") or "unknown"
+            ),
+            fetched_at=str(info.get("provider_status", {}).get("fetched_at") or ""),
+            is_stale=bool(info.get("provider_status", {}).get("is_stale")),
         ),
         DataResult(
             name="price_history",
-            source="market_data",
-            is_partial=history_df is None or history_df.empty,
-            error="Price history unavailable."
-            if history_df is None or history_df.empty
-            else "",
-            cache_status="live",
+            source=str(
+                (history_df.attrs if history_df is not None else {})
+                .get("fetch_metadata", {})
+                .get("source")
+                or "market_data"
+            ),
+            is_partial=history_df is None
+            or history_df.empty
+            or bool(history_df.attrs.get("fetch_metadata", {}).get("is_partial")),
+            error=str(
+                (history_df.attrs if history_df is not None else {})
+                .get("fetch_metadata", {})
+                .get("error")
+                or (
+                    "Price history unavailable."
+                    if history_df is None or history_df.empty
+                    else ""
+                )
+            ),
+            cache_status=str(
+                (history_df.attrs if history_df is not None else {})
+                .get("fetch_metadata", {})
+                .get("cache_status")
+                or "unknown"
+            ),
+            fetched_at=str(
+                (history_df.attrs if history_df is not None else {})
+                .get("fetch_metadata", {})
+                .get("fetched_at")
+                or ""
+            ),
+            is_stale=bool(
+                (history_df.attrs if history_df is not None else {})
+                .get("fetch_metadata", {})
+                .get("is_stale")
+            ),
         ),
         DataResult(
             name="news",
-            source=news_source_status,
-            is_partial=bool(news_error_reason),
+            source=str(news_metadata.get("source") or "finnhub"),
+            is_partial=bool(news_error_reason) or bool(news_metadata.get("is_partial")),
             error=news_error_reason,
-            cache_status="live" if news_source_status == "available" else "failed",
+            cache_status=str(news_metadata.get("cache_status") or "unknown"),
+            fetched_at=str(news_metadata.get("fetched_at") or ""),
+            is_stale=bool(news_metadata.get("is_stale")),
         ),
         DataResult(
             name="technical_analysis",

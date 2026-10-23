@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, TypedDict
@@ -233,11 +234,39 @@ def get_cached_theme_leader_discovery_result(
     )
 
 
+def build_registered_theme_leaders(
+    market_type: str = "US",
+) -> FetchResult[ThemeLeaderDiscoveryContext]:
+    """Model-free research path; never reuse Gemini-backed discovery caches."""
+    if market_type not in BENCHMARKS:
+        raise ValueError("Unsupported market")
+    return _build_live_discovery(market_type, registered_only=True)
+
+
+def build_evidence_theme_leaders(
+    market_type: str, discovery: Callable
+) -> FetchResult[ThemeLeaderDiscoveryContext]:
+    """Use reviewed external evidence without calling or caching model output."""
+    if market_type not in BENCHMARKS:
+        raise ValueError("Unsupported market")
+    result = _build_live_discovery(
+        market_type, registered_only=True, discovery=discovery
+    )
+    for candidate in result.data.get("candidates", []) + result.data.get(
+        "fundamental_pending", []
+    ):
+        if candidate.get("candidate_source") == "Gemini探索":
+            candidate["candidate_source"] = "Codex資料探索"
+    return result
+
+
 def _build_live_discovery(
     market_type: str,
     *,
     themes: list[str] | None = None,
     force_refresh: bool = False,
+    registered_only: bool = False,
+    discovery: Callable | None = None,
 ) -> FetchResult[ThemeLeaderDiscoveryContext]:
     ranking = build_trend_ranking_context(
         market_type,
@@ -263,11 +292,19 @@ def _build_live_discovery(
         )
 
     registered_memberships = _representative_memberships(market_type, selected)
-    external = discover_external_theme_tickers(
-        market_type,
-        [str(row.get("theme") or "") for row in selected],
-        force_refresh=force_refresh,
+    external = (
+        {"status": "unavailable", "warnings": ["外部探索は未実行。登録代表のみ。"]}
+        if registered_only
+        else discover_external_theme_tickers(
+            market_type,
+            [str(row.get("theme") or "") for row in selected],
+            force_refresh=force_refresh,
+        )
     )
+    if discovery is not None:
+        external = discovery(
+            market_type, [str(row.get("theme") or "") for row in selected]
+        )
     external_candidates = list(external.get("validated") or [])[:MAX_EXTERNAL_TICKERS]
     ticker_memberships = _merge_candidate_memberships(
         registered_memberships,

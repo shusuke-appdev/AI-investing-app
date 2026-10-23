@@ -220,8 +220,20 @@ def test_market_display_context_formats_market_context_for_reflex_state():
     display = build_market_display_context(context)
 
     assert display.indices_data == [
-        {"name": "S&P 500", "price": "5,300", "change": 0.5},
-        {"name": "TOPIX", "price": "3,120", "change": 0.2},
+        {
+            "name": "S&P 500",
+            "price": "5,300",
+            "change": 0.5,
+            "change_unit": "%",
+            "change_available": True,
+        },
+        {
+            "name": "TOPIX",
+            "price": "3,120",
+            "change": 0.2,
+            "change_unit": "%",
+            "change_available": True,
+        },
     ]
     assert [group.label for group in display.index_groups] == [
         "米国",

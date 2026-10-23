@@ -17,7 +17,7 @@ from src.finnhub_client import is_configured
 from src.log_config import get_logger
 from src.market_config import get_market_config
 from src.models import MarketIndex
-from src.provider_result import FetchResult
+from src.provider_result import FetchResult, memory_metadata
 from src.stock_data_provider import get_historical_data
 from src.yfinance_runtime import configure_yfinance_cache
 
@@ -53,6 +53,28 @@ def _get_stooq_data(ticker: str) -> tuple[float, float] | None:
 
 
 def _fetch_yfinance_market_item(n: str, t: str) -> tuple[str, str, dict | None]:
+    from src.rate_provider import RATE_SERIES, rate_history
+
+    if t in RATE_SERIES:
+        frame = rate_history(t, "5d")
+        if frame.empty:
+            return n, t, None
+        current = float(frame["Close"].iloc[-1])
+        change = (
+            (current - float(frame["Close"].iloc[-2])) * 100 if len(frame) > 1 else None
+        )
+        return (
+            n,
+            t,
+            {
+                "price": current,
+                "change": change,
+                "change_unit": "bp",
+                "unit": "%",
+                "ticker": t,
+                **frame.attrs.get("fetch_metadata", {}),
+            },
+        )
     try:
         hist = get_historical_data(t, "5d")
         if "Close" in hist.columns:
@@ -79,6 +101,12 @@ def _fetch_yfinance_market_item(n: str, t: str) -> tuple[str, str, dict | None]:
                     "price": float(current),
                     "change": float(change),
                     "ticker": t,
+                    **hist.attrs.get("fetch_metadata", {}),
+                    **(
+                        {"observed_on": pd.Timestamp(hist.index[-1]).date().isoformat()}
+                        if isinstance(hist.index, pd.DatetimeIndex)
+                        else {}
+                    ),
                 },
             )
         return n, t, None
@@ -87,7 +115,11 @@ def _fetch_yfinance_market_item(n: str, t: str) -> tuple[str, str, dict | None]:
         return n, t, None
 
 
-@ttl_cache(ttl=CACHE_TTL_MEDIUM)
+def _memory_indices(data: dict, age: float) -> dict:
+    return {name: memory_metadata(row, age) for name, row in data.items()}
+
+
+@ttl_cache(ttl=CACHE_TTL_MEDIUM, on_hit=_memory_indices)
 def get_market_indices(market_type: str = MARKET_US) -> dict[str, MarketIndex]:
     """Get major market indices data."""
     config = get_market_config(market_type)
@@ -226,11 +258,25 @@ def get_market_indices_result(
     available = {item.get("ticker") for item in data.values()}
     missing_count = len(expected - available)
     warnings = [f"{missing_count} market series unavailable"] if missing_count else []
+    metadata_missing = any(not item.get("fetched_at") for item in data.values())
+    stale = any(item.get("is_stale") for item in data.values())
+    if metadata_missing:
+        warnings.append(
+            "Some series have unrecorded acquisition provenance; not confirmed fresh"
+        )
+    if stale:
+        warnings.append("Stale series retained with their original dates")
+    timestamps = [
+        item["fetched_at"] for item in data.values() if item.get("fetched_at")
+    ]
     return FetchResult(
         data=data,
         source="multi-provider",
+        fetched_at=min(timestamps) if timestamps else "",
+        cache_status="mixed" if data else "failed",
+        is_stale=stale,
         status="available" if data else "unavailable",
-        is_partial=bool(data) and bool(missing_count),
+        is_partial=bool(data) and bool(missing_count or metadata_missing),
         warnings=warnings,
         error_code="all_series_unavailable" if not data else "",
         error="Market indices are unavailable." if not data else "",
@@ -242,6 +288,7 @@ def _uses_yfinance_symbol(ticker: str) -> bool:
 
     return (
         ticker.startswith("^")
+        or ticker.endswith(".T")
         or ticker.endswith("=F")
         or ticker.endswith("=X")
         or ticker.endswith("-USD")

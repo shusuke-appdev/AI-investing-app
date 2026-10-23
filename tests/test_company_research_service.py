@@ -39,8 +39,10 @@ def test_calculate_sotp_uses_only_supported_segment_inputs():
         shares=10.0,
     )
 
-    assert result["status"] == "available"
-    assert result["per_share"] == 70.0
+    assert result["status"] == "partial"
+    assert result["per_share"] is None
+    assert result["equity_value"] is None
+    assert result["enterprise_value"] == 800.0
     assert [item["name"] for item in result["segments"]] == ["Cloud"]
 
 

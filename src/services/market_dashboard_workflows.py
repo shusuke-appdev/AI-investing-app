@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -29,7 +30,6 @@ from src.market_data import get_stock_data as _default_get_stock_data
 from src.market_microstructure import (
     analyze_market_structure as _default_analyze_market_structure,
 )
-from src.services import market_dashboard_service as _service
 from src.services.analysis_context import DataResult, MarketContext
 from src.services.data_fetch_manifest import (
     requirement_failures as _default_requirement_failures,
@@ -37,18 +37,6 @@ from src.services.data_fetch_manifest import (
 from src.services.market_analysis_inputs import MarketAnalysisInputs, shared_history
 from src.services.market_composite_sentiment import (
     build_market_composite_sentiment as _default_build_market_composite_sentiment,
-)
-from src.services.market_dashboard_service import (
-    build_market_high_context as _default_build_market_high_context,
-)
-from src.services.market_dashboard_service import (
-    build_market_summary_context as _default_build_market_summary_context,
-)
-from src.services.market_dashboard_service import (
-    build_market_theme_flow_context as _default_build_market_theme_flow_context,
-)
-from src.services.market_dashboard_service import (
-    build_market_volatility_sentiment_context as _default_build_market_volatility_sentiment_context,
 )
 from src.services.market_dashboard_support import (
     _build_option_context,
@@ -116,8 +104,19 @@ class MarketDashboardWorkflowDependencies:
 def _facade_dependency(name: str, default: Callable[..., Any]) -> Callable[..., Any]:
     """Resolve one explicitly named compatibility patch from the facade."""
 
-    candidate = getattr(_service, name, default)
+    from src.services import market_dashboard_service
+
+    candidate = getattr(market_dashboard_service, name, default)
     return candidate if callable(candidate) else default
+
+
+def _lazy_stage(name: str) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        from src.services import market_dashboard_service
+
+        return getattr(market_dashboard_service, name)(*args, **kwargs)
+
+    return call
 
 
 def _workflow_dependencies(
@@ -134,18 +133,18 @@ def _workflow_dependencies(
         ),
         get_stock_data=_facade_dependency("get_stock_data", _default_get_stock_data),
         build_market_summary_context=_facade_dependency(
-            "build_market_summary_context", _default_build_market_summary_context
+            "build_market_summary_context", _lazy_stage("build_market_summary_context")
         ),
         build_market_theme_flow_context=_facade_dependency(
             "build_market_theme_flow_context",
-            _default_build_market_theme_flow_context,
+            _lazy_stage("build_market_theme_flow_context"),
         ),
         build_market_high_context=_facade_dependency(
-            "build_market_high_context", _default_build_market_high_context
+            "build_market_high_context", _lazy_stage("build_market_high_context")
         ),
         build_market_volatility_sentiment_context=_facade_dependency(
             "build_market_volatility_sentiment_context",
-            _default_build_market_volatility_sentiment_context,
+            _lazy_stage("build_market_volatility_sentiment_context"),
         ),
         build_market_options_context=_facade_dependency(
             "build_market_options_context", build_market_options_context
@@ -252,6 +251,12 @@ def build_market_options_context(
         )
 
     def monitor_task() -> dict[str, Any]:
+        if market_type != "US":
+            return {
+                "status": "not_applicable",
+                "market": market_type,
+                "reason": "米国専用監視は日本の判定には使用しません。",
+            }
         if inputs is None:
             return deps.build_market_monitor_context(options.items)
         return deps.build_market_monitor_context(options.items, inputs=inputs)
@@ -482,10 +487,17 @@ def build_market_monitor_context(
     option_data: list[dict[str, Any]] | None,
     *,
     inputs: MarketAnalysisInputs | None = None,
+    market_type: str = "US",
     dependencies: MarketDashboardWorkflowDependencies | None = None,
 ) -> dict:
     """Build Distribution Day, climax, and yield-spread monitoring context."""
 
+    if market_type != "US":
+        return {
+            "status": "not_applicable",
+            "market": market_type,
+            "reason": "SPY/Nasdaq監視は米国専用。日本固有の判定には使用しません。",
+        }
     deps = _workflow_dependencies(dependencies)
     spy_df = shared_history(inputs, "SPY", "6mo", deps.get_stock_data)
     ndx_df = shared_history(inputs, "^NDX", "6mo", deps.get_stock_data)
@@ -496,7 +508,7 @@ def build_market_monitor_context(
 
     tnx_df = shared_history(inputs, "^TNX", "5d", deps.get_stock_data)
     tnx_yield = (
-        float(tnx_df["Close"].iloc[-1]) / 10.0
+        float(tnx_df["Close"].iloc[-1])
         if tnx_df is not None and not tnx_df.empty
         else None
     )
@@ -525,13 +537,38 @@ def build_flow_alignment_context(
     us_leader = ((sectors.get("markets") or {}).get("US", {}).get("leaders") or [{}])[0]
     jp_leader = ((sectors.get("markets") or {}).get("JP", {}).get("leaders") or [{}])[0]
     flow_status = str(flow.get("status") or "unavailable")
+    directions = [
+        etf_leader.get("relative_return_20d"),
+        us_leader.get("relative_return_20d"),
+    ]
+    comparable_values = all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+        for v in directions
+    )
     if flow_status == "risk_off":
         alignment_label = "注意"
         summary = (
             "ETFリーダーシップproxyはリスクオフ寄りです。"
             "セクター/テーマ候補は小さく扱い、信用・銀行系の弱さを優先確認します。"
         )
-    elif etf_leader and us_leader:
+    elif (
+        etf_leader
+        and us_leader
+        and flow.get("market") == sectors.get("primary_market") == "US"
+        and flow.get("period_end") == sectors.get("period_end")
+        and flow.get("period_end")
+        and flow.get("period_start") == sectors.get("period_start")
+        and flow.get("period_start")
+        and etf_leader.get("ticker")
+        and etf_leader.get("ticker")
+        == (us_leader.get("proxy_ticker") or us_leader.get("ticker"))
+        and flow.get("window") == sectors.get("window")
+        and flow.get("window")
+        and comparable_values
+        and float(etf_leader["relative_return_20d"])
+        * float(us_leader["relative_return_20d"])
+        > 0
+    ):
         alignment_label = "整合"
         summary = (
             "ETFリーダーシップproxyで市場全体の資金圧力を確認し、"
@@ -549,16 +586,16 @@ def build_flow_alignment_context(
         "etf_leader": {
             "ticker": etf_leader.get("ticker", ""),
             "label": etf_leader.get("label", ""),
-            "score": etf_leader.get("leadership_score", 0.0),
+            "score": etf_leader.get("leadership_score"),
         },
         "us_sector_leader": {
             "theme": us_leader.get("theme", ""),
-            "score": us_leader.get("flow_score", 0.0),
+            "score": us_leader.get("flow_score"),
             "action": us_leader.get("action", ""),
         },
         "jp_theme_leader": {
             "theme": jp_leader.get("theme", ""),
-            "score": jp_leader.get("flow_score", 0.0),
+            "score": jp_leader.get("flow_score"),
             "action": jp_leader.get("action", ""),
         },
     }

@@ -6,6 +6,7 @@ google.genai SDK のクライアントを一元管理します。
 from __future__ import annotations
 
 import json
+import os
 import time
 from typing import Any, TypedDict
 
@@ -51,7 +52,10 @@ def get_gemini_client() -> genai.Client | None:
     APIキーが設定されていない場合は None を返します。
     """
     global _client
-    if not ai_generation_enabled():
+    if (
+        os.environ.get("INVESTMENT_RESEARCH_NO_MODEL") == "1"
+        or not ai_generation_enabled()
+    ):
         return None
     if _client is not None:
         return _client
@@ -75,7 +79,10 @@ def configure_gemini(api_key: str | None = None) -> bool:
         設定成功時 True
     """
     global _client
-    if not ai_generation_enabled():
+    if (
+        os.environ.get("INVESTMENT_RESEARCH_NO_MODEL") == "1"
+        or not ai_generation_enabled()
+    ):
         return False
     key = api_key or get_gemini_api_key()
     if not key:

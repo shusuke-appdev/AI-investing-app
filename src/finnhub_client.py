@@ -188,6 +188,10 @@ def get_quote(symbol: str) -> dict | None:
     Returns:
         {"c": 現在価格, "h": 高値, "l": 安値, "o": 始値, "pc": 前日終値, "d": 変化, "dp": 変化率%}
     """
+    # Yahoo's Japanese suffix is not a Finnhub quote symbol. An unnecessary 403
+    # used to disable otherwise-valid US credentials for the whole process.
+    if symbol.endswith(".T"):
+        return None
     client = _get_client()
     if not client:
         return None

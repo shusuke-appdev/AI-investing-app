@@ -28,7 +28,6 @@ from src.option_analyst import (
     get_major_indices_option_status as _default_get_major_indices_option_status,
 )
 from src.persistent_cache import PersistentJsonCache, utc_now_iso
-from src.services import market_dashboard_service as _service
 from src.services.analysis_context import DataResult, MarketContext, OptionContext
 from src.services.market_analysis_inputs import MarketAnalysisInputs, shared_history
 from src.services.market_composite_sentiment import (
@@ -47,8 +46,10 @@ from src.services.market_context_cache import (
 from src.services.market_context_cache import (
     save_context_cache as _default_save_context_cache,
 )
-from src.services.market_dashboard_service import (
-    _MARKET_STAGE_EXECUTORS,
+from src.services.market_short_horizon_forecast import (
+    build_market_short_horizon_forecast as _default_build_market_short_horizon_forecast,
+)
+from src.services.market_stage_contract import (
     DETAIL_STAGE_DEFAULTS,
     DETAIL_STAGE_ORDER,
     MARKET_CONTEXT_CACHE_NAMESPACE,
@@ -56,8 +57,8 @@ from src.services.market_dashboard_service import (
     MARKET_STAGE_TOTAL_TIMEOUT_SECONDS,
     StageTaskResult,
 )
-from src.services.market_short_horizon_forecast import (
-    build_market_short_horizon_forecast as _default_build_market_short_horizon_forecast,
+from src.services.market_stage_contract import (
+    MARKET_STAGE_EXECUTORS as _MARKET_STAGE_EXECUTORS,
 )
 from src.services.provenance_service import stale_cache_provenance
 from src.services.vix_sq_alert_service import (
@@ -91,6 +92,8 @@ def _default_cache_factory() -> PersistentJsonCache:
 def _facade_dependency(name: str, default: Callable[..., Any]) -> Callable[..., Any]:
     """Resolve one named compatibility patch without copying module globals."""
 
+    from src.services import market_dashboard_service as _service
+
     candidate = getattr(_service, name, default)
     return candidate if callable(candidate) else default
 
@@ -102,6 +105,8 @@ def _support_dependencies(
 
     if dependencies is not None:
         return dependencies
+
+    from src.services import market_dashboard_service as _service
 
     cache_candidate = getattr(_service, "_market_context_cache", None)
     cache_factory = (

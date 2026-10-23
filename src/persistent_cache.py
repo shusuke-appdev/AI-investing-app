@@ -83,12 +83,12 @@ class PersistentJsonCache:
             "fetched_at": fetched,
             "data": payload,
         }
-        tmp_path = path.with_suffix(path.suffix + ".tmp")
-        tmp_path.write_text(
-            json.dumps(wrapped, ensure_ascii=False, default=str),
-            encoding="utf-8",
+        from src.storage.atomic_json import write_json
+
+        # Preserve the existing cache serializer while using unique temp files.
+        write_json(
+            path, json.loads(json.dumps(wrapped, ensure_ascii=False, default=str))
         )
-        tmp_path.replace(path)
         return path
 
     def read(

@@ -11,6 +11,10 @@ from src.data_provider import DataProvider
 def get_stock_data(ticker: str, period: str = "1mo") -> pd.DataFrame:
     """Return historical stock data."""
 
+    from src.rate_provider import RATE_SERIES, rate_history
+
+    if ticker in RATE_SERIES:
+        return rate_history(ticker, period)
     return DataProvider.get_historical_data(ticker, period)
 
 

@@ -69,7 +69,7 @@ class FakeYFinanceTicker:
             "sharesOutstanding": 10_000_000,
         }
 
-    def history(self, period):
+    def history(self, period, auto_adjust=True):
         return pd.DataFrame(
             {
                 "open": [140.0, 142.0],
@@ -92,7 +92,7 @@ class FastInfoOnlyTicker:
         }
         self.info = {}
 
-    def history(self, period):
+    def history(self, period, auto_adjust=True):
         return pd.DataFrame(
             {
                 "open": [140.0, 142.0],

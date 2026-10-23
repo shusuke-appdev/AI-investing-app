@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -11,6 +12,7 @@ from src.services.analysis_context import DataResult, OptionContext
 PROVIDER_HEALTH_CACHE_NAMESPACE = "provider_health_snapshot"
 PROVIDER_HEALTH_KEY = "latest"
 PROVIDER_HEALTH_MAX_AGE_SECONDS = 90 * 86400
+_health_lock = threading.RLock()
 
 
 @dataclass
@@ -68,6 +70,11 @@ class ProviderHealthSnapshot:
 def record_data_results(
     results: list[DataResult] | list[dict[str, Any]], *, scope: str = ""
 ) -> None:
+    with _health_lock:
+        _record_data_results_locked(results, scope=scope)
+
+
+def _record_data_results_locked(results, *, scope="") -> None:
     """Merge DataResult rows into the persistent provider health snapshot."""
 
     if not results:

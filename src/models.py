@@ -4,7 +4,7 @@ Using TypedDict for dictionary-based structures shared across provider and Refle
 while providing better developer experience and validation capabilities.
 """
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 
 class StockInfo(TypedDict, total=False):
@@ -24,6 +24,7 @@ class StockInfo(TypedDict, total=False):
     exchange: str
     quote_type: str
     currency: str
+    provider_status: dict[str, Any]
 
     # Financial Metrics
     market_cap: float | None
